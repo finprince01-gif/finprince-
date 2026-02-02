@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiService } from '../services';
-import type { UserTable, RoleModulesData } from '../types';
+import type { UserTable } from '../types';
 
 // Simple in-memory cache
 interface CacheItem<T> {
@@ -99,88 +99,3 @@ export const useModuleData = () => {
   };
 };
 
-export const useRoleModules = (roleId?: number) => {
-  const [roleModules, setRoleModules] = useState<number[]>([]);
-  const [roleModulesLoading, setRoleModulesLoading] = useState(false);
-  const [roleModulesError, setRoleModulesError] = useState<Error | null>(null);
-
-  const loadRoleModules = useCallback(async (forceRefresh = false) => {
-    if (!roleId) return;
-
-    const cacheKey = `role-modules-${roleId}`;
-
-    // Check cache first unless forcing refresh
-    if (!forceRefresh) {
-      const cached = cache.get<number[]>(cacheKey);
-      if (cached) {
-        setRoleModules(cached);
-        return cached;
-      }
-    }
-
-    setRoleModulesLoading(true);
-    setRoleModulesError(null);
-
-    try {
-      const data = await apiService.getRoleModules(roleId);
-      setRoleModules(data.selectedSubmoduleIds);
-      cache.set(cacheKey, data.selectedSubmoduleIds);
-      return data.selectedSubmoduleIds;
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error('Failed to load role modules');
-      setRoleModulesError(err);
-      throw err;
-    } finally {
-      setRoleModulesLoading(false);
-    }
-  }, [roleId]);
-
-  const saveRoleModules = useCallback(async (selectedIds: number[]) => {
-    if (!roleId) return;
-
-    try {
-      await apiService.saveRoleModules(roleId, selectedIds);
-      // Update local state
-      setRoleModules(selectedIds);
-      // Invalidate cache for this role
-      cache.invalidate(`role-modules-${roleId}`);
-      // Invalidate any related caches if needed
-      return selectedIds;
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error('Failed to save role modules');
-      setRoleModulesError(err);
-      throw err;
-    }
-  }, [roleId]);
-
-  // Load role modules when roleId changes
-  useEffect(() => {
-    if (roleId) {
-      loadRoleModules();
-    } else {
-      setRoleModules([]);
-    }
-  }, [roleId, loadRoleModules]);
-
-  return {
-    selectedSubmoduleIds: roleModules,
-    roleModulesLoading,
-    roleModulesError,
-    loadRoleModules,
-    saveRoleModules,
-    invalidateRoleModulesCache: () => cache.invalidate(`role-modules-${roleId}`)
-  };
-};
-
-// Utility hook that combines both
-export const useModuleDataComplete = (roleId: number) => {
-  const userTablesData = useModuleData();
-  const roleModulesData = useRoleModules(roleId);
-
-  return {
-    ...userTablesData,
-    ...roleModulesData,
-    isLoading: userTablesData.userTablesLoading || roleModulesData.roleModulesLoading,
-    hasError: !!(userTablesData.userTablesError || roleModulesData.roleModulesError)
-  };
-};

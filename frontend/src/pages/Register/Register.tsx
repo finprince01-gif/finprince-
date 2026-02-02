@@ -47,7 +47,7 @@ import Icon from "../../components/Icon";
 import { apiService } from "../../services";
 
 // Import ModulePicker component (not currently used in this file)
-import ModulePicker from "../../components/ModulePicker";
+
 
 /**
  * Props for SignupPage component

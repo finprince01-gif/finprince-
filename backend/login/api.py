@@ -56,9 +56,6 @@ class LoginView(APIView):
                 'email': result['email'],
                 'tenant_id': result['tenant_id'],
                 'company_name': result['company_name'],
-                'permissions': result['permissions'],
-                'submodule_ids': result['submodule_ids'],
-                'role': result['role'],
             }
             
             response = Response(response_data, status=status.HTTP_200_OK)

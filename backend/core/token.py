@@ -17,12 +17,7 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         # RBAC REMOVED: All users have full permissions
         # Check if user is superuser (all registered users are superusers)
         is_superuser = getattr(user, 'is_superuser', False)
-        token['permissions'] = [] if not is_superuser else ['ALL']
         token['is_superuser'] = is_superuser
-
-        token['user_type'] = 'owner'
-        token['is_owner'] = True
-        token['submodule_ids'] = []
         
         return token
 
@@ -64,10 +59,6 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         data['tenant_id'] = getattr(user, 'tenant_id', '')
         data['company_name'] = getattr(user, 'company_name', '')
         
-        # Include permissions and role in response
-        token_data = self.get_token(user)
-        data['permissions'] = token_data['permissions']
-        data['submodule_ids'] = token_data['submodule_ids']
-        data['role'] = 'OWNER' if token_data['is_owner'] else 'USER'
+
         
         return data

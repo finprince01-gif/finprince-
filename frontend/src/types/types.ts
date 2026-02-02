@@ -18,7 +18,7 @@
  * 4. Inventory (Stock Items, Units, Groups)
  * 5. Vouchers (Transactions)
  * 6. AI Features (Invoice extraction, AI Agent)
- * 7. User Management (Users, Roles, Permissions)
+
  * 
  * FOR NEW DEVELOPERS:
  * - Always import types when working with data
@@ -338,80 +338,14 @@ export interface MassUploadFile {
   error?: string;
 }
 
-// For User Management and RBAC
+// For User Data
 export interface User {
   id: number;
   username: string;
   name: string;
   email?: string;
   is_active: boolean;
-  roles: Role[];
   tenantId: string;
-}
-
-export interface Role {
-  id: number;
-  name: string;
-  description?: string;
-  is_system: boolean;
-  permissions: Permission[];
-}
-
-export interface Permission {
-  id: number;
-  code: string;
-  name: string;
-  module: string;
-  groupName: string;
-  description?: string;
-}
-
-// Permission with modules and groups for display
-export interface PermissionGroup {
-  module: string;
-  groups: {
-    [groupName: string]: Permission[];
-  };
-}
-
-// Role with permission count for management listing
-export interface RoleSummary {
-  id: number;
-  name: string;
-  description?: string;
-  isSystem: boolean;
-  permissionsCount: number;
-}
-
-// Login response with permissions
-export interface LoginResponse {
-  success: boolean;
-  user: {
-    id: number;
-    name: string;
-    email?: string;
-    tenantId: string;
-  };
-  tenantId: string;
-  permissions: string[];
-  token: string;
-}
-
-// OTP verification response (includes auto-login tokens)
-export interface OTPVerificationResponse {
-  success: boolean;
-  message?: string;
-  access?: string;
-  refresh?: string;
-  user?: {
-    id: number;
-    username: string;
-    email?: string;
-    phone?: string;
-    company_name?: string;
-    tenant_id?: string;
-  };
-  permissions?: string[];
 }
 
 // For Module-Submodule UI
@@ -431,6 +365,3 @@ export interface UserTable {
   created_at?: string;
 }
 
-export interface RoleModulesData {
-  selectedSubmoduleIds: number[];
-}

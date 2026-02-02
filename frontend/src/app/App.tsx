@@ -13,7 +13,6 @@
  * - Uses React hooks for state management (useState, useEffect, useCallback)
  * - Communicates with Django backend via REST API
  * - Stores authentication tokens in HttpOnly cookies (secure)
- * - Implements role-based access control (RBAC)
  * - Supports multi-tenancy (each company has isolated data)
  * 
  * FOR NEW DEVELOPERS:
@@ -43,7 +42,7 @@ import InventoryPage from '../pages/Inventory';           // Stock items and inv
 import VouchersPage from '../pages/Vouchers';             // Transaction vouchers (sales, purchase, etc.)
 import ReportsPage from '../pages/Reports';               // Financial reports
 import SettingsPage from '../pages/Settings';             // Company settings
-import UsersAndRolesPage from '../pages/UsersAndRoles';   // User management and permissions
+// UsersAndRolesPage removed
 import VendorPortalPage from '../pages/VendorPortal';     // Vendor management portal
 import CustomerPortalPage from '../pages/CustomerPortal'; // Customer management portal
 import PayrollPage from '../pages/Payroll';               // Employee payroll management

@@ -30,7 +30,7 @@ class InventoryStockGroupViewSet(viewsets.ModelViewSet):
     queryset = InventoryStockGroup.objects.all()
     serializer_class = InventoryStockGroupSerializer
     permission_classes = [IsAuthenticated]
-    required_permission = 'INVENTORY_STOCK_GROUPS'
+
     
     def get_queryset(self):
         """Delegate to flow layer."""
@@ -86,7 +86,7 @@ class InventoryUnitViewSet(viewsets.ModelViewSet):
     queryset = InventoryUnit.objects.all()
     serializer_class = InventoryUnitSerializer
     permission_classes = [IsAuthenticated]
-    required_permission = 'INVENTORY_UNITS'
+
     
     def get_queryset(self):
         """Delegate to flow layer."""
@@ -142,7 +142,7 @@ class InventoryStockItemViewSet(viewsets.ModelViewSet):
     queryset = InventoryStockItem.objects.all()
     serializer_class = InventoryStockItemSerializer
     permission_classes = [IsAuthenticated]
-    required_permission = 'INVENTORY_ITEMS'
+
     
     def get_queryset(self):
         """Delegate to flow layer."""
