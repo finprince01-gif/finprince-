@@ -63,8 +63,7 @@ def register_user(registration_data):
         refresh = MyTokenObtainPairSerializer.get_token(user)
         access_token = str(refresh.access_token)
         
-        # RBAC Removed
-        permissions = []
+
         
         logger.info(f"✅ Auto-login: Generated JWT token")
         
@@ -83,7 +82,6 @@ def register_user(registration_data):
                 'tenant_id': user.tenant_id,
                 'selected_plan': user.selected_plan,
             },
-            'permissions': permissions
         }
         
         logger.info(f"✅ Registration complete - User {user.id} successfully saved")

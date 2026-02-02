@@ -45,9 +45,7 @@ def authenticate_user(username, password):
     access_token = str(refresh.access_token)
     refresh_token = str(refresh)
 
-    # RBAC Removed - permissions are no longer used
-    permissions = []
-    permission_ids = []
+
     
     token_data = {
         'access': access_token,
@@ -56,9 +54,6 @@ def authenticate_user(username, password):
         'email': getattr(user, 'email', ''),
         'tenant_id': user.tenant_id,
         'company_name': getattr(user, 'company_name', ''),
-        'permissions': permissions,
-        'submodule_ids': permission_ids,
-        'role': 'Owner', # Defaulting to Owner/Admin for single-user mode
     }
     
     # Log login

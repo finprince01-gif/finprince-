@@ -8,7 +8,6 @@
  * - Company name display at top
  * - Navigation menu with icons
  * - Active page highlighting
- * - Role-based access control (hides menu items based on permissions)
  * - Logout button at bottom
  * 
  * NAVIGATION ITEMS:
@@ -22,14 +21,8 @@
  * - Reports - Financial reports
  * - Settings - Company settings
  * 
- * PERMISSIONS:
- * - Dashboard is always visible
- * - Other items require specific permissions (MASTERS, INVENTORY, etc.)
- * - OWNER role has access to everything
- * 
  * FOR NEW DEVELOPERS:
  * - Add new menu items to the `allNavItems` array
- * - Specify a role if the item requires permissions
  * - Use Icon component for consistent icon display
  */
 
@@ -58,18 +51,18 @@ interface SidebarProps {
  */
 const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, companyName, userPlan }) => {
   // Define all available navigation items
-  // Each item has a name, icon, and optional role requirement
-  const allNavItems: { name: Page; icon: React.ReactElement; role?: string }[] = [
+  // Each item has a name and icon
+  const allNavItems: { name: Page; icon: React.ReactElement }[] = [
     { name: 'Dashboard', icon: <Icon name="dashboard" /> },
-    { name: 'Masters', icon: <Icon name="masters" />, role: 'MASTERS' },
-    { name: 'Inventory', icon: <Icon name="inventory" />, role: 'INVENTORY' },
-    { name: 'Vouchers', icon: <Icon name="vouchers" />, role: 'VOUCHERS' },
+    { name: 'Masters', icon: <Icon name="masters" /> },
+    { name: 'Inventory', icon: <Icon name="inventory" /> },
+    { name: 'Vouchers', icon: <Icon name="vouchers" /> },
     { name: 'Vendor Portal', icon: <Icon name="users" /> },
     { name: 'Customer Portal', icon: <Icon name="users" /> },
     { name: 'Payroll', icon: <Icon name="users" /> },
     { name: 'Service', icon: <Icon name="users" /> },
-    { name: 'Reports', icon: <Icon name="reports" />, role: 'REPORTS' },
-    { name: 'Settings', icon: <Icon name="settings" />, role: 'SETTINGS' },
+    { name: 'Reports', icon: <Icon name="reports" /> },
+    { name: 'Settings', icon: <Icon name="settings" /> },
   ];
 
   // Show ALL navigation items (permission filtering disabled)

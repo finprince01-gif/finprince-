@@ -17,7 +17,7 @@
  * 3. Vouchers - All transaction types (sales, purchase, payment, etc.)
  * 4. AI Features - Invoice extraction, narration generation
  * 5. Authentication - Login, register, logout
- * 6. Users & Permissions - User management, roles, permissions
+ * 5. Authentication - Login, register, logout
  * 
  * FOR NEW DEVELOPERS:
  * - Always use apiService instead of httpClient directly
@@ -52,7 +52,7 @@ import type {
     VoucherTypeMaster,
     VoucherNumbering,
     UserTable,
-    RoleModulesData
+
 } from '../types';
 
 /**
@@ -522,60 +522,15 @@ class ApiService {
     }
 
     // ============================================================================
-    // USER & PERMISSIONS
-    // ============================================================================
 
-    async getModuleSchema() {
-        return httpClient.get<Record<string, any>>('/api/module-permissions/schema/');
-    }
 
-    async getUserModulePermissions(userId: string) {
-        return httpClient.get<{ user_id: string; tenant_id: string; codes: string[] }>(`/api/module-permissions/user/${userId}/`);
-    }
 
-    async updateUserModulePermissions(userId: string, codes: string[]) {
-        return httpClient.put<{ success: boolean; message: string; codes: string[] }>(`/api/module-permissions/user/${userId}/`, { codes });
-    }
-
-    async getUsers() {
-        return httpClient.get<{ users: any[] }>('/api/settings/users/');
-    }
-
-    async createUser(data: any) {
-        return httpClient.post<{ success: boolean }>('/api/settings/users/', data);
-    }
-
-    async updateUser(userId: number, permissions: any[]) {
-        return httpClient.put<{ success: boolean }>(`/api/settings/users/${userId}/`, { userId, permissions });
-    }
-
-    async updateUserRoles(userId: number, roleIds: number[]) {
-        return httpClient.put<{ success: boolean }>(`/api/settings/users/${userId}/roles/`, { roleIds });
-    }
-
-    async deactivateUser(userId: number) {
-        return httpClient.post<{ success: boolean }>(`/api/settings/users/${userId}/deactivate/`);
-    }
-
-    async activateUser(userId: number) {
-        return httpClient.post<{ success: boolean }>(`/api/settings/users/${userId}/activate/`);
-    }
-
-    async deleteUser(userId: number) {
-        return httpClient.delete<{ success: boolean }>(`/api/settings/users/${userId}/`);
-    }
 
     async getUserTables() {
         return httpClient.get<UserTable[]>('/api/user-tables/');
     }
 
-    async getRoleModules(roleId: number) {
-        return httpClient.get<RoleModulesData>(`/api/settings/role-modules/${roleId}/`);
-    }
 
-    async saveRoleModules(roleId: number, selectedSubmoduleIds: number[]) {
-        return httpClient.post<{ success: boolean; message: string }>(`/api/settings/role-modules/${roleId}/`, { selectedSubmoduleIds });
-    }
 
     // ============================================================================
     // SALES VOUCHERS

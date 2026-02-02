@@ -8,7 +8,6 @@ export { HierarchicalDropdown } from './HierarchicalDropdown';
 export { LedgerCreationWizard } from './LedgerCreationWizard';
 export { default as LedgerQuestions } from './LedgerQuestions';
 export { default as DynamicQuestions } from './DynamicQuestions';
-export { default as ModulePicker } from './ModulePicker';
-export { default as PermissionTreeSelector } from './PermissionTreeSelector';
+
 export { default as MassUploadModal } from './MassUploadModal';
 export { default as StockMassUploadModal } from './StockMassUploadModal';

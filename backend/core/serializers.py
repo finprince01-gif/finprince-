@@ -58,8 +58,7 @@ class UserSignupSerializer(serializers.ModelSerializer):
             logo_path=logo_path_str
         )
 
-        # REMOVED: Role creation - Owner gets all permissions automatically
-        # No need to create or assign roles anymore
+
         
         return user
 

@@ -9,15 +9,7 @@ class TenantMiddleware(MiddlewareMixin):
         tenant_id = get_tenant_from_request(request)
         request.tenant_id = tenant_id
 
-class PermissionMiddleware(MiddlewareMixin):
-    """RBAC permissions disabled - all authenticated requests are allowed."""
 
-    def process_view(self, request, view_func, view_args, view_kwargs):
-        """
-        RBAC system has been removed - allow all requests through.
-        """
-        # Always return None to allow all requests
-        return None
 
 class ExceptionLoggingMiddleware:
     """

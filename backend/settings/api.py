@@ -25,7 +25,7 @@ class CompanySettingsViewSet(viewsets.ModelViewSet):
     queryset = CompanyFullInfo.objects.all()
     serializer_class = CompanySettingsSerializer
     permission_classes = [IsAuthenticated]
-    required_permission = 'SETTINGS_COMPANY'
+
     parser_classes = (MultiPartParser, FormParser, JSONParser)
     
     def get_queryset(self):

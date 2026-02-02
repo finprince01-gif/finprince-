@@ -39,9 +39,6 @@ class CookieTokenObtainPairView(TokenObtainPairView):
                 'email': token_data.get('email'),
                 'tenant_id': token_data.get('tenant_id'),
                 'company_name': token_data.get('company_name'),
-                'permissions': token_data.get('permissions'),
-                'submodule_ids': token_data.get('submodule_ids'),
-                'role': token_data.get('role'),
             }
 
             response = Response(response_data, status=status.HTTP_200_OK)

@@ -29,7 +29,7 @@ class VendorMasterPOSettingsViewSet(viewsets.ModelViewSet):
     """
     queryset = VendorMasterPOSettings.objects.all()
     serializer_class = VendorMasterPOSettingsSerializer
-    permission_classes = [AllowAny]  # TODO: Change back to IsAuthenticated after debugging
+    permission_classes = [IsAuthenticated]
 
     
     def get_tenant_id(self):
