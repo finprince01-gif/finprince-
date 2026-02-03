@@ -48,6 +48,7 @@ import VendorPortalPage from '../pages/VendorPortal';     // Vendor management p
 import CustomerPortalPage from '../pages/CustomerPortal'; // Customer management portal
 import PayrollPage from '../pages/Payroll';               // Employee payroll management
 import ServicePage from '../pages/Service';               // Service management page
+import GSTPage from '../pages/GST';                        // GST Returns module
 import LoginPage from '../pages/Login';                   // User login page
 import SignupPage from '../pages/Register';               // New user registration
 // Additional UI Components
@@ -1076,6 +1077,7 @@ const App: React.FC = () => {
       case 'Customer Portal': return <CustomerPortalPage />;
       case 'Payroll': return <PayrollPage />;
       case 'Service': return <ServicePage />;
+      case 'GST': return <GSTPage />;
       case 'MassUploadResult': return <MassUploadResultPage
         results={massUploadResult || []}
         onDone={() => { setCurrentPage('Vouchers'); setMassUploadResult(null); }}

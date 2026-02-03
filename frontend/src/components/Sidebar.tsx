@@ -67,6 +67,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, co
     { name: 'Customer Portal', icon: <Icon name="users" /> },
     { name: 'Payroll', icon: <Icon name="users" /> },
     { name: 'Service', icon: <Icon name="users" /> },
+    { name: 'GST', icon: <Icon name="reports" /> },
     { name: 'Reports', icon: <Icon name="reports" /> },
     { name: 'Users & Roles', icon: <Icon name="users" /> },
     { name: 'Settings', icon: <Icon name="settings" /> },
@@ -97,8 +98,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, co
               key={item.name}
               onClick={() => onNavigate(item.name)}
               className={`flex items-center space-x-3 px-6 py-3 cursor-pointer transition-colors ${isActive
-                  ? 'text-orange-500 bg-orange-50'
-                  : 'text-gray-600 hover:text-orange-500 hover:bg-gray-50'
+                ? 'text-orange-500 bg-orange-50'
+                : 'text-gray-600 hover:text-orange-500 hover:bg-gray-50'
                 }`}
             >
               <div className="w-5 h-5">

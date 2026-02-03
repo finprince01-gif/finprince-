@@ -72,7 +72,12 @@ class SalesVoucherSerializer(serializers.ModelSerializer):
             'id', 'date', 'voucher_type', 'voucher_type_name', 'sales_invoice_number',
             'customer', 'customer_name', 'bill_to_address', 'bill_to_gstin', 'bill_to_contact',
             'bill_to_state', 'bill_to_country', 'ship_to_address', 'ship_to_state', 'ship_to_country',
-            'tax_type', 'status', 'current_step', 'total_taxable_amount', 'total_cgst',
+            'tax_type', 
+            # GST-Compliant Fields
+            'place_of_supply', 'reverse_charge', 'invoice_type', 'export_type',
+            'port_code', 'shipping_bill_number', 'shipping_bill_date', 'ecommerce_gstin',
+            # Status and Totals
+            'status', 'current_step', 'total_taxable_amount', 'total_cgst',
             'total_sgst', 'total_igst', 'grand_total', 'payment_details', 'dispatch_details',
             'einvoice_details', 'items', 'documents', 'created_at', 'updated_at'
         ]

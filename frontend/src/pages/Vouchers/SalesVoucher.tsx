@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { apiService } from '../../services/api';
 import CreateIssueSlipModal from '../../components/CreateIssueSlipModal';
+import { INDIA_STATE_CODES, GST_INVOICE_TYPES, EXPORT_TYPES } from '../../utils/gstConstants';
 
 import { ExtractedInvoiceData } from '../../types';
 
@@ -99,6 +100,16 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
     const [stateType, setStateType] = useState<'within' | 'other' | 'export'>('within');
     const [exportType, setExportType] = useState('EXWP');
     const [supportingDocument, setSupportingDocument] = useState<File | null>(null);
+
+    // GST-Compliant Fields
+    const [placeOfSupply, setPlaceOfSupply] = useState(''); // State code (01-38)
+    const [reverseCharge, setReverseCharge] = useState('N'); // Y or N
+    const [invoiceType, setInvoiceType] = useState('Regular'); // Regular, SEZ with payment, etc.
+    const [gstExportType, setGstExportType] = useState('WPAY'); // WPAY or WOPAY
+    const [portCode, setPortCode] = useState(''); // 6-digit code for exports
+    const [shippingBillNumber, setShippingBillNumber] = useState('');
+    const [shippingBillDate, setShippingBillDate] = useState('');
+    const [ecommerceGstin, setEcommerceGstin] = useState('');
 
     // Item & Tax Details State
     const [salesOrderNo, setSalesOrderNo] = useState('');
@@ -315,6 +326,16 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                 exchange_rate: exchangeRate,
                 supporting_document: supportingDocument, // Passed but likely needs special handling if file
                 sales_order_no: salesOrderNo,
+
+                // GST-Compliant Fields
+                place_of_supply: placeOfSupply || null,
+                reverse_charge: reverseCharge,
+                invoice_type: invoiceType,
+                gst_export_type: stateType === 'export' ? gstExportType : null,
+                port_code: stateType === 'export' ? portCode : null,
+                shipping_bill_number: stateType === 'export' ? shippingBillNumber : null,
+                shipping_bill_date: stateType === 'export' ? formatDate(shippingBillDate) : null,
+                ecommerce_gstin: ecommerceGstin || null,
 
                 // Items (Domestic)
                 items: stateType !== 'export' ? itemRows.map(row => ({
@@ -806,7 +827,166 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                             </div>
                         </div>
 
-                        {/* Row 3: Tax Type and State Selection */}
+                        {/* Row 3: GST-Compliant Fields */}
+                        <div className="border-t pt-6 mt-6">
+                            <h3 className="text-lg font-semibold text-gray-800 mb-4">GST Details</h3>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
+                                {/* Place of Supply */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Place of Supply <span className="text-red-500">*</span>
+                                    </label>
+                                    <select
+                                        value={placeOfSupply}
+                                        onChange={(e) => setPlaceOfSupply(e.target.value)}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                        required
+                                    >
+                                        <option value="">Select State</option>
+                                        {INDIA_STATE_CODES.map(state => (
+                                            <option key={state.code} value={state.code}>
+                                                {state.code} - {state.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Invoice Type */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Invoice Type <span className="text-red-500">*</span>
+                                    </label>
+                                    <select
+                                        value={invoiceType}
+                                        onChange={(e) => setInvoiceType(e.target.value)}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                    >
+                                        {GST_INVOICE_TYPES.map(type => (
+                                            <option key={type.value} value={type.value}>
+                                                {type.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* E-commerce GSTIN */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        E-commerce GST IN
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={ecommerceGstin}
+                                        onChange={(e) => setEcommerceGstin(e.target.value.toUpperCase())}
+                                        maxLength={15}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                        placeholder="15-digit GSTIN"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                {/* Reverse Charge */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Reverse Charge Applicable
+                                    </label>
+                                    <div className="flex gap-4 mt-3">
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="radio"
+                                                name="reverseCharge"
+                                                value="N"
+                                                checked={reverseCharge === 'N'}
+                                                onChange={(e) => setReverseCharge(e.target.value)}
+                                                className="w-4 h-4 text-teal-600 border-gray-300 focus:ring-teal-500"
+                                            />
+                                            <span className="text-sm text-gray-700">No</span>
+                                        </label>
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="radio"
+                                                name="reverseCharge"
+                                                value="Y"
+                                                checked={reverseCharge === 'Y'}
+                                                onChange={(e) => setReverseCharge(e.target.value)}
+                                                className="w-4 h-4 text-teal-600 border-gray-300 focus:ring-teal-500"
+                                            />
+                                            <span className="text-sm text-gray-700">Yes</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                {/* Export Type - Only show for exports */}
+                                {stateType === 'export' && (
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Export Type <span className="text-red-500">*</span>
+                                        </label>
+                                        <select
+                                            value={gstExportType}
+                                            onChange={(e) => setGstExportType(e.target.value)}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                        >
+                                            {EXPORT_TYPES.map(type => (
+                                                <option key={type.value} value={type.value}>
+                                                    {type.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+
+                                {/* Port Code - Only for exports */}
+                                {stateType === 'export' && (
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Port Code
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={portCode}
+                                            onChange={(e) => setPortCode(e.target.value.toUpperCase())}
+                                            maxLength={6}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                            placeholder="e.g., INBLR1"
+                                        />
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Shipping Bill Details - Only for exports */}
+                            {stateType === 'export' && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Shipping Bill Number
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={shippingBillNumber}
+                                            onChange={(e) => setShippingBillNumber(e.target.value)}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                            placeholder="Enter shipping bill number"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Shipping Bill Date
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={shippingBillDate}
+                                            onChange={(e) => setShippingBillDate(e.target.value)}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Row 4: Tax Type and State Selection */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
                                 Tax Type

@@ -80,7 +80,7 @@ const CustomerPortalPage: React.FC = () => {
                             key={tab}
                             onClick={() => setActiveTab(tab as MainTab)}
                             className={`py-4 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === tab
-                                ? 'border-indigo-600 text-indigo-700'
+                                ? 'border-blue-500 text-blue-600'
                                 : 'border-transparent text-gray-500 hover:text-gray-700'
                                 }`}
                         >
@@ -102,7 +102,7 @@ const CustomerPortalPage: React.FC = () => {
                                         key={subTab}
                                         onClick={() => setActiveMasterSubTab(subTab as MasterSubTab)}
                                         className={`pb-3 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${activeMasterSubTab === subTab
-                                            ? 'border-indigo-600 text-indigo-600'
+                                            ? 'border-teal-500 text-teal-600'
                                             : 'border-transparent text-gray-500 hover:text-gray-700'
                                             }`}
                                     >
@@ -132,7 +132,7 @@ const CustomerPortalPage: React.FC = () => {
                                         key={subTab}
                                         onClick={() => setActiveTransactionSubTab(subTab as TransactionSubTab)}
                                         className={`pb-3 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${activeTransactionSubTab === subTab
-                                            ? 'border-indigo-600 text-indigo-600'
+                                            ? 'border-teal-500 text-teal-600'
                                             : 'border-transparent text-gray-500 hover:text-gray-700'
                                             }`}
                                     >
@@ -177,7 +177,7 @@ const CustomerPortalPage: React.FC = () => {
                                                         key={tab}
                                                         onClick={() => setActiveSalesOrderSubTab(tab as SalesOrderSubTab)}
                                                         className={`py-3 px-1 text-sm font-medium border-b-2 transition-colors ${activeSalesOrderSubTab === tab
-                                                            ? 'border-indigo-600 text-indigo-700'
+                                                            ? 'border-teal-500 text-teal-600'
                                                             : 'border-transparent text-gray-500 hover:text-gray-700'
                                                             }`}
                                                     >
