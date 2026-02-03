@@ -9,6 +9,7 @@
  * - Navigation menu with icons
  * - Active page highlighting
  * - Logout button at bottom
+ * - Permission-based filtering using usePermissions hook
  * 
  * NAVIGATION ITEMS:
  * - Dashboard - Overview and metrics
@@ -35,6 +36,9 @@ import type { Page } from '../types';
 // Import Icon component for menu icons
 import Icon from './Icon';
 
+// Import permissions hook
+import { usePermissions } from '../hooks/usePermissions';
+
 /**
  * Props for Sidebar component
  */
@@ -50,6 +54,8 @@ interface SidebarProps {
  * Sidebar Component - Main navigation sidebar
  */
 const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, companyName, userPlan }) => {
+  const { hasPageAccess } = usePermissions();
+
   // Define all available navigation items
   // Each item has a name and icon
   const allNavItems: { name: Page; icon: React.ReactElement }[] = [
@@ -62,51 +68,56 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, co
     { name: 'Payroll', icon: <Icon name="users" /> },
     { name: 'Service', icon: <Icon name="users" /> },
     { name: 'Reports', icon: <Icon name="reports" /> },
+    { name: 'Users & Roles', icon: <Icon name="users" /> },
     { name: 'Settings', icon: <Icon name="settings" /> },
   ];
 
-  // Show ALL navigation items (permission filtering disabled)
-  // All users can see all menu items
-  const navItems = allNavItems;
+  // Filter navigation items based on permissions
+  const navItems = allNavItems.filter(item => {
+    // Always show Dashboard
+    if (item.name === 'Dashboard') return true;
+
+    // Check view permission for all other pages
+    return hasPageAccess(item.name);
+  });
 
   return (
-    <aside className="w-64 bg-white text-gray-800 flex flex-col fixed h-full border-r border-slate-200">
-      <div className="h-16 flex items-center px-6 border-b border-slate-200">
-        <h1 className="text-xl font-bold text-orange-600 truncate" title={companyName}>{companyName || 'Your Company Name'}</h1>
+    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col fixed h-full">
+      {/* Company Name */}
+      <div className="p-6 border-b border-gray-200">
+        <h1 className="text-xl font-bold text-orange-500">{companyName || 'muthu'}</h1>
       </div>
-      <nav className="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
+
+      {/* Navigation Items */}
+      <nav className="flex-1 overflow-y-auto py-4">
         {navItems.map((item) => {
           const isActive = currentPage === item.name;
           return (
             <a
               key={item.name}
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                onNavigate(item.name);
-              }}
-              className={`flex items-center space-x-3 px-4 py-2.5 rounded-md text-sm font-medium transition-colors ${isActive
-                ? 'bg-orange-50 text-orange-700'
-                : 'text-gray-600 hover:bg-slate-100 hover:text-gray-900'
+              onClick={() => onNavigate(item.name)}
+              className={`flex items-center space-x-3 px-6 py-3 cursor-pointer transition-colors ${isActive
+                  ? 'text-orange-500 bg-orange-50'
+                  : 'text-gray-600 hover:text-orange-500 hover:bg-gray-50'
                 }`}
             >
-              <span className={`w-6 h-6 ${isActive ? 'text-orange-600' : 'text-gray-400'}`}>{item.icon}</span>
-              <span>{item.name}</span>
+              <div className="w-5 h-5">
+                {item.icon}
+              </div>
+              <span className="text-sm font-medium">{item.name}</span>
             </a>
           );
         })}
       </nav>
-      <div className="px-4 py-4 border-t border-slate-200">
+
+      {/* Logout */}
+      <div className="p-4 border-t border-gray-200">
         <a
-          href="#"
-          onClick={(e) => {
-            e.preventDefault();
-            onLogout();
-          }}
-          className="flex items-center space-x-3 px-4 py-2.5 rounded-md text-sm font-medium transition-colors text-gray-600 hover:bg-slate-100 hover:text-gray-900"
+          onClick={onLogout}
+          className="flex items-center space-x-3 px-6 py-3 text-gray-600 hover:text-orange-500 cursor-pointer transition-colors"
         >
-          <Icon name="logout" className="w-6 h-6 text-gray-400" />
-          <span>Logout</span>
+          <Icon name="logout" className="w-5 h-5" />
+          <span className="text-sm font-medium">Logout</span>
         </a>
       </div>
     </aside>

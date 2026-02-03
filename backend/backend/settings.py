@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     'customerportal',  # Customer Portal
     'payroll',  # Payroll Management
     'services',  # Services Management
+    'rbac',  # Role-Based Access Control
     'rest_framework_simplejwt',
     'reports',
 ]
@@ -234,6 +235,7 @@ MIGRATION_MODULES = {
     'payroll': None,
     'services': None,
     'reports': None,
+    'rbac': None,
     'gst': None,         # Implicitly installed or in other modules
     'login': None,       # Implicitly installed or in other modules
     'masters': None,     # Implicitly installed or in other modules
@@ -302,10 +304,16 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': 'simple',
         },
+        'file': {
+            'level': 'ERROR',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_DIR, 'debug.log'),
+            'formatter': 'verbose',
+        },
     },
     'root': {
-        'handlers': ['console'],
-        'level': 'WARNING',
+        'handlers': ['console', 'file'],
+        'level': 'INFO',
     },
     'loggers': {
         'django.server': {
@@ -320,3 +328,6 @@ LOGGING = {
         },
     },
 }
+
+# Suppress check for unique USERNAME_FIELD (handled by unique_together with tenant_id)
+SILENCED_SYSTEM_CHECKS = ['auth.E003']

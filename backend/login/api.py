@@ -32,6 +32,7 @@ class LoginView(APIView):
         try:
             username = request.data.get('username')
             password = request.data.get('password')
+            email = request.data.get('email')  # Optional email for disambiguation
             
             if not username or not password:
                 return Response(
@@ -39,8 +40,8 @@ class LoginView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Delegate to flow layer
-            user, result = flow.authenticate_user(username, password)
+            # Delegate to flow layer (with optional email)
+            user, result = flow.authenticate_user(username, password, email)
             
             if user is None:
                 return Response(

@@ -3,6 +3,7 @@ import { httpClient } from '../../services/httpClient';
 import { apiService } from '../../services/api';
 import { InventoryCategoryWizard } from '../../components/InventoryCategoryWizard';
 import CategoryHierarchicalDropdown from '../../components/CategoryHierarchicalDropdown';
+import { usePermissions } from '../../hooks/usePermissions';
 
 // Interfaces
 interface Location {
@@ -39,13 +40,44 @@ interface Item {
 }
 
 const InventoryPage: React.FC = () => {
+  // Permissions
+  const { hasTabAccess, getAccessibleTabs, isSuperuser } = usePermissions();
+
   // Top Level Tabs
-  const tabs = ['Master', 'Operations', 'Reports'] as const;
-  type Tab = typeof tabs[number];
+  const allTabs = ['Master', 'Operations', 'Reports'] as const;
+  type Tab = typeof allTabs[number];
+
+  // Filter tabs based on permissions
+  // If superuser, show all. Else, check each tab.
+  // Note: We need to handle the case where "Master" corresponds to "Master" permission, etc.
+  // Since the user defined structure is "Master", "Operations", "Reports" exactly, this matches.
+
+  const visibleTabs = isSuperuser
+    ? allTabs
+    : allTabs.filter(tab => hasTabAccess('Inventory', tab));
+
   const [activeTab, setActiveTab] = useState<Tab>('Master');
 
+  // Ensure activeTab is valid
+  // If current activeTab is not visible, switch to first visible tab
+  useEffect(() => {
+    if (visibleTabs.length > 0 && !visibleTabs.includes(activeTab)) {
+      setActiveTab(visibleTabs[0]);
+    }
+  }, [visibleTabs, activeTab]);
+
   // Master Sub Tabs
-  const masterSubTabs = ['Category', 'Location', 'Inventory Items', 'GRN & Issue Slip'] as const;
+  const masterSubTabsList = ['Category', 'Location', 'Inventory Items', 'GRN & Issue Slip'] as const;
+
+  // Logic to filter sub-tabs if needed. 
+  // For now, let's assume "Master" permission grants access to all Master sub-tabs,
+  // OR we can make it even more granular if the backend structure supports "Inventory -> Master -> Category" etc.
+  // The current spec was just page -> tabs. 
+  // Let's assume if you have "Master" tab access, you see all master sub-tabs for now, 
+  // unless we want to extend the permission structure later.
+
+  const masterSubTabs = masterSubTabsList;
+
   type MasterSubTab = typeof masterSubTabs[number];
   const [activeMasterSubTab, setActiveMasterSubTab] = useState<MasterSubTab>('Category');
 
@@ -4566,7 +4598,7 @@ const InventoryPage: React.FC = () => {
         <h2 className="text-2xl font-bold text-gray-800">Inventory Management</h2>
       </div>
       <div className="flex space-x-6 mb-6 border-b border-gray-200">
-        {tabs.map((tab) => (
+        {visibleTabs.map((tab) => (
           <button key={tab} onClick={() => setActiveTab(tab)} className={`pb-2 text-sm font-medium transition-colors ${activeTab === tab ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>
             {tab}
           </button>

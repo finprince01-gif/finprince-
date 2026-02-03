@@ -63,6 +63,9 @@ urlpatterns = [
     # Payroll Management
     path('api/payroll/', include('payroll.urls')),
     
+    # Role-Based Access Control
+    path('api/rbac/', include('rbac.urls')),
+    
     # Services Management
     path('api/services/', include('services.urls')),
     

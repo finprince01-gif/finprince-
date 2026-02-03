@@ -17,6 +17,7 @@
 import React, { useState, useEffect } from 'react';
 import Icon from '../../components/Icon';
 import { httpClient } from '../../services/httpClient';
+import { usePermissions } from '../../hooks/usePermissions';
 
 type ServiceTab = 'service-group' | 'service-list';
 
@@ -97,6 +98,10 @@ const GST_RATES = [0, 5, 12, 18, 28];
  * Service Page Component with Tabs
  */
 const ServicePage: React.FC<ServicePageProps> = () => {
+  const { hasTabAccess } = usePermissions();
+  // Assume 'Services' permission controls both Groups and List for now
+  const canAccessServices = hasTabAccess('Service', 'Services');
+  
   const [activeTab, setActiveTab] = useState<ServiceTab>('service-group');
   const [services, setServices] = useState<any[]>([
     {

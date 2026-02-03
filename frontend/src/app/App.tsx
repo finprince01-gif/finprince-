@@ -42,6 +42,7 @@ import InventoryPage from '../pages/Inventory';           // Stock items and inv
 import VouchersPage from '../pages/Vouchers';             // Transaction vouchers (sales, purchase, etc.)
 import ReportsPage from '../pages/Reports';               // Financial reports
 import SettingsPage from '../pages/Settings';             // Company settings
+import UsersAndRolesPage from '../pages/UsersAndRoles';   // User and role management (RBAC)
 // UsersAndRolesPage removed
 import VendorPortalPage from '../pages/VendorPortal';     // Vendor management portal
 import CustomerPortalPage from '../pages/CustomerPortal'; // Customer management portal
@@ -1070,6 +1071,7 @@ const App: React.FC = () => {
         ledgerGroups={ledgerGroups}
       /></ErrorBoundary>; // Available for all plans
       case 'Settings': return <SettingsPage companyDetails={companyDetails} onSave={handleSaveSettings} />; // Available for all plans
+      case 'Users & Roles': return <UsersAndRolesPage onNavigate={handleNavigate} />;
       case 'Vendor Portal': return <VendorPortalPage onLogout={handleLogout} />;
       case 'Customer Portal': return <CustomerPortalPage />;
       case 'Payroll': return <PayrollPage />;

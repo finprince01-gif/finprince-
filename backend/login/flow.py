@@ -14,27 +14,74 @@ logger = logging.getLogger('login.flow')
 # LOGIN OPERATIONS
 # ============================================================================
 
-def authenticate_user(username, password):
+def authenticate_user(username, password, email=None):
     """
-    Authenticate user with username and password.
+    Authenticate user with username/email and password.
     
     Args:
         username: Username
         password: Plain text password
+        email: Optional email for disambiguation in multi-tenant setups
     
     Returns:
         tuple: (user, token_data) if successful, (None, error_message) if failed
     """
-    from django.contrib.auth import authenticate
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
     
-    # Authenticate user
-    user = authenticate(username=username, password=password)
+    # Try email-based authentication first (more specific in multi-tenant)
+    if email:
+        try:
+            user = User.objects.get(email=email)
+            if user.check_password(password):
+                if not user.is_active:
+                    return None, "Account is inactive"
+                # Email authentication successful, generate tokens
+                refresh = MyTokenObtainPairSerializer.get_token(user)
+                access_token = str(refresh.access_token)
+                refresh_token = str(refresh)
+                
+                token_data = {
+                    'access': access_token,
+                    'refresh': refresh_token,
+                    'username': user.username,
+                    'email': getattr(user, 'email', ''),
+                    'tenant_id': user.tenant_id,
+                    'company_name': getattr(user, 'company_name', ''),
+                }
+                
+                logger.info(
+                    f"🔐 LOGIN SUCCESS (Email) - {timezone.localtime().strftime('%Y-%m-%d %H:%M:%S')} | "
+                    f"Tenant: {user.tenant_id} ({token_data['company_name']}) | "
+                    f"User: {user.username} ({token_data['email']})"
+                )
+                
+                return user, token_data
+            else:
+                return None, "Invalid credentials"
+        except User.DoesNotExist:
+            # Email not found, fall through to username authentication
+            pass
+        except User.MultipleObjectsReturned:
+            # This shouldn't happen if email is unique, but handle it
+            logger.error(f"Multiple users found with email {email}")
+            return None, "Email authentication error. Please contact support."
     
-    if user is None:
-        pass
-        # Fallback removed - no TenantUser model
+    # Fallback to username-based authentication
+    users = User.objects.filter(username=username)
+    user = None
+    
+    for u in users:
+        if u.check_password(password):
+            if user is not None:
+                # Ambiguity: same username/password in multiple tenants
+                # Suggest using email for login
+                logger.warning(f"Ambiguous login for {username}: Multiple users found with same password.")
+                return None, "Multiple accounts found with this username. Please use your email address to log in."
+            user = u
             
     if user is None:
+        # No user found or password incorrect
         return None, "Invalid credentials"
     
     if not user.is_active:
@@ -44,7 +91,6 @@ def authenticate_user(username, password):
     refresh = MyTokenObtainPairSerializer.get_token(user)
     access_token = str(refresh.access_token)
     refresh_token = str(refresh)
-
 
     
     token_data = {
