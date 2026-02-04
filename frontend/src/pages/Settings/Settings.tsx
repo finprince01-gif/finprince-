@@ -1,7 +1,7 @@
-
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import type { CompanyDetails } from '../../types';
 import { apiService } from '../../services';
+import { usePermissions } from '../../hooks/usePermissions';
 
 interface SettingsPageProps {
   companyDetails: CompanyDetails;
@@ -18,6 +18,20 @@ const indianStates = [
 ];
 
 const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) => {
+  const { hasTabAccess, isSuperuser } = usePermissions();
+
+  const allTabs = ['Company Profile', 'Tax Settings', 'Regional Settings'];
+  const availableTabs = useMemo(() => {
+    return isSuperuser ? allTabs : allTabs.filter(tab => hasTabAccess('Settings', tab));
+  }, [hasTabAccess, isSuperuser]);
+
+  const [activeTab, setActiveTab] = useState(availableTabs.length > 0 ? availableTabs[0] : 'Company Profile');
+
+  useEffect(() => {
+    if (availableTabs.length > 0 && !availableTabs.includes(activeTab)) {
+      setActiveTab(availableTabs[0]);
+    }
+  }, [availableTabs, activeTab]);
   const [details, setDetails] = useState<CompanyDetails>(companyDetails);
   const [isSaved, setIsSaved] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -118,226 +132,255 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Page Title */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
-      </div>
-
-      {/* Main Settings Card */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-        <div className="space-y-10">
-          {/* Company Information Section */}
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-6 pb-2 border-b border-gray-200">
-              Company Information
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Company Name
-                </label>
-                <input
-                  type="text"
-                  name="name"
-                  value={details.name || ''}
-                  onChange={handleChange}
-                  disabled={!isEditMode}
-                  className={`w-full px-4 py-3 border rounded-lg transition-colors ${isEditMode
-                    ? 'border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500'
-                    : 'border-gray-200 bg-gray-50 text-gray-700 cursor-not-allowed'
-                    }`}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Company Logo
-                </label>
-                <input
-                  type="file"
-                  onChange={handleFileChange}
-                  disabled={!isEditMode}
-                  accept="image/*"
-                  className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Address
-                </label>
-                <textarea
-                  name="address"
-                  rows={4}
-                  value={details.address || ''}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors resize-none"
-                  placeholder="Enter company address"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Contact Information Section */}
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-6 pb-2 border-b border-gray-200">
-              Contact Information
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  name="email"
-                  value={details.email || ''}
-                  onChange={handleChange}
-                  disabled={!isEditMode}
-                  className={`w-full px-4 py-3 border rounded-lg transition-colors ${isEditMode
-                    ? 'border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500'
-                    : 'border-gray-200 bg-gray-50 text-gray-700 cursor-not-allowed'
-                    }`}
-                  placeholder="company@example.com"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Phone
-                </label>
-                <input
-                  type="tel"
-                  name="phone"
-                  value={details.phone || ''}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
-                  placeholder="+91 9876543210"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Website
-                </label>
-                <input
-                  type="url"
-                  name="website"
-                  value={details.website || ''}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
-                  placeholder="https://www.company.com"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Tax & Legal Information Section */}
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-6 pb-2 border-b border-gray-200">
-              Tax & Legal Information
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  GSTIN
-                </label>
-                <input
-                  type="text"
-                  name="gstin"
-                  value={details.gstin || ''}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
-                  placeholder="22AAAAA0000A1Z5"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  State
-                </label>
-                <select
-                  name="state"
-                  value={details.state || ''}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors bg-white"
-                >
-                  <option value="">Select State</option>
-                  {indianStates.map(state => (
-                    <option key={state} value={state}>{state}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  PAN
-                </label>
-                <input
-                  type="text"
-                  name="pan"
-                  value={details.pan || ''}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
-                  placeholder="AAAAA0000A"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  CIN
-                </label>
-                <input
-                  type="text"
-                  name="cin"
-                  value={details.cin || ''}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
-                  placeholder="U12345MH2020PLC123456"
-                />
-              </div>
-            </div>
-          </div>
-
-
-        </div>
-
-        {/* Action Buttons */}
-        <div className="mt-10 pt-6 border-t border-gray-200">
-          <div className="flex justify-end gap-3">
-            {isSaved && (
-              <div className="mr-4 flex items-center text-sm text-green-600">
-                <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-                Settings saved successfully!
-              </div>
-            )}
-
+      {/* Tabs */}
+      <div className="mb-6 border-b border-gray-200">
+        <nav className="flex space-x-8 px-2">
+          {availableTabs.map(tab => (
             <button
-              type="button"
-              onClick={handleEdit}
-              disabled={isEditMode}
-              className={`px-6 py-3 font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors shadow-sm ${isEditMode
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-green-600 text-white hover:bg-green-700 focus:ring-green-500'
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === tab
+                ? 'border-orange-600 text-orange-700'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
             >
-              Edit Settings
+              {tab}
             </button>
+          ))}
+        </nav>
+      </div>
 
-            <button
-              type="submit"
-              onClick={handleSubmit}
-              className="px-6 py-3 bg-orange-600 text-white font-medium rounded-lg hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-colors shadow-sm"
-            >
-              Save
-            </button>
+      {activeTab === 'Company Profile' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+          <div className="space-y-10">
+            {/* Company Information Section */}
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-6 pb-2 border-b border-gray-200">
+                Company Information
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Company Name
+                  </label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={details.name || ''}
+                    onChange={handleChange}
+                    disabled={!isEditMode}
+                    className={`w-full px-4 py-3 border rounded-lg transition-colors ${isEditMode
+                      ? 'border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500'
+                      : 'border-gray-200 bg-gray-50 text-gray-700 cursor-not-allowed'
+                      }`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Company Logo
+                  </label>
+                  <input
+                    type="file"
+                    onChange={handleFileChange}
+                    disabled={!isEditMode}
+                    accept="image/*"
+                    className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Address
+                  </label>
+                  <textarea
+                    name="address"
+                    rows={4}
+                    value={details.address || ''}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors resize-none"
+                    placeholder="Enter company address"
+                  />
+                </div>
+              </div>
+            </div>
 
-            {isEditMode && (
+            {/* Contact Information Section */}
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-6 pb-2 border-b border-gray-200">
+                Contact Information
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={details.email || ''}
+                    onChange={handleChange}
+                    disabled={!isEditMode}
+                    className={`w-full px-4 py-3 border rounded-lg transition-colors ${isEditMode
+                      ? 'border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500'
+                      : 'border-gray-200 bg-gray-50 text-gray-700 cursor-not-allowed'
+                      }`}
+                    placeholder="company@example.com"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Phone
+                  </label>
+                  <input
+                    type="tel"
+                    name="phone"
+                    value={details.phone || ''}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
+                    placeholder="+91 9876543210"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Website
+                  </label>
+                  <input
+                    type="url"
+                    name="website"
+                    value={details.website || ''}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
+                    placeholder="https://www.company.com"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Tax & Legal Information Section */}
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-6 pb-2 border-b border-gray-200">
+                Tax & Legal Information
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    GSTIN
+                  </label>
+                  <input
+                    type="text"
+                    name="gstin"
+                    value={details.gstin || ''}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
+                    placeholder="22AAAAA0000A1Z5"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    State
+                  </label>
+                  <select
+                    name="state"
+                    value={details.state || ''}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors bg-white"
+                  >
+                    <option value="">Select State</option>
+                    {indianStates.map(state => (
+                      <option key={state} value={state}>{state}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    PAN
+                  </label>
+                  <input
+                    type="text"
+                    name="pan"
+                    value={details.pan || ''}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
+                    placeholder="AAAAA0000A"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    CIN
+                  </label>
+                  <input
+                    type="text"
+                    name="cin"
+                    value={details.cin || ''}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
+                    placeholder="U12345MH2020PLC123456"
+                  />
+                </div>
+              </div>
+            </div>
+
+
+          </div>
+
+          {/* Action Buttons */}
+          <div className="mt-10 pt-6 border-t border-gray-200">
+            <div className="flex justify-end gap-3">
+              {isSaved && (
+                <div className="mr-4 flex items-center text-sm text-green-600">
+                  <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  Settings saved successfully!
+                </div>
+              )}
+
               <button
                 type="button"
-                onClick={handleCancel}
-                className="px-6 py-3 bg-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors shadow-sm"
+                onClick={handleEdit}
+                disabled={isEditMode}
+                className={`px-6 py-3 font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors shadow-sm ${isEditMode
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-green-600 text-white hover:bg-green-700 focus:ring-green-500'
+                  }`}
               >
-                Cancel
+                Edit Settings
               </button>
-            )}
+
+              <button
+                type="submit"
+                onClick={handleSubmit}
+                className="px-6 py-3 bg-orange-600 text-white font-medium rounded-lg hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-colors shadow-sm"
+              >
+                Save
+              </button>
+
+              {isEditMode && (
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  className="px-6 py-3 bg-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors shadow-sm"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {activeTab === 'Tax Settings' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Tax Settings</h2>
+          <p className="text-gray-500">Tax configuration options will be available soon.</p>
+        </div>
+      )}
+
+      {activeTab === 'Regional Settings' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Regional Settings</h2>
+          <p className="text-gray-500">Regional and language settings will be available soon.</p>
+        </div>
+      )}
     </div>
   );
 };

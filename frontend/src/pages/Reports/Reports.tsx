@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { usePermissions } from '../../hooks/usePermissions';
 import type { Ledger, Voucher, StockItem, SalesPurchaseVoucher, LedgerGroupMaster } from '../../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, AreaChart, Area } from 'recharts';
 
@@ -84,6 +85,9 @@ type GSTTab = 'B2B' | 'B2C-L' | 'B2C-S' | 'Exports' | 'CDN' | 'Advances' | 'ITC-
 
 const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], ledgerGroups = [], stockItems = [] }) => {
   // Report Options Mapping
+  const { hasTabAccess, isSuperuser } = usePermissions();
+
+  // Report Options Mapping
   const allReports: { id: ReportType; label: string }[] = [
     { id: 'DayBook', label: 'Day Book' },
     { id: 'LedgerReport', label: 'Ledger Report' },
@@ -94,11 +98,35 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
     { id: 'AIReport', label: 'AI Report' }
   ];
 
-  // RBAC Disabled - Show all reports
-  const availableReports = allReports;
-  const defaultReport = availableReports[0].id;
+  // Map ReportType IDs to permission tab names
+  const reportPermissionMap: { [key in ReportType]: string } = {
+    'DayBook': 'DayBook',
+    'LedgerReport': 'LedgerReport',
+    'TrialBalance': 'TrialBalance',
+    'BalanceSheet': 'BalanceSheet',
+    'StockSummary': 'StockSummary',
+    'GSTReports': 'GSTReports',
+    'AIReport': 'AIReport'
+  };
+
+  // Filter Reports based on permissions
+  const availableReports = isSuperuser
+    ? allReports
+    : allReports.filter(report => {
+      const permissionTabName = reportPermissionMap[report.id];
+      return hasTabAccess('Reports', permissionTabName);
+    });
+
+  const defaultReport = availableReports.length > 0 ? availableReports[0].id : ('DayBook' as ReportType);
 
   const [reportType, setReportType] = useState<ReportType>(defaultReport);
+
+  // Ensure active report is valid
+  useEffect(() => {
+    if (availableReports.length > 0 && !availableReports.find(r => r.id === reportType)) {
+      setReportType(availableReports[0].id);
+    }
+  }, [availableReports, reportType]);
 
   const [selectedLedger, setSelectedLedger] = useState<string>('');
   const [startDate, setStartDate] = useState<string>('');

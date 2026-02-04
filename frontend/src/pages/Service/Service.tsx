@@ -98,11 +98,32 @@ const GST_RATES = [0, 5, 12, 18, 28];
  * Service Page Component with Tabs
  */
 const ServicePage: React.FC<ServicePageProps> = () => {
+<<<<<<< Updated upstream
   const { hasTabAccess } = usePermissions();
   // Assume 'Services' permission controls both Groups and List for now
   const canAccessServices = hasTabAccess('Service', 'Services');
   
   const [activeTab, setActiveTab] = useState<ServiceTab>('service-group');
+=======
+  const { hasTabAccess, isSuperuser } = usePermissions();
+
+  const allServiceTabs = [
+    { id: 'service-group', label: 'SERVICE GROUP', perm: 'Service Group' },
+    { id: 'service-list', label: 'SERVICE LIST', perm: 'Service List' }
+  ] as const;
+
+  const availableTabs = isSuperuser
+    ? allServiceTabs
+    : allServiceTabs.filter(tab => hasTabAccess('Service', tab.perm));
+
+  const [activeTab, setActiveTab] = useState<ServiceTab>(availableTabs.length > 0 ? availableTabs[0].id : 'service-group');
+
+  useEffect(() => {
+    if (availableTabs.length > 0 && !availableTabs.find(t => t.id === activeTab)) {
+      setActiveTab(availableTabs[0].id);
+    }
+  }, [availableTabs, activeTab]);
+>>>>>>> Stashed changes
   const [services, setServices] = useState<any[]>([
     {
       id: 1,
@@ -615,6 +636,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
         {/* Tab Navigation */}
         <div className="mb-6 border-b border-slate-200">
           <div className="flex space-x-8">
+<<<<<<< Updated upstream
             <button
               onClick={() => setActiveTab('service-group')}
               className={`pb-3 px-2 font-medium transition-colors ${activeTab === 'service-group'
@@ -633,6 +655,20 @@ const ServicePage: React.FC<ServicePageProps> = () => {
             >
               Service List
             </button>
+=======
+            {availableTabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`pb-3 px-2 font-medium transition-colors ${activeTab === tab.id
+                  ? 'text-orange-600 border-b-2 border-orange-600'
+                  : 'text-gray-600 hover:text-gray-800'
+                  }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+>>>>>>> Stashed changes
           </div>
         </div>
 

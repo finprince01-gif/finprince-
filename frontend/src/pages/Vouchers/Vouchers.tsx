@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { usePermissions } from '../../hooks/usePermissions';
 import type { VoucherType, Ledger, StockItem, Voucher, SalesPurchaseVoucher, PaymentReceiptVoucher, ContraVoucher, JournalVoucher, JournalEntry, VoucherItem, ExtractedInvoiceData, CompanyDetails } from '../../types';
 import Icon from '../../components/Icon';
 import { apiService, httpClient } from '../../services';
@@ -105,19 +106,26 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({ value, onChange, op
 
 const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockItems, onAddVouchers, prefilledData, clearPrefilledData, onInvoiceUpload, companyDetails, onMassUploadComplete, permissions = [] }) => {
 
+  const { hasTabAccess, isSuperuser } = usePermissions();
+
   const allVoucherTypes: { id: VoucherType; label: string; perm: string }[] = [
-    { id: 'Sales', label: 'Sales', perm: 'VOUCHERS_SALES' },
-    { id: 'Purchase', label: 'Purchase', perm: 'VOUCHERS_PURCHASE' },
-    { id: 'Payment', label: 'Payment', perm: 'VOUCHERS_PAYMENT' },
-    { id: 'Receipt', label: 'Receipt', perm: 'VOUCHERS_RECEIPT' },
-    { id: 'Contra', label: 'Contra', perm: 'VOUCHERS_CONTRA' },
-    { id: 'Journal', label: 'Journal', perm: 'VOUCHERS_JOURNAL' },
-    { id: 'Expenses', label: 'Expenses', perm: 'VOUCHERS_EXPENSES' }
+    { id: 'Sales', label: 'Sales', perm: 'Sales' },
+    { id: 'Purchase', label: 'Purchase', perm: 'Purchase' },
+    { id: 'Payment', label: 'Payment', perm: 'Payment' },
+    { id: 'Receipt', label: 'Receipt', perm: 'Receipt' },
+    { id: 'Contra', label: 'Contra', perm: 'Contra' },
+    { id: 'Journal', label: 'Journal', perm: 'Journal' },
+    { id: 'Expenses', label: 'Expenses', perm: 'Expenses' },
+    { id: 'Credit Note', label: 'Credit Note', perm: 'Credit Note' },
+    { id: 'Debit Note', label: 'Debit Note', perm: 'Debit Note' }
   ];
 
-  // Show all voucher types (permission filtering disabled)
-  const availableVoucherTypes = allVoucherTypes;
-  const defaultVoucherType = availableVoucherTypes.length > 0 ? availableVoucherTypes[0].id : 'Purchase';
+  // Filter voucher types based on permissions
+  const availableVoucherTypes = isSuperuser
+    ? allVoucherTypes
+    : allVoucherTypes.filter(v => hasTabAccess('Vouchers', v.perm));
+
+  const defaultVoucherType = availableVoucherTypes.length > 0 ? availableVoucherTypes[0].id : ('Purchase' as VoucherType);
 
   const [voucherType, setVoucherType] = useState<VoucherType>(defaultVoucherType);
 
@@ -4621,6 +4629,18 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         {voucherType === 'Contra' && renderSimpleForm(voucherType)}
         {voucherType === 'Journal' && renderJournalForm()}
         {voucherType === 'Expenses' && renderExpensesForm()}
+        {voucherType === 'Credit Note' && (
+          <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
+            <h3 className="text-xl font-medium text-gray-900 mb-2">Credit Note Voucher</h3>
+            <p className="text-gray-500">Credit Note entry form is under development.</p>
+          </div>
+        )}
+        {voucherType === 'Debit Note' && (
+          <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
+            <h3 className="text-xl font-medium text-gray-900 mb-2">Debit Note Voucher</h3>
+            <p className="text-gray-500">Debit Note entry form is under development.</p>
+          </div>
+        )}
 
         {/* Hide page-level buttons for Receipt and Payment since they have their own buttons */}
         {voucherType !== 'Receipt' && voucherType !== 'Payment' && voucherType !== 'Expenses' && voucherType !== 'Sales' && (

@@ -1,14 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import GSTR1Page from './GSTR1';
+import { usePermissions } from '../../hooks/usePermissions';
 
 export default function GSTPage() {
-    const [activeTab, setActiveTab] = useState('GSTR1');
+    const { hasTabAccess, isSuperuser } = usePermissions();
 
-    const tabs = [
+    const allTabs = [
         { id: 'GSTR1', label: 'GSTR1 - Outward Supplies' },
         { id: 'GSTR2', label: 'GSTR2 - Inward Supplies' },
         { id: 'GSTR3B', label: 'GSTR3B - Summary Return' }
     ];
+
+    const availableTabs = isSuperuser
+        ? allTabs
+        : allTabs.filter(tab => hasTabAccess('GST', tab.id));
+
+    const [activeTab, setActiveTab] = useState(availableTabs.length > 0 ? availableTabs[0].id : '');
+
+    useEffect(() => {
+        if (availableTabs.length > 0 && !availableTabs.find(t => t.id === activeTab)) {
+            setActiveTab(availableTabs[0].id);
+        }
+    }, [availableTabs, activeTab]);
 
     return (
         <div className="min-h-screen bg-gray-50 p-8">
@@ -23,13 +36,13 @@ export default function GSTPage() {
                 <div className="bg-white rounded-lg shadow-sm mb-6">
                     <div className="border-b border-gray-200">
                         <div className="flex gap-8 px-6">
-                            {tabs.map((tab) => (
+                            {availableTabs.map((tab) => (
                                 <button
                                     key={tab.id}
                                     onClick={() => setActiveTab(tab.id)}
                                     className={`py-4 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === tab.id
-                                            ? 'border-blue-600 text-blue-700'
-                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                        ? 'border-blue-600 text-blue-700'
+                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                         }`}
                                 >
                                     {tab.label}

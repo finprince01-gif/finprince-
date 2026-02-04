@@ -129,7 +129,7 @@ export interface StockGroup {
   parent?: number | null;
 }
 
-export type VoucherType = 'Purchase' | 'Sales' | 'Payment' | 'Receipt' | 'Contra' | 'Journal' | 'Expenses';
+export type VoucherType = 'Purchase' | 'Sales' | 'Payment' | 'Receipt' | 'Contra' | 'Journal' | 'Expenses' | 'Credit Note' | 'Debit Note';
 
 export interface BaseVoucher {
   id: string;
