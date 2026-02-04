@@ -564,7 +564,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                             className={`
                                 pb-3 text-sm font-medium transition-colors duration-200 relative
                                 ${activeTab === tab.id
-                                    ? 'text-teal-600 border-b-2 border-teal-600'
+                                    ? 'text-emerald-600 border-b-2 border-emerald-600'
                                     : 'text-gray-600 hover:text-gray-800'
                                 }
                             `}

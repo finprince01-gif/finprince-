@@ -1,0 +1,12 @@
+START SCRIPT
+COUNT: 6
+Contract: 1 | No: CON-8999 | Tenant: 12306aa9-51cd-4284-8884-031242de1f03 | Deleted: False
+Contract: 2 | No: CT-2026-224 | Tenant: 12306aa9-51cd-4284-8884-031242de1f03 | Deleted: False
+Contract: 4 | No: TEST-CAMEL-003 | Tenant: 12306aa9-51cd-4284-8884-031242de1f03 | Deleted: False
+Contract: 6 | No: TEST-ERR-523 | Tenant: 12306aa9-51cd-4284-8884-031242de1f03 | Deleted: False
+Contract: 9 | No: CT-2026-0896 | Tenant: 12306aa9-51cd-4284-8884-031242de1f03 | Deleted: False
+Contract: 10 | No: CT-2026-9617 | Tenant: 12306aa9-51cd-4284-8884-031242de1f03 | Deleted: False
+USER COUNT: 2
+User: dummy | ID: 1 | Tenant: 17e87191-0a7a-4961-9a8c-7bf0d5fe48dd
+User: admin | ID: 3 | Tenant: 12306aa9-51cd-4284-8884-031242de1f03
+END SCRIPT

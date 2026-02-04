@@ -3,7 +3,16 @@ import { httpClient } from '../../services/httpClient';
 
 export default function GSTR1Page() {
     const [activeSubTab, setActiveSubTab] = useState('B2B');
-    const [period, setPeriod] = useState({ year: '2024-25', month: 'January' });
+    const [period, setPeriod] = useState(() => {
+        const today = new Date();
+        const currentYear = today.getFullYear();
+        const currentMonth = today.getMonth();
+        const fyStartYear = currentMonth >= 3 ? currentYear : currentYear - 1;
+        return {
+            year: `${fyStartYear}-${(fyStartYear + 1).toString().slice(-2)}`,
+            month: 'January'
+        };
+    });
     const [isLoading, setIsLoading] = useState(false);
 
     // Data states
@@ -18,6 +27,7 @@ export default function GSTR1Page() {
     const [docData, setDocData] = useState<any[]>([]);
     const [expData, setExpData] = useState<any[]>([]);
     const [hsnData, setHsnData] = useState<any[]>([]);
+    const [stats, setStats] = useState<Record<string, number>>({});
 
     const subTabs = [
         // Original tabs
@@ -35,20 +45,25 @@ export default function GSTR1Page() {
     const fetchData = async () => {
         setIsLoading(true);
         try {
+            // Fetch stats first
+            let queryParams = new URLSearchParams(period as any).toString();
+            const statsRes = await httpClient.get(`/api/gst/gstr1/stats/?${queryParams}`);
+            setStats(statsRes || {});
+
             // Mapping tab names to API endpoints
             const endpointMap: Record<string, string> = {
-                'B2B': '/api/accounting/gst/gstr1/b2b/',
-                'B2CL': '/api/accounting/gst/gstr1/b2cl/',
-                'B2CS': '/api/accounting/gst/gstr1/b2cs/',
-                'CDNR': '/api/accounting/gst/gstr1/cdnr/',
-                'CDNUR': '/api/accounting/gst/gstr1/cdnur/',
-                'EXP': '/api/accounting/gst/gstr1/exp/',
-                'AT': '/api/accounting/gst/gstr1/at/',
-                'ATADJ': '/api/accounting/gst/gstr1/atadj/',
-                'EXEMP': '/api/accounting/gst/gstr1/exemp/',
-                'DOC': '/api/accounting/gst/gstr1/doc/',
-                'HSNB2B': '/api/accounting/gst/gstr1/hsnb2b/',
-                'HSNB2C': '/api/accounting/gst/gstr1/hsnb2c/',
+                'B2B': '/api/gst/gstr1/b2b/',
+                'B2CL': '/api/gst/gstr1/b2cl/',
+                'B2CS': '/api/gst/gstr1/b2cs/',
+                'CDNR': '/api/gst/gstr1/cdnr/',
+                'CDNUR': '/api/gst/gstr1/cdnur/',
+                'EXP': '/api/gst/gstr1/exp/',
+                'AT': '/api/gst/gstr1/at/',
+                'ATADJ': '/api/gst/gstr1/atadj/',
+                'EXEMP': '/api/gst/gstr1/exemp/',
+                'DOC': '/api/gst/gstr1/doc/',
+                'HSNB2B': '/api/gst/gstr1/hsnb2b/',
+                'HSNB2C': '/api/gst/gstr1/hsnb2c/',
 
             };
 
@@ -73,7 +88,7 @@ export default function GSTR1Page() {
             }
 
             // In a real application, you'd pass period as query parameters
-            const queryParams = new URLSearchParams(period as any).toString();
+            queryParams = new URLSearchParams(period as any).toString();
             const fullUrl = `${url}?${queryParams}`;
             const response = await httpClient.get(fullUrl);
 
@@ -128,7 +143,7 @@ export default function GSTR1Page() {
     const handleDownloadExcel = async () => {
         try {
             const queryParams = new URLSearchParams(period as any).toString();
-            const response: any = await httpClient.get(`/api/accounting/gst/gstr1/download_excel/?${queryParams}`);
+            const response: any = await httpClient.get(`/api/gst/gstr1/download_excel/?${queryParams}`);
 
             const url = window.URL.createObjectURL(response);
             const link = document.createElement('a');
@@ -145,7 +160,7 @@ export default function GSTR1Page() {
     const handleDownloadJson = async () => {
         try {
             const queryParams = new URLSearchParams(period as any).toString();
-            const response: any = await httpClient.get(`/api/accounting/gst/gstr1/download_json/?${queryParams}`);
+            const response: any = await httpClient.get(`/api/gst/gstr1/download_json/?${queryParams}`);
 
             const blob = new Blob([JSON.stringify(response, null, 2)], { type: 'application/json' });
             const url = window.URL.createObjectURL(blob);
@@ -177,8 +192,23 @@ export default function GSTR1Page() {
                             onChange={(e) => setPeriod({ ...period, year: e.target.value })}
                             className="px-4 py-2 border border-gray-300 rounded-md"
                         >
-                            <option>2024-25</option>
-                            <option>2023-24</option>
+                            {(() => {
+                                const years = [];
+                                const today = new Date();
+                                const currentYear = today.getFullYear();
+                                const currentMonth = today.getMonth(); // 0 is January
+
+                                // GST Financial Year starts in April (index 3)
+                                let fyStartYear = currentMonth >= 3 ? currentYear : currentYear - 1;
+
+                                for (let i = 0; i < 11; i++) {
+                                    const start = fyStartYear - i;
+                                    const end = (start + 1).toString().slice(-2);
+                                    const fyLabel = `${start}-${end}`;
+                                    years.push(<option key={fyLabel} value={fyLabel}>{fyLabel}</option>);
+                                }
+                                return years;
+                            })()}
                         </select>
                     </div>
                     <div>
@@ -239,7 +269,7 @@ export default function GSTR1Page() {
                                     : 'border-transparent text-gray-500 hover:text-gray-700'
                                     }`}
                             >
-                                {tab}
+                                {tab} {stats[tab] !== undefined && stats[tab] > 0 ? `(${stats[tab]})` : ''}
                             </button>
                         ))}
                     </div>

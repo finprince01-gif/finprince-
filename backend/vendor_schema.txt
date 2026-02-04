@@ -1,0 +1,22 @@
+CREATE TABLE `vendor_master_basicdetail` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) NOT NULL COMMENT 'Tenant ID for multi-tenancy',
+  `vendor_code` varchar(50) DEFAULT NULL COMMENT 'Vendor code (auto-generated or manual)',
+  `vendor_name` varchar(200) NOT NULL COMMENT 'Vendor name',
+  `pan_no` varchar(10) DEFAULT NULL COMMENT 'PAN number',
+  `contact_person` varchar(100) DEFAULT NULL COMMENT 'Contact person name',
+  `email` varchar(255) NOT NULL COMMENT 'Email address',
+  `contact_no` varchar(20) NOT NULL COMMENT 'Contact number',
+  `is_also_customer` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Is this vendor also a customer?',
+  `is_active` tinyint(1) NOT NULL DEFAULT '1' COMMENT 'Whether this vendor is active',
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `created_by` varchar(100) DEFAULT NULL COMMENT 'Created by user',
+  `updated_by` varchar(100) DEFAULT NULL COMMENT 'Updated by user',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `vendor_basicdetail_tenant_code_unique` (`tenant_id`,`vendor_code`),
+  KEY `vendor_basicdetail_tenant_id_idx` (`tenant_id`),
+  KEY `vendor_basicdetail_tenant_name_idx` (`tenant_id`,`vendor_name`),
+  KEY `vendor_basicdetail_email_idx` (`email`),
+  KEY `vendor_basicdetail_pan_idx` (`pan_no`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Vendor Master Basic Details for vendor creation'

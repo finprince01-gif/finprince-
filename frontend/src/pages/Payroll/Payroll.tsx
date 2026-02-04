@@ -81,9 +81,9 @@ const PayrollPage: React.FC = () => {
     };
 
     return (
-        <div className="flex-1 bg-gradient-to-br from-green-50 to-emerald-50 min-h-screen">
+        <div className="flex-1 bg-sky-50 min-h-screen">
             {/* Header */}
-            <div className="bg-white border-b border-gray-200 px-8 py-6">
+            <div className="px-8 py-6">
                 <div className="flex items-center justify-between">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900">Payroll Management</h1>
@@ -102,14 +102,14 @@ const PayrollPage: React.FC = () => {
             </div>
 
             {/* Tab Navigation */}
-            <div className="bg-white border-b border-gray-200 px-8">
-                <div className="flex gap-8">
+            <div className="px-8">
+                <div className="flex gap-8 border-b border-gray-200 pb-1">
                     {tabs.map((tab) => (
                         <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
-                            className={`py-4 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === tab
-                                ? 'border-green-600 text-green-700'
+                            className={`py-2 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === tab
+                                ? 'border-blue-600 text-blue-600'
                                 : 'border-transparent text-gray-500 hover:text-gray-700'
                                 }`}
                         >

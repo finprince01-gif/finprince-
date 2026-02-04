@@ -7,7 +7,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.db.models import Sum, Q, Count
-from .models import SalesVoucher
+from accounting.models_voucher_sales import VoucherSalesInvoiceDetails
 from core.utils import IsTenantMember
 
 class GSTR1ViewSet(viewsets.ViewSet):
@@ -23,10 +23,10 @@ class GSTR1ViewSet(viewsets.ViewSet):
         tenant_id = getattr(user, 'tenant_id', None)
         
         if tenant_id:
-            queryset = SalesVoucher.objects.filter(tenant_id=tenant_id).exclude(status='cancelled')
+            queryset = VoucherSalesInvoiceDetails.objects.filter(tenant_id=tenant_id)
         else:
-            # Fallback for dev environments without auth
-            queryset = SalesVoucher.objects.all()
+            # Fallback
+            queryset = VoucherSalesInvoiceDetails.objects.all()
             
         # Date Filtering logic
         year_str = self.request.query_params.get('year')
@@ -57,47 +57,67 @@ class GSTR1ViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def b2b(self, request):
         """Get B2B invoices (Registered Customers)"""
-        # Use bill_to_gstin field directly from SalesVoucher
-        vouchers = self.get_queryset().exclude(bill_to_gstin__isnull=True).exclude(bill_to_gstin__exact='')
+        vouchers = self.get_queryset().exclude(gstin__isnull=True).exclude(gstin__exact='')
         
         data = []
         for v in vouchers:
+            pay = getattr(v, 'payment_details', None)
+            val = pay.payment_invoice_value if pay else 0
+            taxable = pay.payment_taxable_value if pay else 0
+            igst = pay.payment_igst if pay else 0
+            cgst = pay.payment_cgst if pay else 0
+            sgst = pay.payment_sgst if pay else 0
+
+            # Determine POS
+            pos = ''
+            if v.gstin and len(v.gstin) >= 2:
+                pos = v.gstin[:2]
+            elif v.state_type == 'within': pos = '29' 
+            elif v.state_type == 'other': pos = '27'
+
             data.append({
-                'gstin': v.bill_to_gstin,
-                'recipient_name': v.customer.name if v.customer else v.customer_name, # Fallback
-                'invoice_no': v.sales_invoice_number,
+                'gstin': v.gstin,
+                'recipient_name': v.customer_name,
+                'invoice_no': v.sales_invoice_no,
                 'invoice_date': v.date,
-                'invoice_value': v.grand_total,
-                'place_of_supply': v.place_of_supply or v.bill_to_state,
-                'reverse_charge': v.reverse_charge,
-                'taxable_value': v.total_taxable_amount,
-                'igst': v.total_igst,
-                'cgst': v.total_cgst,
-                'sgst': v.total_sgst,
-                'rate': 0, # Complex to calc average rate here without items
+                'invoice_value': val,
+                'place_of_supply': pos,
+                'reverse_charge': 'N',
+                'taxable_value': taxable,
+                'igst': igst,
+                'cgst': cgst,
+                'sgst': sgst,
+                'rate': 0, 
             })
         return Response(data)
 
     @action(detail=False, methods=['get'])
     def b2cl(self, request):
         """Get B2C Large invoices"""
-        # Unregistered (> 2.5L and Inter-state)
-        # Using bill_to_gstin being empty
-        vouchers = self.get_queryset().filter(
-            Q(bill_to_gstin__isnull=True) | Q(bill_to_gstin__exact=''),
-            grand_total__gt=250000
-        )
+        # Logic: Filter conceptually first, but since grand_total is in related table, iterate
+        all_vouchers = self.get_queryset().filter(Q(gstin__isnull=True) | Q(gstin__exact=''))
         
         data = []
-        for v in vouchers:
+        for v in all_vouchers:
+            pay = getattr(v, 'payment_details', None)
+            val = pay.payment_invoice_value if pay else 0
+            if val <= 250000: continue # Skip if not large
+            if v.state_type != 'other': continue # Skip if not interstate
+
+            taxable = pay.payment_taxable_value if pay else 0
+            igst = pay.payment_igst if pay else 0
+            
+            # POS
+            pos = '27' # Default Interstate
+
             data.append({
-                'invoice_no': v.sales_invoice_number,
+                'invoice_no': v.sales_invoice_no,
                 'invoice_date': v.date,
-                'invoice_value': v.grand_total,
-                'place_of_supply': v.place_of_supply or v.bill_to_state,
+                'invoice_value': val,
+                'place_of_supply': pos,
                 'rate': 0,
-                'taxable_value': v.total_taxable_amount,
-                'igst': v.total_igst,
+                'taxable_value': taxable,
+                'igst': igst,
                 'cess': 0
             })
         return Response(data)
@@ -105,33 +125,45 @@ class GSTR1ViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def b2cs(self, request):
         """Get B2C Small aggregated"""
-        vouchers = self.get_queryset().filter(
-            Q(bill_to_gstin__isnull=True) | Q(bill_to_gstin__exact=''),
-            grand_total__lte=250000
-        )
+        all_vouchers = self.get_queryset().filter(Q(gstin__isnull=True) | Q(gstin__exact=''))
         
-        # Filter to keep only those that have a place of supply (usually required for B2CS)
-        
-        # Aggregate by place_of_supply
-        # Note: True aggregation requires grouping by Rate as well. 
-        # This is simplified.
-        aggregated = vouchers.values('place_of_supply').annotate(
-            total_taxable=Sum('total_taxable_amount'),
-            total_igst=Sum('total_igst'),
-            total_cgst=Sum('total_cgst'),
-            total_sgst=Sum('total_sgst')
-        )
-        
+        # Manually aggregate
+        agg_map = {} # POS -> {taxable, igst...}
+
+        for v in all_vouchers:
+            pay = getattr(v, 'payment_details', None)
+            val = pay.payment_invoice_value if pay else 0
+            
+            # Filter condition: Small (<2.5L) OR Intra-state
+            is_large_inter = (val > 250000 and v.state_type == 'other')
+            if is_large_inter: continue 
+
+            taxable = pay.payment_taxable_value if pay else 0
+            igst = pay.payment_igst if pay else 0
+            cgst = pay.payment_cgst if pay else 0
+            sgst = pay.payment_sgst if pay else 0
+
+            # POS
+            pos = '29' if v.state_type == 'within' else '27'
+            
+            if pos not in agg_map:
+                agg_map[pos] = {'taxable': 0, 'igst': 0, 'cgst': 0, 'sgst': 0}
+            
+            agg_map[pos]['taxable'] += float(taxable)
+            agg_map[pos]['igst'] += float(igst)
+            agg_map[pos]['cgst'] += float(cgst)
+            agg_map[pos]['sgst'] += float(sgst)
+
         data = []
-        for v in aggregated:
+        for pos, vals in agg_map.items():
             data.append({
                 'type': 'OE',
-                'place_of_supply': v['place_of_supply'],
+                'place_of_supply': pos,
                 'rate': 0, 
-                'taxable_value': v['total_taxable'],
-                'igst': v['total_igst'],
-                'cgst': v['total_cgst'],
-                'sgst': v['total_sgst'],
+                'taxable_value': vals['taxable'],
+                'igst': vals['igst'],
+                'cgst': vals['cgst'],
+                'sgst': vals['sgst'],
                 'cess': 0
             })
         return Response(data)
@@ -139,23 +171,64 @@ class GSTR1ViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def exp(self, request):
         """Get Export invoices"""
-        vouchers = self.get_queryset().filter(tax_type='export')
+        # tax_type for export might be 'export'
+        vouchers = self.get_queryset().filter(state_type='export')
         
         data = []
         for v in vouchers:
+            pay = getattr(v, 'payment_details', None)
+            val = pay.payment_invoice_value if pay else 0
+            taxable = pay.payment_taxable_value if pay else 0
+
             data.append({
                 'export_type': v.export_type or 'WPAY',
-                'invoice_no': v.sales_invoice_number,
+                'invoice_no': v.sales_invoice_no,
                 'invoice_date': v.date,
-                'invoice_value': v.grand_total,
-                'port_code': v.port_code,
-                'shipping_bill_number': v.shipping_bill_number,
-                'shipping_bill_date': v.shipping_bill_date,
+                'invoice_value': val,
+                'port_code': '',
+                'shipping_bill_number': '',
+                'shipping_bill_date': '',
                 'rate': 0,
-                'taxable_value': v.total_taxable_amount
-            }
-)
+                'taxable_value': taxable
+            })
         return Response(data)
+
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """Returns counts for each GSTR1 category for the selected period"""
+        queryset = self.get_queryset()
+        
+        # B2B
+        b2b_count = queryset.exclude(gstin__isnull=True).exclude(gstin__exact='').count()
+        
+        # Unregistered (conceptually B2C)
+        unreg = queryset.filter(Q(gstin__isnull=True) | Q(gstin__exact=''))
+        
+        # We need to iterate or use complex annotation because grand_total is in related table
+        b2cl_count = 0
+        b2cs_count = 0
+        for v in unreg:
+            val = getattr(v.payment_details, 'payment_invoice_value', 0) if hasattr(v, 'payment_details') else 0
+            if val > 250000 and v.state_type == 'other':
+                b2cl_count += 1
+            else:
+                b2cs_count += 1
+        
+        exp_count = queryset.filter(state_type='export').count()
+
+        return Response({
+            'B2B': b2b_count,
+            'B2CL': b2cl_count,
+            'B2CS': b2cs_count,
+            'EXP': exp_count,
+            # Placeholder for others
+            'CDNR': 0,
+            'CDNUR': 0,
+            'AT': 0,
+            'ATADJ': 0,
+            'HSN': 0,
+            'DOC': 0
+        })
 
     @action(detail=False, methods=['get'])
     def cdnr(self, request):
@@ -460,41 +533,63 @@ class GSTR1ViewSet(viewsets.ViewSet):
             cols_cdnur = ['UR Type', 'Note/Refund Voucher Number', 'Note/Refund Voucher Date', 'Document Type', 'Reason For Issuing Note', 'Place Of Supply', 'Note/Refund Voucher Value', 'Rate', 'Taxable Value', 'Cess Amount', 'Pre GST']
             
             for v in queryset:
-                has_gstin = v.bill_to_gstin and v.bill_to_gstin.strip()
-                val = v.grand_total
-                pos = v.place_of_supply or v.bill_to_state
+                # Access related payment details (OneToOne/Foreign Key)
+                # Using getattr to be safe if relation missing
+                pay = getattr(v, 'payment_details', None)
                 
+                # Default values if pay is missing
+                val = pay.payment_invoice_value if pay else 0
+                taxable = pay.payment_taxable_value if pay else 0
+                igst = pay.payment_igst if pay else 0
+                cgst = pay.payment_cgst if pay else 0
+                sgst = pay.payment_sgst if pay else 0
+                cess = pay.payment_cess if pay else 0
+
+                has_gstin = v.gstin and v.gstin.strip()
+                
+                # Determine POS (Place of Supply)
+                pos = ''
+                if has_gstin and len(v.gstin) >= 2:
+                    pos = v.gstin[:2]
+                elif v.state_type == 'within':
+                   pos = '29' # Default to Karnataka for now or infer
+                elif v.state_type == 'other':
+                   pos = '27' # Default/Placeholder
+
                 row_common = {
-                    'Invoice Number': v.sales_invoice_number,
+                    'Invoice Number': v.sales_invoice_no,
                     'Invoice Date': v.date,
                     'Invoice Value': val,
                     'Place Of Supply': pos,
                     'Rate': 0, 
-                    'Taxable Value': v.total_taxable_amount,
-                    'Cess Amount': 0
+                    'Taxable Value': taxable,
+                    'Cess Amount': cess
                 }
                 
+                # Check tables
                 if has_gstin:
                     r = row_common.copy()
-                    r['GSTIN/UIN of Recipient'] = v.bill_to_gstin
-                    r['Receiver Name'] = v.customer.name if v.customer else ''
-                    r['Reverse Charge'] = v.reverse_charge
-                    r['Invoice Type'] = v.invoice_type
-                    r['E-Commerce GSTIN'] = v.ecommerce_gstin
-                    # Ensure all cols are present
+                    r['GSTIN/UIN of Recipient'] = v.gstin
+                    r['Receiver Name'] = v.customer_name
+                    r['Reverse Charge'] = 'N' # Not in model, default N
+                    r['Invoice Type'] = 'Regular'
+                    r['E-Commerce GSTIN'] = ''
                     b2b_rows.append(r)
                 
                 elif v.tax_type == 'export':
                     r = row_common.copy()
-                    r['Export Type'] = v.export_type
-                    r['Port Code'] = v.port_code
-                    r['Shipping Bill No'] = v.shipping_bill_number
-                    r['Shipping Bill Date'] = v.shipping_bill_date
+                    r['Export Type'] = v.export_type or 'WPAY'
+                    r['Port Code'] = ''
+                    r['Shipping Bill No'] = ''
+                    r['Shipping Bill Date'] = ''
+                    # Try to fetch from dispatch if exists? 
+                    # dispatch = getattr(v, 'dispatch_details', None)
+                    # if dispatch: ...
                     exp_rows.append(r)
                     
-                elif val > 250000 and v.tax_type == 'other_state':
+                elif val > 250000 and v.state_type == 'other':
                     r = {k: v for k, v in row_common.items() if k in cols_b2cl}
-                    r['E-Commerce GSTIN'] = v.ecommerce_gstin
+                    r['E-Commerce GSTIN'] = ''
                     b2cl_rows.append(r)
                 
                 else:
@@ -502,9 +597,9 @@ class GSTR1ViewSet(viewsets.ViewSet):
                         'Type': 'OE',
                         'Place Of Supply': pos,
                         'Rate': 0,
-                        'Taxable Value': v.total_taxable_amount,
-                        'Cess Amount': 0,
-                        'E-Commerce GSTIN': v.ecommerce_gstin
+                        'Taxable Value': taxable,
+                        'Cess Amount': cess,
+                        'E-Commerce GSTIN': ''
                     }
                     b2cs_rows.append(r)
 
@@ -585,26 +680,45 @@ class GSTR1ViewSet(viewsets.ViewSet):
         }
         
         for v in queryset:
-             has_gstin = v.bill_to_gstin and v.bill_to_gstin.strip() if v.bill_to_gstin else False
-             is_large = v.grand_total > 250000
-             is_inter = v.tax_type == 'other_state'
+             # Access related payment details
+             pay = getattr(v, 'payment_details', None)
+             
+             # Default values
+             val = pay.payment_invoice_value if pay else 0
+             taxable = pay.payment_taxable_value if pay else 0
+             igst = pay.payment_igst if pay else 0
+             cgst = pay.payment_cgst if pay else 0
+             sgst = pay.payment_sgst if pay else 0
+             
+             has_gstin = v.gstin and v.gstin.strip()
+             is_large = val > 250000
+             is_inter = v.state_type == 'other'
+             
+             # Determine POS
+             pos = ''
+             if has_gstin and len(v.gstin) >= 2:
+                 pos = v.gstin[:2]
+             elif v.state_type == 'within':
+                 pos = '29' 
+             elif v.state_type == 'other':
+                 pos = '27'
 
              item = {
-                 "inum": v.sales_invoice_number,
+                 "inum": v.sales_invoice_no,
                  "idt": str(v.date),
-                 "val": float(v.grand_total),
-                 "pos": v.place_of_supply,
-                 "rchrg": v.reverse_charge,
+                 "val": float(val),
+                 "pos": pos,
+                 "rchrg": "N",
                  "inv_typ": "R",
                  "itms": [
                      {
                          "num": 1,
                          "itm_det": {
-                             "txval": float(v.total_taxable_amount),
+                             "txval": float(taxable),
                              "rt": 0,
-                             "iamt": float(v.total_igst),
-                             "camt": float(v.total_cgst),
-                             "samt": float(v.total_sgst),
+                             "iamt": float(igst),
+                             "camt": float(cgst),
+                             "samt": float(sgst),
                              "csamt": 0
                          }
                      }
@@ -612,7 +726,7 @@ class GSTR1ViewSet(viewsets.ViewSet):
              }
              
              if has_gstin:
-                 ctin = v.bill_to_gstin
+                 ctin = v.gstin
                  found = False
                  for entry in data['b2b']:
                      if entry['ctin'] == ctin:
@@ -625,7 +739,7 @@ class GSTR1ViewSet(viewsets.ViewSet):
              elif (not has_gstin) and is_large and is_inter:
                  found = False
                  for entry in data['b2cl']:
-                     if entry['pos'] == v.place_of_supply:
+                     if entry['pos'] == pos:
                          entry['inv'].append(item)
                          found = True
                          break
