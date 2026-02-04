@@ -130,7 +130,7 @@ class UserManagementViewSet(viewsets.ModelViewSet):
     - POST /api/rbac/users/ - Create a new user with role assignment
     - GET /api/rbac/users/{id}/ - Get user details with roles
     - PUT /api/rbac/users/{id}/ - Update user
-    - DELETE /api/rbac/users/{id}/ - Delete user (deactivate)
+    - DELETE /api/rbac/users/{id}/ - Delete user (permanently remove from database)
     - GET /api/rbac/users/me/permissions/ - Get current user's permissions
     """
     permission_classes = [IsAuthenticated]
@@ -153,9 +153,8 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         return UserWithRolesSerializer
     
     def perform_destroy(self, instance):
-        """Deactivate user instead of deleting"""
-        instance.is_active = False
-        instance.save()
+        """Delete user from database"""
+        instance.delete()
     
     @action(detail=False, methods=['get'])
     def me(self, request):
