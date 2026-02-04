@@ -2377,3 +2377,58 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_grn` (
   KEY `idx_iog_grn_no` (`grn_no`),
   KEY `idx_iog_location` (`location_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- ============================================================================
+-- RBAC (Role-Based Access Control) Tables
+-- ============================================================================
+-- Simplified RBAC implementation with only 2 tables + existing users table
+-- Total: 3 tables (users + rbac_roles + rbac_user_roles)
+
+-- Table: rbac_roles
+--------------------------------------------------------------------------------
+CREATE TABLE `rbac_roles` (
+  `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+  `tenant_id` VARCHAR(36) NOT NULL,
+  `name` VARCHAR(100) NOT NULL,
+  `description` TEXT NULL,
+  `permissions` JSON NOT NULL DEFAULT ('{}'),
+  `is_active` BOOLEAN NOT NULL DEFAULT TRUE,
+  `created_at` DATETIME(6) NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` DATETIME(6) NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  
+  INDEX `idx_rbac_roles_tenant` (`tenant_id`),
+  INDEX `idx_rbac_roles_active` (`is_active`),
+  INDEX `idx_rbac_roles_name` (`name`),
+  
+  UNIQUE KEY `unique_role_per_tenant` (`tenant_id`, `name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+COMMENT='Role definitions with hierarchical permissions for RBAC';
+
+-- Table: rbac_user_roles
+CREATE TABLE `rbac_user_roles` (
+  `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+  `tenant_id` VARCHAR(36) NOT NULL,
+  `user_id` BIGINT NOT NULL,
+  `role_id` BIGINT NOT NULL,
+  `username` VARCHAR(150) NULL COMMENT 'Snapshot of username',
+  `email` VARCHAR(254) NULL COMMENT 'Snapshot of email',
+  `phone` VARCHAR(15) NULL COMMENT 'Snapshot of phone',
+  `assigned_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `assigned_by_id` BIGINT NULL,
+  `created_at` DATETIME(6) NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` DATETIME(6) NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  
+  INDEX `idx_rbac_user_roles_tenant` (`tenant_id`),
+  INDEX `idx_rbac_user_roles_user` (`user_id`),
+  INDEX `idx_rbac_user_roles_role` (`role_id`),
+  INDEX `idx_rbac_user_roles_assigned_by` (`assigned_by_id`),
+  INDEX `idx_rbac_user_roles_assigned_at` (`assigned_at`),
+  
+  UNIQUE KEY `unique_user_role_per_tenant` (`user_id`, `role_id`, `tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+COMMENT='User-to-Role assignments for RBAC';
+
+-- ============================================================================
+-- End of RBAC Tables
+-- ============================================================================
+

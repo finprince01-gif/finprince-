@@ -17,7 +17,7 @@
  * 3. Vouchers - All transaction types (sales, purchase, payment, etc.)
  * 4. AI Features - Invoice extraction, narration generation
  * 5. Authentication - Login, register, logout
- * 6. Users & Permissions - User management, roles, permissions
+ * 5. Authentication - Login, register, logout
  * 
  * FOR NEW DEVELOPERS:
  * - Always use apiService instead of httpClient directly
@@ -52,7 +52,7 @@ import type {
     VoucherTypeMaster,
     VoucherNumbering,
     UserTable,
-    RoleModulesData
+
 } from '../types';
 
 /**
@@ -522,60 +522,15 @@ class ApiService {
     }
 
     // ============================================================================
-    // USER & PERMISSIONS
-    // ============================================================================
 
-    async getModuleSchema() {
-        return httpClient.get<Record<string, any>>('/api/module-permissions/schema/');
-    }
 
-    async getUserModulePermissions(userId: string) {
-        return httpClient.get<{ user_id: string; tenant_id: string; codes: string[] }>(`/api/module-permissions/user/${userId}/`);
-    }
 
-    async updateUserModulePermissions(userId: string, codes: string[]) {
-        return httpClient.put<{ success: boolean; message: string; codes: string[] }>(`/api/module-permissions/user/${userId}/`, { codes });
-    }
-
-    async getUsers() {
-        return httpClient.get<{ users: any[] }>('/api/settings/users/');
-    }
-
-    async createUser(data: any) {
-        return httpClient.post<{ success: boolean }>('/api/settings/users/', data);
-    }
-
-    async updateUser(userId: number, permissions: any[]) {
-        return httpClient.put<{ success: boolean }>(`/api/settings/users/${userId}/`, { userId, permissions });
-    }
-
-    async updateUserRoles(userId: number, roleIds: number[]) {
-        return httpClient.put<{ success: boolean }>(`/api/settings/users/${userId}/roles/`, { roleIds });
-    }
-
-    async deactivateUser(userId: number) {
-        return httpClient.post<{ success: boolean }>(`/api/settings/users/${userId}/deactivate/`);
-    }
-
-    async activateUser(userId: number) {
-        return httpClient.post<{ success: boolean }>(`/api/settings/users/${userId}/activate/`);
-    }
-
-    async deleteUser(userId: number) {
-        return httpClient.delete<{ success: boolean }>(`/api/settings/users/${userId}/`);
-    }
 
     async getUserTables() {
         return httpClient.get<UserTable[]>('/api/user-tables/');
     }
 
-    async getRoleModules(roleId: number) {
-        return httpClient.get<RoleModulesData>(`/api/settings/role-modules/${roleId}/`);
-    }
 
-    async saveRoleModules(roleId: number, selectedSubmoduleIds: number[]) {
-        return httpClient.post<{ success: boolean; message: string }>(`/api/settings/role-modules/${roleId}/`, { selectedSubmoduleIds });
-    }
 
     // ============================================================================
     // SALES VOUCHERS
@@ -733,6 +688,153 @@ class ApiService {
         }
 
         return httpClient.post<any>('/api/voucher-sales-new/', data);
+    }
+
+    // ============================================================================
+    // RBAC (Role-Based Access Control)
+    // ============================================================================
+    // User and role management with granular permissions
+
+    /**
+     * Get all roles for the current tenant
+     * @returns Array of roles with permissions
+     */
+    async getRoles() {
+        return httpClient.get<any[]>('/api/rbac/roles/');
+    }
+
+    /**
+     * Get a specific role by ID
+     * @param roleId - Role ID
+     * @returns Role details with permissions
+     */
+    async getRole(roleId: number) {
+        return httpClient.get<any>(`/api/rbac/roles/${roleId}/`);
+    }
+
+    /**
+     * Create a new role
+     * @param data - Role data (name, description, permissions)
+     * @returns Created role
+     */
+    async createRole(data: any) {
+        return httpClient.post<any>('/api/rbac/roles/', data);
+    }
+
+    /**
+     * Update an existing role
+     * @param roleId - Role ID
+     * @param data - Updated role data
+     * @returns Updated role
+     */
+    async updateRole(roleId: number, data: any) {
+        return httpClient.put<any>(`/api/rbac/roles/${roleId}/`, data);
+    }
+
+    /**
+     * Delete a role
+     * @param roleId - Role ID
+     * @returns Success status
+     */
+    async deleteRole(roleId: number) {
+        return httpClient.delete<{ success: boolean }>(`/api/rbac/roles/${roleId}/`);
+    }
+
+    /**
+     * Get the permissions structure (available pages and tabs)
+     * @returns Structure of pages and tabs for permission configuration
+     */
+    async getPermissionsStructure() {
+        return httpClient.get<any>('/api/rbac/roles/permissions_structure/');
+    }
+
+    /**
+     * Get all users with their roles
+     * @returns Array of users with role assignments
+     */
+    async getUsersWithRoles() {
+        return httpClient.get<any[]>('/api/rbac/users/');
+    }
+
+    /**
+     * Get a specific user with their roles
+     * @param userId - User ID
+     * @returns User details with roles and permissions
+     */
+    async getUserWithRoles(userId: number) {
+        return httpClient.get<any>(`/api/rbac/users/${userId}/`);
+    }
+
+    /**
+     * Create a new user with role assignment
+     * @param data - User data (username, email, password, role_ids)
+     * @returns Created user
+     */
+    async createUserWithRoles(data: any) {
+        return httpClient.post<any>('/api/rbac/users/', data);
+    }
+
+    /**
+     * Update a user
+     * @param userId - User ID
+     * @param data - Updated user data
+     * @returns Updated user
+     */
+    async updateUser(userId: number, data: any) {
+        return httpClient.put<any>(`/api/rbac/users/${userId}/`, data);
+    }
+
+    /**
+     * Delete (deactivate) a user
+     * @param userId - User ID
+     * @returns Success status
+     */
+    async deleteUser(userId: number) {
+        return httpClient.delete<{ success: boolean }>(`/api/rbac/users/${userId}/`);
+    }
+
+    /**
+     * Get current user's permissions
+     * @returns Current user's combined permissions from all roles
+     */
+    async getMyPermissions() {
+        return httpClient.get<any>('/api/rbac/users/me/permissions/');
+    }
+
+    /**
+     * Assign roles to a user
+     * @param userId - User ID
+     * @param roleIds - Array of role IDs to assign
+     * @returns Updated user with new roles
+     */
+    async assignRolesToUser(userId: number, roleIds: number[]) {
+        return httpClient.post<any>(`/api/rbac/users/${userId}/assign_roles/`, { role_ids: roleIds });
+    }
+
+    /**
+     * Remove a specific role from a user
+     * @param userId - User ID
+     * @param roleId - Role ID to remove
+     * @returns Updated user
+     */
+    async removeRoleFromUser(userId: number, roleId: number) {
+        return httpClient.post<any>(`/api/rbac/users/${userId}/remove_role/`, { role_id: roleId });
+    }
+
+    /**
+     * Get all user-role assignments
+     * @returns Array of user-role assignments
+     */
+    async getUserRoles() {
+        return httpClient.get<any[]>('/api/rbac/user-roles/');
+    }
+
+    /**
+     * Get permission change logs
+     * @returns Array of permission change audit logs
+     */
+    async getPermissionLogs() {
+        return httpClient.get<any[]>('/api/rbac/permission-logs/');
     }
 
     // ============================================================================

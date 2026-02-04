@@ -590,6 +590,53 @@ class SalesVoucher(BaseModel):
         help_text="Auto-determined: Within State if User State = Bill To State, Other State if different states in India, Export if Bill To Country != India"
     )
     
+    # GST-Compliant Fields for GSTR1
+    place_of_supply = models.CharField(
+        max_length=2,
+        null=True,
+        blank=True,
+        help_text="State code (01-38) for Place of Supply as per GST"
+    )
+    reverse_charge = models.CharField(
+        max_length=1,
+        default='N',
+        help_text="Y or N - Reverse charge applicable"
+    )
+    invoice_type = models.CharField(
+        max_length=50,
+        default='Regular',
+        help_text="Regular, SEZ with payment, SEZ without payment, Deemed Export"
+    )
+    export_type = models.CharField(
+        max_length=10,
+        null=True,
+        blank=True,
+        help_text="WPAY (With Payment) or WOPAY (Without Payment) for exports"
+    )
+    port_code = models.CharField(
+        max_length=6,
+        null=True,
+        blank=True,
+        help_text="6-digit port code for exports (e.g., INBLR1)"
+    )
+    shipping_bill_number = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        help_text="Shipping bill number for exports"
+    )
+    shipping_bill_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Shipping bill date for exports"
+    )
+    ecommerce_gstin = models.CharField(
+        max_length=15,
+        null=True,
+        blank=True,
+        help_text="GSTIN of e-commerce operator if applicable"
+    )
+    
     # Workflow tracking
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
     current_step = models.IntegerField(default=1, help_text="Track which tab user is on (1-5)")

@@ -1,7 +1,7 @@
 """
-Reports Flow Layer - Business Logic + RBAC + Tenant Validation
+Reports Flow Layer - Business Logic + Tenant Validation
 This is the ONLY place for business decisions in the Reports module.
-Every function MUST start with tenant validation and permission checks.
+Every function MUST start with tenant validation.
 """
 
 import logging

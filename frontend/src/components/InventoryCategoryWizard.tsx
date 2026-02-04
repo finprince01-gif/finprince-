@@ -517,9 +517,11 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                                 <button
                                     type="submit"
                                     disabled={!selectedNode}
-                                    className={`w-full py-2.5 px-4 rounded font-medium shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 text-sm ${selectedNode
-                                        ? 'bg-gray-300 text-gray-700 hover:bg-gray-400 cursor-pointer'
-                                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                    className={`w-full py-2.5 px-4 rounded font-medium shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm ${selectedNode && formData.subgroup.trim()
+                                            ? 'bg-blue-600 text-white hover:bg-blue-700 cursor-pointer focus:ring-blue-500'
+                                            : selectedNode
+                                                ? 'bg-gray-300 text-gray-700 hover:bg-gray-400 cursor-pointer focus:ring-gray-400'
+                                                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                                         }`}
                                 >
                                     Create Category

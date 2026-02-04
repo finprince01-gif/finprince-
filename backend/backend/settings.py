@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     'customerportal',  # Customer Portal
     'payroll',  # Payroll Management
     'services',  # Services Management
+    'rbac',  # Role-Based Access Control
     'rest_framework_simplejwt',
     'reports',
 ]
@@ -223,6 +224,26 @@ CACHES = {
     }
 }
 
+
+# Disable migrations for local apps (Run without migration files)
+MIGRATION_MODULES = {
+    'core': None,
+    'accounting': None,
+    'inventory': None,
+    'vendors': None,
+    'customerportal': None,
+    'payroll': None,
+    'services': None,
+    'reports': None,
+    'rbac': None,
+    'gst': None,         # Implicitly installed or in other modules
+    'login': None,       # Implicitly installed or in other modules
+    'masters': None,     # Implicitly installed or in other modules
+    'registration': None,# Implicitly installed or in other modules
+    'settings': None,    # Implicitly installed or in other modules
+    'vouchers': None,    # Implicitly installed or in other modules
+}
+
 # Twilio SMS Configuration (Optional - falls back to mock SMS if not configured)
 TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID', None)
 TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN', None)
@@ -283,10 +304,16 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': 'simple',
         },
+        'file': {
+            'level': 'ERROR',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_DIR, 'debug.log'),
+            'formatter': 'verbose',
+        },
     },
     'root': {
-        'handlers': ['console'],
-        'level': 'WARNING',
+        'handlers': ['console', 'file'],
+        'level': 'INFO',
     },
     'loggers': {
         'django.server': {
@@ -301,3 +328,6 @@ LOGGING = {
         },
     },
 }
+
+# Suppress check for unique USERNAME_FIELD (handled by unique_together with tenant_id)
+SILENCED_SYSTEM_CHECKS = ['auth.E003']

@@ -28,7 +28,7 @@ class POSettingsFlow:
             Created VendorMasterPOSettings instance
         """
         # TODO: Add business validation logic here
-        # For example: check tenant permissions, validate against business rules, etc.
+        # For example: validate against business rules, etc.
         
         return POSettingsDatabase.create_po_setting(
             tenant_id=tenant_id,

@@ -17,6 +17,7 @@
 import React, { useState, useEffect } from 'react';
 import Icon from '../../components/Icon';
 import { httpClient } from '../../services/httpClient';
+import { usePermissions } from '../../hooks/usePermissions';
 
 type ServiceTab = 'service-group' | 'service-list';
 
@@ -97,6 +98,10 @@ const GST_RATES = [0, 5, 12, 18, 28];
  * Service Page Component with Tabs
  */
 const ServicePage: React.FC<ServicePageProps> = () => {
+  const { hasTabAccess } = usePermissions();
+  // Assume 'Services' permission controls both Groups and List for now
+  const canAccessServices = hasTabAccess('Service', 'Services');
+
   const [activeTab, setActiveTab] = useState<ServiceTab>('service-group');
   const [services, setServices] = useState<any[]>([
     {
@@ -617,7 +622,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                 : 'text-gray-600 hover:text-gray-800'
                 }`}
             >
-              Service Group
+              SERVICE GROUP
             </button>
             <button
               onClick={() => setActiveTab('service-list')}
@@ -626,15 +631,15 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                 : 'text-gray-600 hover:text-gray-800'
                 }`}
             >
-              Service List
+              SERVICE LIST
             </button>
           </div>
         </div>
 
         {/* Service Group Tab */}
         {activeTab === 'service-group' && (
-          <div className="flex flex-col h-[calc(100vh-200px)]">
-            <div className="px-4 pt-2 pb-3 flex items-center gap-2">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 min-h-[500px]">
+            <div className="px-4 pt-6 pb-3 flex items-center gap-2">
               <Icon name="local_offer" className="w-5 h-5 text-gray-600" />
               <h3 className="text-lg font-semibold text-gray-800">Create Service Group</h3>
             </div>
@@ -755,7 +760,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
 
         {/* Service List Tab */}
         {activeTab === 'service-list' && !showCreateForm && !selectedService && (
-          <div>
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 min-h-[500px] p-6">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-semibold text-gray-800">Service List</h2>
               <button

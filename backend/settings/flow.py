@@ -1,7 +1,7 @@
 """
-Settings Flow Layer - Business Logic + RBAC + Tenant Validation
+Settings Flow Layer - Business Logic + Tenant Validation
 This is the ONLY place for business decisions in the Settings module.
-Every function MUST start with tenant validation and permission checks.
+Every function MUST start with tenant validation.
 """
 
 import logging

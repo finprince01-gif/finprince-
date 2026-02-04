@@ -173,12 +173,7 @@ class CreateUserView(APIView):
                 refresh = MyTokenObtainPairSerializer.get_token(user)
                 access_token = str(refresh.access_token)
                 
-                # Get permissions from token (Owner gets all 33)
-                from .rbac import get_all_permission_ids, get_permission_codes_from_ids
-                all_ids = get_all_permission_ids()
-                permissions = get_permission_codes_from_ids(all_ids)
-                
-                logger.info(f"✅ Auto-login: Generated JWT token with {len(permissions)} permissions")
+                logger.info(f"✅ Auto-login: Generated JWT token")
                 
                 return Response({
                     'success': True,
@@ -194,7 +189,6 @@ class CreateUserView(APIView):
                         'tenant_id': user.tenant_id,
                         'selected_plan': user.selected_plan,
                     },
-                    'permissions': permissions
                 }, status=status.HTTP_201_CREATED)
         
         except Exception as e:

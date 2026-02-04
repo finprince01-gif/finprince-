@@ -34,7 +34,7 @@ class MasterLedgerGroupViewSet(viewsets.ModelViewSet):
     serializer_class = MasterLedgerGroupSerializer
     permission_classes = [AllowAny]  # TEMPORARY: Disabled for development
     # permission_classes = [IsAuthenticated]
-    required_permission = 'MASTERS_LEDGER_GROUPS'
+
     
     def get_queryset(self):
         """Delegate to flow layer."""
@@ -101,7 +101,7 @@ class MasterLedgerViewSet(viewsets.ModelViewSet):
     serializer_class = MasterLedgerSerializer
     permission_classes = [AllowAny]  # TEMPORARY: Disabled for development
     # permission_classes = [IsAuthenticated]
-    required_permission = 'MASTERS_LEDGERS'
+
     
     def get_queryset(self):
         """Delegate to flow layer."""
@@ -206,7 +206,7 @@ class MasterVoucherConfigViewSet(viewsets.ModelViewSet):
     queryset = MasterVoucherConfig.objects.all()
     serializer_class = MasterVoucherConfigSerializer
     permission_classes = [IsAuthenticated]
-    required_permission = 'MASTERS_VOUCHER_CONFIG'
+
     
     def get_queryset(self):
         """Delegate to flow layer."""
@@ -280,7 +280,7 @@ class VoucherConfigurationViewSet(viewsets.ModelViewSet):
     queryset = VoucherConfiguration.objects.all()
     serializer_class = VoucherConfigurationSerializer
     permission_classes = [IsAuthenticated]
-    required_permission = 'MASTERS_VOUCHER_CONFIG'
+
     
     def get_queryset(self):
         """Delegate to flow layer."""
@@ -336,7 +336,7 @@ class AmountTransactionViewSet(viewsets.ModelViewSet):
     queryset = AmountTransaction.objects.all()
     serializer_class = AmountTransactionSerializer
     permission_classes = [IsAuthenticated]
-    required_permission = 'MASTERS_LEDGERS'
+
     
     def get_queryset(self):
         """Delegate to flow layer with optional filters."""

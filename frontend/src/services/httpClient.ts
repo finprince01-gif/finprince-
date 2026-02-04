@@ -216,7 +216,9 @@ class HttpClient {
 
     public logout() {
         this.clearAuthData();
-        window.location.href = '/login';
+        if (window.location.pathname !== '/login') {
+            window.location.href = '/login';
+        }
     }
 
     public saveAuthData(data: { tenant_id?: string; company_name?: string }) {

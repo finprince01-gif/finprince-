@@ -23,6 +23,7 @@ from .views_receipt import VoucherReceiptSingleViewSet, VoucherReceiptBulkViewSe
 from .views_expense import VoucherExpenseViewSet
 from .views_contra_journal import VoucherContraViewSet, VoucherJournalViewSet
 from .views_voucher_purchase import VoucherPurchaseViewSet
+from .views_gst import GSTR1ViewSet
 
 router = routers.DefaultRouter()
 
@@ -57,6 +58,10 @@ router.register('journal-entries', JournalEntryViewSet, basename='journal-entrie
 
 # Questions endpoint
 router.register('questions', QuestionViewSet, basename='questions')
+
+
+# GST Endpoints
+router.register('gst/gstr1', GSTR1ViewSet, basename='gstr1')
 
 # Unified voucher endpoint - filter by type using query params
 # e.g., /api/accounting/vouchers/?type=sales

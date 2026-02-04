@@ -49,9 +49,7 @@ urlpatterns = [
     path('api/masters/', include('masters.urls')),
     # path('api/', include('masters.urls')),  # For hierarchy endpoint
     
-    # LEGACY ROUTES - COMMENTED OUT (functionality moved to new modules)
-    # path('api/', include('accounting.urls')),
-    # path('api/masters/', include('accounting.urls')),
+
     
     # Inventory - NEW refactored module
     path('api/inventory/', include('inventory.urls')),
@@ -65,6 +63,9 @@ urlpatterns = [
     # Payroll Management
     path('api/payroll/', include('payroll.urls')),
     
+    # Role-Based Access Control
+    path('api/rbac/', include('rbac.urls')),
+    
     # Services Management
     path('api/services/', include('services.urls')),
     
@@ -74,8 +75,7 @@ urlpatterns = [
     # Settings - NEW refactored module
     path('api/', include('settings.urls')),
     
-    # Users & Roles - removed
-    # path('api/', include('users_roles.urls')),
+
 
     # Reports
     path('api/reports/', include('reports.urls')),

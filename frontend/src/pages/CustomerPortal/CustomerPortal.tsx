@@ -61,30 +61,30 @@ const CustomerPortalPage: React.FC = () => {
     const [showCreateOrder, setShowCreateOrder] = useState(false);
 
     return (
-        <div className="flex-1 bg-gray-50 min-h-screen">
+        <div className="flex-1 bg-sky-50 min-h-screen">
             {/* Header */}
-            <div className="bg-white border-b border-gray-200 px-8 py-6">
+            <div className="px-8 py-6">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-900">Customer Module</h1>
+                        <h1 className="text-3xl font-bold text-gray-900">Customer Portal</h1>
                         <p className="text-sm text-gray-600 mt-1">Manage customers, categories, and sales transactions</p>
                     </div>
                 </div>
             </div>
 
             {/* Main Tabs */}
-            <div className="bg-white border-b border-gray-200 px-8">
-                <div className="flex gap-8">
+            <div className="px-8">
+                <div className="flex gap-8 border-b border-gray-200 pb-1">
                     {['Masters', 'Transactions'].map((tab) => (
                         <button
                             key={tab}
                             onClick={() => setActiveTab(tab as MainTab)}
-                            className={`py-4 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === tab
-                                ? 'border-indigo-600 text-indigo-700'
+                            className={`py-2 px-1 text-sm font-medium transition-colors border-b-2 ${activeTab === tab
+                                ? 'border-blue-600 text-blue-600'
                                 : 'border-transparent text-gray-500 hover:text-gray-700'
                                 }`}
                         >
-                            {tab}
+                            {tab.toUpperCase()}
                         </button>
                     ))}
                 </div>
@@ -95,18 +95,18 @@ const CustomerPortalPage: React.FC = () => {
                 {activeTab === 'Masters' && (
                     <div>
                         {/* Sub-tabs for Masters */}
-                        <div className="mb-6 border-b border-gray-200">
-                            <div className="flex gap-8">
+                        <div className="mb-6">
+                            <div className="flex gap-8 border-b border-gray-200 pb-1">
                                 {['Category', 'Sales Quotation & Order', 'Customer', 'Long-term Contracts'].map((subTab) => (
                                     <button
                                         key={subTab}
                                         onClick={() => setActiveMasterSubTab(subTab as MasterSubTab)}
-                                        className={`pb-3 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${activeMasterSubTab === subTab
-                                            ? 'border-indigo-600 text-indigo-600'
+                                        className={`pb-3 text-sm font-medium transition-colors whitespace-nowrap border-b-2 ${activeMasterSubTab === subTab
+                                            ? 'border-teal-500 text-teal-600'
                                             : 'border-transparent text-gray-500 hover:text-gray-700'
                                             }`}
                                     >
-                                        {subTab}
+                                        {subTab.toUpperCase()}
                                     </button>
                                 ))}
                             </div>
@@ -125,18 +125,18 @@ const CustomerPortalPage: React.FC = () => {
                 {activeTab === 'Transactions' && (
                     <div>
                         {/* Sub-tabs for Transactions */}
-                        <div className="mb-6 border-b border-gray-200">
-                            <div className="flex gap-8">
+                        <div className="mb-6">
+                            <div className="flex gap-8 border-b border-gray-200 pb-1">
                                 {['Sales Quotation', 'Sales Order', 'Sales', 'Receipt'].map((subTab) => (
                                     <button
                                         key={subTab}
                                         onClick={() => setActiveTransactionSubTab(subTab as TransactionSubTab)}
-                                        className={`pb-3 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${activeTransactionSubTab === subTab
-                                            ? 'border-indigo-600 text-indigo-600'
+                                        className={`pb-3 text-sm font-medium transition-colors whitespace-nowrap border-b-2 ${activeTransactionSubTab === subTab
+                                            ? 'border-teal-500 text-teal-600'
                                             : 'border-transparent text-gray-500 hover:text-gray-700'
                                             }`}
                                     >
-                                        {subTab}
+                                        {subTab.toUpperCase()}
                                     </button>
                                 ))}
                             </div>
@@ -177,11 +177,11 @@ const CustomerPortalPage: React.FC = () => {
                                                         key={tab}
                                                         onClick={() => setActiveSalesOrderSubTab(tab as SalesOrderSubTab)}
                                                         className={`py-3 px-1 text-sm font-medium border-b-2 transition-colors ${activeSalesOrderSubTab === tab
-                                                            ? 'border-indigo-600 text-indigo-700'
+                                                            ? 'border-teal-500 text-teal-600'
                                                             : 'border-transparent text-gray-500 hover:text-gray-700'
                                                             }`}
                                                     >
-                                                        {tab}
+                                                        {tab.toUpperCase()}
                                                     </button>
                                                 ))}
                                             </nav>

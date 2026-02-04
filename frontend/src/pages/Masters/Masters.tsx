@@ -38,8 +38,8 @@ const MastersPage: React.FC<MastersPageProps> = ({
   voucherTypes = []
 }) => {
   const allTabs: { id: MasterTab; label: string }[] = [
-    { id: 'Ledgers', label: 'Ledgers' },
-    { id: 'Vouchers', label: 'Vouchers' }
+    { id: 'Ledgers', label: 'LEDGERS' },
+    { id: 'Vouchers', label: 'VOUCHERS' }
   ];
 
   // Show all tabs - RBAC disabled
@@ -1602,587 +1602,589 @@ const MastersPage: React.FC<MastersPageProps> = ({
           <h2 className="text-lg font-semibold text-gray-800">Select Voucher Type</h2>
         </div>
 
-        {/* Voucher Type Buttons - Horizontal Strip */}
-        <div className="flex flex-wrap gap-3 justify-center items-center">
+        {/* Voucher Type Tabs - Horizontal Navigation */}
+        <nav className="flex space-x-8 border-b border-gray-200 justify-center mb-6" aria-label="Voucher Types">
           {voucherButtons.map((voucher, index) => {
             const isSelected = selectedVoucher === voucher.id;
-            const isSales = voucher.id === 'sales';
             return (
               <button
                 key={voucher.id}
                 onClick={() => handleVoucherClick(voucher.id)}
-                className={`px-6 py-3 text-sm font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 ${isSelected && isSales
-                  ? 'bg-teal-600 text-white border-2 border-teal-600 focus:ring-teal-500'
-                  : isSelected
-                    ? 'bg-teal-600 text-white border-2 border-teal-600 focus:ring-teal-500'
-                    : 'bg-white text-teal-600 border-2 border-teal-300 hover:border-teal-500 hover:bg-teal-50 focus:ring-teal-500'
+                className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors uppercase ${isSelected
+                  ? 'border-teal-500 text-teal-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
               >
                 {voucher.label}
               </button>
             );
           })}
-        </div>
+        </nav>
 
         {/* Sales Voucher Form with Existing Vouchers Table */}
         {selectedVoucher === 'sales' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Left Column - Sales Voucher Configuration */}
-            <div className="bg-white p-6 rounded-lg shadow-sm border-2 border-teal-400">
-              <h3 className="text-xl font-bold text-gray-800 mb-6">Sales</h3>
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Left Column - Sales Voucher Configuration */}
+              <div>
+                <h3 className="text-xl font-bold text-gray-800 mb-6">Sales</h3>
 
-              {/* Error Message */}
-              {voucherFormError && (
-                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
-                  <p className="text-sm text-red-600">{voucherFormError}</p>
-                </div>
-              )}
-
-              <form onSubmit={handleVoucherSubmit} className="space-y-6">
-                {/* Voucher Name */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Voucher Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={voucherName}
-                    onChange={(e) => setVoucherName(e.target.value)}
-                    className="w-full max-w-md px-4 py-2 border-2 border-green-400 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                    placeholder="Enter voucher name"
-                    required
-                  />
-                  <p className="mt-1 text-xs text-gray-500">Data Validation: Text</p>
-                </div>
-
-                {/* Enable Automatic Numbering Series */}
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="enableAutoNumbering"
-                    checked={enableAutoNumbering}
-                    onChange={(e) => setEnableAutoNumbering(e.target.checked)}
-                    className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                  />
-                  <label htmlFor="enableAutoNumbering" className="ml-2 text-sm font-medium text-gray-700">
-                    Enable Automatic Numbering Series
-                  </label>
-                </div>
-
-                {/* Prefix and Suffix */}
-                <div className="grid grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Prefix <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={voucherPrefix}
-                      onChange={(e) => setVoucherPrefix(e.target.value)}
-                      className="w-full px-4 py-2 border-2 border-green-400 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                      placeholder="e.g., INV-"
-                      pattern="[a-zA-Z0-9/\-]*"
-                      title="Only alphanumeric characters, slash (/), and hyphen (-) are allowed"
-                      required
-                    />
-                    <p className="mt-1 text-xs text-gray-500">Alphanumeric (With / Slash and - Hyphen)</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Suffix <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={voucherSuffix}
-                      onChange={(e) => setVoucherSuffix(e.target.value)}
-                      className="w-full px-4 py-2 border-2 border-green-400 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                      placeholder="e.g., /24-25"
-                      pattern="[a-zA-Z0-9/\-]*"
-                      title="Only alphanumeric characters, slash (/), and hyphen (-) are allowed"
-                      required
-                    />
-                    <p className="mt-1 text-xs text-gray-500">Alphanumeric (With / Slash and - Hyphen)</p>
-                  </div>
-                </div>
-
-                {/* Start From and Required Digits */}
-                <div className="grid grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Start From
-                    </label>
-                    <input
-                      type="number"
-                      value={voucherStartFrom}
-                      onChange={(e) => setVoucherStartFrom(parseInt(e.target.value) || 1)}
-                      className="w-full px-4 py-2 border-2 border-green-400 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                      placeholder="1"
-                      min="1"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Required Digits
-                    </label>
-                    <input
-                      type="number"
-                      value={voucherRequiredDigits}
-                      onChange={(e) => setVoucherRequiredDigits(parseInt(e.target.value) || 4)}
-                      className="w-full px-4 py-2 border-2 border-green-400 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                      placeholder="4"
-                      min="1"
-                    />
-                  </div>
-                </div>
-
-                {/* Effective Period */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Effective Period: <span className="text-red-500">*</span>
-                  </label>
-                  <div className="grid grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-1">From <span className="text-red-500">*</span></label>
-                      <input
-                        type="date"
-                        value={voucherEffectiveFrom}
-                        onChange={(e) => setVoucherEffectiveFrom(e.target.value)}
-                        min={today}
-                        className="w-full px-4 py-2 border-2 border-green-400 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-1">To <span className="text-red-500">*</span></label>
-                      <input
-                        type="date"
-                        value={voucherEffectiveTo}
-                        onChange={(e) => setVoucherEffectiveTo(e.target.value)}
-                        min={voucherEffectiveFrom || today}
-                        max={financialYearEnd}
-                        className="w-full px-4 py-2 border-2 border-green-400 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                        required
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Update Customer Master */}
-                <div className="space-y-3">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Update Customer Master: Yes/No
-                  </label>
-                  <div className="flex items-center space-x-4">
-                    <label className="flex items-center">
-                      <input
-                        type="radio"
-                        name="voucherUpdateCustomerMaster"
-                        value="yes"
-                        checked={voucherUpdateCustomerMaster === true}
-                        onChange={(e) => setVoucherUpdateCustomerMaster(true)}
-                        className="w-4 h-4 text-green-600 focus:ring-green-500"
-                      />
-                      <span className="ml-2 text-sm text-gray-700">Yes</span>
-                    </label>
-                    <label className="flex items-center">
-                      <input
-                        type="radio"
-                        name="voucherUpdateCustomerMaster"
-                        value="no"
-                        checked={voucherUpdateCustomerMaster === false}
-                        onChange={(e) => setVoucherUpdateCustomerMaster(false)}
-                        className="w-4 h-4 text-green-600 focus:ring-green-500"
-                      />
-                      <span className="ml-2 text-sm text-gray-700">No</span>
-                    </label>
-                  </div>
-                </div>
-
-                {/* If Yes, Include from existing series - Only show if Yes is selected */}
-                {voucherUpdateCustomerMaster && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Include from existing series:
-                    </label>
-                    <div className="relative max-w-md">
-                      <select
-                        value={voucherIncludeFromSeries || ''}
-                        onChange={(e) => setVoucherIncludeFromSeries(e.target.value ? parseInt(e.target.value) : null)}
-                        className="w-full px-4 py-2 border-2 border-green-400 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none bg-white"
-                      >
-                        <option value="">Drop down list to have the existing list of series</option>
-                        {existingVouchers.map(v => (
-                          <option key={v.id} value={v.id}>{v.voucher_name}</option>
-                        ))}
-                      </select>
-                    </div>
+                {/* Error Message */}
+                {voucherFormError && (
+                  <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                    <p className="text-sm text-red-600">{voucherFormError}</p>
                   </div>
                 )}
 
-                {/* Submit Button */}
-                <div className="flex justify-end gap-3 pt-4">
-                  {isEditModeVoucher && (
-                    <button
-                      type="button"
-                      onClick={resetVoucherForm}
-                      className="px-8 py-3 bg-gray-500 text-white font-semibold rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors duration-200"
-                    >
-                      Cancel
-                    </button>
+                <form onSubmit={handleVoucherSubmit} className="space-y-6">
+                  {/* Voucher Name */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Voucher Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={voucherName}
+                      onChange={(e) => setVoucherName(e.target.value)}
+                      className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                      placeholder="Enter voucher name"
+                      required
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Data Validation: Text</p>
+                  </div>
+
+                  {/* Enable Automatic Numbering Series */}
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="enableAutoNumbering"
+                      checked={enableAutoNumbering}
+                      onChange={(e) => setEnableAutoNumbering(e.target.checked)}
+                      className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                    />
+                    <label htmlFor="enableAutoNumbering" className="ml-2 text-sm font-medium text-gray-700">
+                      Enable Automatic Numbering Series
+                    </label>
+                  </div>
+
+                  {/* Prefix and Suffix */}
+                  <div className="grid grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Prefix <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={voucherPrefix}
+                        onChange={(e) => setVoucherPrefix(e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                        placeholder="e.g., INV-"
+                        pattern="[a-zA-Z0-9/\-]*"
+                        title="Only alphanumeric characters, slash (/), and hyphen (-) are allowed"
+                        required
+                      />
+                      <p className="mt-1 text-xs text-gray-500">Alphanumeric (With / Slash and - Hyphen)</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Suffix <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={voucherSuffix}
+                        onChange={(e) => setVoucherSuffix(e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                        placeholder="e.g., /24-25"
+                        pattern="[a-zA-Z0-9/\-]*"
+                        title="Only alphanumeric characters, slash (/), and hyphen (-) are allowed"
+                        required
+                      />
+                      <p className="mt-1 text-xs text-gray-500">Alphanumeric (With / Slash and - Hyphen)</p>
+                    </div>
+                  </div>
+
+                  {/* Start From and Required Digits */}
+                  <div className="grid grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Start From
+                      </label>
+                      <input
+                        type="number"
+                        value={voucherStartFrom}
+                        onChange={(e) => setVoucherStartFrom(parseInt(e.target.value) || 1)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                        placeholder="1"
+                        min="1"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Required Digits
+                      </label>
+                      <input
+                        type="number"
+                        value={voucherRequiredDigits}
+                        onChange={(e) => setVoucherRequiredDigits(parseInt(e.target.value) || 4)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                        placeholder="4"
+                        min="1"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Effective Period */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Effective Period: <span className="text-red-500">*</span>
+                    </label>
+                    <div className="grid grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">From <span className="text-red-500">*</span></label>
+                        <input
+                          type="date"
+                          value={voucherEffectiveFrom}
+                          onChange={(e) => setVoucherEffectiveFrom(e.target.value)}
+                          min={today}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">To <span className="text-red-500">*</span></label>
+                        <input
+                          type="date"
+                          value={voucherEffectiveTo}
+                          onChange={(e) => setVoucherEffectiveTo(e.target.value)}
+                          min={voucherEffectiveFrom || today}
+                          max={financialYearEnd}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Update Customer Master */}
+                  <div className="space-y-3">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Update Customer Master: Yes/No
+                    </label>
+                    <div className="flex items-center space-x-4">
+                      <label className="flex items-center">
+                        <input
+                          type="radio"
+                          name="voucherUpdateCustomerMaster"
+                          value="yes"
+                          checked={voucherUpdateCustomerMaster === true}
+                          onChange={(e) => setVoucherUpdateCustomerMaster(true)}
+                          className="w-4 h-4 text-teal-600 focus:ring-teal-500"
+                        />
+                        <span className="ml-2 text-sm text-gray-700">Yes</span>
+                      </label>
+                      <label className="flex items-center">
+                        <input
+                          type="radio"
+                          name="voucherUpdateCustomerMaster"
+                          value="no"
+                          checked={voucherUpdateCustomerMaster === false}
+                          onChange={(e) => setVoucherUpdateCustomerMaster(false)}
+                          className="w-4 h-4 text-teal-600 focus:ring-teal-500"
+                        />
+                        <span className="ml-2 text-sm text-gray-700">No</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* If Yes, Include from existing series - Only show if Yes is selected */}
+                  {voucherUpdateCustomerMaster && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Include from existing series:
+                      </label>
+                      <div className="relative max-w-md">
+                        <select
+                          value={voucherIncludeFromSeries || ''}
+                          onChange={(e) => setVoucherIncludeFromSeries(e.target.value ? parseInt(e.target.value) : null)}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 appearance-none bg-white"
+                        >
+                          <option value="">Drop down list to have the existing list of series</option>
+                          {existingVouchers.map(v => (
+                            <option key={v.id} value={v.id}>{v.voucher_name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
                   )}
-                  <button
-                    type="submit"
-                    className="px-8 py-3 bg-teal-600 text-white font-semibold rounded-md hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-colors duration-200"
-                  >
-                    {isEditModeVoucher ? 'Update' : 'Save'}
-                  </button>
-                </div>
-              </form>
-            </div>
 
-            {/* Right Column - Existing Vouchers */}
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Existing Vouchers</h3>
-
-              {/* Table */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead className="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">SELECT</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">VOUCHER NAME</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">VOUCHER SERIES PREVIEW (LAST SERIES)</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">EFFECTIVE FROM</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">EFFECTIVE TO</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">UPDATE CUSTOMER MASTER</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">INCLUDE FROM SERIES</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">ACTIONS</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {existingVouchers.length === 0 ? (
-                      <tr>
-                        <td colSpan={8} className="px-3 py-12 text-center">
-                          <p className="text-sm text-gray-400">No vouchers configured yet</p>
-                        </td>
-                      </tr>
-                    ) : (
-                      existingVouchers
-                        .map((voucher) => {
-                          const isSelected = selectedVoucherConfig?.id === voucher.id;
-                          const seriesPreview = voucher.enable_auto_numbering
-                            ? `${voucher.prefix || ''}${String(voucher.current_number || voucher.start_from || 1).padStart(voucher.required_digits || 4, '0')}${voucher.suffix || ''}`
-                            : 'Manual';
-
-                          return (
-                            <tr
-                              key={voucher.id}
-                              className={`transition-colors ${isSelected ? 'bg-teal-50 hover:bg-teal-100' : 'hover:bg-gray-50'}`}
-                            >
-                              <td className="px-3 py-3 whitespace-nowrap">
-                                <input
-                                  type="radio"
-                                  name="selectedVoucherConfig"
-                                  checked={isSelected}
-                                  onChange={() => setSelectedVoucherConfig(voucher)}
-                                  className="w-4 h-4 text-teal-600 focus:ring-teal-500 cursor-pointer"
-                                />
-                              </td>
-                              <td className="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                                {voucher.voucher_name}
-                              </td>
-                              <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-700">
-                                {seriesPreview}
-                              </td>
-                              <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">
-                                {voucher.effective_from}
-                              </td>
-                              <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">
-                                {voucher.effective_to}
-                              </td>
-                              <td className="px-3 py-3 whitespace-nowrap text-sm text-center text-gray-600">
-                                {voucher.update_customer_master ? 'Yes' : 'No'}
-                              </td>
-                              <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">
-                                {voucher.include_from_existing_series
-                                  ? existingVouchers.find(v => v.id === parseInt(voucher.include_from_existing_series))?.voucher_name || '-'
-                                  : '-'}
-                              </td>
-                              <td className="px-3 py-3 whitespace-nowrap text-sm">
-                                {isSelected ? (
-                                  <div className="flex gap-2">
-                                    <button
-                                      onClick={handleEditVoucherConfig}
-                                      className="px-3 py-1.5 text-xs font-semibold rounded-md text-white bg-teal-600 hover:bg-teal-700 transition-colors"
-                                    >
-                                      Edit
-                                    </button>
-                                    <button
-                                      onClick={handleDeleteVoucherConfig}
-                                      className="px-3 py-1.5 text-xs font-semibold rounded-md text-white bg-red-600 hover:bg-red-700 transition-colors"
-                                    >
-                                      Delete
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <span className="text-gray-400 text-xs italic">Select to edit</span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })
+                  {/* Submit Button */}
+                  <div className="flex justify-end gap-3 pt-4">
+                    {isEditModeVoucher && (
+                      <button
+                        type="button"
+                        onClick={resetVoucherForm}
+                        className="px-8 py-3 bg-gray-500 text-white font-semibold rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors duration-200"
+                      >
+                        Cancel
+                      </button>
                     )}
-                  </tbody>
-                </table>
+                    <button
+                      type="submit"
+                      className="px-8 py-3 bg-teal-600 text-white font-semibold rounded-md hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-colors duration-200"
+                    >
+                      {isEditModeVoucher ? 'Update' : 'Save'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Right Column - Existing Vouchers */}
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Existing Vouchers</h3>
+
+                {/* Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">SELECT</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">VOUCHER NAME</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">VOUCHER SERIES PREVIEW (LAST SERIES)</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">EFFECTIVE FROM</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">EFFECTIVE TO</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">UPDATE CUSTOMER MASTER</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">INCLUDE FROM SERIES</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">ACTIONS</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {existingVouchers.length === 0 ? (
+                        <tr>
+                          <td colSpan={8} className="px-3 py-12 text-center">
+                            <p className="text-sm text-gray-400">No vouchers configured yet</p>
+                          </td>
+                        </tr>
+                      ) : (
+                        existingVouchers
+                          .map((voucher) => {
+                            const isSelected = selectedVoucherConfig?.id === voucher.id;
+                            const seriesPreview = voucher.enable_auto_numbering
+                              ? `${voucher.prefix || ''}${String(voucher.current_number || voucher.start_from || 1).padStart(voucher.required_digits || 4, '0')}${voucher.suffix || ''}`
+                              : 'Manual';
+
+                            return (
+                              <tr
+                                key={voucher.id}
+                                className={`transition-colors ${isSelected ? 'bg-teal-50 hover:bg-teal-100' : 'hover:bg-gray-50'}`}
+                              >
+                                <td className="px-3 py-3 whitespace-nowrap">
+                                  <input
+                                    type="radio"
+                                    name="selectedVoucherConfig"
+                                    checked={isSelected}
+                                    onChange={() => setSelectedVoucherConfig(voucher)}
+                                    className="w-4 h-4 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                                  />
+                                </td>
+                                <td className="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                                  {voucher.voucher_name}
+                                </td>
+                                <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-700">
+                                  {seriesPreview}
+                                </td>
+                                <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">
+                                  {voucher.effective_from}
+                                </td>
+                                <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">
+                                  {voucher.effective_to}
+                                </td>
+                                <td className="px-3 py-3 whitespace-nowrap text-sm text-center text-gray-600">
+                                  {voucher.update_customer_master ? 'Yes' : 'No'}
+                                </td>
+                                <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">
+                                  {voucher.include_from_existing_series
+                                    ? existingVouchers.find(v => v.id === parseInt(voucher.include_from_existing_series))?.voucher_name || '-'
+                                    : '-'}
+                                </td>
+                                <td className="px-3 py-3 whitespace-nowrap text-sm">
+                                  {isSelected ? (
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={handleEditVoucherConfig}
+                                        className="px-3 py-1.5 text-xs font-semibold rounded-md text-white bg-teal-600 hover:bg-teal-700 transition-colors"
+                                      >
+                                        Edit
+                                      </button>
+                                      <button
+                                        onClick={handleDeleteVoucherConfig}
+                                        className="px-3 py-1.5 text-xs font-semibold rounded-md text-white bg-red-600 hover:bg-red-700 transition-colors"
+                                      >
+                                        Delete
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <span className="text-gray-400 text-xs italic">Select to edit</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
         )}
 
+
         {/* Other Vouchers Form - For all vouchers except Sales */}
         {selectedVoucher !== 'sales' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Left Column - Voucher Configuration */}
-            <div className="bg-white p-6 rounded-lg shadow-sm border-2 border-teal-400">
-              <h3 className="text-xl font-bold text-gray-800 mb-6">
-                {voucherButtons.find(v => v.id === selectedVoucher)?.label}
-              </h3>
-              <form onSubmit={handleVoucherSubmit} className="space-y-6">
-                {/* Voucher Name */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Voucher Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={voucherName}
-                    onChange={(e) => setVoucherName(e.target.value)}
-                    className="w-full max-w-md px-4 py-2 border-2 border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    placeholder="Enter voucher name"
-                    required
-                  />
-                  <p className="mt-1 text-xs text-gray-500">Data Validation: Text</p>
-                </div>
-
-                {/* Enable Automatic Numbering Series */}
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="otherEnableAutoNumbering"
-                    checked={enableAutoNumbering}
-                    onChange={(e) => setEnableAutoNumbering(e.target.checked)}
-                    className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
-                  />
-                  <label htmlFor="otherEnableAutoNumbering" className="ml-2 text-sm font-medium text-gray-700">
-                    Enable Automatic Numbering Series
-                  </label>
-                </div>
-
-                {/* Prefix and Suffix */}
-                <div className="grid grid-cols-2 gap-6">
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Left Column - Voucher Configuration */}
+              <div>
+                <h3 className="text-xl font-bold text-gray-800 mb-6">
+                  {voucherButtons.find(v => v.id === selectedVoucher)?.label}
+                </h3>
+                <form onSubmit={handleVoucherSubmit} className="space-y-6">
+                  {/* Voucher Name */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Prefix <span className="text-red-500">*</span>
+                      Voucher Name <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
-                      value={voucherPrefix}
-                      onChange={(e) => setVoucherPrefix(e.target.value)}
-                      className="w-full px-4 py-2 border-2 border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
-                      placeholder="e.g., CN-"
-                      pattern="[a-zA-Z0-9/\-]*"
-                      title="Only alphanumeric characters, slash (/), and hyphen (-) are allowed"
+                      value={voucherName}
+                      onChange={(e) => setVoucherName(e.target.value)}
+                      className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                      placeholder="Enter voucher name"
                       required
                     />
-                    <p className="mt-1 text-xs text-gray-500">Alphanumeric (With / Slash and - Hyphen)</p>
+                    <p className="mt-1 text-xs text-gray-500">Data Validation: Text</p>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Suffix <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={voucherSuffix}
-                      onChange={(e) => setVoucherSuffix(e.target.value)}
-                      className="w-full px-4 py-2 border-2 border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
-                      placeholder="e.g., /24-25"
-                      pattern="[a-zA-Z0-9/\-]*"
-                      title="Only alphanumeric characters, slash (/), and hyphen (-) are allowed"
-                      required
-                    />
-                    <p className="mt-1 text-xs text-gray-500">Alphanumeric (With / Slash and - Hyphen)</p>
-                  </div>
-                </div>
 
-                {/* Start From and Required Digits */}
-                <div className="grid grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Start From
-                    </label>
+                  {/* Enable Automatic Numbering Series */}
+                  <div className="flex items-center">
                     <input
-                      type="number"
-                      value={voucherStartFrom}
-                      onChange={(e) => setVoucherStartFrom(parseInt(e.target.value) || 1)}
-                      className="w-full px-4 py-2 border-2 border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
-                      placeholder="1"
-                      min="1"
+                      type="checkbox"
+                      id="otherEnableAutoNumbering"
+                      checked={enableAutoNumbering}
+                      onChange={(e) => setEnableAutoNumbering(e.target.checked)}
+                      className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
                     />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Required Digits
+                    <label htmlFor="otherEnableAutoNumbering" className="ml-2 text-sm font-medium text-gray-700">
+                      Enable Automatic Numbering Series
                     </label>
-                    <input
-                      type="number"
-                      value={voucherRequiredDigits}
-                      onChange={(e) => setVoucherRequiredDigits(parseInt(e.target.value) || 4)}
-                      className="w-full px-4 py-2 border-2 border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
-                      placeholder="4"
-                      min="1"
-                    />
                   </div>
-                </div>
 
-                {/* Effective Period */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Effective Period: <span className="text-red-500">*</span>
-                  </label>
+                  {/* Prefix and Suffix */}
                   <div className="grid grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">From <span className="text-red-500">*</span></label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Prefix <span className="text-red-500">*</span>
+                      </label>
                       <input
-                        type="date"
-                        value={voucherEffectiveFrom}
-                        onChange={(e) => setVoucherEffectiveFrom(e.target.value)}
-                        min={today}
-                        className="w-full px-4 py-2 border-2 border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        type="text"
+                        value={voucherPrefix}
+                        onChange={(e) => setVoucherPrefix(e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                        placeholder="e.g., CN-"
+                        pattern="[a-zA-Z0-9/\-]*"
+                        title="Only alphanumeric characters, slash (/), and hyphen (-) are allowed"
                         required
+                      />
+                      <p className="mt-1 text-xs text-gray-500">Alphanumeric (With / Slash and - Hyphen)</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Suffix <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={voucherSuffix}
+                        onChange={(e) => setVoucherSuffix(e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                        placeholder="e.g., /24-25"
+                        pattern="[a-zA-Z0-9/\-]*"
+                        title="Only alphanumeric characters, slash (/), and hyphen (-) are allowed"
+                        required
+                      />
+                      <p className="mt-1 text-xs text-gray-500">Alphanumeric (With / Slash and - Hyphen)</p>
+                    </div>
+                  </div>
+
+                  {/* Start From and Required Digits */}
+                  <div className="grid grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Start From
+                      </label>
+                      <input
+                        type="number"
+                        value={voucherStartFrom}
+                        onChange={(e) => setVoucherStartFrom(parseInt(e.target.value) || 1)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                        placeholder="1"
+                        min="1"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">To <span className="text-red-500">*</span></label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Required Digits
+                      </label>
                       <input
-                        type="date"
-                        value={voucherEffectiveTo}
-                        onChange={(e) => setVoucherEffectiveTo(e.target.value)}
-                        min={voucherEffectiveFrom || today}
-                        max={financialYearEnd}
-                        className="w-full px-4 py-2 border-2 border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
-                        required
+                        type="number"
+                        value={voucherRequiredDigits}
+                        onChange={(e) => setVoucherRequiredDigits(parseInt(e.target.value) || 4)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                        placeholder="4"
+                        min="1"
                       />
                     </div>
                   </div>
-                </div>
 
-                {/* Submit Button */}
-                <div className="flex justify-end gap-3 pt-4">
-                  {isEditModeVoucher && (
-                    <button
-                      type="button"
-                      onClick={resetVoucherForm}
-                      className="px-8 py-3 bg-gray-500 text-white font-semibold rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors duration-200"
-                    >
-                      Cancel
-                    </button>
-                  )}
-                  <button
-                    type="submit"
-                    className="px-8 py-3 bg-teal-600 text-white font-semibold rounded-md hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-colors duration-200"
-                  >
-                    {isEditModeVoucher ? 'Update' : 'Save'}
-                  </button>
-                </div>
-              </form>
-            </div>
+                  {/* Effective Period */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Effective Period: <span className="text-red-500">*</span>
+                    </label>
+                    <div className="grid grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">From <span className="text-red-500">*</span></label>
+                        <input
+                          type="date"
+                          value={voucherEffectiveFrom}
+                          onChange={(e) => setVoucherEffectiveFrom(e.target.value)}
+                          min={today}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">To <span className="text-red-500">*</span></label>
+                        <input
+                          type="date"
+                          value={voucherEffectiveTo}
+                          onChange={(e) => setVoucherEffectiveTo(e.target.value)}
+                          min={voucherEffectiveFrom || today}
+                          max={financialYearEnd}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
 
-            {/* Right Column - Existing Vouchers */}
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Existing Vouchers</h3>
-
-              {/* Table */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead className="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">SELECT</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">VOUCHER NAME</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">VOUCHER SERIES PREVIEW (LAST SERIES)</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">EFFECTIVE FROM</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">EFFECTIVE TO</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">ACTIONS</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {existingVouchers.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="px-3 py-12 text-center">
-                          <p className="text-sm text-gray-400">No vouchers configured yet</p>
-                        </td>
-                      </tr>
-                    ) : (
-                      existingVouchers
-                        .map((voucher) => {
-                          const isSelected = selectedVoucherConfig?.id === voucher.id;
-                          const seriesPreview = voucher.enable_auto_numbering
-                            ? `${voucher.prefix || ''}${String(voucher.current_number || voucher.start_from || 1).padStart(voucher.required_digits || 4, '0')}${voucher.suffix || ''}`
-                            : 'Manual';
-
-                          return (
-                            <tr
-                              key={voucher.id}
-                              className={`transition-colors ${isSelected ? 'bg-teal-50 hover:bg-teal-100' : 'hover:bg-gray-50'}`}
-                            >
-                              <td className="px-3 py-3 whitespace-nowrap">
-                                <input
-                                  type="radio"
-                                  name="selectedVoucherConfig"
-                                  checked={isSelected}
-                                  onChange={() => setSelectedVoucherConfig(voucher)}
-                                  className="w-4 h-4 text-teal-600 focus:ring-teal-500 cursor-pointer"
-                                />
-                              </td>
-                              <td className="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                                {voucher.voucher_name}
-                              </td>
-                              <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-700">
-                                {seriesPreview}
-                              </td>
-                              <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">
-                                {voucher.effective_from}
-                              </td>
-                              <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">
-                                {voucher.effective_to}
-                              </td>
-                              <td className="px-3 py-3 whitespace-nowrap text-sm">
-                                {isSelected ? (
-                                  <div className="flex gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={handleEditVoucherConfig}
-                                      className="px-3 py-1.5 text-xs font-semibold rounded-md text-white bg-teal-600 hover:bg-teal-700 transition-colors"
-                                    >
-                                      Edit
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={handleDeleteVoucherConfig}
-                                      className="px-3 py-1.5 text-xs font-semibold rounded-md text-white bg-red-600 hover:bg-red-700 transition-colors"
-                                    >
-                                      Delete
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <span className="text-gray-400 text-xs italic">Select to edit</span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })
+                  {/* Submit Button */}
+                  <div className="flex justify-end gap-3 pt-4">
+                    {isEditModeVoucher && (
+                      <button
+                        type="button"
+                        onClick={resetVoucherForm}
+                        className="px-8 py-3 bg-gray-500 text-white font-semibold rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors duration-200"
+                      >
+                        Cancel
+                      </button>
                     )}
-                  </tbody>
-                </table>
+                    <button
+                      type="submit"
+                      className="px-8 py-3 bg-teal-600 text-white font-semibold rounded-md hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-colors duration-200"
+                    >
+                      {isEditModeVoucher ? 'Update' : 'Save'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Right Column - Existing Vouchers */}
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Existing Vouchers</h3>
+
+                {/* Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">SELECT</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">VOUCHER NAME</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">VOUCHER SERIES PREVIEW (LAST SERIES)</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">EFFECTIVE FROM</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">EFFECTIVE TO</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">ACTIONS</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {existingVouchers.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="px-3 py-12 text-center">
+                            <p className="text-sm text-gray-400">No vouchers configured yet</p>
+                          </td>
+                        </tr>
+                      ) : (
+                        existingVouchers
+                          .map((voucher) => {
+                            const isSelected = selectedVoucherConfig?.id === voucher.id;
+                            const seriesPreview = voucher.enable_auto_numbering
+                              ? `${voucher.prefix || ''}${String(voucher.current_number || voucher.start_from || 1).padStart(voucher.required_digits || 4, '0')}${voucher.suffix || ''}`
+                              : 'Manual';
+
+                            return (
+                              <tr
+                                key={voucher.id}
+                                className={`transition-colors ${isSelected ? 'bg-teal-50 hover:bg-teal-100' : 'hover:bg-gray-50'}`}
+                              >
+                                <td className="px-3 py-3 whitespace-nowrap">
+                                  <input
+                                    type="radio"
+                                    name="selectedVoucherConfig"
+                                    checked={isSelected}
+                                    onChange={() => setSelectedVoucherConfig(voucher)}
+                                    className="w-4 h-4 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                                  />
+                                </td>
+                                <td className="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                                  {voucher.voucher_name}
+                                </td>
+                                <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-700">
+                                  {seriesPreview}
+                                </td>
+                                <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">
+                                  {voucher.effective_from}
+                                </td>
+                                <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">
+                                  {voucher.effective_to}
+                                </td>
+                                <td className="px-3 py-3 whitespace-nowrap text-sm">
+                                  {isSelected ? (
+                                    <div className="flex gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={handleEditVoucherConfig}
+                                        className="px-3 py-1.5 text-xs font-semibold rounded-md text-white bg-teal-600 hover:bg-teal-700 transition-colors"
+                                      >
+                                        Edit
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={handleDeleteVoucherConfig}
+                                        className="px-3 py-1.5 text-xs font-semibold rounded-md text-white bg-red-600 hover:bg-red-700 transition-colors"
+                                      >
+                                        Delete
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <span className="text-gray-400 text-xs italic">Select to edit</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>

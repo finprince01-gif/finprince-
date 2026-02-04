@@ -85,13 +85,13 @@ type GSTTab = 'B2B' | 'B2C-L' | 'B2C-S' | 'Exports' | 'CDN' | 'Advances' | 'ITC-
 const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], ledgerGroups = [], stockItems = [] }) => {
   // Report Options Mapping
   const allReports: { id: ReportType; label: string }[] = [
-    { id: 'DayBook', label: 'Day Book' },
-    { id: 'LedgerReport', label: 'Ledger Report' },
-    { id: 'TrialBalance', label: 'Trial Balance' },
-    { id: 'BalanceSheet', label: 'Balance Sheet' },
-    { id: 'StockSummary', label: 'Stock Summary' },
-    { id: 'GSTReports', label: 'GST Reports' },
-    { id: 'AIReport', label: 'AI Report' }
+    { id: 'DayBook', label: 'DAY BOOK' },
+    { id: 'LedgerReport', label: 'LEDGER REPORT' },
+    { id: 'TrialBalance', label: 'TRIAL BALANCE' },
+    { id: 'BalanceSheet', label: 'BALANCE SHEET' },
+    { id: 'StockSummary', label: 'STOCK SUMMARY' },
+    { id: 'GSTReports', label: 'GST REPORTS' },
+    { id: 'AIReport', label: 'AI REPORT' }
   ];
 
   // RBAC Disabled - Show all reports
@@ -1438,19 +1438,21 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
 
       <h2 className="text-3xl font-bold text-gray-900 mb-8">Reports</h2>
 
-      <div className="mb-8 flex p-1 bg-gray-200 rounded-xl max-w-4xl shadow-sm">
-        {availableReports.map(({ id, label }, idx) => (
-          <button
-            key={`report-tab-${id}-${idx}`}
-            onClick={() => setReportType(id as ReportType)}
-            className={`flex-1 py-3 px-4 text-sm font-semibold rounded-lg transition-all duration-200 ${reportType === id
-              ? 'bg-white text-blue-600 shadow-md border border-gray-200'
-              : 'text-gray-600 hover:bg-gray-100'
-              }`}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="mb-8 border-b border-gray-200">
+        <nav className="flex space-x-8" aria-label="Report Tabs">
+          {availableReports.map(({ id, label }, idx) => (
+            <button
+              key={`report-tab-${id}-${idx}`}
+              onClick={() => setReportType(id as ReportType)}
+              className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${reportType === id
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
       </div>
 
       <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200">

@@ -447,8 +447,8 @@ const PaymentVoucherBulk: React.FC = () => {
               type="button"
               onClick={() => setShowAdvanceSection(!showAdvanceSection)}
               className={`px-8 py-2 text-sm font-medium rounded-lg transition-colors ${showAdvanceSection
-                  ? 'bg-orange-600 text-white hover:bg-orange-700'
-                  : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-orange-500'
+                ? 'bg-orange-600 text-white hover:bg-orange-700'
+                : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-orange-500'
                 }`}
             >
               Advance

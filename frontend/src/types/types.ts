@@ -18,7 +18,7 @@
  * 4. Inventory (Stock Items, Units, Groups)
  * 5. Vouchers (Transactions)
  * 6. AI Features (Invoice extraction, AI Agent)
- * 7. User Management (Users, Roles, Permissions)
+
  * 
  * FOR NEW DEVELOPERS:
  * - Always import types when working with data
@@ -34,7 +34,7 @@
  * Page - Defines all possible pages/sections in the application
  * Used for routing and navigation
  */
-export type Page = 'Dashboard' | 'Masters' | 'Inventory' | 'Vouchers' | 'Reports' | 'Settings' | 'MassUploadResult' | 'Vendor Portal' | 'Customer Portal' | 'Payroll' | 'Service';
+export type Page = 'Dashboard' | 'Masters' | 'Inventory' | 'Vouchers' | 'Reports' | 'Settings' | 'MassUploadResult' | 'Vendor Portal' | 'Customer Portal' | 'Payroll' | 'Service' | 'Users & Roles' | 'GST';
 
 // ============================================================================
 // COMPANY & SETTINGS TYPES
@@ -338,80 +338,14 @@ export interface MassUploadFile {
   error?: string;
 }
 
-// For User Management and RBAC
+// For User Data
 export interface User {
   id: number;
   username: string;
   name: string;
   email?: string;
   is_active: boolean;
-  roles: Role[];
   tenantId: string;
-}
-
-export interface Role {
-  id: number;
-  name: string;
-  description?: string;
-  is_system: boolean;
-  permissions: Permission[];
-}
-
-export interface Permission {
-  id: number;
-  code: string;
-  name: string;
-  module: string;
-  groupName: string;
-  description?: string;
-}
-
-// Permission with modules and groups for display
-export interface PermissionGroup {
-  module: string;
-  groups: {
-    [groupName: string]: Permission[];
-  };
-}
-
-// Role with permission count for management listing
-export interface RoleSummary {
-  id: number;
-  name: string;
-  description?: string;
-  isSystem: boolean;
-  permissionsCount: number;
-}
-
-// Login response with permissions
-export interface LoginResponse {
-  success: boolean;
-  user: {
-    id: number;
-    name: string;
-    email?: string;
-    tenantId: string;
-  };
-  tenantId: string;
-  permissions: string[];
-  token: string;
-}
-
-// OTP verification response (includes auto-login tokens)
-export interface OTPVerificationResponse {
-  success: boolean;
-  message?: string;
-  access?: string;
-  refresh?: string;
-  user?: {
-    id: number;
-    username: string;
-    email?: string;
-    phone?: string;
-    company_name?: string;
-    tenant_id?: string;
-  };
-  permissions?: string[];
 }
 
 // For Module-Submodule UI
@@ -431,6 +365,120 @@ export interface UserTable {
   created_at?: string;
 }
 
-export interface RoleModulesData {
-  selectedSubmoduleIds: number[];
+// ============================================================================
+// RBAC (Role-Based Access Control) TYPES
+// ============================================================================
+
+/**
+ * TabPermissions - Permissions for individual tabs within a page
+ * Key: tab name, Value: boolean (true = has access)
+ */
+export interface TabPermissions {
+  [tabName: string]: boolean;
+}
+
+/**
+ * PagePermissions - Permissions for a page and its tabs
+ */
+export interface PagePermissions {
+  view: boolean;           // Can view the page
+  tabs?: TabPermissions;   // Optional tab-level permissions
+}
+
+/**
+ * Permissions - Complete permission structure for all pages
+ * Key: page name, Value: PagePermissions
+ */
+export interface Permissions {
+  [pageName: string]: PagePermissions;
+}
+
+/**
+ * Role - User role with hierarchical permissions
+ * Examples: Admin, Accountant, Sales Manager, Inventory Manager
+ */
+export interface Role {
+  id?: number;
+  name: string;
+  description?: string;
+  permissions: Permissions;
+  is_active?: boolean;
+  tenant_id?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/**
+ * UserRole - Assignment of a role to a user
+ */
+export interface UserRole {
+  id?: number;
+  user_id: number;
+  role_id: number;
+  role_name?: string;
+  role_description?: string;
+  user_username?: string;
+  assigned_at?: string;
+  assigned_by?: number;
+  tenant_id?: string;
+}
+
+/**
+ * UserWithRoles - User with their assigned roles and combined permissions
+ */
+export interface UserWithRoles {
+  id: number;
+  username: string;
+  email?: string;
+  company_name?: string;
+  phone?: string;
+  is_active: boolean;
+  tenant_id?: string;
+  roles: {
+    id: number;
+    name: string;
+    description?: string;
+    assigned_at: string;
+  }[];
+  permissions: Permissions;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/**
+ * CreateUserWithRole - Data for creating a new user with role assignment
+ */
+export interface CreateUserWithRole {
+  username: string;
+  email?: string;
+  password: string;
+  phone?: string;
+  role_ids?: number[];
+}
+
+/**
+ * PermissionLog - Audit trail for permission changes
+ */
+export interface PermissionLog {
+  id: number;
+  role_id: number;
+  role_name: string;
+  changed_by_id?: number;
+  changed_by_username?: string;
+  action: 'created' | 'updated' | 'deleted';
+  old_permissions?: Permissions;
+  new_permissions?: Permissions;
+  change_summary?: string;
+  created_at: string;
+  tenant_id: string;
+}
+
+/**
+ * PermissionsStructure - Available pages and tabs for permission configuration
+ * Used to build the permission tree UI
+ */
+export interface PermissionsStructure {
+  [pageName: string]: {
+    tabs: string[];
+  };
 }

@@ -1,4 +1,4 @@
-export type Page = 'Dashboard' | 'Masters' | 'Inventory' | 'Vouchers' | 'Reports' | 'Settings' | 'MassUploadResult' | 'Vendor Portal' | 'Customer Portal' | 'Payroll' | 'Service' | 'GST';
+export type Page = 'Dashboard' | 'Masters' | 'Inventory' | 'Vouchers' | 'Reports' | 'Settings' | 'MassUploadResult' | 'Vendor Portal' | 'Customer Portal' | 'Payroll' | 'Service' | 'GST' | 'Users & Roles';
 
 export interface CompanyDetails {
   name: string;
@@ -248,52 +248,17 @@ export interface MassUploadFile {
   error?: string;
 }
 
-// For User Management and RBAC
+// For User Management
 export interface User {
   id: number;
   username: string;
   name: string;
   email?: string;
   is_active: boolean;
-  roles: Role[];
   tenantId: string;
 }
 
-export interface Role {
-  id: number;
-  name: string;
-  description?: string;
-  is_system: boolean;
-  permissions: Permission[];
-}
-
-export interface Permission {
-  id: number;
-  code: string;
-  name: string;
-  module: string;
-  groupName: string;
-  description?: string;
-}
-
-// Permission with modules and groups for display
-export interface PermissionGroup {
-  module: string;
-  groups: {
-    [groupName: string]: Permission[];
-  };
-}
-
-// Role with permission count for management listing
-export interface RoleSummary {
-  id: number;
-  name: string;
-  description?: string;
-  isSystem: boolean;
-  permissionsCount: number;
-}
-
-// Login response with permissions
+// Login response
 export interface LoginResponse {
   success: boolean;
   user: {
@@ -303,7 +268,6 @@ export interface LoginResponse {
     tenantId: string;
   };
   tenantId: string;
-  permissions: string[];
   token: string;
 }
 
@@ -321,7 +285,6 @@ export interface OTPVerificationResponse {
     company_name?: string;
     tenant_id?: string;
   };
-  permissions?: string[];
 }
 
 // For Module-Submodule UI
@@ -339,8 +302,4 @@ export interface UserTable {
   description?: string;
   submodules: Submodule[];
   created_at?: string;
-}
-
-export interface RoleModulesData {
-  selectedSubmoduleIds: number[];
 }
