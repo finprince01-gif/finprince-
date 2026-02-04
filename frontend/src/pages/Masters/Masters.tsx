@@ -1368,7 +1368,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
 
         </form>
       </div>
-    </div>
+    </div >
   );
 
   const renderLedgerGroups = () => (

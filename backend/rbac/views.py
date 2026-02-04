@@ -87,6 +87,9 @@ class RoleViewSet(viewsets.ModelViewSet):
             "Service": {
                 "tabs": ["Services", "Bookings", "Invoices"]
             },
+            "GST": {
+                "tabs": ["GSTR-1", "GSTR-3B", "GST Reports"]
+            },
             "Reports": {
                 "tabs": ["Trial Balance", "Profit & Loss", "Balance Sheet", "GST Reports", "Ledger Reports"]
             },
@@ -131,7 +134,7 @@ class UserManagementViewSet(viewsets.ModelViewSet):
     - POST /api/rbac/users/ - Create a new user with role assignment
     - GET /api/rbac/users/{id}/ - Get user details with roles
     - PUT /api/rbac/users/{id}/ - Update user
-    - DELETE /api/rbac/users/{id}/ - Delete user (deactivate)
+    - DELETE /api/rbac/users/{id}/ - Delete user (permanently remove from database)
     - GET /api/rbac/users/me/permissions/ - Get current user's permissions
     """
     permission_classes = [IsAuthenticated]
@@ -155,15 +158,29 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         return UserWithRolesSerializer
     
     def perform_destroy(self, instance):
-        """Deactivate user instead of deleting"""
-        instance.is_active = False
-        instance.save()
+        """Delete user from database"""
+        instance.delete()
     
     @action(detail=False, methods=['get'])
     def me(self, request):
         """Get current user's details with roles and permissions"""
         serializer = UserWithRolesSerializer(request.user)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='all-users')
+    def all_users(self, request):
+        """Get all users from users table (for role assignment selection)"""
+        user = request.user
+        if user.tenant_id:
+            # Get ALL users in tenant
+            all_users_list = User.objects.filter(tenant_id=user.tenant_id).order_by('username')
+            return Response([{
+                'id': u.id,
+                'username': u.username,
+                'email': u.email,
+                'phone': u.phone
+            } for u in all_users_list])
+        return Response([])
     
     @action(detail=False, methods=['get'], url_path='me/permissions')
     def my_permissions(self, request):

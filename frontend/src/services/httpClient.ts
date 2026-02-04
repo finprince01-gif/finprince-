@@ -167,6 +167,16 @@ class HttpClient {
                 return await response.json();
             }
 
+            // Handle binary formats for downloads
+            if (contentType && (
+                contentType.includes('application/vnd.openxmlformats-officedocument') ||
+                contentType.includes('application/pdf') ||
+                contentType.includes('application/zip') ||
+                contentType.includes('application/octet-stream')
+            )) {
+                return await response.blob() as unknown as T;
+            }
+
             return (await response.text()) as unknown as T;
 
         } catch (error) {

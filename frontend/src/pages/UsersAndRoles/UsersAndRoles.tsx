@@ -192,7 +192,7 @@ const UsersAndRolesPage: React.FC<UsersAndRolesPageProps> = ({ onNavigate }) => 
     };
 
     const handleDeleteUser = async (userId: number) => {
-        if (!confirm('Are you sure you want to deactivate this user?')) return;
+        if (!confirm('Are you sure you want to permanently delete this user? This action cannot be undone.')) return;
 
         try {
             await apiService.deleteUser(userId);

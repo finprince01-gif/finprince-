@@ -54,7 +54,7 @@ interface SidebarProps {
  * Sidebar Component - Main navigation sidebar
  */
 const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, companyName, userPlan }) => {
-  const { hasPageAccess } = usePermissions();
+  const { hasPageAccess, permissions, isSuperuser } = usePermissions();
 
   // Define all available navigation items
   // Each item has a name and icon
@@ -82,6 +82,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, co
     return hasPageAccess(item.name);
   });
 
+  // If RBAC is not configured (no permissions set), show all menu items
+  // This ensures users have full access when roles aren't set up yet
+  const hasRBACConfigured = Object.keys(permissions).length > 0 || isSuperuser;
+  const displayItems = hasRBACConfigured ? navItems : allNavItems;
+
   return (
     <aside className="w-64 bg-white border-r border-gray-200 flex flex-col fixed h-full">
       {/* Company Name */}
@@ -91,7 +96,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, co
 
       {/* Navigation Items */}
       <nav className="flex-1 overflow-y-auto py-4">
-        {navItems.map((item) => {
+        {displayItems.map((item) => {
           const isActive = currentPage === item.name;
           return (
             <a
