@@ -1,0 +1,105 @@
+--- inventory_operation_consumption ---
+CREATE TABLE `inventory_operation_consumption` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) NOT NULL,
+  `created_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `issue_slip_no` varchar(100) NOT NULL,
+  `date` date DEFAULT NULL,
+  `time` time DEFAULT NULL,
+  `status` varchar(50) NOT NULL DEFAULT 'Draft',
+  `goods_from_location` varchar(255) DEFAULT NULL,
+  `goods_to_location` varchar(255) DEFAULT NULL,
+  `posting_note` text,
+  `items` json DEFAULT NULL COMMENT 'List of items: item_code, quantity, rate, etc.',
+  `dispatch_address` text,
+  `dispatch_date` date DEFAULT NULL,
+  `vehicle_number` varchar(50) DEFAULT NULL,
+  `valid_till` date DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_ioc_tenant` (`tenant_id`),
+  KEY `idx_ioc_issue_slip` (`issue_slip_no`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+
+--- inventory_operation_grn ---
+CREATE TABLE `inventory_operation_grn` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) NOT NULL,
+  `created_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `grn_no` varchar(100) NOT NULL COMMENT 'GRN number',
+  `date` date DEFAULT NULL,
+  `time` time DEFAULT NULL,
+  `grn_type` varchar(50) NOT NULL DEFAULT 'purchase' COMMENT 'purchase or sales_return',
+  `location_id` bigint DEFAULT NULL COMMENT 'Foreign key to inventory_master_location',
+  `purchase_order_no` varchar(100) DEFAULT NULL,
+  `vendor_name` varchar(255) DEFAULT NULL,
+  `supplier_invoice_no` varchar(100) DEFAULT NULL,
+  `customer_name` varchar(255) DEFAULT NULL,
+  `sales_invoice_no` varchar(100) DEFAULT NULL,
+  `branch` varchar(100) DEFAULT NULL,
+  `address` text,
+  `gstin` varchar(20) DEFAULT NULL,
+  `total_boxes` varchar(50) DEFAULT NULL,
+  `posting_note` text,
+  `items` json DEFAULT NULL COMMENT 'List of items',
+  PRIMARY KEY (`id`),
+  KEY `idx_iog_tenant` (`tenant_id`),
+  KEY `idx_iog_grn_no` (`grn_no`),
+  KEY `idx_iog_location` (`location_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+
+--- inventory_operation_outward ---
+CREATE TABLE `inventory_operation_outward` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) NOT NULL,
+  `created_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `outward_slip_no` varchar(100) NOT NULL,
+  `date` date DEFAULT NULL,
+  `time` time DEFAULT NULL,
+  `outward_type` varchar(50) NOT NULL DEFAULT 'sales' COMMENT 'sales or purchase_return',
+  `location_id` bigint DEFAULT NULL,
+  `sales_order_no` varchar(100) DEFAULT NULL,
+  `customer_name` varchar(255) DEFAULT NULL,
+  `supplier_invoice_no` varchar(100) DEFAULT NULL,
+  `vendor_name` varchar(255) DEFAULT NULL,
+  `branch` varchar(100) DEFAULT NULL,
+  `address` text,
+  `gstin` varchar(20) DEFAULT NULL,
+  `total_boxes` varchar(50) DEFAULT NULL,
+  `posting_note` text,
+  `items` json DEFAULT NULL COMMENT 'List of items: item_code, quantity, hsn, etc.',
+  `dispatch_address` text,
+  `dispatch_date` date DEFAULT NULL,
+  `vehicle_number` varchar(50) DEFAULT NULL,
+  `valid_till` date DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_ioo_tenant` (`tenant_id`),
+  KEY `idx_ioo_outward_slip` (`outward_slip_no`),
+  KEY `idx_ioo_location` (`location_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+
+--- inventory_operation_scrap ---
+CREATE TABLE `inventory_operation_scrap` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) NOT NULL,
+  `created_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `issue_slip_no` varchar(100) NOT NULL,
+  `date` date DEFAULT NULL,
+  `time` time DEFAULT NULL,
+  `status` varchar(50) NOT NULL DEFAULT 'Draft',
+  `goods_from_location` varchar(255) DEFAULT NULL,
+  `goods_to_location` varchar(255) DEFAULT NULL,
+  `posting_note` text,
+  `items` json DEFAULT NULL COMMENT 'List of items: item_code, quantity, value, etc.',
+  `dispatch_address` text,
+  `dispatch_date` date DEFAULT NULL,
+  `vehicle_number` varchar(50) DEFAULT NULL,
+  `valid_till` date DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_ios_tenant` (`tenant_id`),
+  KEY `idx_ios_issue_slip` (`issue_slip_no`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+

@@ -61,30 +61,30 @@ const CustomerPortalPage: React.FC = () => {
     const [showCreateOrder, setShowCreateOrder] = useState(false);
 
     return (
-        <div className="flex-1 bg-gray-50 min-h-screen">
+        <div className="flex-1 bg-sky-50 min-h-screen">
             {/* Header */}
-            <div className="bg-white border-b border-gray-200 px-8 py-6">
+            <div className="px-8 py-6">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-900">Customer Module</h1>
+                        <h1 className="text-3xl font-bold text-gray-900">Customer Portal</h1>
                         <p className="text-sm text-gray-600 mt-1">Manage customers, categories, and sales transactions</p>
                     </div>
                 </div>
             </div>
 
             {/* Main Tabs */}
-            <div className="bg-white border-b border-gray-200 px-8">
-                <div className="flex gap-8">
+            <div className="px-8">
+                <div className="flex gap-8 border-b border-gray-200 pb-1">
                     {['Masters', 'Transactions'].map((tab) => (
                         <button
                             key={tab}
                             onClick={() => setActiveTab(tab as MainTab)}
-                            className={`py-4 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === tab
-                                ? 'border-blue-500 text-blue-600'
+                            className={`py-2 px-1 text-sm font-medium transition-colors border-b-2 ${activeTab === tab
+                                ? 'border-blue-600 text-blue-600'
                                 : 'border-transparent text-gray-500 hover:text-gray-700'
                                 }`}
                         >
-                            {tab}
+                            {tab.toUpperCase()}
                         </button>
                     ))}
                 </div>
@@ -95,18 +95,18 @@ const CustomerPortalPage: React.FC = () => {
                 {activeTab === 'Masters' && (
                     <div>
                         {/* Sub-tabs for Masters */}
-                        <div className="mb-6 border-b border-gray-200">
-                            <div className="flex gap-8">
+                        <div className="mb-6">
+                            <div className="flex gap-8 border-b border-gray-200 pb-1">
                                 {['Category', 'Sales Quotation & Order', 'Customer', 'Long-term Contracts'].map((subTab) => (
                                     <button
                                         key={subTab}
                                         onClick={() => setActiveMasterSubTab(subTab as MasterSubTab)}
-                                        className={`pb-3 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${activeMasterSubTab === subTab
+                                        className={`pb-3 text-sm font-medium transition-colors whitespace-nowrap border-b-2 ${activeMasterSubTab === subTab
                                             ? 'border-teal-500 text-teal-600'
                                             : 'border-transparent text-gray-500 hover:text-gray-700'
                                             }`}
                                     >
-                                        {subTab}
+                                        {subTab.toUpperCase()}
                                     </button>
                                 ))}
                             </div>
@@ -125,18 +125,18 @@ const CustomerPortalPage: React.FC = () => {
                 {activeTab === 'Transactions' && (
                     <div>
                         {/* Sub-tabs for Transactions */}
-                        <div className="mb-6 border-b border-gray-200">
-                            <div className="flex gap-8">
+                        <div className="mb-6">
+                            <div className="flex gap-8 border-b border-gray-200 pb-1">
                                 {['Sales Quotation', 'Sales Order', 'Sales', 'Receipt'].map((subTab) => (
                                     <button
                                         key={subTab}
                                         onClick={() => setActiveTransactionSubTab(subTab as TransactionSubTab)}
-                                        className={`pb-3 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${activeTransactionSubTab === subTab
+                                        className={`pb-3 text-sm font-medium transition-colors whitespace-nowrap border-b-2 ${activeTransactionSubTab === subTab
                                             ? 'border-teal-500 text-teal-600'
                                             : 'border-transparent text-gray-500 hover:text-gray-700'
                                             }`}
                                     >
-                                        {subTab}
+                                        {subTab.toUpperCase()}
                                     </button>
                                 ))}
                             </div>
@@ -181,7 +181,7 @@ const CustomerPortalPage: React.FC = () => {
                                                             : 'border-transparent text-gray-500 hover:text-gray-700'
                                                             }`}
                                                     >
-                                                        {tab}
+                                                        {tab.toUpperCase()}
                                                     </button>
                                                 ))}
                                             </nav>
@@ -2699,7 +2699,7 @@ const LongTermContractsContent: React.FC = () => {
 
     // Basic Details State
     const [basicDetails, setBasicDetails] = useState({
-        contractNumber: 'CT-2026-224', // Auto-generated
+        contractNumber: `CT-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`, // Auto-generated
         customerId: '',
         customerName: '',
         branchId: '',
@@ -2767,7 +2767,7 @@ const LongTermContractsContent: React.FC = () => {
     const fetchContracts = async () => {
         try {
             const response = await httpClient.get('/api/customerportal/long-term-contracts/');
-            setContracts((response as any).data || []);
+            setContracts((response as any) || []);
         } catch (error) {
             console.error('Error fetching contracts:', error);
             setContracts([]);
@@ -2834,7 +2834,7 @@ const LongTermContractsContent: React.FC = () => {
 
     const resetForm = () => {
         setBasicDetails({
-            contractNumber: 'CT-2026-224',
+            contractNumber: `CT-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`,
             customerId: '',
             customerName: '',
             branchId: '',
@@ -3350,15 +3350,15 @@ const LongTermContractsContent: React.FC = () => {
                     <tbody className="bg-white divide-y divide-gray-200">
                         {contracts.map((contract) => (
                             <tr key={contract.id} className="hover:bg-gray-50 transition-colors group">
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">{contract.contractNo}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{contract.customerName}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">{contract.contract_number}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{contract.customer_name}</td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                    <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full cursor-default ${getBadgeStyle(contract.type)}`}>
-                                        {contract.type}
+                                    <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full cursor-default ${getBadgeStyle(contract.contract_type)}`}>
+                                        {contract.contract_type}
                                     </span>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 tabular-nums">
-                                    {contract.validFrom} <span className="mx-2 text-gray-400">-</span> {contract.validTo}
+                                    {contract.contract_validity_from} <span className="mx-2 text-gray-400">-</span> {contract.contract_validity_to}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                                     <div className="flex items-center justify-center gap-3 opacity-60 group-hover:opacity-100 transition-opacity">

@@ -349,7 +349,7 @@ const UsersAndRolesPage: React.FC<UsersAndRolesPageProps> = ({ onNavigate }) => 
                             }`}
                     >
                         <Icon name="users" className="inline-block w-5 h-5 mr-2" />
-                        Users
+                        USERS
                     </button>
                     <button
                         onClick={() => setActiveTab('roles')}
@@ -359,7 +359,7 @@ const UsersAndRolesPage: React.FC<UsersAndRolesPageProps> = ({ onNavigate }) => 
                             }`}
                     >
                         <Icon name="settings" className="inline-block w-5 h-5 mr-2" />
-                        Roles & Permissions
+                        ROLES & PERMISSIONS
                     </button>
                 </div>
             </div>

@@ -4559,7 +4559,7 @@ const InventoryPage: React.FC = () => {
           <nav className="flex space-x-8 border-b border-gray-200" aria-label="GRN & Issue Slip Sub-tabs">
             {grnIssueSlipSubTabs.map((subTab) => (
               <button key={subTab} onClick={() => setActiveGRNIssueSlipSubTab(subTab)} className={`pb-3 px-6 text-sm font-medium transition-all relative ${activeGRNIssueSlipSubTab === subTab ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500 hover:text-gray-700'}`}>
-                {subTab}
+                {subTab.toUpperCase()}
               </button>
             ))}
           </nav>
@@ -4578,13 +4578,17 @@ const InventoryPage: React.FC = () => {
         <nav className="flex space-x-8 border-b border-gray-200" aria-label="Master Sub-tabs">
           {masterSubTabs.map((subTab) => (
             <button key={subTab} onClick={() => setActiveMasterSubTab(subTab)} className={`pb-3 px-6 text-sm font-medium transition-all relative ${activeMasterSubTab === subTab ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500 hover:text-gray-700'}`}>
-              {subTab}
+              {subTab.toUpperCase()}
             </button>
           ))}
         </nav>
       </div>
       <div className="p-0">
-        {activeMasterSubTab === 'Category' && <InventoryCategoryWizard onCreateCategory={handleCreateCategory} />}
+        {activeMasterSubTab === 'Category' && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 min-h-[500px]">
+            <InventoryCategoryWizard onCreateCategory={handleCreateCategory} />
+          </div>
+        )}
         {activeMasterSubTab === 'Location' && renderLocation()}
         {activeMasterSubTab === 'Inventory Items' && renderItemCode()}
         {activeMasterSubTab === 'GRN & Issue Slip' && renderGRNIssueSlip()}
@@ -4600,7 +4604,7 @@ const InventoryPage: React.FC = () => {
       <div className="flex space-x-6 mb-6 border-b border-gray-200">
         {visibleTabs.map((tab) => (
           <button key={tab} onClick={() => setActiveTab(tab)} className={`pb-2 text-sm font-medium transition-colors ${activeTab === tab ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>
-            {tab}
+            {tab.toUpperCase()}
           </button>
         ))}
       </div>

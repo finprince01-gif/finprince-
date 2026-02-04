@@ -19,7 +19,9 @@
  */
 
 // Environment configuration
-export const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000';
+// In development, use empty string to let Vite proxy handle requests
+// In production, use the full API URL from environment variable
+export const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || '';
 
 // Type definitions for Queue Items
 interface QueueItem {
@@ -102,7 +104,7 @@ class HttpClient {
                     // but we also support reading from storage if response body contained it.
                     // For this setup, we assume backend handles the cookie or body.
                     // Based on provided code, the backend view reads COOKIES for the refresh token.
-                    const refreshResponse = await fetch(`${this.baseURL}/api/auth/refresh/`, {
+                    const refreshResponse = await fetch(`/api/auth/refresh/`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ refresh: localStorage.getItem('refreshToken') }),
