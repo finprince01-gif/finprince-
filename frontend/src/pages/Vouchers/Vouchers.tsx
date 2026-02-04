@@ -1273,7 +1273,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     return (
       <div className="space-y-6">
         {/* Tabs Navigation */}
-        {/* Tabs Navigation */}
         <div className="flex border-b border-gray-200 overflow-x-auto">
           {(invoiceInForeignCurrency === 'Yes' ? [
             { id: 'supplier', label: 'Supplier Details' },
@@ -1291,7 +1290,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               key={tab.id}
               onClick={() => setPurchaseActiveTab(tab.id as any)}
               className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${purchaseActiveTab === tab.id
-                ? 'border-orange-600 text-orange-600'
+                ? 'border-emerald-600 text-emerald-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
             >
@@ -2626,8 +2625,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           <button
             onClick={() => setReceiptMode('single')}
             className={`px-6 py-2 text-sm font-medium rounded-lg transition-colors ${receiptMode === 'single'
-              ? 'bg-orange-600 text-white'
-              : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-orange-500'
+              ? 'bg-emerald-600 text-white'
+              : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-emerald-500'
               }`}
           >
             Receipt Voucher - Single
@@ -2635,8 +2634,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           <button
             onClick={() => setReceiptMode('bulk')}
             className={`px-6 py-2 text-sm font-medium rounded-lg transition-colors ${receiptMode === 'bulk'
-              ? 'bg-orange-600 text-white'
-              : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-orange-500'
+              ? 'bg-emerald-600 text-white'
+              : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-emerald-500'
               }`}
           >
             Receipt Voucher - Bulk
@@ -4532,15 +4531,26 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     <div>
       <h2 className="text-2xl font-bold text-gray-800 mb-6">Voucher Entry</h2>
 
-      <div className="mb-6 flex flex-wrap justify-center items-center gap-2 p-1 bg-slate-200 rounded-lg max-w-4xl mx-auto">
-        <div className="flex flex-wrap justify-center flex-1 gap-1">
+      <div className="flex justify-between items-center border-b border-gray-200 mb-6">
+        <nav className="-mb-px flex space-x-8 overflow-x-auto" aria-label="Tabs">
           {availableVoucherTypes.map(type => (
-            <button key={type.id} onClick={() => { setVoucherType(type.id); resetForm(); }} className={`flex-1 py-2 px-3 text-sm font-semibold rounded-md transition-colors ${voucherType === type.id ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-600 hover:bg-slate-300'}`}>{type.label}</button>
+            <button
+              key={type.id}
+              onClick={() => { setVoucherType(type.id); resetForm(); }}
+              className={`
+                whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors
+                ${voucherType === type.id
+                  ? 'border-emerald-500 text-emerald-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
+              `}
+            >
+              {type.label.toUpperCase()}
+            </button>
           ))}
-        </div>
+        </nav>
         <button
           onClick={() => setIsInvoiceScannerOpen(true)}
-          className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          className="ml-4 inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 my-2"
           title="Upload and scan invoices"
         >
           <Icon name="upload" className="w-4 h-4 mr-2" />

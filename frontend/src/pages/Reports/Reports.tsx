@@ -85,13 +85,13 @@ type GSTTab = 'B2B' | 'B2C-L' | 'B2C-S' | 'Exports' | 'CDN' | 'Advances' | 'ITC-
 const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], ledgerGroups = [], stockItems = [] }) => {
   // Report Options Mapping
   const allReports: { id: ReportType; label: string }[] = [
-    { id: 'DayBook', label: 'Day Book' },
-    { id: 'LedgerReport', label: 'Ledger Report' },
-    { id: 'TrialBalance', label: 'Trial Balance' },
-    { id: 'BalanceSheet', label: 'Balance Sheet' },
-    { id: 'StockSummary', label: 'Stock Summary' },
-    { id: 'GSTReports', label: 'GST Reports' },
-    { id: 'AIReport', label: 'AI Report' }
+    { id: 'DayBook', label: 'DAY BOOK' },
+    { id: 'LedgerReport', label: 'LEDGER REPORT' },
+    { id: 'TrialBalance', label: 'TRIAL BALANCE' },
+    { id: 'BalanceSheet', label: 'BALANCE SHEET' },
+    { id: 'StockSummary', label: 'STOCK SUMMARY' },
+    { id: 'GSTReports', label: 'GST REPORTS' },
+    { id: 'AIReport', label: 'AI REPORT' }
   ];
 
   // RBAC Disabled - Show all reports
