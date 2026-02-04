@@ -1,102 +1,102 @@
-import React, { useState, useEffect } from 'react';
-import type { Ledger, LedgerGroupMaster, VoucherTypeMaster } from '../../types';
-import Icon from '../../components/Icon';
-import { HierarchicalDropdown } from '../../components/HierarchicalDropdown';
-import { LedgerCreationWizard } from '../../components/LedgerCreationWizard.tsx';
-import { apiService, httpClient } from '../../services';
+  import React, { useState, useEffect } from 'react';
+  import type { Ledger, LedgerGroupMaster, VoucherTypeMaster } from '../../types';
+  import Icon from '../../components/Icon';
+  import { HierarchicalDropdown } from '../../components/HierarchicalDropdown';
+  import { LedgerCreationWizard } from '../../components/LedgerCreationWizard.tsx';
+  import { apiService, httpClient } from '../../services';
 
 
 
-interface MastersPageProps {
-  ledgers: Ledger[];
-  ledgerGroups: LedgerGroupMaster[];
-  onAddLedger: (ledger: Ledger) => void;
-  onUpdateLedger?: (idOrName: number | string, ledger: Partial<Ledger>) => void;
-  onDeleteLedger?: (idOrName: number | string) => void;
+  interface MastersPageProps {
+    ledgers: Ledger[];
+    ledgerGroups: LedgerGroupMaster[];
+    onAddLedger: (ledger: Ledger) => void;
+    onUpdateLedger?: (idOrName: number | string, ledger: Partial<Ledger>) => void;
+    onDeleteLedger?: (idOrName: number | string) => void;
 
-  onAddLedgerGroup: (group: LedgerGroupMaster) => void;
-  onUpdateLedgerGroup?: (idOrName: number | string, group: Partial<LedgerGroupMaster>) => void;
-  onDeleteLedgerGroup?: (idOrName: number | string) => void;
+    onAddLedgerGroup: (group: LedgerGroupMaster) => void;
+    onUpdateLedgerGroup?: (idOrName: number | string, group: Partial<LedgerGroupMaster>) => void;
+    onDeleteLedgerGroup?: (idOrName: number | string) => void;
 
-  voucherTypes?: VoucherTypeMaster[];
-  onAddVoucherType?: (voucherType: Omit<VoucherTypeMaster, 'id' | 'tenantId' | 'createdAt' | 'updatedAt'>) => void;
-}
+    voucherTypes?: VoucherTypeMaster[];
+    onAddVoucherType?: (voucherType: Omit<VoucherTypeMaster, 'id' | 'tenantId' | 'createdAt' | 'updatedAt'>) => void;
+  }
 
 
-type MasterTab = 'Ledgers' | 'LedgerGroups' | 'Vouchers';
+  type MasterTab = 'Ledgers' | 'LedgerGroups' | 'Vouchers';
 
-const MastersPage: React.FC<MastersPageProps> = ({
-  ledgers,
-  ledgerGroups,
-  onAddLedger,
-  onUpdateLedger,
-  onDeleteLedger,
-  onAddLedgerGroup,
-  onUpdateLedgerGroup,
-  onDeleteLedgerGroup,
-  onAddVoucherType,
-  voucherTypes = []
-}) => {
-  const allTabs: { id: MasterTab; label: string }[] = [
-    { id: 'Ledgers', label: 'Ledgers' },
-    { id: 'Vouchers', label: 'Vouchers' }
-  ];
+  const MastersPage: React.FC<MastersPageProps> = ({
+    ledgers,
+    ledgerGroups,
+    onAddLedger,
+    onUpdateLedger,
+    onDeleteLedger,
+    onAddLedgerGroup,
+    onUpdateLedgerGroup,
+    onDeleteLedgerGroup,
+    onAddVoucherType,
+    voucherTypes = []
+  }) => {
+    const allTabs: { id: MasterTab; label: string }[] = [
+      { id: 'Ledgers', label: 'Ledgers' },
+      { id: 'Vouchers', label: 'Vouchers' }
+    ];
 
-  // Show all tabs - RBAC disabled
-  const availableTabs = allTabs;
+    // Show all tabs - RBAC disabled
+    const availableTabs = allTabs;
 
-  const [activeTab, setActiveTab] = useState<MasterTab>(availableTabs[0].id);
+    const [activeTab, setActiveTab] = useState<MasterTab>(availableTabs[0].id);
 
-  // No permission checks - RBAC system removed
+    // No permission checks - RBAC system removed
 
-  // State for Create Ledger
-  const [ledgerName, setLedgerName] = useState('');
-  const [ledgerGroup, setLedgerGroup] = useState<string>('');
-  const [selectedLedger, setSelectedLedger] = useState<Ledger | null>(null);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [ledgerSearchQuery, setLedgerSearchQuery] = useState('');
+    // State for Create Ledger
+    const [ledgerName, setLedgerName] = useState('');
+    const [ledgerGroup, setLedgerGroup] = useState<string>('');
+    const [selectedLedger, setSelectedLedger] = useState<Ledger | null>(null);
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [ledgerSearchQuery, setLedgerSearchQuery] = useState('');
 
-  // State for Secured Loans additional fields
-  const [loanAccountNumber, setLoanAccountNumber] = useState('');
-  const [panGstin, setPanGstin] = useState('');
-  const [lenderName, setLenderName] = useState('');
-  const [loanAmount, setLoanAmount] = useState('');
-  const [interestType, setInterestType] = useState('');
-  const [interestRate, setInterestRate] = useState('');
-  const [tenure, setTenure] = useState('');
+    // State for Secured Loans additional fields
+    const [loanAccountNumber, setLoanAccountNumber] = useState('');
+    const [panGstin, setPanGstin] = useState('');
+    const [lenderName, setLenderName] = useState('');
+    const [loanAmount, setLoanAmount] = useState('');
+    const [interestType, setInterestType] = useState('');
+    const [interestRate, setInterestRate] = useState('');
+    const [tenure, setTenure] = useState('');
 
-  // State for Bank OD/CC Accounts additional fields
-  const [bankAccountNumber, setBankAccountNumber] = useState('');
-  const [gstinPan, setGstinPan] = useState('');
-  const [enableBankReconciliation, setEnableBankReconciliation] = useState(false);
-  const [bankName, setBankName] = useState('');
-  const [ifscCode, setIfscCode] = useState('');
-  const [branch, setBranch] = useState('');
-  const [bankingCurrency, setBankingCurrency] = useState('');
+    // State for Bank OD/CC Accounts additional fields
+    const [bankAccountNumber, setBankAccountNumber] = useState('');
+    const [gstinPan, setGstinPan] = useState('');
+    const [enableBankReconciliation, setEnableBankReconciliation] = useState(false);
+    const [bankName, setBankName] = useState('');
+    const [ifscCode, setIfscCode] = useState('');
+    const [branch, setBranch] = useState('');
+    const [bankingCurrency, setBankingCurrency] = useState('');
 
-  // State for Trade Payables additional fields
-  const [referenceWiseTracking, setReferenceWiseTracking] = useState('');
-  const [creditPeriod, setCreditPeriod] = useState('');
+    // State for Trade Payables additional fields
+    const [referenceWiseTracking, setReferenceWiseTracking] = useState('');
+    const [creditPeriod, setCreditPeriod] = useState('');
 
-  // State for Tangible assets additional fields
-  const [isDepreciationPerIncomeTax, setIsDepreciationPerIncomeTax] = useState('');
-  const [depreciationPercentage, setDepreciationPercentage] = useState('');
+    // State for Tangible assets additional fields
+    const [isDepreciationPerIncomeTax, setIsDepreciationPerIncomeTax] = useState('');
+    const [depreciationPercentage, setDepreciationPercentage] = useState('');
 
-  // State for Intangible Assets additional fields
-  const [isAmortizationPerIncomeTax, setIsAmortizationPerIncomeTax] = useState('');
-  const [amortizationPercentage, setAmortizationPercentage] = useState('');
+    // State for Intangible Assets additional fields
+    const [isAmortizationPerIncomeTax, setIsAmortizationPerIncomeTax] = useState('');
+    const [amortizationPercentage, setAmortizationPercentage] = useState('');
 
-  // State for Investments in preference shares additional fields
-  const [companyCIN, setCompanyCIN] = useState('');
-  const [dividendRate, setDividendRate] = useState('');
+    // State for Investments in preference shares additional fields
+    const [companyCIN, setCompanyCIN] = useState('');
+    const [dividendRate, setDividendRate] = useState('');
 
-  // State for Investments in equity instruments additional fields
-  const [equityInstrumentsCIN, setEquityInstrumentsCIN] = useState('');
+    // State for Investments in equity instruments additional fields
+    const [equityInstrumentsCIN, setEquityInstrumentsCIN] = useState('');
 
-  // State for Investments in debentures or bonds
-  const [debentureBondCIN, setDebentureBondCIN] = useState('');
-  const [debentureBondInterestRate, setDebentureBondInterestRate] = useState('');
-  const [debentureBondMaturityDate, setDebentureBondMaturityDate] = useState('');
+    // State for Investments in debentures or bonds
+    const [debentureBondCIN, setDebentureBondCIN] = useState('');
+    const [debentureBondInterestRate, setDebentureBondInterestRate] = useState('');
+    const [debentureBondMaturityDate, setDebentureBondMaturityDate] = useState('');
 
   // State for Inventories additional fields
   const [inventoryType, setInventoryType] = useState('');
@@ -1368,7 +1368,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
 
         </form>
       </div>
-    </div>
+    </div >
   );
 
   const renderLedgerGroups = () => (
