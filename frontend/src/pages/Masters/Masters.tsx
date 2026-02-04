@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { usePermissions } from '../../hooks/usePermissions';
 import type { Ledger, LedgerGroupMaster, VoucherTypeMaster } from '../../types';
 import Icon from '../../components/Icon';
 import { HierarchicalDropdown } from '../../components/HierarchicalDropdown';
@@ -37,17 +38,50 @@ const MastersPage: React.FC<MastersPageProps> = ({
   onAddVoucherType,
   voucherTypes = []
 }) => {
+  const { hasTabAccess, isSuperuser } = usePermissions();
+
   const allTabs: { id: MasterTab; label: string }[] = [
     { id: 'Ledgers', label: 'LEDGERS' },
     { id: 'Vouchers', label: 'VOUCHERS' }
   ];
 
-  // Show all tabs - RBAC disabled
-  const availableTabs = allTabs;
+  const ledgerSubTabs = ['Ledgers', 'Ledger Groups'];
+  const voucherSubPermissions = ['Sales', 'Purchase', 'Payment', 'Receipt', 'Contra', 'Journal', 'Expenses', 'Credit Note', 'Debit Note'];
 
-  const [activeTab, setActiveTab] = useState<MasterTab>(availableTabs[0].id);
+  // Filter tabs - RBAC enabled
+  const availableTabs = isSuperuser
+    ? allTabs
+    : allTabs.filter(tab => {
+      if (tab.id === 'Ledgers') return ledgerSubTabs.some(t => hasTabAccess('Masters', t));
+      if (tab.id === 'Vouchers') return voucherSubPermissions.some(t => hasTabAccess('Masters', t));
+      return true;
+    });
 
-  // No permission checks - RBAC system removed
+  const [activeTab, setActiveTab] = useState<MasterTab>(availableTabs.length > 0 ? availableTabs[0].id : 'Ledgers');
+
+  // Ensure activeTab is valid
+  useEffect(() => {
+    if (availableTabs.length > 0 && !availableTabs.find(t => t.id === activeTab)) {
+      setActiveTab(availableTabs[0].id);
+    }
+  }, [availableTabs, activeTab]);
+
+  // Voucher Buttons Definition and Filtering
+  const allVoucherButtons = [
+    { id: 'sales', label: 'Sales', permission: 'Sales' },
+    { id: 'credit-note', label: 'Credit Note', permission: 'Credit Note' },
+    { id: 'receipts', label: 'Receipts', permission: 'Receipt' },
+    { id: 'purchases', label: 'Purchases', permission: 'Purchase' },
+    { id: 'debit-note', label: 'Debit Note', permission: 'Debit Note' },
+    { id: 'payments', label: 'Payments', permission: 'Payment' },
+    { id: 'expenses', label: 'Expenses', permission: 'Expenses' },
+    { id: 'journal', label: 'Journal', permission: 'Journal' },
+    { id: 'contra', label: 'Contra', permission: 'Contra' }
+  ];
+
+  const voucherButtons = isSuperuser
+    ? allVoucherButtons
+    : allVoucherButtons.filter(btn => hasTabAccess('Masters', btn.permission));
 
   // State for Create Ledger
   const [ledgerName, setLedgerName] = useState('');
@@ -120,7 +154,14 @@ const MastersPage: React.FC<MastersPageProps> = ({
   const [newVoucherType, setNewVoucherType] = useState('');
   const [salesNumbering, setSalesNumbering] = useState({ enableAuto: true, prefix: 'INV-', suffix: '/24-25', nextNumber: 1, padding: 4, preview: '' });
   const [purchaseNumbering, setPurchaseNumbering] = useState({ enableAuto: true, prefix: 'PO-', suffix: '/24-25', nextNumber: 1, padding: 4, preview: '' });
-  const [selectedVoucher, setSelectedVoucher] = useState<string>('sales');
+  const [selectedVoucher, setSelectedVoucher] = useState<string>(voucherButtons.length > 0 ? voucherButtons[0].id : 'sales');
+
+  // Ensure selectedVoucher is valid
+  useEffect(() => {
+    if (voucherButtons.length > 0 && !voucherButtons.find(v => v.id === selectedVoucher)) {
+      setSelectedVoucher(voucherButtons[0].id);
+    }
+  }, [voucherButtons, selectedVoucher]);
   const [updateCustomerMaster, setUpdateCustomerMaster] = useState<string>('no');
 
   // State for Voucher Configuration Form
@@ -1566,17 +1607,8 @@ const MastersPage: React.FC<MastersPageProps> = ({
   }, [purchaseNumbering.enableAuto, purchaseNumbering.prefix, purchaseNumbering.nextNumber, purchaseNumbering.padding, purchaseNumbering.suffix]);
 
   const renderVouchers = () => {
-    const voucherButtons = [
-      { id: 'sales', label: 'Sales' },
-      { id: 'credit-note', label: 'Credit Note' },
-      { id: 'receipts', label: 'Receipts' },
-      { id: 'purchases', label: 'Purchases' },
-      { id: 'debit-note', label: 'Debit Note' },
-      { id: 'payments', label: 'Payments' },
-      { id: 'expenses', label: 'Expenses' },
-      { id: 'journal', label: 'Journal' },
-      { id: 'contra', label: 'Contra' }
-    ];
+
+    // voucherButtons is now defined at top level
 
     const handleVoucherClick = (voucherId: string) => {
       console.log(`Clicked voucher: ${voucherId} `);

@@ -1,5 +1,6 @@
 // Vendor Portal - Master Configuration
 import React, { useState, useEffect } from 'react';
+import { usePermissions } from '../../hooks/usePermissions';
 import { httpClient } from '../../services/httpClient';
 import CategoryHierarchicalDropdown from '../../components/CategoryHierarchicalDropdown';
 import { InventoryCategoryWizard } from '../../components/InventoryCategoryWizard';
@@ -60,6 +61,7 @@ interface VendorPortalProps {
 }
 
 const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
+    const { hasTabAccess, isSuperuser } = usePermissions();
     // GST Details Interfaces (Defined inside to avoid placement issues, or better moved out if stable)
     // Actually, moving them here
     interface PlaceOfBusiness {
@@ -82,7 +84,25 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         isExpanded?: boolean;
     }
     // Tab State
-    const [activeTab, setActiveTab] = useState<VendorTab>('Master');
+    const allTabs: VendorTab[] = ['Master', 'Transaction'];
+    const availableTabs = isSuperuser
+        ? allTabs
+        : allTabs.filter(tab => {
+            const masterSubs = ['Category', 'PO Settings', 'Vendor Creation'];
+            const transSubs = ['Purchase Orders', 'Procurement', 'Payment'];
+            if (tab === 'Master') return masterSubs.some(t => hasTabAccess('Vendor Portal', t));
+            if (tab === 'Transaction') return transSubs.some(t => hasTabAccess('Vendor Portal', t));
+            return false;
+        });
+
+    const [activeTab, setActiveTab] = useState<VendorTab>(availableTabs.length > 0 ? availableTabs[0] : 'Master');
+
+    useEffect(() => {
+        if (availableTabs.length > 0 && !availableTabs.includes(activeTab)) {
+            setActiveTab(availableTabs[0]);
+        }
+    }, [availableTabs, activeTab]);
+
     const [activeMasterSubTab, setActiveMasterSubTab] = useState<MasterSubTab>('Category');
     const [activeTransactionSubTab, setActiveTransactionSubTab] = useState<TransactionSubTab>('Purchase Orders');
     const [activePOSubTab, setActivePOSubTab] = useState<POSubTab>('Dashboard');
@@ -1308,7 +1328,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 {/* Main Tabs */}
                 <div className="mb-6">
                     <nav className="flex space-x-8 border-b border-gray-200" aria-label="Vendor Portal Tabs">
-                        {['Master', 'Transaction'].map((tab) => (
+                        {availableTabs.map((tab) => (
                             <button
                                 key={tab}
                                 onClick={() => setActiveTab(tab as VendorTab)}
@@ -1330,7 +1350,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                             {/* Sub-tabs */}
                             <div className="mb-6">
                                 <nav className="flex space-x-8 border-b border-gray-200">
-                                    {['Category', 'PO Settings', 'Vendor Creation'].map((subTab) => (
+                                    {['Category', 'PO Settings', 'Vendor Creation'].filter(t => isSuperuser || hasTabAccess('Vendor Portal', t)).map((subTab) => (
                                         <button
                                             key={subTab}
                                             onClick={() => setActiveMasterSubTab(subTab as MasterSubTab)}

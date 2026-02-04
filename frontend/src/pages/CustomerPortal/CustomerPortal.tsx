@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { httpClient } from '../../services/httpClient';
+import { usePermissions } from '../../hooks/usePermissions';
 
 import { InventoryCategoryWizard } from '../../components/InventoryCategoryWizard';
 import Icon from '../../components/Icon'; // Assuming Icon component exists
@@ -8,7 +9,7 @@ import SalesQuotationList from './SalesQuotationList';
 import CreateSalesOrder from './CreateSalesOrder';
 import { Eye, Mail, Filter, ChevronLeft, X, Calendar } from 'lucide-react';
 
-type MainTab = 'Masters' | 'Transactions';
+type MainTab = 'Master' | 'Transaction';
 type MasterSubTab = 'Category' | 'Sales Quotation & Order' | 'Customer' | 'Long-term Contracts';
 
 type TransactionSubTab = 'Sales Quotation' | 'Sales Order' | 'Sales' | 'Receipt';
@@ -52,7 +53,28 @@ interface Category {
 }
 
 const CustomerPortalPage: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<MainTab>('Masters');
+    const { hasTabAccess, isSuperuser } = usePermissions();
+
+    const allTabs: MainTab[] = ['Master', 'Transaction'];
+    const availableTabs = useMemo(() => {
+        return allTabs.filter(tab => {
+            if (isSuperuser) return true;
+            const masterSubs = ['Category', 'Sales Quotation & Order', 'Customer', 'Long-term Contracts'];
+            const transSubs = ['Sales Quotation', 'Sales Order', 'Sales', 'Receipt'];
+            if (tab === 'Master') return masterSubs.some(t => hasTabAccess('Customer Portal', t));
+            if (tab === 'Transaction') return transSubs.some(t => hasTabAccess('Customer Portal', t));
+            return false;
+        });
+    }, [hasTabAccess, isSuperuser]);
+
+    const [activeTab, setActiveTab] = useState<MainTab>(availableTabs.length > 0 ? availableTabs[0] : 'Master');
+
+    useEffect(() => {
+        if (availableTabs.length > 0 && !availableTabs.includes(activeTab)) {
+            setActiveTab(availableTabs[0]);
+        }
+    }, [availableTabs, activeTab]);
+
     const [activeMasterSubTab, setActiveMasterSubTab] = useState<MasterSubTab>('Category');
     const [activeTransactionSubTab, setActiveTransactionSubTab] = useState<TransactionSubTab>('Sales Quotation');
     const [activeSalesQuotationSubTab, setActiveSalesQuotationSubTab] = useState<SalesQuotationSubTab>('General Customer Quote');
@@ -75,7 +97,7 @@ const CustomerPortalPage: React.FC = () => {
             {/* Main Tabs */}
             <div className="px-8">
                 <div className="flex gap-8 border-b border-gray-200 pb-1">
-                    {['Masters', 'Transactions'].map((tab) => (
+                    {availableTabs.map((tab) => (
                         <button
                             key={tab}
                             onClick={() => setActiveTab(tab as MainTab)}
@@ -92,12 +114,12 @@ const CustomerPortalPage: React.FC = () => {
 
             {/* Content Area */}
             <div className="px-8 py-6">
-                {activeTab === 'Masters' && (
+                {activeTab === 'Master' && (
                     <div>
-                        {/* Sub-tabs for Masters */}
+                        {/* Sub-tabs for Master */}
                         <div className="mb-6">
                             <div className="flex gap-8 border-b border-gray-200 pb-1">
-                                {['Category', 'Sales Quotation & Order', 'Customer', 'Long-term Contracts'].map((subTab) => (
+                                {['Category', 'Sales Quotation & Order', 'Customer', 'Long-term Contracts'].filter(t => isSuperuser || hasTabAccess('Customer Portal', t)).map((subTab) => (
                                     <button
                                         key={subTab}
                                         onClick={() => setActiveMasterSubTab(subTab as MasterSubTab)}
@@ -122,12 +144,12 @@ const CustomerPortalPage: React.FC = () => {
                     </div>
                 )}
 
-                {activeTab === 'Transactions' && (
+                {activeTab === 'Transaction' && (
                     <div>
-                        {/* Sub-tabs for Transactions */}
+                        {/* Sub-tabs for Transaction */}
                         <div className="mb-6">
                             <div className="flex gap-8 border-b border-gray-200 pb-1">
-                                {['Sales Quotation', 'Sales Order', 'Sales', 'Receipt'].map((subTab) => (
+                                {['Sales Quotation', 'Sales Order', 'Sales', 'Receipt'].filter(t => isSuperuser || hasTabAccess('Customer Portal', t)).map((subTab) => (
                                     <button
                                         key={subTab}
                                         onClick={() => setActiveTransactionSubTab(subTab as TransactionSubTab)}

@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Icon from '../../components/Icon';
 import { httpClient } from '../../services/httpClient';
+import { usePermissions } from '../../hooks/usePermissions';
 
 type PayrollTab = 'EMPLOYEES' | 'PAY RUNS' | 'SALARY TEMPLATES' | 'STATUTORY' | 'REPORTS';
 
@@ -37,16 +38,29 @@ interface PayRun {
 }
 
 const PayrollPage: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<PayrollTab>('EMPLOYEES');
+    const { hasTabAccess, isSuperuser } = usePermissions();
+
+    const allTabs: PayrollTab[] = ['EMPLOYEES', 'PAY RUNS', 'SALARY TEMPLATES', 'STATUTORY', 'REPORTS'];
+    const tabs = useMemo(() => {
+        return isSuperuser ? allTabs : allTabs.filter(tab => hasTabAccess('Payroll', tab));
+    }, [hasTabAccess, isSuperuser]);
+
+    const [activeTab, setActiveTab] = useState<PayrollTab>(tabs.length > 0 ? tabs[0] : 'EMPLOYEES');
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [payRuns, setPayRuns] = useState<PayRun[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [showProcessPayRunModal, setShowProcessPayRunModal] = useState(false);
 
-    const tabs: PayrollTab[] = ['EMPLOYEES', 'PAY RUNS', 'SALARY TEMPLATES', 'STATUTORY', 'REPORTS'];
+    useEffect(() => {
+        if (tabs.length > 0 && !tabs.includes(activeTab)) {
+            setActiveTab(tabs[0]);
+        }
+    }, [tabs, activeTab]);
 
     useEffect(() => {
-        fetchData();
+        if (tabs.includes(activeTab)) {
+            fetchData();
+        }
     }, [activeTab]);
 
     const fetchData = async () => {
