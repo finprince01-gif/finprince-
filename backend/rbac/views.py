@@ -87,6 +87,9 @@ class RoleViewSet(viewsets.ModelViewSet):
             "Service": {
                 "tabs": ["Services", "Bookings", "Invoices"]
             },
+            "GST": {
+                "tabs": ["GSTR-1", "GSTR-3B", "GST Reports"]
+            },
             "Reports": {
                 "tabs": ["Trial Balance", "Profit & Loss", "Balance Sheet", "GST Reports", "Ledger Reports"]
             },
