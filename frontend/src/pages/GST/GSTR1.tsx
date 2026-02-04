@@ -125,6 +125,42 @@ export default function GSTR1Page() {
         }
     };
 
+    const handleDownloadExcel = async () => {
+        try {
+            const queryParams = new URLSearchParams(period as any).toString();
+            const response: any = await httpClient.get(`/api/accounting/gst/gstr1/download_excel/?${queryParams}`);
+
+            const url = window.URL.createObjectURL(response);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `GSTR1_${period.year}_${period.month}.xlsx`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        } catch (error) {
+            console.error('Download failed', error);
+        }
+    };
+
+    const handleDownloadJson = async () => {
+        try {
+            const queryParams = new URLSearchParams(period as any).toString();
+            const response: any = await httpClient.get(`/api/accounting/gst/gstr1/download_json/?${queryParams}`);
+
+            const blob = new Blob([JSON.stringify(response, null, 2)], { type: 'application/json' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `GSTR1_${period.year}_${period.month}.json`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        } catch (error) {
+            console.error('Download failed', error);
+        }
+    };
+
+
     useEffect(() => {
         fetchData();
     }, [activeSubTab, period]); // Refetch on tab or period change
@@ -172,6 +208,20 @@ export default function GSTR1Page() {
                         disabled={isLoading}
                     >
                         {isLoading ? 'Generating...' : 'Generate Return'}
+                    </button>
+                    <button
+                        onClick={handleDownloadExcel}
+                        className="mt-7 px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-2"
+                        disabled={isLoading}
+                    >
+                        Download Excel
+                    </button>
+                    <button
+                        onClick={handleDownloadJson}
+                        className="mt-7 px-6 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 flex items-center gap-2"
+                        disabled={isLoading}
+                    >
+                        Download JSON
                     </button>
                 </div>
             </div>

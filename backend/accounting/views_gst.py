@@ -1,4 +1,8 @@
 from rest_framework import viewsets, status
+import pandas as pd
+import io
+import json
+from django.http import HttpResponse, FileResponse
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -435,3 +439,203 @@ class GSTR1ViewSet(viewsets.ViewSet):
         """Get HSN Summary B2C"""
         # Placeholder for HSN B2C logic
         return Response([])
+
+    @action(detail=False, methods=['get'])
+    def download_excel(self, request):
+        print("DEBUG: download_excel triggered")
+        try:
+            queryset = self.get_queryset()
+            
+            b2b_rows = []
+            b2cl_rows = []
+            b2cs_rows = []
+            exp_rows = []
+            
+            # Column Definitions for consistency
+            cols_b2b = ['GSTIN/UIN of Recipient', 'Receiver Name', 'Invoice Number', 'Invoice Date', 'Invoice Value', 'Place Of Supply', 'Reverse Charge', 'Invoice Type', 'E-Commerce GSTIN', 'Rate', 'Taxable Value', 'Cess Amount']
+            cols_b2cl = ['Invoice Number', 'Invoice Date', 'Invoice Value', 'Place Of Supply', 'Rate', 'Taxable Value', 'Cess Amount', 'E-Commerce GSTIN']
+            cols_b2cs = ['Type', 'Place Of Supply', 'Rate', 'Taxable Value', 'Cess Amount', 'E-Commerce GSTIN']
+            cols_exp = ['Export Type', 'Invoice Number', 'Invoice Date', 'Invoice Value', 'Port Code', 'Shipping Bill No', 'Shipping Bill Date', 'Rate', 'Taxable Value']
+            cols_cdnr = ['GSTIN/UIN of Recipient', 'Name of Recipient', 'Invoice/Advance Receipt Number', 'Invoice/Advance Receipt Date', 'Note/Refund Voucher Number', 'Note/Refund Voucher Date', 'Document Type', 'Reason For Issuing Note', 'Place Of Supply', 'Note/Refund Voucher Value', 'Rate', 'Taxable Value', 'Cess Amount', 'Pre GST']
+            cols_cdnur = ['UR Type', 'Note/Refund Voucher Number', 'Note/Refund Voucher Date', 'Document Type', 'Reason For Issuing Note', 'Place Of Supply', 'Note/Refund Voucher Value', 'Rate', 'Taxable Value', 'Cess Amount', 'Pre GST']
+            
+            for v in queryset:
+                has_gstin = v.bill_to_gstin and v.bill_to_gstin.strip()
+                val = v.grand_total
+                pos = v.place_of_supply or v.bill_to_state
+                
+                row_common = {
+                    'Invoice Number': v.sales_invoice_number,
+                    'Invoice Date': v.date,
+                    'Invoice Value': val,
+                    'Place Of Supply': pos,
+                    'Rate': 0, 
+                    'Taxable Value': v.total_taxable_amount,
+                    'Cess Amount': 0
+                }
+                
+                if has_gstin:
+                    r = row_common.copy()
+                    r['GSTIN/UIN of Recipient'] = v.bill_to_gstin
+                    r['Receiver Name'] = v.customer.name if v.customer else ''
+                    r['Reverse Charge'] = v.reverse_charge
+                    r['Invoice Type'] = v.invoice_type
+                    r['E-Commerce GSTIN'] = v.ecommerce_gstin
+                    # Ensure all cols are present
+                    b2b_rows.append(r)
+                
+                elif v.tax_type == 'export':
+                    r = row_common.copy()
+                    r['Export Type'] = v.export_type
+                    r['Port Code'] = v.port_code
+                    r['Shipping Bill No'] = v.shipping_bill_number
+                    r['Shipping Bill Date'] = v.shipping_bill_date
+                    exp_rows.append(r)
+                    
+                elif val > 250000 and v.tax_type == 'other_state':
+                    r = {k: v for k, v in row_common.items() if k in cols_b2cl}
+                    r['E-Commerce GSTIN'] = v.ecommerce_gstin
+                    b2cl_rows.append(r)
+                
+                else:
+                    r = {
+                        'Type': 'OE',
+                        'Place Of Supply': pos,
+                        'Rate': 0,
+                        'Taxable Value': v.total_taxable_amount,
+                        'Cess Amount': 0,
+                        'E-Commerce GSTIN': v.ecommerce_gstin
+                    }
+                    b2cs_rows.append(r)
+
+            # Helpers
+            def get_df(rows, cols):
+                if rows:
+                    df = pd.DataFrame(rows)
+                    # Add missing cols
+                    for c in cols:
+                        if c not in df.columns:
+                            df[c] = ''
+                    return df[cols] # Reorder
+                return pd.DataFrame(columns=cols)
+
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                get_df(b2b_rows, cols_b2b).to_excel(writer, sheet_name='B2B', index=False)
+                get_df(b2cl_rows, cols_b2cl).to_excel(writer, sheet_name='B2CL', index=False)
+                get_df(b2cs_rows, cols_b2cs).to_excel(writer, sheet_name='B2CS', index=False)
+                get_df(exp_rows, cols_exp).to_excel(writer, sheet_name='EXP', index=False)
+                get_df([], cols_cdnr).to_excel(writer, sheet_name='CDNR', index=False)
+                get_df([], cols_cdnur).to_excel(writer, sheet_name='CDNUR', index=False)
+                
+                # Empty Sheets for others
+                pd.DataFrame(columns=['Place Of Supply', 'Rate', 'Gross Advance Received', 'Cess Amount']).to_excel(writer, sheet_name='AT', index=False)
+                pd.DataFrame(columns=['Place Of Supply', 'Rate', 'Gross Advance Adjusted', 'Cess Amount']).to_excel(writer, sheet_name='ATADJ', index=False)
+                pd.DataFrame(columns=['Description', 'Nil Rated Supplies', 'Exempted (Other than Nil rated/non-GST supply)', 'Non-GST Supplies']).to_excel(writer, sheet_name='EXEMP', index=False)
+                pd.DataFrame(columns=['HSN/SAC', 'Description', 'UQC', 'Total Quantity', 'Total Value', 'Rate', 'Taxable Value', 'Integrated Tax Amount', 'Central Tax Amount', 'State/UT Tax Amount', 'Cess Amount']).to_excel(writer, sheet_name='HSN', index=False)
+                pd.DataFrame(columns=['Nature of Document', 'Sr. No. From', 'Sr. No. To', 'Total Number', 'Cancelled']).to_excel(writer, sheet_name='DOC', index=False)
+                # Amendment Sheets
+                get_df([], cols_b2b).to_excel(writer, sheet_name='B2BA', index=False)
+                get_df([], cols_b2cl).to_excel(writer, sheet_name='B2CLA', index=False)
+                get_df([], cols_b2cs).to_excel(writer, sheet_name='B2CSA', index=False)
+                get_df([], cols_exp).to_excel(writer, sheet_name='EXPA', index=False)
+                get_df([], cols_cdnr).to_excel(writer, sheet_name='CDNRA', index=False)
+                
+            output.seek(0)
+            
+            year = request.query_params.get('year', '2024-25')
+            month = request.query_params.get('month', 'All')
+            filename = f"GSTR1_{year}_{month}.xlsx"
+            
+            return FileResponse(output, as_attachment=True, filename=filename)
+        except Exception as e:
+            print(f"ERROR in download_excel: {e}")
+            import traceback
+            traceback.print_exc()
+            return Response({'error': str(e)}, status=500)
+
+    @action(detail=False, methods=['get'])
+    def download_json(self, request):
+        queryset = self.get_queryset()
+        
+        year_str = request.query_params.get('year', '2024-25')
+        month_name = request.query_params.get('month', 'January') 
+        
+        # Numeric month mapping
+        months_map = {
+            'January': '01', 'February': '02', 'March': '03', 'April': '04',
+            'May': '05', 'June': '06', 'July': '07', 'August': '08',
+            'September': '09', 'October': '10', 'November': '11', 'December': '12'
+        }
+        month_num = months_map.get(month_name, '01')
+        
+        # Year logic for FY: 2024-25 -> Jan is 2025
+        # (Assuming the queryset is already filtered correctly by get_queryset)
+        actual_year = year_str.split('-')[0]
+        if month_name in ['January', 'February', 'March']:
+            try:
+                actual_year = str(int(actual_year) + 1)
+            except: pass
+            
+        data = {
+            "gstin": "UNAVAILABLE", 
+            "fp": f"{month_num}{actual_year}",
+            "b2b": [],
+            "b2cl": []
+        }
+        
+        for v in queryset:
+             has_gstin = v.bill_to_gstin and v.bill_to_gstin.strip() if v.bill_to_gstin else False
+             is_large = v.grand_total > 250000
+             is_inter = v.tax_type == 'other_state'
+
+             item = {
+                 "inum": v.sales_invoice_number,
+                 "idt": str(v.date),
+                 "val": float(v.grand_total),
+                 "pos": v.place_of_supply,
+                 "rchrg": v.reverse_charge,
+                 "inv_typ": "R",
+                 "itms": [
+                     {
+                         "num": 1,
+                         "itm_det": {
+                             "txval": float(v.total_taxable_amount),
+                             "rt": 0,
+                             "iamt": float(v.total_igst),
+                             "camt": float(v.total_cgst),
+                             "samt": float(v.total_sgst),
+                             "csamt": 0
+                         }
+                     }
+                 ]
+             }
+             
+             if has_gstin:
+                 ctin = v.bill_to_gstin
+                 found = False
+                 for entry in data['b2b']:
+                     if entry['ctin'] == ctin:
+                         entry['inv'].append(item)
+                         found = True
+                         break
+                 if not found:
+                     data['b2b'].append({"ctin": ctin, "inv": [item]})
+
+             elif (not has_gstin) and is_large and is_inter:
+                 found = False
+                 for entry in data['b2cl']:
+                     if entry['pos'] == v.place_of_supply:
+                         entry['inv'].append(item)
+                         found = True
+                         break
+                 if not found:
+                     data['b2cl'].append({
+                        "pos": v.place_of_supply,
+                        "inv": [item]
+                     })
+
+        filename = f"GSTR1_{year}_{month}.json"
+        response = HttpResponse(json.dumps(data, default=str), content_type='application/json')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
