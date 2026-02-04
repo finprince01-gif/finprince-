@@ -565,6 +565,9 @@ class SalesVoucher(BaseModel):
         max_length=50, 
         help_text="Auto-generated, sequential, read-only"
     )
+    voucher_name = models.CharField(max_length=100, null=True, blank=True)
+    outward_slip_no = models.CharField(max_length=50, null=True, blank=True)
+
     customer = models.ForeignKey(
         MasterLedger, 
         on_delete=models.PROTECT, 
