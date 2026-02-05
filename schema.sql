@@ -1,7 +1,7 @@
 create database Finpixe_AI_Accounting;
 
 -- Table: tenants
---------------------------------------------------------------------------------
+
 CREATE TABLE `tenants` (
   `id` char(36) NOT NULL,
   `name` varchar(255) NOT NULL,
@@ -10,7 +10,7 @@ CREATE TABLE `tenants` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 -- Table: amount_transactions
---------------------------------------------------------------------------------
+
 CREATE TABLE `amount_transactions` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) NOT NULL,
@@ -36,7 +36,7 @@ CREATE TABLE `amount_transactions` (
 
 
 -- Table: answers
---------------------------------------------------------------------------------
+
 CREATE TABLE `answers` (
   `id` int NOT NULL AUTO_INCREMENT,
   `ledger_code` varchar(50) DEFAULT NULL,
@@ -50,7 +50,7 @@ CREATE TABLE `answers` (
 
 
 -- Table: company_informations
---------------------------------------------------------------------------------
+
 CREATE TABLE `company_informations` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` char(36) NOT NULL,
@@ -93,7 +93,7 @@ CREATE TABLE `company_informations` (
 
 
 -- Table: master_hierarchy_raw
---------------------------------------------------------------------------------
+
 CREATE TABLE `master_hierarchy_raw` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `type_of_business_1` text,
@@ -118,7 +118,7 @@ CREATE TABLE `master_hierarchy_raw` (
 
 
 -- Table: master_ledgers
---------------------------------------------------------------------------------
+
 CREATE TABLE `master_ledgers` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` char(36) NOT NULL,
@@ -154,7 +154,7 @@ CREATE TABLE `master_ledgers` (
 
 
 -- Table: questions
---------------------------------------------------------------------------------
+
 CREATE TABLE `questions` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `sub_group_1_2` varchar(50) DEFAULT NULL,
@@ -171,7 +171,7 @@ CREATE TABLE `questions` (
 
 
 -- Table: transcaction_file
---------------------------------------------------------------------------------
+
 CREATE TABLE `transcaction_file` (
   `id` bigint NOT NULL,
   `tenant_id` bigint NOT NULL,
@@ -232,7 +232,7 @@ CREATE TABLE `transcaction_file` (
 
 
 -- Table: users
---------------------------------------------------------------------------------
+
 CREATE TABLE `users` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `password` varchar(128) NOT NULL,
@@ -267,7 +267,7 @@ CREATE TABLE `users` (
 
 
 -- Table: vendor_master_category
---------------------------------------------------------------------------------
+
 CREATE TABLE `vendor_master_category` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `tenant_id` VARCHAR(36) NOT NULL COMMENT 'Tenant ID for multi-tenancy',
@@ -301,7 +301,7 @@ COMMENT='Vendor Master Category - Stores vendor category hierarchy';
 
 -- Table: vendor_master_posettings
 
---------------------------------------------------------------------------------
+
 CREATE TABLE IF NOT EXISTS `vendor_master_posettings` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `tenant_id` VARCHAR(36) NOT NULL,
@@ -327,7 +327,7 @@ COLLATE=utf8mb4_0900_ai_ci;
 
 
 -- Table: vendor_master_basicdetail
---------------------------------------------------------------------------------
+
 CREATE TABLE `vendor_master_basicdetail` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) NOT NULL COMMENT 'Tenant ID for multi-tenancy',
@@ -353,7 +353,7 @@ CREATE TABLE `vendor_master_basicdetail` (
 
 
 -- Table: vendor_master_gstdetails
---------------------------------------------------------------------------------
+
 CREATE TABLE `vendor_master_gstdetails` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) NOT NULL COMMENT 'Tenant ID for multi-tenancy',
@@ -381,7 +381,7 @@ CREATE TABLE `vendor_master_gstdetails` (
 
 
 -- Table: vendor_master_productservices
---------------------------------------------------------------------------------
+
 CREATE TABLE `vendor_master_productservices` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) NOT NULL COMMENT 'Tenant ID for multi-tenancy',
@@ -405,7 +405,7 @@ CREATE TABLE `vendor_master_productservices` (
 
 
 -- Table: vendor_master_tds
---------------------------------------------------------------------------------
+
 CREATE TABLE `vendor_master_tds` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) NOT NULL COMMENT 'Tenant ID for multi-tenancy',
@@ -429,7 +429,7 @@ CREATE TABLE `vendor_master_tds` (
 
 
 -- Table: inventory_master_category
---------------------------------------------------------------------------------
+
 CREATE TABLE `inventory_master_category` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `tenant_id` CHAR(36) NOT NULL,
@@ -465,7 +465,7 @@ DEFAULT CHARSET=utf8mb4
 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Table: inventory_master_location
---------------------------------------------------------------------------------
+
 CREATE TABLE `inventory_master_location` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `tenant_id` CHAR(36) NOT NULL,
@@ -501,7 +501,7 @@ COLLATE=utf8mb4_0900_ai_ci
 COMMENT='Inventory Master Location - Stores warehouse/storage locations';
 
 -- Table: inventory_master_inventoryitems
---------------------------------------------------------------------------------
+
 CREATE TABLE `inventory_master_inventoryitems` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `tenant_id` CHAR(36) NOT NULL,
@@ -950,7 +950,7 @@ CREATE TABLE IF NOT EXISTS `customer_masters_salesquotation` (
 
 
 -- Table: customer_master_category
---------------------------------------------------------------------------------
+
 CREATE TABLE `customer_master_category` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) NOT NULL COMMENT 'Tenant ID for multi-tenancy',
@@ -979,7 +979,7 @@ COMMENT='Customer Master Category Hierarchy';
 
 
 -- Table: customer_master_longtermcontracts_basicdetails
---------------------------------------------------------------------------------
+
 CREATE TABLE `customer_master_longtermcontracts_basicdetails` (
   `id` int NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) NOT NULL COMMENT 'Tenant ID for multi-tenancy',
@@ -1012,7 +1012,7 @@ CREATE TABLE `customer_master_longtermcontracts_basicdetails` (
 
 
 -- Table: customer_master_longtermcontracts_productservices
---------------------------------------------------------------------------------
+
 CREATE TABLE `customer_master_longtermcontracts_productservices` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) NOT NULL COMMENT 'Tenant ID for multi-tenancy',
@@ -1036,7 +1036,7 @@ CREATE TABLE `customer_master_longtermcontracts_productservices` (
 
 
 -- Table: customer_master_longtermcontracts_termscondition
---------------------------------------------------------------------------------
+
 CREATE TABLE `customer_master_longtermcontracts_termscondition` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) NOT NULL COMMENT 'Tenant ID for multi-tenancy',
@@ -2025,7 +2025,7 @@ CREATE TABLE inventory_master_issueslip (
 -- Uses JSON 'items' column for detailed line items
 -- ============================================================================
 
--- 1. JOB WORK ----------------------------------------------------------------
+-- 1. JOB WORK 
 -- Handles both "Goods sent for Jobwork" (Outward) and "Receipt of goods sent for Jobwork" (Receipt)
 
 CREATE TABLE IF NOT EXISTS `inventory_operation_jobwork` (
@@ -2086,7 +2086,7 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_jobwork` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Inventory Jobwork Operations';
 
 
--- 2. INTER-UNIT TRANSFER -----------------------------------------------------
+-- 2. INTER-UNIT TRANSFER 
 
 CREATE TABLE IF NOT EXISTS `inventory_operation_interunit` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
@@ -2115,7 +2115,7 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_interunit` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
--- 3. LOCATION CHANGE ---------------------------------------------------------
+-- 3. LOCATION CHANGE 
 
 CREATE TABLE IF NOT EXISTS `inventory_operation_locationchange` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
@@ -2144,7 +2144,7 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_locationchange` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
--- 4. PRODUCTION --------------------------------------------------------------
+-- 4. PRODUCTION 
 
 CREATE TABLE IF NOT EXISTS `inventory_operation_production` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
@@ -2181,7 +2181,7 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_production` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
--- 5. CONSUMPTION -------------------------------------------------------------
+-- 5. CONSUMPTION 
 
 CREATE TABLE IF NOT EXISTS `inventory_operation_consumption` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
@@ -2210,7 +2210,7 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_consumption` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
--- 6. SCRAP -------------------------------------------------------------------
+-- 6. SCRAP 
 
 CREATE TABLE IF NOT EXISTS `inventory_operation_scrap` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
@@ -2239,7 +2239,7 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_scrap` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
--- 7. NEW GRN (Goods Receipt Note) --------------------------------------------
+-- 7. NEW GRN (Goods Receipt Note) 
 
 CREATE TABLE IF NOT EXISTS `inventory_operation_new_grn` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
@@ -2279,7 +2279,7 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_new_grn` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
--- 8. OUTWARD -----------------------------------------------------------------
+-- 8. OUTWARD 
 
 CREATE TABLE IF NOT EXISTS `inventory_operation_outward` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
@@ -2316,7 +2316,7 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_outward` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
--- 9. (LEGACY) GRN ------------------------------------------------------------
+-- 9. (LEGACY) GRN 
 -- Kept for backward compatibility if needed, using JSON items now
 
 CREATE TABLE IF NOT EXISTS `inventory_operation_grn` (
@@ -2353,7 +2353,7 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_grn` (
 -- Total: 3 tables (users + rbac_roles + rbac_user_roles)
 
 -- Table: rbac_roles
---------------------------------------------------------------------------------
+
 CREATE TABLE `rbac_roles` (
   `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
   `tenant_id` VARCHAR(36) NOT NULL,
@@ -2373,6 +2373,7 @@ CREATE TABLE `rbac_roles` (
 COMMENT='Role definitions with hierarchical permissions for RBAC';
 
 -- Table: rbac_user_roles
+
 CREATE TABLE `rbac_user_roles` (
   `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
   `tenant_id` VARCHAR(36) NOT NULL,
