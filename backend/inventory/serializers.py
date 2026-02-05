@@ -8,7 +8,6 @@ from .models import (
     InventoryOperationProduction,
     InventoryOperationConsumption,
     InventoryOperationScrap,
-    InventoryOperationGRN,
     InventoryOperationOutward,
     InventoryOperationNewGRN
 )
@@ -275,12 +274,7 @@ class InventoryOperationScrapSerializer(serializers.ModelSerializer):
 
         return super().update(instance, validated_data)
 
-# --- GRN ---
-class InventoryOperationGRNSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = InventoryOperationGRN
-        fields = '__all__'
-        read_only_fields = ['tenant_id', 'id', 'created_at', 'updated_at']
+# InventoryOperationGRNSerializer removed - replaced by InventoryOperationNewGRNSerializer
 
 # --- Outward ---
 class InventoryOperationOutwardSerializer(serializers.ModelSerializer):

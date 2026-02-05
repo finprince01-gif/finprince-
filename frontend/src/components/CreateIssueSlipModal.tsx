@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { httpClient } from '../services/httpClient';
 import Icon from './Icon'; // Assuming Icon component exists, need to verify path or mock it
 // If Icon doesn't exist at this path, I'll use simple SVGs or adjust. 
 // Based on Vouchers.tsx, it seems Icon is at '../../components/Icon' from pages, so './Icon' is likely incorrect if this is in 'components'.
@@ -14,6 +15,11 @@ interface IssueSlipItem {
     uom: string;
     quantity: string;
     boxes: string;
+}
+
+interface Location {
+    id: number;
+    name: string;
 }
 
 interface CreateIssueSlipModalProps {
@@ -34,10 +40,26 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
     const [gstin, setGstin] = useState('');
     const [postingNote, setPostingNote] = useState('');
 
+    // Locations State
+    const [locations, setLocations] = useState<Location[]>([]);
+
     // Items State
     const [items, setItems] = useState<IssueSlipItem[]>([
         { id: 1, itemCode: '', itemName: '', hsnCode: '', uom: '', quantity: '', boxes: '' }
     ]);
+
+    // Fetch locations on mount
+    useEffect(() => {
+        const fetchLocations = async () => {
+            try {
+                const response = await httpClient.get<Location[]>('/api/inventory/locations/');
+                setLocations(response || []);
+            } catch (error) {
+                console.error('Failed to fetch locations:', error);
+            }
+        };
+        fetchLocations();
+    }, []);
 
     const handleAddItem = () => {
         const newItem: IssueSlipItem = {
@@ -67,19 +89,37 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
     };
 
     const handleSave = () => {
-        onSave({
-            outwardSlipNo,
-            date,
-            time,
-            location,
-            salesOrderNo,
-            customerName,
-            branch,
-            address,
-            gstin,
-            items,
-            postingNote
-        });
+        // Validate required fields
+        if (!outwardSlipNo) {
+            alert('Please enter Outward Slip No');
+            return;
+        }
+
+        // Construct payload to match InventoryOperationOutwardSerializer
+        const payload = {
+            outward_slip_no: outwardSlipNo,
+            date: date || null,
+            time: time || null,
+            location: location ? parseInt(location) : null, // Convert to integer ID
+            sales_order_no: salesOrderNo || '',
+            customer_name: customerName || '',
+            branch: branch || '',
+            address: address || '',
+            gstin: gstin || '',
+            posting_note: postingNote || '',
+            total_boxes: calculateTotalBoxes().toString(),
+            items: items.map(item => ({
+                item_code: item.itemCode || '',
+                item_name: item.itemName || '',
+                hsn_code: item.hsnCode || '',
+                uom: item.uom || '',
+                quantity: parseFloat(item.quantity) || 0,
+                no_of_boxes: item.boxes || '0'
+            }))
+        };
+
+        console.log('Outward Slip Payload:', JSON.stringify(payload, null, 2));
+        onSave(payload);
         onClose();
     };
 
@@ -132,8 +172,11 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-teal-500"
                             >
                                 <option value="">Select Location</option>
-                                <option value="Warehouse A">Warehouse A</option>
-                                <option value="Store B">Store B</option>
+                                {locations.map((loc) => (
+                                    <option key={loc.id} value={loc.id.toString()}>
+                                        {loc.name}
+                                    </option>
+                                ))}
                             </select>
                         </div>
                     </div>
