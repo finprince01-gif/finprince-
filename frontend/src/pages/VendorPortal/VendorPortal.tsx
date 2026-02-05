@@ -777,7 +777,6 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     ]);
 
     // Payment Bills Interface and Data
-    // Payment Bills Interface and Data
     interface LogEntry {
         action: string;
         user: string;
@@ -1248,9 +1247,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
     // Derived Preview
     const getPreview = () => {
-        const yearPart = poAutoYear ? '/2024' : ''; // Mock year
         const numPart = '0'.repeat(Math.max(0, poDigits - 1)) + '1';
-        return `${poPrefix}${yearPart}${poSuffix}/${numPart}`;
+        return `${poPrefix}${numPart}${poSuffix}`;
     };
 
     // Handle PO Submit
@@ -1486,11 +1484,11 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 </div>
 
                                                 {/* Preview Box */}
-                                                <div className="bg-gray-100 p-3 rounded-md text-center">
-                                                    <span className="text-xs text-gray-500 uppercase font-semibold">Sample Preview</span>
-                                                    <div className="text-lg font-mono font-bold text-gray-700 mt-1">
+                                                <div className="bg-gray-100 p-6 rounded-md text-center">
+                                                    <p className="text-xs uppercase text-gray-500 font-semibold mb-2">SAMPLE PREVIEW</p>
+                                                    <p className="text-xl font-bold text-gray-800">
                                                         {getPreview()}
-                                                    </div>
+                                                    </p>
                                                 </div>
 
                                                 {/* Actions */}

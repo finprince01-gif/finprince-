@@ -5,6 +5,7 @@ import { usePermissions } from '../../hooks/usePermissions';
 import { InventoryCategoryWizard } from '../../components/InventoryCategoryWizard';
 import Icon from '../../components/Icon'; // Assuming Icon component exists
 import CreateSalesQuotation from './CreateSalesQuotation';
+import CategoryHierarchicalDropdown, { Category as DropdownCategory } from '../../components/CategoryHierarchicalDropdown';
 import SalesQuotationList from './SalesQuotationList';
 import CreateSalesOrder from './CreateSalesOrder';
 import { Eye, Mail, Filter, ChevronLeft, X, Calendar } from 'lucide-react';
@@ -2421,6 +2422,13 @@ const CustomerContent: React.FC = () => {
     );
 };
 
+const CUSTOMER_CATEGORIES: DropdownCategory[] = [
+    { id: 1, category: 'Retail', group: 'Consumer', subgroup: null, full_path: 'Consumer > Retail', is_active: true },
+    { id: 2, category: 'Wholesale', group: 'Business', subgroup: null, full_path: 'Business > Wholesale', is_active: true },
+    { id: 3, category: 'Corporate', group: 'Business', subgroup: null, full_path: 'Business > Corporate', is_active: true },
+    { id: 4, category: 'Distributor', group: 'Business', subgroup: null, full_path: 'Business > Distributor', is_active: true },
+];
+
 const SalesOrderContent: React.FC = () => {
     const [subTab, setSubTab] = useState<'Sales Quotation' | 'Sales Order'>('Sales Quotation');
 
@@ -2480,10 +2488,8 @@ const SalesOrderContent: React.FC = () => {
     };
 
     const getPreview = () => {
-        const currentYear = new Date().getFullYear();
-        const yearPart = form.autoYear ? `/${currentYear}` : '';
         const numberPart = '0'.repeat(Math.max(0, form.digits - 1)) + '1';
-        return `${form.prefix}${yearPart}${form.suffix}/${numberPart}`;
+        return `${form.prefix}${numberPart}${form.suffix}`;
     };
 
     // Save Sales Quotation Series
@@ -2604,17 +2610,13 @@ const SalesOrderContent: React.FC = () => {
 
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Customer Category <span className="text-red-500">*</span></label>
-                        <select
-                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-gray-600"
+                        <CategoryHierarchicalDropdown
+                            staticCategories={CUSTOMER_CATEGORIES}
                             value={form.category}
-                            onChange={(e) => handleChange('category', e.target.value)}
-                        >
-                            <option value="">Select Category</option>
-                            <option value="Retail">Retail</option>
-                            <option value="Wholesale">Wholesale</option>
-                            <option value="Corporate">Corporate</option>
-                            <option value="Distributor">Distributor</option>
-                        </select>
+                            onSelect={(selection) => handleChange('category', selection.fullPath)}
+                            colorTheme="teal"
+                            placeholder="Select Category"
+                        />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -2662,7 +2664,7 @@ const SalesOrderContent: React.FC = () => {
 
                     <div className="bg-gray-100 rounded-md p-6 text-center">
                         <p className="text-xs uppercase text-gray-500 font-semibold mb-2">SAMPLE PREVIEW</p>
-                        <p className="text-xl font-bold text-gray-800 font-mono">{getPreview()}</p>
+                        <p className="text-xl font-bold text-gray-800">{getPreview()}</p>
                     </div>
 
                     <button
@@ -2675,7 +2677,7 @@ const SalesOrderContent: React.FC = () => {
 
                 {/* Right: Table */}
                 <div className="lg:col-span-8">
-                    <h3 className="text-lg font-bold text-gray-900 mb-6">Category {isSQ ? 'Sales Quote' : 'SO'} Series Preview</h3>
+                    <h3 className="text-lg font-bold text-gray-900 mb-6">Existing {isSQ ? 'Sales Quotation' : 'Sales Order'} Series</h3>
                     <div className="border border-gray-200 rounded-lg overflow-hidden">
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">

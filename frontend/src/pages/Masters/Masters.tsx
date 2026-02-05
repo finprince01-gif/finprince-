@@ -162,7 +162,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
       setSelectedVoucher(voucherButtons[0].id);
     }
   }, [voucherButtons, selectedVoucher]);
-  const [updateCustomerMaster, setUpdateCustomerMaster] = useState<string>('no');
+
 
   // State for Voucher Configuration Form
   const [voucherName, setVoucherName] = useState('');
@@ -171,10 +171,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
   const [voucherSuffix, setVoucherSuffix] = useState('');
   const [voucherStartFrom, setVoucherStartFrom] = useState(1);
   const [voucherRequiredDigits, setVoucherRequiredDigits] = useState(4);
-  const [voucherEffectiveFrom, setVoucherEffectiveFrom] = useState('');
-  const [voucherEffectiveTo, setVoucherEffectiveTo] = useState('');
-  const [voucherUpdateCustomerMaster, setVoucherUpdateCustomerMaster] = useState(false);
-  const [voucherIncludeFromSeries, setVoucherIncludeFromSeries] = useState<number | null>(null);
+
   const [existingVouchers, setExistingVouchers] = useState<any[]>([]);
   const [selectedVoucherConfig, setSelectedVoucherConfig] = useState<any | null>(null);
   const [isEditModeVoucher, setIsEditModeVoucher] = useState(false);
@@ -639,10 +636,6 @@ const MastersPage: React.FC<MastersPageProps> = ({
     setVoucherSuffix('');
     setVoucherStartFrom(1);
     setVoucherRequiredDigits(4);
-    setVoucherEffectiveFrom('');
-    setVoucherEffectiveTo('');
-    setVoucherUpdateCustomerMaster(false);
-    setVoucherIncludeFromSeries(null);
     setSelectedVoucherConfig(null);
     setIsEditModeVoucher(false);
     setVoucherFormError('');
@@ -658,16 +651,15 @@ const MastersPage: React.FC<MastersPageProps> = ({
       setVoucherFormError('Voucher name is required');
       return;
     }
-    if (!voucherEffectiveFrom || !voucherEffectiveTo) {
-      setVoucherFormError('Effective period is required');
-      return;
-    }
 
-    // Validate that Effective To is after Effective From
-    const fromDate = new Date(voucherEffectiveFrom);
-    const toDate = new Date(voucherEffectiveTo);
-    if (toDate <= fromDate) {
-      setVoucherFormError('Effective To date must be after Effective From date');
+    // Validate voucher number length (Prefix + Required Digits + Suffix <= 16)
+    const prefixLen = voucherPrefix?.length || 0;
+    const suffixLen = voucherSuffix?.length || 0;
+    const digitsLen = voucherRequiredDigits || 0;
+    const totalLen = prefixLen + digitsLen + suffixLen;
+
+    if (totalLen > 16) {
+      setVoucherFormError(`Total length (${totalLen}) exceeds 16 characters limit (Prefix: ${prefixLen} + Digits: ${digitsLen} + Suffix: ${suffixLen}). GST allows max 16 digits.`);
       return;
     }
 
@@ -678,13 +670,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
         prefix: voucherPrefix,
         suffix: voucherSuffix,
         start_from: voucherStartFrom,
-        required_digits: voucherRequiredDigits,
-        effective_from: voucherEffectiveFrom,
-        effective_to: voucherEffectiveTo,
-        ...(selectedVoucher === 'sales' && {
-          update_customer_master: voucherUpdateCustomerMaster
-        }),
-        include_from_existing_series: voucherIncludeFromSeries
+        required_digits: voucherRequiredDigits
       };
 
       const endpoint = getVoucherEndpoint(selectedVoucher);
@@ -742,10 +728,6 @@ const MastersPage: React.FC<MastersPageProps> = ({
     setVoucherSuffix(selectedVoucherConfig.suffix || '');
     setVoucherStartFrom(selectedVoucherConfig.start_from || 1);
     setVoucherRequiredDigits(selectedVoucherConfig.required_digits || 4);
-    setVoucherEffectiveFrom(selectedVoucherConfig.effective_from || '');
-    setVoucherEffectiveTo(selectedVoucherConfig.effective_to || '');
-    setVoucherUpdateCustomerMaster(selectedVoucherConfig.update_customer_master || false);
-    setVoucherIncludeFromSeries(selectedVoucherConfig.include_from_existing_series || null);
     setIsEditModeVoucher(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -1762,92 +1744,25 @@ const MastersPage: React.FC<MastersPageProps> = ({
                         placeholder="4"
                         min="1"
                       />
+                      <p className={`mt-1 text-xs ${(voucherPrefix?.length || 0) + (voucherRequiredDigits || 0) + (voucherSuffix?.length || 0) > 16 ? 'text-red-500' : 'text-gray-500'}`}>
+                        Total Length: {(voucherPrefix?.length || 0) + (voucherRequiredDigits || 0) + (voucherSuffix?.length || 0)}/16 (GST Limit)
+                      </p>
                     </div>
                   </div>
 
-                  {/* Effective Period */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Effective Period: <span className="text-red-500">*</span>
-                    </label>
-                    <div className="grid grid-cols-2 gap-6">
-                      <div>
-                        <label className="block text-xs text-gray-600 mb-1">From <span className="text-red-500">*</span></label>
-                        <input
-                          type="date"
-                          value={voucherEffectiveFrom}
-                          onChange={(e) => setVoucherEffectiveFrom(e.target.value)}
-                          min={today}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-600 mb-1">To <span className="text-red-500">*</span></label>
-                        <input
-                          type="date"
-                          value={voucherEffectiveTo}
-                          onChange={(e) => setVoucherEffectiveTo(e.target.value)}
-                          min={voucherEffectiveFrom || today}
-                          max={financialYearEnd}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                          required
-                        />
-                      </div>
-                    </div>
-                  </div>
 
-                  {/* Update Customer Master */}
-                  <div className="space-y-3">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Update Customer Master: Yes/No
-                    </label>
-                    <div className="flex items-center space-x-4">
-                      <label className="flex items-center">
-                        <input
-                          type="radio"
-                          name="voucherUpdateCustomerMaster"
-                          value="yes"
-                          checked={voucherUpdateCustomerMaster === true}
-                          onChange={(e) => setVoucherUpdateCustomerMaster(true)}
-                          className="w-4 h-4 text-teal-600 focus:ring-teal-500"
-                        />
-                        <span className="ml-2 text-sm text-gray-700">Yes</span>
-                      </label>
-                      <label className="flex items-center">
-                        <input
-                          type="radio"
-                          name="voucherUpdateCustomerMaster"
-                          value="no"
-                          checked={voucherUpdateCustomerMaster === false}
-                          onChange={(e) => setVoucherUpdateCustomerMaster(false)}
-                          className="w-4 h-4 text-teal-600 focus:ring-teal-500"
-                        />
-                        <span className="ml-2 text-sm text-gray-700">No</span>
-                      </label>
-                    </div>
-                  </div>
 
-                  {/* If Yes, Include from existing series - Only show if Yes is selected */}
-                  {voucherUpdateCustomerMaster && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Include from existing series:
-                      </label>
-                      <div className="relative max-w-md">
-                        <select
-                          value={voucherIncludeFromSeries || ''}
-                          onChange={(e) => setVoucherIncludeFromSeries(e.target.value ? parseInt(e.target.value) : null)}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 appearance-none bg-white"
-                        >
-                          <option value="">Drop down list to have the existing list of series</option>
-                          {existingVouchers.map(v => (
-                            <option key={v.id} value={v.id}>{v.voucher_name}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  )}
+                  {/* Voucher Preview */}
+                  <div className="mt-6 p-6 bg-gray-100 rounded-lg flex flex-col items-center justify-center">
+                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                      SAMPLE PREVIEW
+                    </span>
+                    <p className="text-xl font-bold text-gray-800 tracking-wide">
+                      {voucherPrefix || ''}
+                      {String(voucherStartFrom || 1).padStart(voucherRequiredDigits || 4, '0')}
+                      {voucherSuffix || ''}
+                    </p>
+                  </div>
 
                   {/* Submit Button */}
                   <div className="flex justify-end gap-3 pt-4">
@@ -1882,17 +1797,14 @@ const MastersPage: React.FC<MastersPageProps> = ({
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">SELECT</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">VOUCHER NAME</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">VOUCHER SERIES PREVIEW (LAST SERIES)</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">EFFECTIVE FROM</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">EFFECTIVE TO</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">UPDATE CUSTOMER MASTER</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">INCLUDE FROM SERIES</th>
+
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">ACTIONS</th>
                       </tr>
                     </thead>
                     <tbody>
                       {existingVouchers.length === 0 ? (
                         <tr>
-                          <td colSpan={8} className="px-3 py-12 text-center">
+                          <td colSpan={4} className="px-3 py-12 text-center">
                             <p className="text-sm text-gray-400">No vouchers configured yet</p>
                           </td>
                         </tr>
@@ -1924,20 +1836,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                                 <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-700">
                                   {seriesPreview}
                                 </td>
-                                <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">
-                                  {voucher.effective_from}
-                                </td>
-                                <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">
-                                  {voucher.effective_to}
-                                </td>
-                                <td className="px-3 py-3 whitespace-nowrap text-sm text-center text-gray-600">
-                                  {voucher.update_customer_master ? 'Yes' : 'No'}
-                                </td>
-                                <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">
-                                  {voucher.include_from_existing_series
-                                    ? existingVouchers.find(v => v.id === parseInt(voucher.include_from_existing_series))?.voucher_name || '-'
-                                    : '-'}
-                                </td>
+
                                 <td className="px-3 py-3 whitespace-nowrap text-sm">
                                   {isSelected ? (
                                     <div className="flex gap-2">
@@ -2074,39 +1973,24 @@ const MastersPage: React.FC<MastersPageProps> = ({
                         placeholder="4"
                         min="1"
                       />
+                      <p className={`mt-1 text-xs ${(voucherPrefix?.length || 0) + (voucherRequiredDigits || 0) + (voucherSuffix?.length || 0) > 16 ? 'text-red-500' : 'text-gray-500'}`}>
+                        Total Length: {(voucherPrefix?.length || 0) + (voucherRequiredDigits || 0) + (voucherSuffix?.length || 0)}/16 (GST Limit)
+                      </p>
                     </div>
                   </div>
 
-                  {/* Effective Period */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Effective Period: <span className="text-red-500">*</span>
-                    </label>
-                    <div className="grid grid-cols-2 gap-6">
-                      <div>
-                        <label className="block text-xs text-gray-600 mb-1">From <span className="text-red-500">*</span></label>
-                        <input
-                          type="date"
-                          value={voucherEffectiveFrom}
-                          onChange={(e) => setVoucherEffectiveFrom(e.target.value)}
-                          min={today}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-600 mb-1">To <span className="text-red-500">*</span></label>
-                        <input
-                          type="date"
-                          value={voucherEffectiveTo}
-                          onChange={(e) => setVoucherEffectiveTo(e.target.value)}
-                          min={voucherEffectiveFrom || today}
-                          max={financialYearEnd}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                          required
-                        />
-                      </div>
-                    </div>
+
+
+                  {/* Voucher Preview */}
+                  <div className="mt-6 p-6 bg-gray-100 rounded-lg flex flex-col items-center justify-center">
+                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                      SAMPLE PREVIEW
+                    </span>
+                    <p className="text-xl font-bold text-gray-800 tracking-wide">
+                      {voucherPrefix || ''}
+                      {String(voucherStartFrom || 1).padStart(voucherRequiredDigits || 4, '0')}
+                      {voucherSuffix || ''}
+                    </p>
                   </div>
 
                   {/* Submit Button */}
@@ -2142,15 +2026,14 @@ const MastersPage: React.FC<MastersPageProps> = ({
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">SELECT</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">VOUCHER NAME</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">VOUCHER SERIES PREVIEW (LAST SERIES)</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">EFFECTIVE FROM</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">EFFECTIVE TO</th>
+
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">ACTIONS</th>
                       </tr>
                     </thead>
                     <tbody>
                       {existingVouchers.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="px-3 py-12 text-center">
+                          <td colSpan={4} className="px-3 py-12 text-center">
                             <p className="text-sm text-gray-400">No vouchers configured yet</p>
                           </td>
                         </tr>
@@ -2182,12 +2065,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                                 <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-700">
                                   {seriesPreview}
                                 </td>
-                                <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">
-                                  {voucher.effective_from}
-                                </td>
-                                <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">
-                                  {voucher.effective_to}
-                                </td>
+
                                 <td className="px-3 py-3 whitespace-nowrap text-sm">
                                   {isSelected ? (
                                     <div className="flex gap-2">

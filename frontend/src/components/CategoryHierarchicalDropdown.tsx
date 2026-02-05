@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { httpClient } from '../services/httpClient';
 
-interface Category {
+export interface Category {
     id: number;
     category: string;
     group: string | null;
@@ -17,6 +17,8 @@ interface DropdownProps {
     placeholder?: string;
     className?: string;
     onlyRoots?: boolean;
+    staticCategories?: Category[];
+    colorTheme?: 'teal' | 'indigo';
 }
 
 const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
@@ -25,7 +27,9 @@ const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
     excludeId,
     placeholder = 'Select Category',
     className = '',
-    onlyRoots = false
+    onlyRoots = false,
+    staticCategories,
+    colorTheme = 'teal'
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [categories, setCategories] = useState<Category[]>([]);
@@ -33,8 +37,32 @@ const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
     const [searchQuery, setSearchQuery] = useState('');
     const dropdownRef = useRef<HTMLDivElement>(null);
 
+    // Theme Classes
+    const themeClasses = {
+        teal: {
+            hoverBorder: 'hover:border-teal-400',
+            focusRing: 'focus:ring-teal-500',
+            focusBorder: 'focus:border-teal-500',
+            activeBg: 'bg-teal-100',
+            activeText: 'text-teal-800',
+            hoverBg: 'hover:bg-teal-50'
+        },
+        indigo: {
+            hoverBorder: 'hover:border-indigo-400',
+            focusRing: 'focus:ring-indigo-500',
+            focusBorder: 'focus:border-indigo-500',
+            activeBg: 'bg-indigo-100',
+            activeText: 'text-indigo-800',
+            hoverBg: 'hover:bg-indigo-50'
+        }
+    }[colorTheme];
+
     useEffect(() => {
-        fetchCategories();
+        if (staticCategories && staticCategories.length > 0) {
+            setCategories(staticCategories);
+        } else {
+            fetchCategories();
+        }
 
         const handleClickOutside = (event: MouseEvent) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -44,7 +72,7 @@ const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
 
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    }, [staticCategories]);
 
     // Default system categories to ensure they always appear
     const DEFAULT_CATS = [
@@ -127,9 +155,9 @@ const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
         <div className={`relative ${className}`} ref={dropdownRef}>
             <div
                 onClick={() => setIsOpen(!isOpen)}
-                className="w-full px-4 py-2 border-2 border-gray-200 rounded-md cursor-pointer bg-white flex items-center justify-between hover:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-colors"
+                className={`w-full px-4 py-2 border border-gray-300 rounded-md cursor-pointer bg-white flex items-center justify-between ${themeClasses.hoverBorder} focus:outline-none focus:ring-2 ${themeClasses.focusRing} transition-colors`}
             >
-                <span className={value ? 'text-gray-900' : 'text-gray-400'}>
+                <span className={value ? 'text-gray-700' : 'text-gray-400'}>
                     {value || placeholder}
                 </span>
                 <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -144,7 +172,7 @@ const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
                             type="text"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-teal-500"
+                            className={`w-full px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none ${themeClasses.focusBorder}`}
                             placeholder="Search..."
                             autoFocus
                         />
@@ -160,7 +188,7 @@ const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
                                 <li
                                     key={cat.id}
                                     onClick={() => handleSelect(cat)}
-                                    className={`px-4 py-2 text-sm cursor-pointer hover:bg-teal-50 ${value === cat.full_path ? 'bg-teal-100 text-teal-800' : 'text-gray-700'
+                                    className={`px-4 py-2 text-sm cursor-pointer ${themeClasses.hoverBg} ${value === cat.full_path ? `${themeClasses.activeBg} ${themeClasses.activeText}` : 'text-gray-700'
                                         }`}
                                 >
                                     {cat.full_path}
