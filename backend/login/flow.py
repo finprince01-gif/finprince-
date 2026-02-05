@@ -108,6 +108,8 @@ def authenticate_user(username, password, email=None):
         f"Tenant: {user.tenant_id} ({token_data['company_name']}) | "
         f"User: {user.username} ({token_data['email']})"
     )
+    # Explicit terminal output for debugging/monitoring
+    print(f"\n🔐 LOGIN SUCCESS: Tenant ID: {user.tenant_id}, Name: {token_data['company_name']}\n")
     
     return user, token_data
 

@@ -35,12 +35,11 @@ class Tenant(models.Model):
 class User(AbstractBaseUser):
     # Map to 'users' table strictly
     id = models.BigAutoField(primary_key=True) # Matches BIGINT in DB
-    # Username is unique per tenant, not globally
+    # Username can be duplicated - no uniqueness constraint
     username = models.CharField(max_length=100)
     company_name = models.CharField(max_length=255, unique=True, null=True, blank=True)
-    email = models.CharField(max_length=255, blank=True, null=True) # Email also shouldn't handle global unique if used for login?
-    # Wait, usually email is unique per user. If multi-tenant, same email can exist for different tenants?
-    # For now, let's stick to username as requested. The prompt specifically mentioned username.
+    # Email must be unique globally across all tenants
+    email = models.CharField(max_length=255, unique=True, blank=True, null=True)
     
     selected_plan = models.CharField(max_length=50, null=True, blank=True)
     logo_path = models.CharField(max_length=500, blank=True, null=True)
@@ -65,7 +64,8 @@ class User(AbstractBaseUser):
 
     class Meta:
         db_table = 'users'
-        unique_together = [['username', 'tenant_id']]
+        # Removed unique_together constraint - usernames can be duplicated
+        # Email uniqueness is enforced at the field level
     
     def __str__(self):
         return self.username

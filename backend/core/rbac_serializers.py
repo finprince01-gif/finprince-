@@ -164,16 +164,12 @@ class CreateUserWithRoleSerializer(serializers.Serializer):
     )
     
     def validate_username(self, value):
-        """Check if username already exists within the tenant"""
-        request = self.context.get('request')
-        if request and hasattr(request, 'user'):
-            tenant_id = request.user.tenant_id
-            if User.objects.filter(username=value, tenant_id=tenant_id).exists():
-                raise serializers.ValidationError("Username already exists in this organization")
+        """Username validation - duplicate usernames are allowed"""
+        # No uniqueness check - usernames can be duplicated
         return value
     
     def validate_email(self, value):
-        """Check if email already exists (globally, as email should be unique across all tenants)"""
+        """Check if email already exists - email must be unique globally"""
         if value and value.strip():  # Only validate if email is provided
             if User.objects.filter(email=value).exists():
                 raise serializers.ValidationError("This email address is already registered")

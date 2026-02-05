@@ -307,6 +307,13 @@ LOGGING = {
         'core.auth_views': {
             'handlers': ['console'],
             'level': 'INFO',
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'login': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
             'propagate': False,
         },
     },

@@ -6,7 +6,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from core.auth_views import CookieTokenObtainPairView, CookieTokenRefreshView, LogoutView
 from core.token import MyTokenObtainPairSerializer
-from admin_api import SubscriptionsListView
+from core.views import AdminSubscriptionsView, AdminPaymentsView
 import threading
 import sys
 
@@ -31,10 +31,10 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     
     # Admin API (for admin-subscription-panel) - accept both with/without trailing slash
-    path('api/admin/subscriptions', SubscriptionsListView.as_view(), name='admin-subscriptions-no-slash'),
-    path('api/admin/subscriptions/', SubscriptionsListView.as_view(), name='admin-subscriptions'),
-    path('api/admin/payments', SubscriptionsListView.as_view(), name='admin-payments-no-slash'),
-    path('api/admin/payments/', SubscriptionsListView.as_view(), name='admin-payments'),
+    path('api/admin/subscriptions', AdminSubscriptionsView.as_view(), name='admin-subscriptions-no-slash'),
+    path('api/admin/subscriptions/', AdminSubscriptionsView.as_view(), name='admin-subscriptions'),
+    path('api/admin/payments', AdminPaymentsView.as_view(), name='admin-payments-no-slash'),
+    path('api/admin/payments/', AdminPaymentsView.as_view(), name='admin-payments'),
     
     # Login - NEW refactored module
     path('api/auth/', include('login.urls')),

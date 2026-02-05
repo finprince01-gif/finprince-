@@ -1531,42 +1531,6 @@ CREATE TABLE IF NOT EXISTS service_groups (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Service Groups Table';
    
       
-   CREATE TABLE `inventory_master_grn` (
-  `id` BIGINT NOT NULL AUTO_INCREMENT,
-  `tenant_id` VARCHAR(36) NOT NULL,
-  `created_at` DATETIME(6) DEFAULT NULL,
-  `updated_at` DATETIME(6) DEFAULT NULL,
-  `name` VARCHAR(255) NOT NULL,
-  `grn_type` VARCHAR(100) NOT NULL,
-  `prefix` VARCHAR(50) DEFAULT NULL,
-  `suffix` VARCHAR(50) DEFAULT NULL,
-  `year` VARCHAR(4) DEFAULT NULL,
-  `required_digits` INT NOT NULL,
-  `preview` VARCHAR(255) DEFAULT NULL,
-  `is_active` TINYINT(1) NOT NULL DEFAULT 1,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB
-DEFAULT CHARSET=utf8mb4
-COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE `inventory_master_issueslip` (
-  `id` BIGINT NOT NULL AUTO_INCREMENT,
-  `tenant_id` VARCHAR(36) NOT NULL,
-  `created_at` DATETIME(6) DEFAULT NULL,
-  `updated_at` DATETIME(6) DEFAULT NULL,
-  `name` VARCHAR(255) NOT NULL,
-  `issue_slip_type` VARCHAR(100) NOT NULL,
-  `prefix` VARCHAR(50) DEFAULT NULL,
-  `suffix` VARCHAR(50) DEFAULT NULL,
-  `year` VARCHAR(4) DEFAULT NULL,
-  `required_digits` INT NOT NULL,
-  `preview` VARCHAR(255) DEFAULT NULL,
-  `is_active` TINYINT(1) NOT NULL DEFAULT 1,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB
-DEFAULT CHARSET=utf8mb4
-COLLATE=utf8mb4_unicode_ci;
-
 CREATE TABLE `voucher_sales_dispatchdetails` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `tenant_id` VARCHAR(36) NOT NULL,
@@ -2018,38 +1982,42 @@ CREATE TABLE voucher_purchase_transit_details (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE inventory_master_grn (
-  id BIGINT NOT NULL AUTO_INCREMENT,
-  tenant_id VARCHAR(36) NOT NULL,
-  created_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
-  updated_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-  name VARCHAR(255) NOT NULL,
-  grn_type VARCHAR(100) NOT NULL,
-  prefix VARCHAR(50),
-  suffix VARCHAR(50),
-  `year` VARCHAR(4),
-  required_digits INT NOT NULL DEFAULT 0,
-  preview VARCHAR(255),
-  is_active TINYINT(1) NOT NULL DEFAULT 1,
-  PRIMARY KEY (id),
-  KEY idx_img_tenant (tenant_id)
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    tenant_id VARCHAR(36) NOT NULL,
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+        ON UPDATE CURRENT_TIMESTAMP(6),
+    name VARCHAR(255) NOT NULL,
+    grn_type VARCHAR(100) NOT NULL,
+    prefix VARCHAR(50),
+    suffix VARCHAR(50),
+    `year` CHAR(4),
+    required_digits INT NOT NULL DEFAULT 0,
+    preview VARCHAR(255),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    PRIMARY KEY (id),
+    KEY idx_img_tenant (tenant_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+
 CREATE TABLE inventory_master_issueslip (
-  id BIGINT NOT NULL AUTO_INCREMENT,
-  tenant_id VARCHAR(36) NOT NULL,
-  created_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
-  updated_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-  name VARCHAR(255) NOT NULL,
-  issue_slip_type VARCHAR(100) NOT NULL,
-  prefix VARCHAR(50),
-  suffix VARCHAR(50),
-  `year` VARCHAR(4),
-  required_digits INT NOT NULL DEFAULT 0,
-  preview VARCHAR(255),
-  is_active TINYINT(1) NOT NULL DEFAULT 1,
-  PRIMARY KEY (id),
-  KEY idx_imi_tenant (tenant_id)
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    tenant_id VARCHAR(36) NOT NULL,
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+        ON UPDATE CURRENT_TIMESTAMP(6),
+    name VARCHAR(255) NOT NULL,
+    issue_slip_type VARCHAR(100) NOT NULL,
+    prefix VARCHAR(50),
+    suffix VARCHAR(50),
+    `year` CHAR(4),
+    required_digits INT NOT NULL DEFAULT 0,
+    preview VARCHAR(255),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    PRIMARY KEY (id),
+    KEY idx_imi_tenant (tenant_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ============================================================================
 -- INVENTORY OPERATIONS SCHEMA
 -- Stores various inventory operations like Job Work, Inter-Unit,
