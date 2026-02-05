@@ -2316,35 +2316,9 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_outward` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
--- 9. (LEGACY) GRN 
--- Kept for backward compatibility if needed, using JSON items now
-
-CREATE TABLE IF NOT EXISTS `inventory_operation_grn` (
-  `id` BIGINT NOT NULL AUTO_INCREMENT,
-  `tenant_id` VARCHAR(36) NOT NULL,
-  `created_at` DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
-  `updated_at` DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-  `grn_no` VARCHAR(100) NOT NULL COMMENT 'GRN number',
-  `date` DATE NULL,
-  `time` TIME NULL,
-  `grn_type` VARCHAR(50) NOT NULL DEFAULT 'purchase' COMMENT 'purchase or sales_return',
-  `location_id` BIGINT NULL COMMENT 'Foreign key to inventory_master_location',
-  `purchase_order_no` VARCHAR(100) NULL,
-  `vendor_name` VARCHAR(255) NULL,
-  `supplier_invoice_no` VARCHAR(100) NULL,
-  `customer_name` VARCHAR(255) NULL,
-  `sales_invoice_no` VARCHAR(100) NULL,
-  `branch` VARCHAR(100) NULL,
-  `address` TEXT NULL,
-  `gstin` VARCHAR(20) NULL,
-  `total_boxes` VARCHAR(50) NULL,
-  `posting_note` TEXT NULL,
-  `items` JSON DEFAULT NULL COMMENT 'List of items',
-  PRIMARY KEY (`id`),
-  KEY `idx_iog_tenant` (`tenant_id`),
-  KEY `idx_iog_grn_no` (`grn_no`),
-  KEY `idx_iog_location` (`location_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+-- 9. (LEGACY) GRN - REMOVED
+-- This table has been deprecated and replaced by inventory_operation_new_grn
+-- The old table used location as ForeignKey, the new table uses location_id as BigInt
 
 -- ============================================================================
 -- RBAC (Role-Based Access Control) Tables
@@ -2373,7 +2347,6 @@ CREATE TABLE `rbac_roles` (
 COMMENT='Role definitions with hierarchical permissions for RBAC';
 
 -- Table: rbac_user_roles
-
 CREATE TABLE `rbac_user_roles` (
   `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
   `tenant_id` VARCHAR(36) NOT NULL,

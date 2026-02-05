@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { httpClient } from '../services/httpClient';
 
 interface GRNItem {
     id: number;
@@ -8,6 +9,11 @@ interface GRNItem {
     uom: string;
     quantity: string;
     boxes: string;
+}
+
+interface Location {
+    id: number;
+    name: string;
 }
 
 interface CreateGRNModalProps {
@@ -29,10 +35,26 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
     const [gstin, setGstin] = useState('');
     const [postingNote, setPostingNote] = useState('');
 
+    // Locations State
+    const [locations, setLocations] = useState<Location[]>([]);
+
     // Items State
     const [items, setItems] = useState<GRNItem[]>([
         { id: 1, itemCode: '', itemName: '', hsnCode: '', uom: '', quantity: '', boxes: '' }
     ]);
+
+    // Fetch locations on mount
+    useEffect(() => {
+        const fetchLocations = async () => {
+            try {
+                const response = await httpClient.get<Location[]>('/api/inventory/locations/');
+                setLocations(response || []);
+            } catch (error) {
+                console.error('Failed to fetch locations:', error);
+            }
+        };
+        fetchLocations();
+    }, []);
 
     const handleAddItem = () => {
         const newItem: GRNItem = {
@@ -62,30 +84,38 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
     };
 
     const handleSave = () => {
-        // Construct payload to match InventoryOperationGRNSerializer
+        // Validate required fields
+        if (!grnNo) {
+            alert('Please enter GRN No');
+            return;
+        }
+
+        // Construct payload to match InventoryOperationNewGRNSerializer
         const payload = {
+            grn_type: 'purchases', // purchases or sales_return
             grn_no: grnNo,
             date: date || null,
             time: time || null,
-            location: location || null, // Should be ID ideally, but sending string for now if backend accepts or handles logic
-            purchase_order_no: purchaseOrderNo,
-            supplier_invoice_no: supplierInvoiceNo,
-            vendor_name: vendorName,
-            branch: branch,
-            address: address,
-            gstin: gstin,
-            posting_note: postingNote,
-            total_boxes: calculateTotalBoxes().toString(),
+            location_id: location ? parseInt(location) : null, // BigIntegerField, not ForeignKey
+            reference_no: purchaseOrderNo || '', // PO No
+            secondary_ref_no: supplierInvoiceNo || '', // Supplier Invoice No
+            vendor_name: vendorName || '',
+            branch: branch || '',
+            address: address || '',
+            gstin: gstin || '',
+            posting_note: postingNote || '',
+            status: 'Posted',
             items: items.map(item => ({
-                item_code: item.itemCode,
-                item_name: item.itemName,
-                hsn_code: item.hsnCode,
-                uom: item.uom,
+                item_code: item.itemCode || '',
+                item_name: item.itemName || '',
+                hsn_code: item.hsnCode || '',
+                uom: item.uom || '',
                 quantity: parseFloat(item.quantity) || 0,
-                no_of_boxes: item.boxes
+                no_of_boxes: item.boxes || '0'
             }))
         };
 
+        console.log('GRN Payload:', JSON.stringify(payload, null, 2));
         onSave(payload);
         onClose();
     };
@@ -136,9 +166,11 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-teal-500"
                             >
                                 <option value="">Select Location</option>
-                                {/* In real app, populate from locations API */}
-                                <option value="1">Warehouse A</option>
-                                <option value="2">Warehouse B</option>
+                                {locations.map((loc) => (
+                                    <option key={loc.id} value={loc.id.toString()}>
+                                        {loc.name}
+                                    </option>
+                                ))}
                             </select>
                         </div>
                     </div>

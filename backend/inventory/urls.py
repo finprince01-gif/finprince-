@@ -13,7 +13,6 @@ from .views import (
     InventoryOperationProductionViewSet,
     InventoryOperationConsumptionViewSet,
     InventoryOperationScrapViewSet,
-    InventoryOperationGRNViewSet,
     InventoryOperationOutwardViewSet,
     InventoryOperationNewGRNViewSet
 )
@@ -33,7 +32,7 @@ router.register('operations/location-change', InventoryOperationLocationChangeVi
 router.register('operations/production', InventoryOperationProductionViewSet, basename='inventory-operation-production')
 router.register('operations/consumption', InventoryOperationConsumptionViewSet, basename='inventory-operation-consumption')
 router.register('operations/scrap', InventoryOperationScrapViewSet, basename='inventory-operation-scrap')
-router.register('operations/grn', InventoryOperationGRNViewSet, basename='inventory-operation-grn')
+# Old GRN endpoint removed - use 'operations/new-grn' instead
 router.register('operations/outward', InventoryOperationOutwardViewSet, basename='inventory-operation-outward')
 router.register('operations/new-grn', InventoryOperationNewGRNViewSet, basename='inventory-operation-new-grn')
 

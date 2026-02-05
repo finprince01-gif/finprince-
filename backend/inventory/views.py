@@ -8,7 +8,7 @@ from .models import (
     InventoryOperationJobWork, InventoryOperationInterUnit, 
     InventoryOperationLocationChange, InventoryOperationProduction,
     InventoryOperationConsumption, InventoryOperationScrap,
-    InventoryOperationGRN, InventoryOperationOutward,
+    InventoryOperationOutward,
     InventoryOperationNewGRN
 )
 from .serializers import (
@@ -23,10 +23,7 @@ from .serializers import (
     InventoryOperationLocationChangeSerializer,
     InventoryOperationProductionSerializer,
     InventoryOperationConsumptionSerializer,
-    InventoryOperationConsumptionSerializer,
     InventoryOperationScrapSerializer,
-    InventoryOperationGRNSerializer,
-    InventoryOperationGRNSerializer,
     InventoryOperationOutwardSerializer,
     InventoryOperationNewGRNSerializer
 )
@@ -246,17 +243,7 @@ class InventoryOperationScrapViewSet(viewsets.ModelViewSet):
         tenant_id = get_tenant_from_request(self.request)
         serializer.save(tenant_id=tenant_id)
 
-class InventoryOperationGRNViewSet(viewsets.ModelViewSet):
-    serializer_class = InventoryOperationGRNSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_queryset(self):
-        tenant_id = get_tenant_from_request(self.request)
-        return InventoryOperationGRN.objects.filter(tenant_id=tenant_id)
-
-    def perform_create(self, serializer):
-        tenant_id = get_tenant_from_request(self.request)
-        serializer.save(tenant_id=tenant_id)
+# InventoryOperationGRNViewSet removed - replaced by InventoryOperationNewGRNViewSet
 
 class InventoryOperationOutwardViewSet(viewsets.ModelViewSet):
     serializer_class = InventoryOperationOutwardSerializer

@@ -214,7 +214,7 @@ class ApiService {
     }
 
     async createInventoryOperationGRN(data: any) {
-        return httpClient.post<any>('/api/inventory/operations/grn/', data);
+        return httpClient.post<any>('/api/inventory/operations/new-grn/', data);
     }
 
     async createInventoryOperationOutward(data: any) {

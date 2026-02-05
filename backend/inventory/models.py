@@ -385,42 +385,7 @@ class InventoryOperationScrap(BaseModel):
         db_table = 'inventory_operation_scrap'
 
 
-class InventoryOperationGRN(BaseModel):
-    """
-    GRN Operation (Purchase / Sales Return) - Legacy/Deprecated
-    """
-    grn_no = models.CharField(max_length=100)
-    date = models.DateField(null=True, blank=True)
-    time = models.TimeField(null=True, blank=True)
-    
-    # 'purchase' or 'sales_return'
-    grn_type = models.CharField(max_length=50, default='purchase')
-    
-    # Location Logic
-    location = models.ForeignKey(InventoryLocation, on_delete=models.SET_NULL, null=True, blank=True)
-    
-    # Purchase Fields
-    purchase_order_no = models.CharField(max_length=100, null=True, blank=True)
-    vendor_name = models.CharField(max_length=255, null=True, blank=True)
-    supplier_invoice_no = models.CharField(max_length=100, null=True, blank=True)
-    
-    # Sales Return Fields
-    customer_name = models.CharField(max_length=255, null=True, blank=True)
-    sales_invoice_no = models.CharField(max_length=100, null=True, blank=True)
-    
-    # Common
-    branch = models.CharField(max_length=100, null=True, blank=True)
-    address = models.TextField(null=True, blank=True)
-    gstin = models.CharField(max_length=20, null=True, blank=True)
-    
-    total_boxes = models.CharField(max_length=50, null=True, blank=True)
-    posting_note = models.TextField(null=True, blank=True)
-
-    # Items (Stored as JSON)
-    items = models.JSONField(default=list, blank=True, null=True)
-
-    class Meta:
-        db_table = 'inventory_operation_grn'
+# InventoryOperationGRN removed - replaced by InventoryOperationNewGRN
 
 
 class InventoryOperationOutward(BaseModel):
