@@ -8,7 +8,8 @@ import CreateSalesQuotation from './CreateSalesQuotation';
 import CategoryHierarchicalDropdown, { Category as DropdownCategory } from '../../components/CategoryHierarchicalDropdown';
 import SalesQuotationList from './SalesQuotationList';
 import CreateSalesOrder from './CreateSalesOrder';
-import { Eye, Mail, Filter, ChevronLeft, X, Calendar } from 'lucide-react';
+import { Eye, Mail, Filter, ChevronLeft, X, Calendar, Pencil, Trash2 } from 'lucide-react';
+import CustomerViewModal from './CustomerViewModal';
 
 type MainTab = 'Master' | 'Transaction';
 type MasterSubTab = 'Category' | 'Sales Quotation & Order' | 'Customer' | 'Long-term Contracts';
@@ -432,6 +433,7 @@ const CategoryContent: React.FC = () => {
 const CustomerContent: React.FC = () => {
     // State for view mode
     const [view, setView] = useState<'list' | 'create'>('list');
+    const [viewCustomer, setViewCustomer] = useState<any | null>(null); // State for viewing customer details
     const [activeTab, setActiveTab] = useState(''); // Start with empty to show overview first
 
     // State for filters
@@ -735,6 +737,7 @@ const CustomerContent: React.FC = () => {
                 // Update existing customer
                 console.log('Updating existing customer:', createdCustomerId);
                 response = await httpClient.patch(`/api/customerportal/customer-master/${createdCustomerId}/`, payload);
+                await fetchCustomers(); // Refresh the list
                 if (options.exit) alert('Customer updated successfully!');
             } else {
                 // Create new customer
@@ -742,6 +745,7 @@ const CustomerContent: React.FC = () => {
                 response = await httpClient.post('/api/customerportal/customer-master/', payload);
                 console.log('Customer created! Response:', response);
                 setCreatedCustomerId(response.id);
+                await fetchCustomers(); // Refresh the list
                 if (options.exit) alert('Customer created successfully!');
             }
 
@@ -858,11 +862,13 @@ const CustomerContent: React.FC = () => {
 
     // Mock Branch Data
     const mockBranches = [
-        { id: 1, gstin: '29ABCDE1234F1Z5', address: '123, Industrial Area, Bangalore, Karnataka - 560001', defaultRef: 'Bangalore HO' },
-        { id: 2, gstin: '27ABCDE1234F1Z5', address: '456, Textile Market, Surat, Gujarat - 395002', defaultRef: 'Surat Branch' },
+        { id: 1, gstin: '29ABCDE1234F1Z5', address: '123, Industrial Area, Bangalore, Karnataka - 560001', defaultRef: 'Bangalore Branch' },
+        { id: 2, gstin: '27ABCDE1234F1Z5', address: '456, Textile Market, Surat, Gujarat - 395002', defaultRef: 'Mumbai Branch' },
+        { id: 3, gstin: '07ABCDE1234F1Z5', address: '789, Connaught Place, New Delhi - 110001', defaultRef: 'Main Branch' },
     ];
 
     const handleGstSelect = (gstin: string) => {
+        setShowBranchDetails(false); // Hide details when selection changes, forcing user to click Fetch again
         if (selectedGSTINs.includes(gstin)) {
             setSelectedGSTINs(prev => prev.filter(g => g !== gstin));
             setRegisteredBranches(prev => prev.filter(b => b.gstin !== gstin)); // Cleanup
@@ -883,6 +889,17 @@ const CustomerContent: React.FC = () => {
         setExpandedBranches(prev =>
             prev.includes(id) ? prev.filter(b => b !== id) : [...prev, id]
         );
+    };
+
+    const handleNextToGst = () => {
+        // Reset GST related states to ensure "Image 2" clean state
+        setSelectedGSTINs([]);
+        setGstInput('');
+        setShowGstDropdown(false);
+        setShowBranchDetails(false);
+        setExpandedBranches([]);
+        setIsUnregistered(false);
+        setActiveTab('GST Details');
     };
 
     const handleVendorRadioChange = (isYes: boolean) => {
@@ -935,6 +952,142 @@ const CustomerContent: React.FC = () => {
         }
     };
 
+    const handleEditCustomer = (customer: any) => {
+        // 1. Basic Details
+        setCustomerFormData({
+            customer_name: customer.customer_name,
+            customer_code: customer.customer_code,
+            customer_category: customer.customer_category || '', // Use ID if available
+            pan_number: customer.pan_number || '',
+            contact_person: customer.contact_person || '',
+            email_address: customer.email_address || '',
+            contact_number: customer.contact_number || ''
+        });
+
+        // 2. Vendor Link
+        setIsVendor(customer.is_also_vendor || false);
+
+        // 3. GST Details
+        const gstData = customer.gst_details;
+        // Reset validation/view states first
+        setGstInput('');
+        setShowBranchDetails(false);
+        setExpandedBranches([1]);
+
+        if (gstData && (gstData.gstins.length > 0 || gstData.branches.length > 0)) {
+            // Check if unregistered based on GSTINs or flag if backend provides it
+            // Backend serializer provides 'is_unregistered' flag if we look closely at models, 
+            // but mapped here we can infer. If GSTIN is null/empty in branches or gstins array is empty but branches exist?
+            // Actually, the serializer returns 'gstins' array. If empty and branches exist with no GSTIN, it's unregistered.
+            // Or explicitly check 'isUnregistered' from backend if available.
+            // Assuming 'isUnregistered' state logic:
+            const hasGstins = gstData.gstins && gstData.gstins.length > 0;
+            const isUnreg = !hasGstins && gstData.branches.some((b: any) => !b.gstin);
+
+            setIsUnregistered(isUnreg);
+
+            if (isUnreg) {
+                // Populate unregistered branches
+                const branches = gstData.branches.map((b: any, index: number) => ({
+                    id: index + 1,
+                    referenceName: b.defaultRef || '',
+                    address: b.address || '',
+                    contactPerson: b.contactPerson || '',
+                    email: b.email || '',
+                    contactNumber: b.contactNumber || '',
+                    gstin: null
+                }));
+                setUnregisteredBranches(branches.length ? branches : [{ id: 1, referenceName: '', address: '', contactPerson: '', email: '', contactNumber: '', gstin: null }]);
+            } else {
+                // Populate registered branches
+                setSelectedGSTINs(gstData.gstins || []);
+
+                // Populate registered branches state
+                const branches = gstData.branches.map((b: any) => {
+                    const mock = mockBranches.find(mb => mb.gstin === b.gstin);
+                    return {
+                        gstin: b.gstin,
+                        defaultRef: b.defaultRef || (mock ? mock.defaultRef : ''),
+                        address: b.address || (mock ? mock.address : ''),
+                        contactPerson: b.contactPerson || '',
+                        contactNumber: b.contactNumber || '',
+                        email: b.email || ''
+                    };
+                });
+                setRegisteredBranches(branches);
+                if (branches.length > 0) setShowBranchDetails(true);
+            }
+        } else {
+            // Reset to default
+            setIsUnregistered(false);
+            setSelectedGSTINs([]);
+            setRegisteredBranches([]);
+            setUnregisteredBranches([{ id: 1, referenceName: '', address: '', contactPerson: '', email: '', contactNumber: '', gstin: null }]);
+        }
+
+        // 4. Products Services
+        const prodData = customer.products_services;
+        if (prodData && prodData.items.length > 0) {
+            setProductRows(prodData.items.map((item: any, index: number) => ({
+                id: index + 1,
+                itemCode: item.itemCode || '',
+                itemName: item.itemName || '',
+                uom: item.uom || '',
+                custItemCode: item.custItemCode || '',
+                custItemName: item.custItemName || '',
+                custUom: item.custUom || ''
+            })));
+        } else {
+            setProductRows([{ id: 1, itemCode: '', itemName: 'Auto-fetched', uom: '', custItemCode: '', custItemName: '', custUom: '' }]);
+        }
+
+        // 5. Statutory (TDS)
+        setStatutoryDetails({
+            msmeNo: customer.msme_no || '',
+            fssaiNo: customer.fssai_no || '',
+            iecCode: customer.iec_code || '',
+            eouStatus: customer.eou_status || 'Export Oriented Unit (EOU)',
+            tcsSection: customer.tcs_section || '',
+            tcsEnabled: customer.tcs_enabled || false,
+            tdsSection: customer.tds_section || '',
+            tdsEnabled: customer.tds_enabled || false
+        });
+
+        // 6. Banking
+        const bankData = customer.banking_info;
+        if (bankData && bankData.accounts && bankData.accounts.length > 0) {
+            setBankAccounts(bankData.accounts.map((acc: any) => ({
+                id: acc.id || Date.now() + Math.random(), // Ensure ID exists
+                accountNumber: acc.accountNumber || '',
+                bankName: acc.bankName || '',
+                ifscCode: acc.ifscCode || '',
+                branchName: acc.branchName || '',
+                swiftCode: acc.swiftCode || '',
+                associatedBranches: acc.associatedBranches || []
+            })));
+        } else {
+            setBankAccounts([]);
+        }
+
+        // 7. Terms
+        setTermsDetails({
+            creditPeriod: customer.credit_period || '',
+            creditTerms: customer.credit_terms || '',
+            penaltyTerms: customer.penalty_terms || '',
+            deliveryTerms: customer.delivery_terms || '',
+            warrantyDetails: customer.warranty_details || '',
+            forceMajeure: customer.force_majeure || '',
+            disputeTerms: customer.dispute_terms || ''
+        });
+
+        // 8. Set ID for update
+        setCreatedCustomerId(customer.id);
+
+        // 9. Switch View
+        setView('create');
+        setActiveTab('Basic Details');
+    };
+
     const filteredCustomers = (customers || []).filter(customer => {
         const name = customer.customer_name || customer.name || '';
         const code = customer.customer_code || customer.code || '';
@@ -964,7 +1117,9 @@ const CustomerContent: React.FC = () => {
                             <ChevronLeft className="w-4 h-4" />
                             Back to Customer List
                         </button>
-                        <h3 className="text-xl font-bold text-gray-900 mb-2">Create New Customer</h3>
+                        <h3 className="text-xl font-bold text-gray-900 mb-2">
+                            {createdCustomerId ? 'Edit Customer' : 'Create New Customer'}
+                        </h3>
                         <p className="text-sm text-gray-600 mb-8">Select a tab below to configure customer details:</p>
 
                         {/* Card-based Tab Overview */}
@@ -979,7 +1134,13 @@ const CustomerContent: React.FC = () => {
                             ].map(tab => (
                                 <button
                                     key={tab.name}
-                                    onClick={() => setActiveTab(tab.name)}
+                                    onClick={() => {
+                                        if (tab.name === 'GST Details') {
+                                            handleNextToGst();
+                                        } else {
+                                            setActiveTab(tab.name);
+                                        }
+                                    }}
                                     className="p-6 border border-gray-200 bg-white rounded-lg text-left transition-all hover:border-indigo-300 hover:shadow-sm"
                                 >
                                     <h4 className="text-base font-semibold mb-1 text-gray-900">
@@ -1223,15 +1384,15 @@ const CustomerContent: React.FC = () => {
                 {/* GST Details Content */}
                 {activeTab === 'GST Details' && (
                     <div className="max-w-4xl mx-auto">
-                        <div className="flex justify-center mb-8">
-                            <label className="flex items-center gap-2 cursor-pointer p-4 rounded-md hover:bg-gray-50 transition-colors">
+                        <div className="flex justify-center mb-10 pt-4">
+                            <label className="flex items-center gap-3 cursor-pointer p-2 px-4 rounded-md hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-200">
                                 <input
                                     type="checkbox"
                                     checked={isUnregistered}
                                     onChange={(e) => setIsUnregistered(e.target.checked)}
                                     className="w-4 h-4 text-teal-600 rounded focus:ring-indigo-500"
                                 />
-                                <span className="text-sm font-medium text-gray-700">Customer is Unregistered</span>
+                                <span className="text-sm font-semibold text-gray-700">Customer is Unregistered</span>
                             </label>
                         </div>
 
@@ -1452,7 +1613,9 @@ const CustomerContent: React.FC = () => {
                                                             <span className="w-6 h-6 flex items-center justify-center bg-white border border-gray-200 rounded text-xs font-semibold text-gray-600">
                                                                 {index + 1}
                                                             </span>
-                                                            <span className="font-semibold text-gray-800">{branch.defaultRef || 'New Branch'}</span>
+                                                            <span className="font-semibold text-gray-800">
+                                                                {branch.defaultRef || 'New Branch'}
+                                                            </span>
                                                         </div>
                                                         <span className="text-gray-400">
                                                             {isExpanded ? '▲' : '▼'}
@@ -1523,10 +1686,10 @@ const CustomerContent: React.FC = () => {
                         )}
 
                         {/* Footer Buttons for GST Tab */}
-                        <div className="flex justify-between items-center gap-4 mt-12 border-t border-gray-200 pt-6">
+                        <div className="flex justify-center items-center gap-6 mt-16 border-t border-gray-100 pt-8">
                             <button
                                 onClick={handleBackButton}
-                                className="flex items-center gap-2 px-6 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                                className="flex items-center gap-2 px-8 py-2.5 border border-gray-300 rounded-md text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
                             >
                                 <ChevronLeft className="w-4 h-4" />
                                 Back
@@ -2292,7 +2455,7 @@ const CustomerContent: React.FC = () => {
                                         <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
                                         <polyline points="22 4 12 14.01 9 11.01"></polyline>
                                     </svg>
-                                    Onboard Customer
+                                    {createdCustomerId ? 'Update Customer' : 'Onboard Customer'}
                                 </button>
                             </div>
                         </div>
@@ -2403,12 +2566,28 @@ const CustomerContent: React.FC = () => {
                                     </span>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                                    <button className={`hover:text-red-700 transition-colors ${(customer.status || 'Live') === 'Live' ? 'text-gray-300 cursor-not-allowed' : 'text-red-500'
-                                        }`}>
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                        </svg>
-                                    </button>
+                                    <div className="flex items-center justify-end gap-3">
+                                        <button
+                                            className="text-indigo-600 hover:text-indigo-900 transition-colors"
+                                            title="View"
+                                            onClick={() => setViewCustomer(customer)}
+                                        >
+                                            <Eye className="w-5 h-5" />
+                                        </button>
+                                        <button
+                                            className="text-blue-600 hover:text-blue-900 transition-colors"
+                                            title="Edit"
+                                            onClick={() => handleEditCustomer(customer)}
+                                        >
+                                            <Pencil className="w-5 h-5" />
+                                        </button>
+                                        <button
+                                            className="text-red-600 hover:text-red-900 transition-colors"
+                                            title="Delete"
+                                        >
+                                            <Trash2 className="w-5 h-5" />
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         ))}
@@ -2418,6 +2597,14 @@ const CustomerContent: React.FC = () => {
                     <div className="p-8 text-center text-gray-500 text-sm">No customers found.</div>
                 )}
             </div>
+
+            {/* View Modal */}
+            {viewCustomer && (
+                <CustomerViewModal
+                    customer={viewCustomer}
+                    onClose={() => setViewCustomer(null)}
+                />
+            )}
         </div>
     );
 };
@@ -2476,10 +2663,26 @@ const SalesOrderContent: React.FC = () => {
         }
     };
 
+    // Fetch Sales Order Series from API
+    const fetchSalesOrderSeries = async () => {
+        try {
+            setSoLoading(true);
+            const response = await httpClient.get<any[]>('/api/customerportal/sales-order-series/');
+            setSoList(response || []);
+        } catch (error) {
+            console.error('Error fetching sales order series:', error);
+            setSoList([]);
+        } finally {
+            setSoLoading(false);
+        }
+    };
+
     // Load data when component mounts or tab changes
     useEffect(() => {
         if (subTab === 'Sales Quotation') {
             fetchSalesQuotationSeries();
+        } else if (subTab === 'Sales Order') {
+            fetchSalesOrderSeries();
         }
     }, [subTab]);
 
@@ -2492,7 +2695,7 @@ const SalesOrderContent: React.FC = () => {
         return `${form.prefix}${numberPart}${form.suffix}`;
     };
 
-    // Save Sales Quotation Series
+    // Save Sales Quotation/Order Series
     const handleSaveSeries = async () => {
         if (!form.name.trim()) {
             alert('Please enter a series name');
@@ -2514,19 +2717,28 @@ const SalesOrderContent: React.FC = () => {
                 current_number: 0
             };
 
-            await httpClient.post('/api/customerportal/sales-quotation-series/', payload);
+            const endpoint = subTab === 'Sales Quotation'
+                ? '/api/customerportal/sales-quotation-series/'
+                : '/api/customerportal/sales-order-series/';
+
+            await httpClient.post(endpoint, payload);
             alert('Series saved successfully!');
 
-            await fetchSalesQuotationSeries();
+            if (subTab === 'Sales Quotation') {
+                await fetchSalesQuotationSeries();
+            } else {
+                await fetchSalesOrderSeries();
+            }
 
-            setSqForm({
+            setForm(prev => ({
+                ...prev,
                 name: '',
                 category: '',
-                prefix: 'SQ/',
+                prefix: subTab === 'Sales Quotation' ? 'SQ/' : 'SO/',
                 suffix: '/24-25',
                 autoYear: true,
                 digits: 4
-            });
+            }));
         } catch (error: any) {
             console.error('Error saving series:', error);
             let errorMessage = 'Failed to save series';
@@ -2549,9 +2761,18 @@ const SalesOrderContent: React.FC = () => {
     const handleDeleteSeries = async (id: number) => {
         if (!window.confirm('Are you sure you want to delete this series?')) return;
         try {
-            await httpClient.delete(`/api/customerportal/sales-quotation-series/${id}/`);
+            const endpoint = subTab === 'Sales Quotation'
+                ? `/api/customerportal/sales-quotation-series/${id}/`
+                : `/api/customerportal/sales-order-series/${id}/`;
+
+            await httpClient.delete(endpoint);
             alert('Series deleted successfully!');
-            await fetchSalesQuotationSeries();
+
+            if (subTab === 'Sales Quotation') {
+                await fetchSalesQuotationSeries();
+            } else {
+                await fetchSalesOrderSeries();
+            }
         } catch (error) {
             console.error('Error deleting series:', error);
             alert('Failed to delete series');
@@ -2691,10 +2912,10 @@ const SalesOrderContent: React.FC = () => {
                             <tbody className="bg-white divide-y divide-gray-200">
                                 {list.map((series) => (
                                     <tr key={series.id}>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{series.name}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{series.category}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{series.series_name}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{series.customer_category}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            {'displayDetails' in series ? series.displayDetails : `${series.prefix} (${series.digits} digits)`}
+                                            {'displayDetails' in series ? series.displayDetails : `${series.prefix} (${series.required_digits} digits)`}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                             <button className="text-teal-600 hover:text-indigo-900 mr-4">Edit</button>
@@ -2720,6 +2941,7 @@ const LongTermContractsContent: React.FC = () => {
     const [automateBilling, setAutomateBilling] = useState(false);
     const [loading, setLoading] = useState(false);
     const [contracts, setContracts] = useState<any[]>([]);
+    const [customers, setCustomers] = useState<any[]>([]);
 
     // Basic Details State
     const [basicDetails, setBasicDetails] = useState({
@@ -2781,12 +3003,23 @@ const LongTermContractsContent: React.FC = () => {
         others: ''
     });
 
-    // Fetch contracts on component mount
+    // Fetch contracts and customers on component mount
     useEffect(() => {
         if (view === 'list') {
             fetchContracts();
         }
+        fetchCustomers();
     }, [view]);
+
+    const fetchCustomers = async () => {
+        try {
+            const response = await httpClient.get('/api/customerportal/customer-master/');
+            setCustomers((response as any) || []);
+        } catch (error) {
+            console.error('Error fetching customers:', error);
+            setCustomers([]);
+        }
+    };
 
     const fetchContracts = async () => {
         try {
@@ -2983,8 +3216,11 @@ const LongTermContractsContent: React.FC = () => {
                                                 }}
                                             >
                                                 <option value="">Select Customer</option>
-                                                <option value="1">Acme Corporation</option>
-                                                <option value="2">Tech Solutions Ltd</option>
+                                                {customers.map((customer) => (
+                                                    <option key={customer.id} value={customer.id}>
+                                                        {customer.customer_name}
+                                                    </option>
+                                                ))}
                                             </select>
                                         </div>
                                         <div>
