@@ -23,8 +23,7 @@ class MasterVoucherSalesSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'tenant_id', 'voucher_name', 'prefix', 'suffix',
             'start_from', 'current_number', 'required_digits',
-            'enable_auto_numbering', 'update_customer_master', 'include_from_existing_series',
-            'effective_from', 'effective_to', 'is_active',
+            'enable_auto_numbering', 'include_from_existing_series', 'is_active',
             'created_at', 'updated_at', 'created_by', 'updated_by'
         ]
         read_only_fields = ['id', 'tenant_id', 'created_at', 'updated_at']
@@ -38,8 +37,7 @@ class MasterVoucherCreditNoteSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'tenant_id', 'voucher_name', 'prefix', 'suffix',
             'start_from', 'current_number', 'required_digits',
-            'enable_auto_numbering', 'include_from_existing_series',
-            'effective_from', 'effective_to', 'is_active',
+            'enable_auto_numbering', 'include_from_existing_series', 'is_active',
             'created_at', 'updated_at', 'created_by', 'updated_by'
         ]
         read_only_fields = ['id', 'tenant_id', 'created_at', 'updated_at']
@@ -53,8 +51,7 @@ class MasterVoucherReceiptsSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'tenant_id', 'voucher_name', 'prefix', 'suffix',
             'start_from', 'current_number', 'required_digits',
-            'enable_auto_numbering', 'include_from_existing_series',
-            'effective_from', 'effective_to', 'is_active',
+            'enable_auto_numbering', 'include_from_existing_series', 'is_active',
             'created_at', 'updated_at', 'created_by', 'updated_by'
         ]
         read_only_fields = ['id', 'tenant_id', 'created_at', 'updated_at']
@@ -68,8 +65,7 @@ class MasterVoucherPurchasesSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'tenant_id', 'voucher_name', 'prefix', 'suffix',
             'start_from', 'current_number', 'required_digits',
-            'enable_auto_numbering', 'include_from_existing_series',
-            'effective_from', 'effective_to', 'is_active',
+            'enable_auto_numbering', 'include_from_existing_series', 'is_active',
             'created_at', 'updated_at', 'created_by', 'updated_by'
         ]
         read_only_fields = ['id', 'tenant_id', 'created_at', 'updated_at']
@@ -83,8 +79,7 @@ class MasterVoucherDebitNoteSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'tenant_id', 'voucher_name', 'prefix', 'suffix',
             'start_from', 'current_number', 'required_digits',
-            'enable_auto_numbering', 'include_from_existing_series',
-            'effective_from', 'effective_to', 'is_active',
+            'enable_auto_numbering', 'include_from_existing_series', 'is_active',
             'created_at', 'updated_at', 'created_by', 'updated_by'
         ]
         read_only_fields = ['id', 'tenant_id', 'created_at', 'updated_at']
@@ -98,8 +93,7 @@ class MasterVoucherPaymentsSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'tenant_id', 'voucher_name', 'prefix', 'suffix',
             'start_from', 'current_number', 'required_digits',
-            'enable_auto_numbering', 'include_from_existing_series',
-            'effective_from', 'effective_to', 'is_active',
+            'enable_auto_numbering', 'include_from_existing_series', 'is_active',
             'created_at', 'updated_at', 'created_by', 'updated_by'
         ]
         read_only_fields = ['id', 'tenant_id', 'created_at', 'updated_at']
@@ -113,8 +107,7 @@ class MasterVoucherExpensesSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'tenant_id', 'voucher_name', 'prefix', 'suffix',
             'start_from', 'current_number', 'required_digits',
-            'enable_auto_numbering', 'include_from_existing_series',
-            'effective_from', 'effective_to', 'is_active',
+            'enable_auto_numbering', 'include_from_existing_series', 'is_active',
             'created_at', 'updated_at', 'created_by', 'updated_by'
         ]
         read_only_fields = ['id', 'tenant_id', 'created_at', 'updated_at']
@@ -128,8 +121,7 @@ class MasterVoucherJournalSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'tenant_id', 'voucher_name', 'prefix', 'suffix',
             'start_from', 'current_number', 'required_digits',
-            'enable_auto_numbering', 'include_from_existing_series',
-            'effective_from', 'effective_to', 'is_active',
+            'enable_auto_numbering', 'include_from_existing_series', 'is_active',
             'created_at', 'updated_at', 'created_by', 'updated_by'
         ]
         read_only_fields = ['id', 'tenant_id', 'created_at', 'updated_at']
@@ -143,8 +135,7 @@ class MasterVoucherContraSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'tenant_id', 'voucher_name', 'prefix', 'suffix',
             'start_from', 'current_number', 'required_digits',
-            'enable_auto_numbering', 'include_from_existing_series',
-            'effective_from', 'effective_to', 'is_active',
+            'enable_auto_numbering', 'include_from_existing_series', 'is_active',
             'created_at', 'updated_at', 'created_by', 'updated_by'
         ]
         read_only_fields = ['id', 'tenant_id', 'created_at', 'updated_at']

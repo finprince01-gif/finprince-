@@ -699,10 +699,7 @@ CREATE TABLE IF NOT EXISTS `master_voucher_sales` (
   `current_number` int DEFAULT 1 COMMENT 'Current number in sequence',
   `required_digits` int DEFAULT 4 COMMENT 'Number of digits for padding',
   `enable_auto_numbering` tinyint(1) DEFAULT 1 COMMENT 'Enable automatic numbering',
-  `update_customer_master` tinyint(1) DEFAULT 0 COMMENT 'Update customer master',
   `include_from_existing_series` varchar(200) DEFAULT NULL COMMENT 'Include from existing series (dropdown selection)',
-  `effective_from` date DEFAULT NULL COMMENT 'Effective from date',
-  `effective_to` date DEFAULT NULL COMMENT 'Effective to date',
   `is_active` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
@@ -727,8 +724,6 @@ CREATE TABLE IF NOT EXISTS `master_voucher_creditnote` (
   `required_digits` int DEFAULT 4 COMMENT 'Number of digits for padding',
   `enable_auto_numbering` tinyint(1) DEFAULT 1 COMMENT 'Enable automatic numbering',
   `include_from_existing_series` varchar(200) DEFAULT NULL COMMENT 'Include from existing series (dropdown selection)',
-  `effective_from` date DEFAULT NULL COMMENT 'Effective from date',
-  `effective_to` date DEFAULT NULL COMMENT 'Effective to date',
   `is_active` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
@@ -753,8 +748,6 @@ CREATE TABLE IF NOT EXISTS `master_voucher_receipts` (
   `required_digits` int DEFAULT 4 COMMENT 'Number of digits for padding',
   `enable_auto_numbering` tinyint(1) DEFAULT 1 COMMENT 'Enable automatic numbering',
   `include_from_existing_series` varchar(200) DEFAULT NULL COMMENT 'Include from existing series (dropdown selection)',
-  `effective_from` date DEFAULT NULL COMMENT 'Effective from date',
-  `effective_to` date DEFAULT NULL COMMENT 'Effective to date',
   `is_active` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
@@ -779,8 +772,6 @@ CREATE TABLE IF NOT EXISTS `master_voucher_purchases` (
   `required_digits` int DEFAULT 4 COMMENT 'Number of digits for padding',
   `enable_auto_numbering` tinyint(1) DEFAULT 1 COMMENT 'Enable automatic numbering',
   `include_from_existing_series` varchar(200) DEFAULT NULL COMMENT 'Include from existing series (dropdown selection)',
-  `effective_from` date DEFAULT NULL COMMENT 'Effective from date',
-  `effective_to` date DEFAULT NULL COMMENT 'Effective to date',
   `is_active` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
@@ -805,8 +796,6 @@ CREATE TABLE IF NOT EXISTS `master_voucher_debitnote` (
   `required_digits` int DEFAULT 4 COMMENT 'Number of digits for padding',
   `enable_auto_numbering` tinyint(1) DEFAULT 1 COMMENT 'Enable automatic numbering',
   `include_from_existing_series` varchar(200) DEFAULT NULL COMMENT 'Include from existing series (dropdown selection)',
-  `effective_from` date DEFAULT NULL COMMENT 'Effective from date',
-  `effective_to` date DEFAULT NULL COMMENT 'Effective to date',
   `is_active` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
@@ -831,8 +820,6 @@ CREATE TABLE IF NOT EXISTS `master_voucher_payments` (
   `required_digits` int DEFAULT 4 COMMENT 'Number of digits for padding',
   `enable_auto_numbering` tinyint(1) DEFAULT 1 COMMENT 'Enable automatic numbering',
   `include_from_existing_series` varchar(200) DEFAULT NULL COMMENT 'Include from existing series (dropdown selection)',
-  `effective_from` date DEFAULT NULL COMMENT 'Effective from date',
-  `effective_to` date DEFAULT NULL COMMENT 'Effective to date',
   `is_active` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
@@ -857,8 +844,6 @@ CREATE TABLE IF NOT EXISTS `master_voucher_expenses` (
   `required_digits` int DEFAULT 4 COMMENT 'Number of digits for padding',
   `enable_auto_numbering` tinyint(1) DEFAULT 1 COMMENT 'Enable automatic numbering',
   `include_from_existing_series` varchar(200) DEFAULT NULL COMMENT 'Include from existing series (dropdown selection)',
-  `effective_from` date DEFAULT NULL COMMENT 'Effective from date',
-  `effective_to` date DEFAULT NULL COMMENT 'Effective to date',
   `is_active` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
@@ -883,8 +868,6 @@ CREATE TABLE IF NOT EXISTS `master_voucher_journal` (
   `required_digits` int DEFAULT 4 COMMENT 'Number of digits for padding',
   `enable_auto_numbering` tinyint(1) DEFAULT 1 COMMENT 'Enable automatic numbering',
   `include_from_existing_series` varchar(200) DEFAULT NULL COMMENT 'Include from existing series (dropdown selection)',
-  `effective_from` date DEFAULT NULL COMMENT 'Effective from date',
-  `effective_to` date DEFAULT NULL COMMENT 'Effective to date',
   `is_active` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
@@ -909,8 +892,6 @@ CREATE TABLE IF NOT EXISTS `master_voucher_contra` (
   `required_digits` int DEFAULT 4 COMMENT 'Number of digits for padding',
   `enable_auto_numbering` tinyint(1) DEFAULT 1 COMMENT 'Enable automatic numbering',
   `include_from_existing_series` varchar(200) DEFAULT NULL COMMENT 'Include from existing series (dropdown selection)',
-  `effective_from` date DEFAULT NULL COMMENT 'Effective from date',
-  `effective_to` date DEFAULT NULL COMMENT 'Effective to date',
   `is_active` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
@@ -2316,35 +2297,9 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_outward` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
--- 9. (LEGACY) GRN 
--- Kept for backward compatibility if needed, using JSON items now
-
-CREATE TABLE IF NOT EXISTS `inventory_operation_grn` (
-  `id` BIGINT NOT NULL AUTO_INCREMENT,
-  `tenant_id` VARCHAR(36) NOT NULL,
-  `created_at` DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
-  `updated_at` DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-  `grn_no` VARCHAR(100) NOT NULL COMMENT 'GRN number',
-  `date` DATE NULL,
-  `time` TIME NULL,
-  `grn_type` VARCHAR(50) NOT NULL DEFAULT 'purchase' COMMENT 'purchase or sales_return',
-  `location_id` BIGINT NULL COMMENT 'Foreign key to inventory_master_location',
-  `purchase_order_no` VARCHAR(100) NULL,
-  `vendor_name` VARCHAR(255) NULL,
-  `supplier_invoice_no` VARCHAR(100) NULL,
-  `customer_name` VARCHAR(255) NULL,
-  `sales_invoice_no` VARCHAR(100) NULL,
-  `branch` VARCHAR(100) NULL,
-  `address` TEXT NULL,
-  `gstin` VARCHAR(20) NULL,
-  `total_boxes` VARCHAR(50) NULL,
-  `posting_note` TEXT NULL,
-  `items` JSON DEFAULT NULL COMMENT 'List of items',
-  PRIMARY KEY (`id`),
-  KEY `idx_iog_tenant` (`tenant_id`),
-  KEY `idx_iog_grn_no` (`grn_no`),
-  KEY `idx_iog_location` (`location_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+-- 9. (LEGACY) GRN - REMOVED
+-- This table has been deprecated and replaced by inventory_operation_new_grn
+-- The old table used location as ForeignKey, the new table uses location_id as BigInt
 
 -- ============================================================================
 -- RBAC (Role-Based Access Control) Tables
@@ -2373,7 +2328,6 @@ CREATE TABLE `rbac_roles` (
 COMMENT='Role definitions with hierarchical permissions for RBAC';
 
 -- Table: rbac_user_roles
-
 CREATE TABLE `rbac_user_roles` (
   `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
   `tenant_id` VARCHAR(36) NOT NULL,
