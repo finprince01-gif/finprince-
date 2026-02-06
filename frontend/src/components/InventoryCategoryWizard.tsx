@@ -292,13 +292,13 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
         e.preventDefault();
 
         if (!selectedNode) {
-            alert('Please select a category.');
+            alert('Please select a category or group.');
             return;
         }
 
-        // Validation: At least one field (group or subgroup) must be filled
-        if (selectedNode.level === 0 && !formData.group.trim() && !formData.subgroup.trim()) {
-            alert('Please enter either a Group Name or Subgroup Name (or both)');
+        // Only allow creating subgroups under existing groups
+        if (selectedNode.level === 0) {
+            alert('Please select a group from the tree to create a subgroup.');
             return;
         }
 
@@ -309,16 +309,8 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
         }
 
         try {
-            // Scenario 1: Selected Root (Category) -> Create Group and/or Subgroup
-            if (selectedNode.level === 0) {
-                await onCreateCategory({
-                    category: selectedNode.data.category,
-                    group: formData.group.trim() || null,
-                    subgroup: formData.subgroup.trim() || null
-                });
-            }
-            // Scenario 2: Selected Group -> Create Subgroup
-            else if (selectedNode.level === 1) {
+            // Only Scenario: Selected Group -> Create Subgroup
+            if (selectedNode.level === 1) {
                 await onCreateCategory({
                     category: selectedNode.data.category,
                     group: selectedNode.data.group,
@@ -446,52 +438,46 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                                 </div>
 
                                 {/* 2. Group Input/Display */}
-                                {(allowCreateGroup || (selectedNode && selectedNode.level >= 1)) && (
+                                {selectedNode && (
                                     <div>
                                         <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
                                             GROUP
                                         </label>
 
-                                        {selectedNode && selectedNode.level === 0 ? (
-                                            // If Root selected, allow typing Group
-                                            <input
-                                                type="text"
-                                                name="group"
-                                                value={formData.group}
-                                                onChange={handleInputChange}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder-gray-400 bg-white text-gray-800 text-sm"
-                                                placeholder="Enter Group Name"
-                                                autoFocus
-                                            />
-                                        ) : selectedNode && selectedNode.level === 1 && selectedNode.data.group && !selectedNode.data.subgroup ? (
-                                            // If GROUP (not subgroup) selected at level 1, display it
+                                        {selectedNode.level === 0 ? (
+                                            // If Root (Category) selected, show placeholder to select a group from tree
+                                            <div className="text-gray-400 font-normal text-sm italic">
+                                                Select a group from the left
+                                            </div>
+                                        ) : selectedNode.level === 1 && selectedNode.data.group && !selectedNode.data.subgroup ? (
+                                            // If GROUP selected at level 1, display it
                                             <div className="text-gray-900 font-semibold text-base">
                                                 {selectedNode.name}
                                             </div>
+                                        ) : selectedNode.level === 2 && selectedNode.data.group ? (
+                                            // If SUBGROUP selected, show the parent group
+                                            <div className="text-gray-900 font-semibold text-base">
+                                                {selectedNode.data.group}
+                                            </div>
                                         ) : (
-                                            <input
-                                                type="text"
-                                                value={formData.group}
-                                                disabled
-                                                className="w-full px-3 py-2 border border-gray-300 rounded bg-gray-50 text-gray-400 text-sm cursor-not-allowed"
-                                                placeholder="Enter Group Name"
-                                                readOnly
-                                            />
+                                            <div className="text-gray-400 font-normal text-sm italic">
+                                                Select a group from the left
+                                            </div>
                                         )}
                                     </div>
                                 )}
 
                                 {/* 3. Subgroup Input */}
-                                {(allowCreateGroup || (selectedNode && selectedNode.level >= 1)) && (
+                                {selectedNode && selectedNode.level >= 1 && (
                                     <div>
                                         <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
                                             SUBGROUP
                                         </label>
-                                        {selectedNode && selectedNode.level === 1 && !selectedNode.data.group && selectedNode.data.subgroup ? (
+                                        {selectedNode.level === 1 && !selectedNode.data.group && selectedNode.data.subgroup ? (
                                             <div className="text-gray-900 font-semibold text-base">
                                                 {selectedNode.name}
                                             </div>
-                                        ) : selectedNode && selectedNode.level === 2 ? (
+                                        ) : selectedNode.level === 2 ? (
                                             <div className="text-gray-900 font-semibold text-base">
                                                 {selectedNode.name}
                                             </div>
@@ -516,15 +502,13 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                             <div className="pt-4">
                                 <button
                                     type="submit"
-                                    disabled={!selectedNode}
-                                    className={`w-full py-2.5 px-4 rounded font-medium shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm ${selectedNode && formData.subgroup.trim()
-                                            ? 'bg-blue-600 text-white hover:bg-blue-700 cursor-pointer focus:ring-blue-500'
-                                            : selectedNode
-                                                ? 'bg-gray-300 text-gray-700 hover:bg-gray-400 cursor-pointer focus:ring-gray-400'
-                                                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                    disabled={!selectedNode || selectedNode.level !== 1 || !formData.subgroup.trim()}
+                                    className={`w-full py-2.5 px-4 rounded font-medium shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm ${selectedNode && selectedNode.level === 1 && formData.subgroup.trim()
+                                        ? 'bg-blue-600 text-white hover:bg-blue-700 cursor-pointer focus:ring-blue-500'
+                                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                                         }`}
                                 >
-                                    Create Category
+                                    Create Subgroup
                                 </button>
                             </div>
                         </form>

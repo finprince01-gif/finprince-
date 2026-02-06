@@ -3808,7 +3808,7 @@ const InventoryPage: React.FC = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
                   <CategoryHierarchicalDropdown
-                    onlyRoots={true}
+                    onlyRoots={false}
                     onSelect={async (selection) => {
                       handleFormChange('category', selection.id);
                       handleFormChange('categoryPath', selection.fullPath);
