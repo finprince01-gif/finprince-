@@ -234,14 +234,14 @@ export default function GSTR1Page() {
                     </div>
                     <button
                         onClick={fetchData}
-                        className="mt-7 px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2"
+                        className="mt-7 px-6 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 flex items-center gap-2"
                         disabled={isLoading}
                     >
                         {isLoading ? 'Generating...' : 'Generate Return'}
                     </button>
                     <button
                         onClick={handleDownloadExcel}
-                        className="mt-7 px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-2"
+                        className="mt-7 px-6 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 flex items-center gap-2"
                         disabled={isLoading}
                     >
                         Download Excel
@@ -280,7 +280,7 @@ export default function GSTR1Page() {
                     {/* Loading State */}
                     {isLoading && (
                         <div className="flex justify-center py-8">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
                         </div>
                     )}
 
@@ -1315,3 +1315,4 @@ export default function GSTR1Page() {
         </div>
     );
 }
+

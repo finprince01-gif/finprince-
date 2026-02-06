@@ -205,7 +205,7 @@ export const PaymentVoucherEntry: React.FC<PaymentVoucherEntryProps> = ({ onCanc
                         <Icon name="upload" size={16} />
                         Mass Upload
                     </button>
-                    <button className="px-4 py-2 text-sm bg-orange-500 text-white rounded hover:bg-orange-600 flex items-center gap-2">
+                    <button className="px-4 py-2 text-sm bg-teal-500 text-white rounded hover:bg-teal-600 flex items-center gap-2">
                         <Icon name="download" size={16} />
                         Import Vouchers
                     </button>
@@ -214,7 +214,7 @@ export const PaymentVoucherEntry: React.FC<PaymentVoucherEntryProps> = ({ onCanc
 
             {/* Voucher Type Tabs */}
             <div className="flex gap-2 mb-6 border-b border-gray-200">
-                <button className="px-6 py-2 bg-orange-500 text-white rounded-t font-medium">
+                <button className="px-6 py-2 bg-teal-500 text-white rounded-t font-medium">
                     Payment Voucher - Single
                 </button>
                 <button className="px-6 py-2 text-gray-600 hover:bg-gray-100 rounded-t">
@@ -231,7 +231,7 @@ export const PaymentVoucherEntry: React.FC<PaymentVoucherEntryProps> = ({ onCanc
                         type="date"
                         value={date}
                         onChange={(e) => setDate(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-teal-500"
                     />
                 </div>
 
@@ -266,7 +266,7 @@ export const PaymentVoucherEntry: React.FC<PaymentVoucherEntryProps> = ({ onCanc
                     <select
                         value={payFromLedger || ''}
                         onChange={(e) => setPayFromLedger(Number(e.target.value))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-teal-500"
                     >
                         <option value="">Select Pay from</option>
                         {payFromLedgers.map(ledger => (
@@ -283,7 +283,7 @@ export const PaymentVoucherEntry: React.FC<PaymentVoucherEntryProps> = ({ onCanc
                         <span>Pay to</span>
                         <button
                             onClick={() => setIsAdvanceMode(!isAdvanceMode)}
-                            className={`px-3 py-1 text-xs rounded ${isAdvanceMode ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'}`}
+                            className={`px-3 py-1 text-xs rounded ${isAdvanceMode ? 'bg-teal-500 text-white' : 'bg-gray-200 text-gray-700'}`}
                         >
                             Advance
                         </button>
@@ -291,7 +291,7 @@ export const PaymentVoucherEntry: React.FC<PaymentVoucherEntryProps> = ({ onCanc
                     <select
                         value={payToLedger || ''}
                         onChange={(e) => setPayToLedger(Number(e.target.value))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-teal-500"
                     >
                         <option value="">Select Pay to</option>
                         {allLedgers.map(ledger => (
@@ -319,7 +319,7 @@ export const PaymentVoucherEntry: React.FC<PaymentVoucherEntryProps> = ({ onCanc
                                         value={advanceReference}
                                         onChange={(e) => setAdvanceReference(e.target.value)}
                                         placeholder="Enter reference number"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-teal-500"
                                     />
                                 </div>
                                 <div>
@@ -329,7 +329,7 @@ export const PaymentVoucherEntry: React.FC<PaymentVoucherEntryProps> = ({ onCanc
                                         value={advanceAmount}
                                         onChange={(e) => setAdvanceAmount(Number(e.target.value))}
                                         placeholder="0"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-teal-500"
                                     />
                                 </div>
                             </div>
@@ -371,13 +371,13 @@ export const PaymentVoucherEntry: React.FC<PaymentVoucherEntryProps> = ({ onCanc
                                                     value={transaction.payment || ''}
                                                     onChange={(e) => updatePayment(transaction.id, Number(e.target.value))}
                                                     placeholder="0"
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-right focus:outline-none focus:ring-2 focus:ring-teal-500"
                                                 />
                                             </td>
                                             <td className="px-4 py-3 text-center">
                                                 <button
                                                     onClick={() => handlePayClick(transaction.id)}
-                                                    className="px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
+                                                    className="px-3 py-1 bg-teal-500 text-white text-xs rounded hover:bg-teal-600"
                                                 >
                                                     Pay
                                                 </button>
@@ -399,12 +399,12 @@ export const PaymentVoucherEntry: React.FC<PaymentVoucherEntryProps> = ({ onCanc
                     onChange={(e) => setPostingNote(e.target.value)}
                     placeholder="Enter posting note..."
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
             </div>
 
             {/* Total and Balances */}
-            <div className="grid grid-cols-2 gap-6 mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="grid grid-cols-2 gap-6 mb-6 p-4 bg-teal-50 rounded-lg border border-teal-200">
                 <div>
                     <div className="flex items-center gap-2 mb-2">
                         <input type="radio" checked readOnly className="text-red-500" />
@@ -428,7 +428,7 @@ export const PaymentVoucherEntry: React.FC<PaymentVoucherEntryProps> = ({ onCanc
             <div className="mb-6 p-4 bg-gray-100 rounded-lg">
                 <div className="flex items-center justify-between">
                     <span className="text-lg font-semibold text-gray-800">Total Payments:</span>
-                    <span className="text-2xl font-bold text-blue-600">₹{totalPayments.toFixed(2)}</span>
+                    <span className="text-2xl font-bold text-teal-600">₹{totalPayments.toFixed(2)}</span>
                 </div>
             </div>
 
@@ -443,7 +443,7 @@ export const PaymentVoucherEntry: React.FC<PaymentVoucherEntryProps> = ({ onCanc
                 <button
                     onClick={handlePost}
                     disabled={!payFromLedger || !payToLedger || totalPayments === 0}
-                    className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-medium disabled:bg-gray-300 disabled:cursor-not-allowed"
+                    className="px-6 py-2 bg-teal-600 text-white rounded hover:bg-teal-700 font-medium disabled:bg-gray-300 disabled:cursor-not-allowed"
                 >
                     Post Payment
                 </button>
@@ -451,3 +451,4 @@ export const PaymentVoucherEntry: React.FC<PaymentVoucherEntryProps> = ({ onCanc
         </div>
     );
 };
+

@@ -140,7 +140,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === tab
-                ? 'border-orange-600 text-orange-700'
+                ? 'border-teal-600 text-teal-700'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
             >
@@ -170,7 +170,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                     onChange={handleChange}
                     disabled={!isEditMode}
                     className={`w-full px-4 py-3 border rounded-lg transition-colors ${isEditMode
-                      ? 'border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500'
+                      ? 'border-gray-300 focus:ring-2 focus:ring-teal-500 focus:border-teal-500'
                       : 'border-gray-200 bg-gray-50 text-gray-700 cursor-not-allowed'
                       }`}
                   />
@@ -184,7 +184,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                     onChange={handleFileChange}
                     disabled={!isEditMode}
                     accept="image/*"
-                    className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"
+                    className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100"
                   />
                 </div>
                 <div className="md:col-span-2">
@@ -196,7 +196,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                     rows={4}
                     value={details.address || ''}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors resize-none"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors resize-none"
                     placeholder="Enter company address"
                   />
                 </div>
@@ -220,7 +220,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                     onChange={handleChange}
                     disabled={!isEditMode}
                     className={`w-full px-4 py-3 border rounded-lg transition-colors ${isEditMode
-                      ? 'border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500'
+                      ? 'border-gray-300 focus:ring-2 focus:ring-teal-500 focus:border-teal-500'
                       : 'border-gray-200 bg-gray-50 text-gray-700 cursor-not-allowed'
                       }`}
                     placeholder="company@example.com"
@@ -235,7 +235,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                     name="phone"
                     value={details.phone || ''}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors"
                     placeholder="+91 9876543210"
                   />
                 </div>
@@ -248,7 +248,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                     name="website"
                     value={details.website || ''}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors"
                     placeholder="https://www.company.com"
                   />
                 </div>
@@ -270,7 +270,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                     name="gstin"
                     value={details.gstin || ''}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors"
                     placeholder="22AAAAA0000A1Z5"
                   />
                 </div>
@@ -282,7 +282,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                     name="state"
                     value={details.state || ''}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors bg-white"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors bg-white"
                   >
                     <option value="">Select State</option>
                     {indianStates.map(state => (
@@ -299,7 +299,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                     name="pan"
                     value={details.pan || ''}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors"
                     placeholder="AAAAA0000A"
                   />
                 </div>
@@ -312,7 +312,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                     name="cin"
                     value={details.cin || ''}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors"
                     placeholder="U12345MH2020PLC123456"
                   />
                 </div>
@@ -326,7 +326,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
           <div className="mt-10 pt-6 border-t border-gray-200">
             <div className="flex justify-end gap-3">
               {isSaved && (
-                <div className="mr-4 flex items-center text-sm text-green-600">
+                <div className="mr-4 flex items-center text-sm text-teal-600">
                   <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                   </svg>
@@ -340,7 +340,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                 disabled={isEditMode}
                 className={`px-6 py-3 font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors shadow-sm ${isEditMode
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-green-600 text-white hover:bg-green-700 focus:ring-green-500'
+                  : 'bg-teal-600 text-white hover:bg-teal-700 focus:ring-teal-500'
                   }`}
               >
                 Edit Settings
@@ -349,7 +349,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
               <button
                 type="submit"
                 onClick={handleSubmit}
-                className="px-6 py-3 bg-orange-600 text-white font-medium rounded-lg hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-colors shadow-sm"
+                className="px-6 py-3 bg-teal-600 text-white font-medium rounded-lg hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-colors shadow-sm"
               >
                 Save
               </button>
@@ -386,3 +386,4 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
 };
 
 export default SettingsPage;
+

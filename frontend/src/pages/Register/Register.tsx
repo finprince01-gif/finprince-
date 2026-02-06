@@ -196,11 +196,11 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
     return (
       <div
         onClick={() => setSelectedPlan(name)}
-        className={`relative p-6 bg-white border border-gray-200 rounded-lg shadow-sm cursor-pointer transition-all duration-300 hover:shadow-md ${isSelected ? 'border-orange-500 ring-2 ring-orange-200' : 'hover:border-gray-300'
+        className={`relative p-6 bg-white border border-gray-200 rounded-lg shadow-sm cursor-pointer transition-all duration-300 hover:shadow-md ${isSelected ? 'border-teal-500 ring-2 ring-teal-200' : 'hover:border-gray-300'
           }`}
       >
         {popular && (
-          <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 px-3 py-1 text-xs font-semibold text-white bg-orange-500 rounded-full">
+          <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 px-3 py-1 text-xs font-semibold text-white bg-teal-500 rounded-full">
             Most Popular
           </div>
         )}
@@ -214,7 +214,7 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
         <ul className="mt-6 space-y-3">
           {features.map((feature, index) => (
             <li key={index} className="flex items-center">
-              <svg className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <svg className="w-5 h-5 text-teal-500 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path
                   fillRule="evenodd"
                   d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
@@ -227,7 +227,7 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
         </ul>
         <button
           type="button"
-          className={`mt-6 w-full py-3 px-4 rounded-md font-semibold text-sm transition-colors duration-200 ${isSelected ? 'bg-orange-600 text-white hover:bg-orange-700' : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
+          className={`mt-6 w-full py-3 px-4 rounded-md font-semibold text-sm transition-colors duration-200 ${isSelected ? 'bg-teal-600 text-white hover:bg-teal-700' : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
             }`}
         >
           {isSelected ? 'Selected' : 'Choose Plan'}
@@ -243,7 +243,7 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
         {onBack && (
           <div className="absolute left-4 bottom-4">
             <button
-              className="bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2 px-4 rounded"
+              className="bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2 px-4 rounded"
               onClick={onBack}
             >
               Back
@@ -254,7 +254,7 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
         {/* Header */}
         <div className="bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 w-full text-center">
           <div className="max-w-md mx-auto">
-            <h1 className="text-4xl font-bold text-orange-600 mb-2">AI-Accounting</h1>
+            <h1 className="text-4xl font-bold text-teal-600 mb-2">AI-Accounting</h1>
             <h2 className="text-2xl font-semibold text-gray-900 mb-2">Registration - Step 1/2</h2>
             <p className="text-gray-600">Enter your business details</p>
           </div>
@@ -265,28 +265,28 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
             <form onSubmit={handleNext} className="space-y-6">
               <div>
                 <label htmlFor="companyName" className="block text-sm font-medium text-gray-700 mb-2">Company Name</label>
-                <input id="companyName" name="companyName" type="text" required className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500" placeholder="Your Company Inc." value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
+                <input id="companyName" name="companyName" type="text" required className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Your Company Inc." value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
               </div>
 
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
-                <input id="email" name="email" type="email" autoComplete="email" required className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+                <input id="email" name="email" type="email" autoComplete="email" required className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
               </div>
 
               <div>
                 <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
-                <input id="phone" name="phone" type="tel" required className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500" placeholder="+1234567890" value={phone} onChange={(e) => setPhone(e.target.value)} />
+                <input id="phone" name="phone" type="tel" required className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="+1234567890" value={phone} onChange={(e) => setPhone(e.target.value)} />
               </div>
 
               <div>
                 <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">Username</label>
-                <input id="username" name="username" type="text" required className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500" placeholder="Choose a username" value={username} onChange={(e) => setUsername(e.target.value)} />
+                <input id="username" name="username" type="text" required className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Choose a username" value={username} onChange={(e) => setUsername(e.target.value)} />
               </div>
 
               <div>
                 <label htmlFor="password" title="Password must be at least 8 characters long" className="block text-sm font-medium text-gray-700 mb-2">Password</label>
                 <div className="relative">
-                  <input id="password" name="password" type={showPassword ? 'text' : 'password'} required className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
+                  <input id="password" name="password" type={showPassword ? 'text' : 'password'} required className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
                   <button type="button" className="absolute inset-y-0 right-0 pr-3 flex items-center" onClick={() => setShowPassword(!showPassword)}>
                     {showPassword ? (
                       <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" /></svg>
@@ -300,7 +300,7 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
               <div>
                 <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">Confirm Password</label>
                 <div className="relative">
-                  <input id="confirmPassword" name="confirmPassword" type={showConfirmPassword ? 'text' : 'password'} required className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500" placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+                  <input id="confirmPassword" name="confirmPassword" type={showConfirmPassword ? 'text' : 'password'} required className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
                   <button type="button" className="absolute inset-y-0 right-0 pr-3 flex items-center" onClick={() => setShowConfirmPassword(!showConfirmPassword)}>
                     {showConfirmPassword ? (
                       <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" /></svg>
@@ -319,21 +319,21 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
                       <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                     <div className="flex text-sm text-gray-600">
-                      <label htmlFor="logo-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-orange-600 hover:text-orange-500">
+                      <label htmlFor="logo-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-teal-600 hover:text-teal-500">
                         <span>Upload a file</span>
                         <input id="logo-upload" name="logo-upload" type="file" className="sr-only" accept="image/*" onChange={handleLogoUpload} />
                       </label>
                     </div>
-                    {logoFile && <p className="text-sm text-green-600">Selected: {logoFile.name}</p>}
+                    {logoFile && <p className="text-sm text-teal-600">Selected: {logoFile.name}</p>}
                   </div>
                 </div>
               </div>
 
               {error && <p className="text-sm text-red-600 text-center">{error}</p>}
-              <button type="submit" className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-lg font-medium text-white bg-orange-600 hover:bg-orange-700">Next Step →</button>
+              <button type="submit" className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-lg font-medium text-white bg-teal-600 hover:bg-teal-700">Next Step →</button>
             </form>
             <div className="mt-6 text-center">
-              <p className="text-sm text-gray-600">Already have an account? <button onClick={onSwitchToLogin} className="font-medium text-orange-600 hover:text-orange-500">Sign In</button></p>
+              <p className="text-sm text-gray-600">Already have an account? <button onClick={onSwitchToLogin} className="font-medium text-teal-600 hover:text-teal-500">Sign In</button></p>
             </div>
           </div>
         </div>
@@ -350,7 +350,7 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
         </div>
 
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-orange-600 mb-2">Final Step</h1>
+          <h1 className="text-4xl font-bold text-teal-600 mb-2">Final Step</h1>
           <h2 className="text-3xl font-bold text-gray-900 mb-4">Choose Your Plan</h2>
           <p className="text-gray-600">Select the plan that fits your business</p>
         </div>
@@ -363,11 +363,11 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
 
         <div className="max-w-md w-full px-4 text-center">
           {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
-          {successMessage && <p className="text-sm text-green-600 mb-4">{successMessage}</p>}
+          {successMessage && <p className="text-sm text-teal-600 mb-4">{successMessage}</p>}
           <button
             onClick={handleRegister}
             disabled={loading}
-            className="w-full py-4 px-6 border border-transparent rounded-lg shadow-xl text-xl font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transition-all disabled:opacity-50"
+            className="w-full py-4 px-6 border border-transparent rounded-lg shadow-xl text-xl font-bold text-white bg-gradient-to-r from-teal-600 to-teal-800 hover:from-teal-700 hover:to-teal-900 transition-all disabled:opacity-50"
           >
             {loading ? 'Creating Account...' : 'Complete Registration →'}
           </button>
@@ -380,3 +380,4 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
 };
 
 export default SignupPage;
+

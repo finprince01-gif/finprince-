@@ -306,6 +306,7 @@ export interface ExtractedLineItem {
   hsnCode: string;
   quantity: number;
   rate: number;
+  amount: number;
 }
 
 export interface ExtractedInvoiceData {
@@ -316,6 +317,7 @@ export interface ExtractedInvoiceData {
   subtotal: number;
   cgstAmount: number;
   sgstAmount: number;
+  igstAmount: number;
   totalAmount: number;
   lineItems: ExtractedLineItem[];
 }

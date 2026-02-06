@@ -103,7 +103,7 @@ const CustomerPortalPage: React.FC = () => {
                             key={tab}
                             onClick={() => setActiveTab(tab as MainTab)}
                             className={`py-2 px-1 text-sm font-medium transition-colors border-b-2 ${activeTab === tab
-                                ? 'border-blue-600 text-blue-600'
+                                ? 'border-teal-600 text-teal-600'
                                 : 'border-transparent text-gray-500 hover:text-gray-700'
                                 }`}
                         >
@@ -185,7 +185,7 @@ const CustomerPortalPage: React.FC = () => {
                                         <div className="flex justify-between items-center mb-6">
                                             <h3 className="text-lg font-medium text-gray-900">Sales Order</h3>
                                             <button
-                                                className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition-colors"
+                                                className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition-colors"
                                                 onClick={() => setShowCreateOrder(true)}
                                             >
                                                 Create Sales Order
@@ -264,8 +264,8 @@ const CustomerPortalPage: React.FC = () => {
                                                                     </span>
                                                                 </td>
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-3">
-                                                                    <button className="text-indigo-600 hover:text-indigo-900">View</button>
-                                                                    <button className="text-blue-600 hover:text-blue-900">Edit</button>
+                                                                    <button className="text-teal-600 hover:text-indigo-900">View</button>
+                                                                    <button className="text-teal-600 hover:text-teal-900">Edit</button>
                                                                     <button className="text-red-600 hover:text-red-900">Cancel</button>
                                                                 </td>
                                                             </tr>
@@ -292,7 +292,7 @@ const CustomerPortalPage: React.FC = () => {
                                                                     </span>
                                                                 </td>
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-3">
-                                                                    <button className="text-indigo-600 hover:text-indigo-900">View</button>
+                                                                    <button className="text-teal-600 hover:text-indigo-900">View</button>
                                                                     <button className="text-gray-400 cursor-not-allowed" disabled>Edit</button>
                                                                     <button className="text-gray-400 cursor-not-allowed" disabled>Cancel</button>
                                                                 </td>
@@ -357,7 +357,7 @@ const CustomerPortalPage: React.FC = () => {
                                                                     ₹78,500.00
                                                                 </td>
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                                                    <button className="text-indigo-600 hover:text-indigo-900">View</button>
+                                                                    <button className="text-teal-600 hover:text-indigo-900">View</button>
                                                                 </td>
                                                             </tr>
                                                             {/* Empty State */}
@@ -959,7 +959,7 @@ const CustomerContent: React.FC = () => {
                     <>
                         <button
                             onClick={() => setView('list')}
-                            className="flex items-center gap-2 text-sm text-gray-600 hover:text-indigo-600 mb-4 transition-colors"
+                            className="flex items-center gap-2 text-sm text-gray-600 hover:text-teal-600 mb-4 transition-colors"
                         >
                             <ChevronLeft className="w-4 h-4" />
                             Back to Customer List
@@ -998,7 +998,7 @@ const CustomerContent: React.FC = () => {
                         <div className="mb-6">
                             <button
                                 onClick={() => setActiveTab('')}
-                                className="flex items-center gap-2 text-sm text-gray-600 hover:text-indigo-600 mb-4 transition-colors"
+                                className="flex items-center gap-2 text-sm text-gray-600 hover:text-teal-600 mb-4 transition-colors"
                             >
                                 <ChevronLeft className="w-4 h-4" />
                                 Back to overview
@@ -1101,7 +1101,7 @@ const CustomerContent: React.FC = () => {
                                             name="isVendor"
                                             checked={isVendor}
                                             onChange={() => handleVendorRadioChange(true)}
-                                            className="text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                                            className="text-teal-600 focus:ring-indigo-500 w-4 h-4"
                                         />
                                         <span className="text-sm text-gray-700">Yes</span>
                                     </label>
@@ -1111,7 +1111,7 @@ const CustomerContent: React.FC = () => {
                                             name="isVendor"
                                             checked={!isVendor}
                                             onChange={() => handleVendorRadioChange(false)}
-                                            className="text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                                            className="text-teal-600 focus:ring-indigo-500 w-4 h-4"
                                         />
                                         <span className="text-sm text-gray-700">No</span>
                                     </label>
@@ -1121,8 +1121,8 @@ const CustomerContent: React.FC = () => {
                                 {isVendor && (
                                     <div className="pl-4 border-l-2 border-indigo-200 space-y-4">
                                         {vendorSearchStatus === 'searching' && (
-                                            <div className="flex items-center text-indigo-600 text-sm">
-                                                <svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <div className="flex items-center text-teal-600 text-sm">
+                                                <svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-teal-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                                 </svg>
@@ -1133,18 +1133,18 @@ const CustomerContent: React.FC = () => {
                                         {vendorSearchStatus === 'found' && (
                                             <div className="space-y-3 animate-fadeIn">
                                                 <p className="text-sm font-semibold text-gray-800">
-                                                    <span className="text-indigo-600">✓</span> Vendor found matching PAN/Name.
+                                                    <span className="text-teal-600">✓</span> Vendor found matching PAN/Name.
                                                 </p>
 
                                                 <div className="flex items-center gap-4">
                                                     <label className="text-sm text-gray-700">Link the customer to this vendor?</label>
                                                     <div className="flex gap-4">
                                                         <label className="flex items-center gap-1 cursor-pointer">
-                                                            <input type="radio" name="linkVendor" checked={linkVendor === true} onChange={() => setLinkVendor(true)} className="text-indigo-600 w-4 h-4" />
+                                                            <input type="radio" name="linkVendor" checked={linkVendor === true} onChange={() => setLinkVendor(true)} className="text-teal-600 w-4 h-4" />
                                                             <span className="text-sm">Yes</span>
                                                         </label>
                                                         <label className="flex items-center gap-1 cursor-pointer">
-                                                            <input type="radio" name="linkVendor" checked={linkVendor === false} onChange={() => setLinkVendor(false)} className="text-indigo-600 w-4 h-4" />
+                                                            <input type="radio" name="linkVendor" checked={linkVendor === false} onChange={() => setLinkVendor(false)} className="text-teal-600 w-4 h-4" />
                                                             <span className="text-sm">No</span>
                                                         </label>
                                                     </div>
@@ -1167,11 +1167,11 @@ const CustomerContent: React.FC = () => {
                                                     <label className="text-sm text-gray-700">Create a Vendor?</label>
                                                     <div className="flex gap-4">
                                                         <label className="flex items-center gap-1 cursor-pointer">
-                                                            <input type="radio" name="createVendor" checked={createVendor === true} onChange={() => setCreateVendor(true)} className="text-indigo-600 w-4 h-4" />
+                                                            <input type="radio" name="createVendor" checked={createVendor === true} onChange={() => setCreateVendor(true)} className="text-teal-600 w-4 h-4" />
                                                             <span className="text-sm">Yes</span>
                                                         </label>
                                                         <label className="flex items-center gap-1 cursor-pointer">
-                                                            <input type="radio" name="createVendor" checked={createVendor === false} onChange={() => setCreateVendor(false)} className="text-indigo-600 w-4 h-4" />
+                                                            <input type="radio" name="createVendor" checked={createVendor === false} onChange={() => setCreateVendor(false)} className="text-teal-600 w-4 h-4" />
                                                             <span className="text-sm">No</span>
                                                         </label>
                                                     </div>
@@ -1186,11 +1186,11 @@ const CustomerContent: React.FC = () => {
                                 <label className="block text-sm font-semibold text-gray-700 mb-3">TDS Applicable under GST?</label>
                                 <div className="flex gap-6">
                                     <label className="flex items-center gap-2 cursor-pointer">
-                                        <input type="radio" name="tds" className="text-indigo-600 focus:ring-indigo-500 w-4 h-4" />
+                                        <input type="radio" name="tds" className="text-teal-600 focus:ring-indigo-500 w-4 h-4" />
                                         <span className="text-sm text-gray-700">Yes</span>
                                     </label>
                                     <label className="flex items-center gap-2 cursor-pointer">
-                                        <input type="radio" name="tds" defaultChecked className="text-indigo-600 focus:ring-indigo-500 w-4 h-4" />
+                                        <input type="radio" name="tds" defaultChecked className="text-teal-600 focus:ring-indigo-500 w-4 h-4" />
                                         <span className="text-sm text-gray-700">No</span>
                                     </label>
                                 </div>
@@ -1211,7 +1211,7 @@ const CustomerContent: React.FC = () => {
                                 <button onClick={() => setView('list')} className="px-6 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
                                 <button
                                     onClick={() => setActiveTab('GST Details')}
-                                    className="px-6 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
+                                    className="px-6 py-2 bg-teal-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
                                 >
                                     Next
                                 </button>
@@ -1229,7 +1229,7 @@ const CustomerContent: React.FC = () => {
                                     type="checkbox"
                                     checked={isUnregistered}
                                     onChange={(e) => setIsUnregistered(e.target.checked)}
-                                    className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                                    className="w-4 h-4 text-teal-600 rounded focus:ring-indigo-500"
                                 />
                                 <span className="text-sm font-medium text-gray-700">Customer is Unregistered</span>
                             </label>
@@ -1257,9 +1257,9 @@ const CustomerContent: React.FC = () => {
                                                 type="text"
                                                 value="Unregistered"
                                                 readOnly
-                                                className="w-full px-4 py-2 border border-green-200 rounded-md bg-green-50 text-green-700 font-medium ring-1 ring-green-200"
+                                                className="w-full px-4 py-2 border border-green-200 rounded-md bg-green-50 text-teal-700 font-medium ring-1 ring-green-200"
                                             />
-                                            <span className="absolute right-3 top-2.5 text-xs text-green-600">Auto-set</span>
+                                            <span className="absolute right-3 top-2.5 text-xs text-teal-600">Auto-set</span>
                                         </div>
                                     </div>
                                 </div>
@@ -1271,7 +1271,7 @@ const CustomerContent: React.FC = () => {
                                         <div className="flex bg-gray-100 p-1 rounded-md">
                                             <button
                                                 onClick={() => setAddMultipleBranches(true)}
-                                                className={`px-4 py-1 text-xs font-medium rounded ${addMultipleBranches ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                                className={`px-4 py-1 text-xs font-medium rounded ${addMultipleBranches ? 'bg-teal-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                                             >
                                                 Yes
                                             </button>
@@ -1373,7 +1373,7 @@ const CustomerContent: React.FC = () => {
                                             })}
                                             <button
                                                 onClick={handleAddManualBranch}
-                                                className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 font-medium hover:border-indigo-500 hover:text-indigo-600 transition-colors flex items-center justify-center gap-2"
+                                                className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 font-medium hover:border-indigo-500 hover:text-teal-600 transition-colors flex items-center justify-center gap-2"
                                             >
                                                 <span>+</span> Add Another Branch
                                             </button>
@@ -1414,7 +1414,7 @@ const CustomerContent: React.FC = () => {
                                                                 type="checkbox"
                                                                 checked={selectedGSTINs.includes(gst)}
                                                                 readOnly
-                                                                className="w-4 h-4 text-indigo-600 rounded"
+                                                                className="w-4 h-4 text-teal-600 rounded"
                                                             />
                                                             <span className="text-gray-700">{gst}</span>
                                                         </div>
@@ -1535,7 +1535,7 @@ const CustomerContent: React.FC = () => {
                                 <button onClick={() => setView('list')} className="px-6 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
                                 <button
                                     onClick={() => setActiveTab('Products/Services')}
-                                    className="px-6 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
+                                    className="px-6 py-2 bg-teal-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
                                 >
                                     Next
                                 </button>
@@ -1643,7 +1643,7 @@ const CustomerContent: React.FC = () => {
                         <div className="mb-12">
                             <button
                                 onClick={handleAddProductRow}
-                                className="w-10 h-10 flex items-center justify-center rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors shadow-sm border border-indigo-200"
+                                className="w-10 h-10 flex items-center justify-center rounded-full bg-indigo-50 text-teal-600 hover:bg-indigo-100 transition-colors shadow-sm border border-indigo-200"
                             >
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -1665,7 +1665,7 @@ const CustomerContent: React.FC = () => {
                                 <button onClick={() => setView('list')} className="px-6 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
                                 <button
                                     onClick={() => setActiveTab('TDS & Other Statutory Details')}
-                                    className="px-6 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
+                                    className="px-6 py-2 bg-teal-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
                                 >
                                     Next
                                 </button>
@@ -1692,7 +1692,7 @@ const CustomerContent: React.FC = () => {
                                             value={statutoryDetails.msmeNo}
                                             onChange={(e) => setStatutoryDetails({ ...statutoryDetails, msmeNo: e.target.value })}
                                         />
-                                        <button className="absolute right-2 p-1.5 text-gray-400 hover:text-indigo-600 rounded-md hover:bg-gray-100 transition-colors">
+                                        <button className="absolute right-2 p-1.5 text-gray-400 hover:text-teal-600 rounded-md hover:bg-gray-100 transition-colors">
                                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                                         </button>
                                     </div>
@@ -1707,7 +1707,7 @@ const CustomerContent: React.FC = () => {
                                             value={statutoryDetails.fssaiNo}
                                             onChange={(e) => setStatutoryDetails({ ...statutoryDetails, fssaiNo: e.target.value })}
                                         />
-                                        <button className="absolute right-2 p-1.5 text-gray-400 hover:text-indigo-600 rounded-md hover:bg-gray-100 transition-colors">
+                                        <button className="absolute right-2 p-1.5 text-gray-400 hover:text-teal-600 rounded-md hover:bg-gray-100 transition-colors">
                                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                                         </button>
                                     </div>
@@ -1729,7 +1729,7 @@ const CustomerContent: React.FC = () => {
                                             value={statutoryDetails.iecCode}
                                             onChange={(e) => setStatutoryDetails({ ...statutoryDetails, iecCode: e.target.value })}
                                         />
-                                        <button className="absolute right-2 p-1.5 text-gray-400 hover:text-indigo-600 rounded-md hover:bg-gray-100 transition-colors">
+                                        <button className="absolute right-2 p-1.5 text-gray-400 hover:text-teal-600 rounded-md hover:bg-gray-100 transition-colors">
                                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                                         </button>
                                     </div>
@@ -1754,13 +1754,13 @@ const CustomerContent: React.FC = () => {
                                         <div className="flex gap-8 pl-1">
                                             <div className="flex items-center gap-3">
                                                 <span className="text-sm text-gray-500">Letter of Permission</span>
-                                                <button className="p-1.5 border border-gray-200 rounded-md text-gray-400 hover:text-indigo-600 hover:border-indigo-200 hover:bg-gray-50 transition-colors">
+                                                <button className="p-1.5 border border-gray-200 rounded-md text-gray-400 hover:text-teal-600 hover:border-indigo-200 hover:bg-gray-50 transition-colors">
                                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                                                 </button>
                                             </div>
                                             <div className="flex items-center gap-3">
                                                 <span className="text-sm text-gray-500">Green Card</span>
-                                                <button className="p-1.5 border border-gray-200 rounded-md text-gray-400 hover:text-indigo-600 hover:border-indigo-200 hover:bg-gray-50 transition-colors">
+                                                <button className="p-1.5 border border-gray-200 rounded-md text-gray-400 hover:text-teal-600 hover:border-indigo-200 hover:bg-gray-50 transition-colors">
                                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                                                 </button>
                                             </div>
@@ -1816,7 +1816,7 @@ const CustomerContent: React.FC = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => setShowTcsInfo(!showTcsInfo)}
-                                                        className="p-2 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-md transition-colors"
+                                                        className="p-2 text-teal-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-md transition-colors"
                                                         title={showTcsInfo ? "Hide Description" : "Show Description"}
                                                     >
                                                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1832,7 +1832,7 @@ const CustomerContent: React.FC = () => {
                                             {showTcsInfo && selectedTcsInfo && (
                                                 <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-md">
                                                     <div className="flex items-start gap-2">
-                                                        <svg className="w-5 h-5 text-indigo-600 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                        <svg className="w-5 h-5 text-teal-600 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                                             <circle cx="12" cy="12" r="10"></circle>
                                                             <line x1="12" y1="16" x2="12" y2="12"></line>
                                                             <line x1="12" y1="8" x2="12.01" y2="8"></line>
@@ -1848,7 +1848,7 @@ const CustomerContent: React.FC = () => {
                                         <label className="flex items-center gap-2 cursor-pointer">
                                             <input
                                                 type="checkbox"
-                                                className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                                                className="w-4 h-4 text-teal-600 rounded focus:ring-indigo-500"
                                                 checked={statutoryDetails.tcsEnabled}
                                                 onChange={(e) => setStatutoryDetails({ ...statutoryDetails, tcsEnabled: e.target.checked })}
                                             />
@@ -1899,7 +1899,7 @@ const CustomerContent: React.FC = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => setShowTdsInfo(!showTdsInfo)}
-                                                        className="p-2 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-md transition-colors"
+                                                        className="p-2 text-teal-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-md transition-colors"
                                                         title={showTdsInfo ? "Hide Description" : "Show Description"}
                                                     >
                                                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1915,7 +1915,7 @@ const CustomerContent: React.FC = () => {
                                             {showTdsInfo && selectedTdsInfo && (
                                                 <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-md">
                                                     <div className="flex items-start gap-2">
-                                                        <svg className="w-5 h-5 text-indigo-600 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                        <svg className="w-5 h-5 text-teal-600 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                                             <circle cx="12" cy="12" r="10"></circle>
                                                             <line x1="12" y1="16" x2="12" y2="12"></line>
                                                             <line x1="12" y1="8" x2="12.01" y2="8"></line>
@@ -1931,7 +1931,7 @@ const CustomerContent: React.FC = () => {
                                         <label className="flex items-center gap-2 cursor-pointer">
                                             <input
                                                 type="checkbox"
-                                                className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                                                className="w-4 h-4 text-teal-600 rounded focus:ring-indigo-500"
                                                 checked={statutoryDetails.tdsEnabled}
                                                 onChange={(e) => setStatutoryDetails({ ...statutoryDetails, tdsEnabled: e.target.checked })}
                                             />
@@ -1955,7 +1955,7 @@ const CustomerContent: React.FC = () => {
                                 <button onClick={() => setView('list')} className="px-6 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
                                 <button
                                     onClick={() => setActiveTab('Banking Info')}
-                                    className="px-6 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
+                                    className="px-6 py-2 bg-teal-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
                                 >
                                     Next
                                 </button>
@@ -1985,7 +1985,7 @@ const CustomerContent: React.FC = () => {
                                 <p className="text-gray-500 mb-6">No bank accounts added yet</p>
                                 <button
                                     onClick={handleAddBank}
-                                    className="px-6 py-2.5 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm"
+                                    className="px-6 py-2.5 bg-teal-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm"
                                 >
                                     + Add Bank Account
                                 </button>
@@ -2100,7 +2100,7 @@ const CustomerContent: React.FC = () => {
                                                                     <label key={branch} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-2 py-1.5 rounded">
                                                                         <input
                                                                             type="checkbox"
-                                                                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                                                                            className="w-4 h-4 text-teal-600 rounded focus:ring-indigo-500"
                                                                             checked={(account.associatedBranches || []).includes(branch)}
                                                                             onChange={(e) => {
                                                                                 const currentBranches = account.associatedBranches || [];
@@ -2156,7 +2156,7 @@ const CustomerContent: React.FC = () => {
                                 <div>
                                     <button
                                         onClick={handleAddBank}
-                                        className="px-4 py-2 border border-indigo-200 text-indigo-600 rounded-md text-sm font-medium hover:bg-indigo-50 transition-colors flex items-center gap-2"
+                                        className="px-4 py-2 border border-indigo-200 text-teal-600 rounded-md text-sm font-medium hover:bg-indigo-50 transition-colors flex items-center gap-2"
                                     >
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                                         Add Another Bank
@@ -2178,7 +2178,7 @@ const CustomerContent: React.FC = () => {
                                 <button onClick={() => setView('list')} className="px-6 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
                                 <button
                                     onClick={() => setActiveTab('Terms & Conditions')}
-                                    className="px-6 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
+                                    className="px-6 py-2 bg-teal-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
                                 >
                                     Next
                                 </button>
@@ -2286,7 +2286,7 @@ const CustomerContent: React.FC = () => {
                                             // View change is handled inside handleSaveCustomer when exit: true
                                         }
                                     }}
-                                    className="px-6 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 transition-colors flex items-center gap-2"
+                                    className="px-6 py-2 bg-teal-600 text-white rounded-md text-sm font-medium hover:bg-teal-700 transition-colors flex items-center gap-2"
                                 >
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                         <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
@@ -2326,7 +2326,7 @@ const CustomerContent: React.FC = () => {
                         });
                         setView('create');
                     }}
-                    className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition-colors flex items-center gap-2"
+                    className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition-colors flex items-center gap-2"
                 >
                     <span>+</span> Create New Customer
                 </button>
@@ -2580,7 +2580,7 @@ const SalesOrderContent: React.FC = () => {
                             key={tab}
                             onClick={() => setSubTab(tab as any)}
                             className={`px-6 py-2 rounded-md text-sm font-medium transition-all ${subTab === tab
-                                ? 'bg-white text-indigo-600 shadow-sm'
+                                ? 'bg-white text-teal-600 shadow-sm'
                                 : 'text-gray-500 hover:text-gray-700'
                                 }`}
                         >
@@ -2645,7 +2645,7 @@ const SalesOrderContent: React.FC = () => {
                             <input
                                 id="autoYear"
                                 type="checkbox"
-                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                className="h-4 w-4 text-teal-600 focus:ring-indigo-500 border-gray-300 rounded"
                                 checked={form.autoYear}
                                 onChange={(e) => handleChange('autoYear', e.target.checked)}
                             />
@@ -2670,7 +2670,7 @@ const SalesOrderContent: React.FC = () => {
                     <button
                         onClick={handleSaveSeries}
                         disabled={!form.name || !form.category}
-                        className="w-full py-2.5 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
+                        className="w-full py-2.5 bg-teal-600 text-white font-medium rounded-md hover:bg-indigo-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
                         Save Series
                     </button>
                 </div>
@@ -2697,7 +2697,7 @@ const SalesOrderContent: React.FC = () => {
                                             {'displayDetails' in series ? series.displayDetails : `${series.prefix} (${series.digits} digits)`}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <button className="text-indigo-600 hover:text-indigo-900 mr-4">Edit</button>
+                                            <button className="text-teal-600 hover:text-indigo-900 mr-4">Edit</button>
                                             <button className="text-red-600 hover:text-red-900">Delete</button>
                                         </td>
                                     </tr>
@@ -2892,9 +2892,9 @@ const LongTermContractsContent: React.FC = () => {
 
     const getBadgeStyle = (type: string) => {
         switch (type) {
-            case 'Rate Contract': return 'bg-blue-100 text-blue-700 hover:bg-blue-200';
+            case 'Rate Contract': return 'bg-blue-100 text-teal-700 hover:bg-blue-200';
             case 'Service Contract': return 'bg-purple-100 text-purple-700 hover:bg-purple-200';
-            case 'AMC': return 'bg-green-100 text-green-700 hover:bg-green-200';
+            case 'AMC': return 'bg-green-100 text-teal-700 hover:bg-green-200';
             default: return 'bg-gray-100 text-gray-700';
         }
     };
@@ -2916,7 +2916,7 @@ const LongTermContractsContent: React.FC = () => {
                                     key={tab}
                                     onClick={() => setActiveTab(tab)}
                                     className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === tab
-                                        ? 'border-indigo-500 text-indigo-600'
+                                        ? 'border-indigo-500 text-teal-600'
                                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                         }`}
                                 >
@@ -3028,7 +3028,7 @@ const LongTermContractsContent: React.FC = () => {
                                         <input
                                             type="checkbox"
                                             id="automate-billing"
-                                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300"
+                                            className="w-4 h-4 text-teal-600 rounded focus:ring-indigo-500 border-gray-300"
                                             checked={automateBilling}
                                             onChange={(e) => setAutomateBilling(e.target.checked)}
                                         />
@@ -3221,7 +3221,7 @@ const LongTermContractsContent: React.FC = () => {
                                 </div>
                                 <button
                                     onClick={handleAddProduct}
-                                    className="text-indigo-600 hover:text-indigo-800 text-sm font-medium flex items-center gap-1"
+                                    className="text-teal-600 hover:text-indigo-800 text-sm font-medium flex items-center gap-1"
                                 >
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                                     Add New Product
@@ -3329,7 +3329,7 @@ const LongTermContractsContent: React.FC = () => {
                                         }
                                     }}
                                     disabled={loading}
-                                    className={`px-8 py-2 text-white rounded-md text-sm font-medium transition-colors ${activeTab === 'Terms & Conditions' ? 'bg-green-600 hover:bg-green-700 disabled:bg-gray-400' : 'bg-indigo-600 hover:bg-indigo-700'
+                                    className={`px-8 py-2 text-white rounded-md text-sm font-medium transition-colors ${activeTab === 'Terms & Conditions' ? 'bg-teal-600 hover:bg-teal-700 disabled:bg-gray-400' : 'bg-teal-600 hover:bg-indigo-700'
                                         }`}
                                 >
                                     {loading ? 'Saving...' : (activeTab === 'Terms & Conditions' ? 'Save' : 'Next')}
@@ -3352,7 +3352,7 @@ const LongTermContractsContent: React.FC = () => {
                 </div>
                 <button
                     onClick={() => setView('create')}
-                    className="px-5 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition-colors shadow-sm flex items-center gap-2"
+                    className="px-5 py-2.5 bg-teal-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition-colors shadow-sm flex items-center gap-2"
                 >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                     Add New Contract
@@ -3386,7 +3386,7 @@ const LongTermContractsContent: React.FC = () => {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                                     <div className="flex items-center justify-center gap-3 opacity-60 group-hover:opacity-100 transition-opacity">
-                                        <button className="text-gray-500 hover:text-indigo-600 transition-colors" title="View/Edit Details">
+                                        <button className="text-gray-500 hover:text-teal-600 transition-colors" title="View/Edit Details">
                                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                                         </button>
                                     </div>
@@ -3566,7 +3566,7 @@ const ReceiptContent: React.FC = () => {
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                         <button
                                             onClick={() => handlePostClick(receipt)}
-                                            className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition-colors"
+                                            className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition-colors"
                                         >
                                             Post
                                         </button>
@@ -3682,7 +3682,7 @@ const ReceiptContent: React.FC = () => {
                                 </button>
                                 <button
                                     type="submit"
-                                    className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition-colors"
+                                    className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition-colors"
                                 >
                                     Submit
                                 </button>
@@ -3816,7 +3816,7 @@ const EditNetOffPage: React.FC<EditNetOffPageProps> = ({
                             onClick={() => onNext(salesNetOff, paymentNetOff, purchaseNetOff, receiptNetOff)}
                             disabled={!isNextEnabled}
                             className={`ml-6 px-6 py-2.5 text-sm font-semibold rounded-md shadow-sm transition-colors ${isNextEnabled
-                                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                ? 'bg-teal-600 text-white hover:bg-teal-700'
                                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                 }`}
                         >
@@ -3848,7 +3848,7 @@ const EditNetOffPage: React.FC<EditNetOffPageProps> = ({
                                     <td className="px-6 py-4 text-right">
                                         <input
                                             type="number"
-                                            className="w-32 text-right px-3 py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                            className="w-32 text-right px-3 py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none"
                                             value={salesNetOff[v.id] ?? v.amount}
                                             onChange={(e) => handleAmountChange(v.id, e.target.value, v.amount, setSalesNetOff, salesNetOff)}
                                         />
@@ -3882,7 +3882,7 @@ const EditNetOffPage: React.FC<EditNetOffPageProps> = ({
                                     <td className="px-6 py-4 text-right">
                                         <input
                                             type="number"
-                                            className="w-32 text-right px-3 py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                            className="w-32 text-right px-3 py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none"
                                             value={paymentNetOff[v.id] ?? v.amount}
                                             onChange={(e) => handleAmountChange(v.id, e.target.value, v.amount, setPaymentNetOff, paymentNetOff)}
                                         />
@@ -3916,7 +3916,7 @@ const EditNetOffPage: React.FC<EditNetOffPageProps> = ({
                                     <td className="px-6 py-4 text-right">
                                         <input
                                             type="number"
-                                            className="w-32 text-right px-3 py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                            className="w-32 text-right px-3 py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none"
                                             value={purchaseNetOff[v.id] ?? v.amount}
                                             onChange={(e) => handleAmountChange(v.id, e.target.value, v.amount, setPurchaseNetOff, purchaseNetOff)}
                                         />
@@ -3950,7 +3950,7 @@ const EditNetOffPage: React.FC<EditNetOffPageProps> = ({
                                     <td className="px-6 py-4 text-right">
                                         <input
                                             type="number"
-                                            className="w-32 text-right px-3 py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                            className="w-32 text-right px-3 py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none"
                                             value={receiptNetOff[v.id] ?? v.amount}
                                             onChange={(e) => handleAmountChange(v.id, e.target.value, v.amount, setReceiptNetOff, receiptNetOff)}
                                         />
@@ -4190,14 +4190,14 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                                         type="date"
                                         value={netOffDate}
                                         onChange={(e) => setNetOffDate(e.target.value)}
-                                        className="text-sm px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        className="text-sm px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-teal-500"
                                     />
                                     <Calendar className="w-4 h-4 text-gray-400" />
                                 </div>
                             </div>
                             <div>
                                 <div className="text-xs text-gray-500 mb-1">Running Balance:</div>
-                                <div className="text-lg font-semibold text-blue-600">₹{runningBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                                <div className="text-lg font-semibold text-teal-600">₹{runningBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
                             </div>
                         </div>
                     </div>
@@ -4208,7 +4208,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                     <div className="flex gap-6">
                         <button
                             className={`py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'Invoices under Dispute'
-                                ? 'border-blue-600 text-blue-600'
+                                ? 'border-teal-600 text-teal-600'
                                 : 'border-transparent text-gray-500 hover:text-gray-700'
                                 }`}
                             onClick={() => setActiveTab('Invoices under Dispute')}
@@ -4217,7 +4217,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                         </button>
                         <button
                             className={`py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'Net-off'
-                                ? 'border-blue-600 text-blue-600'
+                                ? 'border-teal-600 text-teal-600'
                                 : 'border-transparent text-gray-500 hover:text-gray-700'
                                 }`}
                             onClick={() => setActiveTab('Net-off')}
@@ -4322,7 +4322,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                             <div className="flex justify-end">
                                 <div className="border border-gray-300 rounded-lg px-6 py-4">
                                     <div className="text-sm text-gray-600 mb-1">Amount Netted Off</div>
-                                    <div className="text-2xl font-bold text-blue-600">
+                                    <div className="text-2xl font-bold text-teal-600">
                                         ₹{(() => {
                                             // Check if manual net-off amounts exist
                                             const isManual = Object.keys(salesNetOffAmounts).length > 0;
@@ -4399,7 +4399,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                                                 .map((voucher) => (
                                                     <tr key={`p-${voucher.id}`} className="hover:bg-gray-50">
                                                         <td className="px-4 py-3">
-                                                            <span className="text-blue-600 font-medium">Purchase</span>
+                                                            <span className="text-teal-600 font-medium">Purchase</span>
                                                         </td>
                                                         <td className="px-4 py-3 text-gray-700">{voucher.date}</td>
                                                         <td className="px-4 py-3 font-medium text-gray-900">{voucher.supplierInvNo}</td>
@@ -4421,7 +4421,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                                                 .map((voucher) => (
                                                     <tr key={`r-${voucher.id}`} className="hover:bg-gray-50">
                                                         <td className="px-4 py-3">
-                                                            <span className="text-blue-600 font-medium">Receipt</span>
+                                                            <span className="text-teal-600 font-medium">Receipt</span>
                                                         </td>
                                                         <td className="px-4 py-3 text-gray-700">{voucher.date}</td>
                                                         <td className="px-4 py-3 font-medium text-gray-900">{voucher.voucherNo}</td>
@@ -4443,7 +4443,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                                                 .map((voucher) => (
                                                     <tr key={`s-${voucher.id}`} className="hover:bg-gray-50">
                                                         <td className="px-4 py-3">
-                                                            <span className="text-green-600 font-medium">Sales</span>
+                                                            <span className="text-teal-600 font-medium">Sales</span>
                                                         </td>
                                                         <td className="px-4 py-3 text-gray-700">{voucher.date}</td>
                                                         <td className="px-4 py-3 font-medium text-gray-900">{voucher.salesVchNo}</td>
@@ -4465,7 +4465,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                                                 .map((voucher) => (
                                                     <tr key={`py-${voucher.id}`} className="hover:bg-gray-50">
                                                         <td className="px-4 py-3">
-                                                            <span className="text-green-600 font-medium">Payment</span>
+                                                            <span className="text-teal-600 font-medium">Payment</span>
                                                         </td>
                                                         <td className="px-4 py-3 text-gray-700">{voucher.date}</td>
                                                         <td className="px-4 py-3 font-medium text-gray-900">{voucher.voucherNo}</td>
@@ -4540,7 +4540,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                                             alert('Net-off saved successfully!');
                                             onClose();
                                         }}
-                                        className="px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors"
+                                        className="px-5 py-2 text-sm font-medium text-white bg-teal-600 rounded hover:bg-teal-700 transition-colors"
                                     >
                                         Save & Close
                                     </button>
@@ -4563,7 +4563,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                             onClick={handleNext}
                             disabled={!isNextEnabled}
                             className={`px-5 py-2 text-sm font-medium rounded transition-colors ${isNextEnabled
-                                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                ? 'bg-teal-600 text-white hover:bg-teal-700'
                                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                 }`}
                         >
@@ -4695,9 +4695,9 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
         if (status === 'Paid') return 'bg-green-100 text-green-800';
         if (status === 'Unpaid') return 'bg-red-100 text-red-800';
         if (status === 'Partially Paid') return 'bg-yellow-100 text-yellow-800';
-        if (status === 'Approved') return 'bg-blue-100 text-blue-800';
+        if (status === 'Approved') return 'bg-blue-100 text-teal-800';
         if (status === 'Not Due') return 'bg-gray-100 text-gray-800';
-        if (status === 'Due') return 'bg-orange-100 text-orange-800';
+        if (status === 'Due') return 'bg-teal-100 text-teal-800';
         if (status === 'Partially Received') return 'bg-yellow-100 text-yellow-800';
         if (status === 'Received') return 'bg-green-100 text-green-800';
         return 'bg-gray-100 text-gray-800';
@@ -5080,14 +5080,14 @@ const SalesContent: React.FC = () => {
                                         <div className="flex items-center justify-center space-x-4">
                                             <button
                                                 onClick={() => handleViewCustomer(customer.customerId, customer.customerName)}
-                                                className="text-indigo-600 hover:text-indigo-900 transition-colors"
+                                                className="text-teal-600 hover:text-indigo-900 transition-colors"
                                                 title="View Customer Ledger"
                                             >
                                                 <Eye className="w-5 h-5" />
                                             </button>
                                             <button
                                                 onClick={() => handleSendMail(customer)}
-                                                className="text-blue-600 hover:text-blue-900 transition-colors"
+                                                className="text-teal-600 hover:text-teal-900 transition-colors"
                                                 title="Send Reminder Email"
                                             >
                                                 <Mail className="w-5 h-5" />
@@ -5113,11 +5113,11 @@ const SalesContent: React.FC = () => {
             {/* Footer Notes */}
             <div className="mt-4 flex items-start space-x-4 text-xs text-gray-500">
                 <div className="flex items-center">
-                    <Eye className="w-4 h-4 mr-1 text-indigo-600" />
+                    <Eye className="w-4 h-4 mr-1 text-teal-600" />
                     <span>View icon → navigates to Customer Ledger filtered for selected customer</span>
                 </div>
                 <div className="flex items-center">
-                    <Mail className="w-4 h-4 mr-1 text-blue-600" />
+                    <Mail className="w-4 h-4 mr-1 text-teal-600" />
                     <span>Mail icon → auto-drafts reminder email with due amounts and aging breakup</span>
                 </div>
             </div>
@@ -5126,3 +5126,4 @@ const SalesContent: React.FC = () => {
 };
 
 export default CustomerPortalPage;
+

@@ -25,7 +25,7 @@
  * FOR NEW DEVELOPERS:
  * - Add new menu items to the `allNavItems` array
  * - Use Icon component for consistent icon display
- */
+ * */
 
 // Import React
 import React from 'react';
@@ -91,7 +91,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, co
     <aside className="w-64 bg-white border-r border-gray-200 flex flex-col fixed h-full">
       {/* Company Name */}
       <div className="p-6 border-b border-gray-200">
-        <h1 className="text-xl font-bold text-orange-500">{companyName || 'muthu'}</h1>
+        <h1 className="text-xl font-bold text-teal-600">{companyName || 'muthu'}</h1>
       </div>
 
       {/* Navigation Items */}
@@ -103,8 +103,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, co
               key={item.name}
               onClick={() => onNavigate(item.name)}
               className={`flex items-center space-x-3 px-6 py-3 cursor-pointer transition-colors ${isActive
-                ? 'text-orange-500 bg-orange-50'
-                : 'text-gray-600 hover:text-orange-500 hover:bg-gray-50'
+                ? 'text-teal-600 bg-teal-50'
+                : 'text-gray-600 hover:text-teal-600 hover:bg-gray-50'
                 }`}
             >
               <div className="w-5 h-5">
@@ -120,7 +120,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, co
       <div className="p-4 border-t border-gray-200">
         <a
           onClick={onLogout}
-          className="flex items-center space-x-3 px-6 py-3 text-gray-600 hover:text-orange-500 cursor-pointer transition-colors"
+          className="flex items-center space-x-3 px-6 py-3 text-gray-600 hover:text-teal-600 cursor-pointer transition-colors"
         >
           <Icon name="logout" className="w-5 h-5" />
           <span className="text-sm font-medium">Logout</span>
@@ -131,3 +131,4 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, co
 };
 
 export default Sidebar;
+

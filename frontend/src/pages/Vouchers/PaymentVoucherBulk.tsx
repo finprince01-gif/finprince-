@@ -221,7 +221,7 @@ const PaymentVoucherBulk: React.FC = () => {
                 type="date"
                 value={date}
                 onChange={e => setDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
             </div>
             <div>
@@ -242,7 +242,7 @@ const PaymentVoucherBulk: React.FC = () => {
               <select
                 value={payFrom}
                 onChange={e => setPayFrom(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
               >
                 <option value="">Select</option>
                 {cashBankLedgers.map(ledger => (
@@ -272,7 +272,7 @@ const PaymentVoucherBulk: React.FC = () => {
                     key={row.id}
                     value={row.payTo}
                     onChange={e => handlePaymentRowChange(row.id, 'payTo', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
                   >
                     <option value="">Vendor Name</option>
                     {allLedgers.map(ledger => (
@@ -286,7 +286,7 @@ const PaymentVoucherBulk: React.FC = () => {
               <button
                 type="button"
                 onClick={handleAddPaymentRow}
-                className="mt-2 text-orange-600 hover:text-orange-700 text-3xl font-bold leading-none"
+                className="mt-2 text-teal-600 hover:text-teal-700 text-3xl font-bold leading-none"
               >
                 +
               </button>
@@ -303,7 +303,7 @@ const PaymentVoucherBulk: React.FC = () => {
                     value={row.amount || ''}
                     onChange={e => handlePaymentRowChange(row.id, 'amount', parseFloat(e.target.value) || 0)}
                     placeholder="Pay now/Advance total"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
                   />
                 ))}
               </div>
@@ -314,21 +314,21 @@ const PaymentVoucherBulk: React.FC = () => {
           <div className="flex justify-center">
             <button
               type="button"
-              className="px-8 py-2 bg-orange-600 text-white rounded-md font-medium hover:bg-orange-700"
+              className="px-8 py-2 bg-teal-600 text-white rounded-md font-medium hover:bg-teal-700"
             >
               Total Payment
             </button>
           </div>
 
           {/* Posting Note */}
-          <div className="bg-orange-50 border-2 border-orange-200 rounded-lg p-4">
+          <div className="bg-teal-50 border-2 border-teal-200 rounded-lg p-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">Posting Note</label>
             <textarea
               value={postingNote}
               onChange={e => setPostingNote(e.target.value)}
               placeholder="Enter posting note..."
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none text-sm"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none text-sm"
             />
           </div>
 
@@ -344,7 +344,7 @@ const PaymentVoucherBulk: React.FC = () => {
             <button
               type="button"
               onClick={handlePost}
-              className="px-6 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700"
+              className="px-6 py-2 text-sm font-medium text-white bg-teal-600 rounded-lg hover:bg-teal-700"
             >
               Post
             </button>
@@ -352,7 +352,7 @@ const PaymentVoucherBulk: React.FC = () => {
         </div>
 
         {/* Right Panel - Transaction List */}
-        <div className="bg-blue-500 rounded-lg p-6">
+        <div className="bg-teal-500 rounded-lg p-6">
           <div className="text-center mb-4">
             <h4 className="text-white font-semibold text-sm">
               {selectedVendor || 'Vendor Name'} (Whose data is displayed below)
@@ -381,7 +381,7 @@ const PaymentVoucherBulk: React.FC = () => {
                               type="checkbox"
                               checked={transaction.selected}
                               onChange={e => handleTransactionSelect(transaction.id, e.target.checked)}
-                              className="w-4 h-4 text-orange-600 focus:ring-orange-500 rounded"
+                              className="w-4 h-4 text-teal-600 focus:ring-teal-500 rounded"
                             />
                             <span>{transaction.date}</span>
                           </div>
@@ -393,7 +393,7 @@ const PaymentVoucherBulk: React.FC = () => {
                             type="number"
                             value={transaction.payNow || ''}
                             onChange={e => handlePayNowChange(transaction.id, parseFloat(e.target.value) || 0)}
-                            className="w-full px-2 py-1 border border-gray-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-orange-500"
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-teal-500"
                           />
                         </td>
                       </tr>
@@ -416,7 +416,7 @@ const PaymentVoucherBulk: React.FC = () => {
                 <div className="flex items-center gap-3">
                   <input
                     type="checkbox"
-                    className="w-4 h-4 text-orange-600 focus:ring-orange-500 rounded"
+                    className="w-4 h-4 text-teal-600 focus:ring-teal-500 rounded"
                   />
                   <div className="flex-1">
                     <label className="block text-xs font-medium text-gray-700 mb-1">Advance Ref. No.</label>
@@ -424,7 +424,7 @@ const PaymentVoucherBulk: React.FC = () => {
                       type="text"
                       value={advanceRefNo}
                       onChange={e => setAdvanceRefNo(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-teal-500"
                     />
                   </div>
                   <div className="flex-1">
@@ -433,7 +433,7 @@ const PaymentVoucherBulk: React.FC = () => {
                       type="number"
                       value={advanceAmount || ''}
                       onChange={e => setAdvanceAmount(parseFloat(e.target.value) || 0)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-teal-500"
                     />
                   </div>
                 </div>
@@ -447,8 +447,8 @@ const PaymentVoucherBulk: React.FC = () => {
               type="button"
               onClick={() => setShowAdvanceSection(!showAdvanceSection)}
               className={`px-8 py-2 text-sm font-medium rounded-lg transition-colors ${showAdvanceSection
-                ? 'bg-orange-600 text-white hover:bg-orange-700'
-                : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-orange-500'
+                ? 'bg-teal-600 text-white hover:bg-teal-700'
+                : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-teal-500'
                 }`}
             >
               Advance
@@ -461,3 +461,4 @@ const PaymentVoucherBulk: React.FC = () => {
 };
 
 export default PaymentVoucherBulk;
+

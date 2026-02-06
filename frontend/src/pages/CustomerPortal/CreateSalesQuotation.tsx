@@ -336,7 +336,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel })
                                 {/* Add Row Button */}
                                 <button
                                     onClick={handleAddItem}
-                                    className="mt-4 flex items-center gap-2 text-indigo-600 hover:text-indigo-700 text-sm font-medium"
+                                    className="mt-4 flex items-center gap-2 text-teal-600 hover:text-indigo-700 text-sm font-medium"
                                 >
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -563,7 +563,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel })
                                 {/* Add Row Button */}
                                 <button
                                     onClick={handleAddSpecificItem}
-                                    className="mt-4 flex items-center gap-2 text-indigo-600 hover:text-indigo-700 text-sm font-medium"
+                                    className="mt-4 flex items-center gap-2 text-teal-600 hover:text-indigo-700 text-sm font-medium"
                                 >
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -614,7 +614,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel })
                         </button>
                         <button
                             onClick={handleSave}
-                            className="px-6 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
+                            className="px-6 py-2 bg-teal-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
                         >
                             Save
                         </button>
@@ -626,3 +626,4 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel })
 };
 
 export default CreateSalesQuotation;
+

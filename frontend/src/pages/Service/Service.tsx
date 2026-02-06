@@ -589,7 +589,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
       return (
         <div key={node.id} style={{ marginLeft: `${node.level * 20}px` }}>
           <div
-            className={`flex items-center py-1.5 px-2 cursor-pointer hover:bg-gray-100 rounded transition-colors ${isSelected ? 'bg-orange-100 text-orange-700 font-medium border-l-2 border-orange-500' : ''
+            className={`flex items-center py-1.5 px-2 cursor-pointer hover:bg-gray-100 rounded transition-colors ${isSelected ? 'bg-teal-100 text-teal-700 font-medium border-l-2 border-teal-500' : ''
               }`}
             onClick={() => handleNodeSelect(node)}
             onDoubleClick={() => {
@@ -633,7 +633,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`pb-3 px-2 font-medium transition-colors ${activeTab === tab.id
-                  ? 'text-orange-600 border-b-2 border-orange-600'
+                  ? 'text-teal-600 border-b-2 border-teal-600'
                   : 'text-gray-600 hover:text-gray-800'
                   }`}
               >
@@ -704,7 +704,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                             name="group"
                             value={formData.group}
                             onChange={handleInputChange}
-                            className="w-full px-3 py-2 border border-gray-300 rounded focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all placeholder-gray-400 bg-white text-gray-800 text-sm"
+                            className="w-full px-3 py-2 border border-gray-300 rounded focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none transition-all placeholder-gray-400 bg-white text-gray-800 text-sm"
                             placeholder="Enter Group Name"
                             autoFocus
                           />
@@ -738,7 +738,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                             value={formData.subgroup}
                             onChange={handleInputChange}
                             disabled={!selectedNode || selectedNode.level > 1}
-                            className={`w-full px-3 py-2 border border-gray-300 rounded focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all placeholder-gray-400 text-sm ${!selectedNode || selectedNode.level > 1
+                            className={`w-full px-3 py-2 border border-gray-300 rounded focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none transition-all placeholder-gray-400 text-sm ${!selectedNode || selectedNode.level > 1
                               ? 'bg-gray-50 text-gray-400 cursor-not-allowed'
                               : 'bg-white text-gray-800'
                               }`}
@@ -753,7 +753,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                       disabled={!selectedNode}
                       className={`w-full py-2.5 px-4 rounded-lg font-medium transition-colors ${!selectedNode
                         ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                        : 'bg-orange-600 text-white hover:bg-orange-700'
+                        : 'bg-teal-600 text-white hover:bg-teal-700'
                         }`}
                     >
                       Create Service Group
@@ -772,7 +772,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
               <h2 className="text-xl font-semibold text-gray-800">Service List</h2>
               <button
                 onClick={handleOpenCreateModal}
-                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium"
+                className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors font-medium"
               >
                 + Add New Service Item
               </button>
@@ -780,7 +780,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
 
             {isLoading ? (
               <div className="flex items-center justify-center h-64">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
               </div>
             ) : (
               <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -815,7 +815,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                           <td className="px-6 py-4 text-center">
                             <button
                               onClick={() => handleViewService(service)}
-                              className="text-blue-600 hover:text-blue-800 font-medium text-sm"
+                              className="text-teal-600 hover:text-teal-800 font-medium text-sm"
                             >
                               View
                             </button>
@@ -855,7 +855,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                     value={createFormData.serviceName}
                     onChange={handleCreateFormChange}
                     placeholder="Enter service name"
-                    className={`col-span-2 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.serviceName ? 'border-red-500' : 'border-gray-300'
+                    className={`col-span-2 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 ${formErrors.serviceName ? 'border-red-500' : 'border-gray-300'
                       }`}
                   />
                   {formErrors.serviceName && (
@@ -870,7 +870,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                     name="serviceGroup"
                     value={createFormData.serviceGroup}
                     onChange={handleCreateFormChange}
-                    className={`col-span-2 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.serviceGroup ? 'border-red-500' : 'border-gray-300'
+                    className={`col-span-2 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 ${formErrors.serviceGroup ? 'border-red-500' : 'border-gray-300'
                       }`}
                   >
                     <option value="">Select service group</option>
@@ -892,7 +892,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                     value={createFormData.serviceCode}
                     onChange={handleCreateFormChange}
                     placeholder="Enter service code"
-                    className={`col-span-2 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.serviceCode ? 'border-red-500' : 'border-gray-300'
+                    className={`col-span-2 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 ${formErrors.serviceCode ? 'border-red-500' : 'border-gray-300'
                       }`}
                   />
                   {formErrors.serviceCode && (
@@ -908,7 +908,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                     name="gstRate"
                     value={createFormData.gstRate}
                     onChange={handleCreateFormChange}
-                    className="col-span-2 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="col-span-2 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                   >
                     {GST_RATES.map(rate => (
                       <option key={rate} value={rate}>
@@ -925,7 +925,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                     name="uom"
                     value={createFormData.uom}
                     onChange={handleCreateFormChange}
-                    className="col-span-2 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="col-span-2 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                   >
                     <option value="">Select UOM</option>
                     {UOM_LIST.map(uom => (
@@ -945,7 +945,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                     value={createFormData.sacCode}
                     onChange={handleCreateFormChange}
                     placeholder="Enter SAC code"
-                    className={`col-span-2 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.sacCode ? 'border-red-500' : 'border-gray-300'
+                    className={`col-span-2 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 ${formErrors.sacCode ? 'border-red-500' : 'border-gray-300'
                       }`}
                   />
                   {formErrors.sacCode && (
@@ -963,7 +963,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                     placeholder="Enter description (optional)"
                     maxLength={500}
                     rows={4}
-                    className="col-span-2 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    className="col-span-2 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
                   />
                   <p className="text-gray-400 text-xs col-span-3">{createFormData.description.length}/500</p>
                 </div>
@@ -975,7 +975,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                     name="expenseLedger"
                     value={createFormData.expenseLedger}
                     onChange={handleCreateFormChange}
-                    className={`col-span-2 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.expenseLedger ? 'border-red-500' : 'border-gray-300'
+                    className={`col-span-2 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 ${formErrors.expenseLedger ? 'border-red-500' : 'border-gray-300'
                       }`}
                   >
                     <option value="">Select expense ledger</option>
@@ -1001,7 +1001,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                 </button>
                 <button
                   onClick={handleSaveCreateService}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                  className="px-6 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-medium"
                 >
                   Save & Close
                 </button>
@@ -1048,7 +1048,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                     value={editFormData.serviceName}
                     onChange={handleEditFormChange}
                     readOnly={!isEditMode}
-                    className={`col-span-2 px-4 py-2 border rounded-lg focus:outline-none ${isEditMode ? 'border-gray-300 focus:ring-2 focus:ring-blue-500' : 'border-gray-300 bg-gray-50 text-gray-600'
+                    className={`col-span-2 px-4 py-2 border rounded-lg focus:outline-none ${isEditMode ? 'border-gray-300 focus:ring-2 focus:ring-teal-500' : 'border-gray-300 bg-gray-50 text-gray-600'
                       }`}
                   />
                 </div>
@@ -1061,7 +1061,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                       name="serviceGroup"
                       value={editFormData.serviceGroup}
                       onChange={handleEditFormChange}
-                      className="col-span-2 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="col-span-2 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                     >
                       <option value="">Select service group</option>
                       {DEFAULT_SYSTEM_CATEGORIES.map(cat => (
@@ -1087,7 +1087,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                     value={editFormData.sacCode}
                     onChange={handleEditFormChange}
                     readOnly={!isEditMode}
-                    className={`col-span-2 px-4 py-2 border rounded-lg focus:outline-none ${isEditMode ? 'border-gray-300 focus:ring-2 focus:ring-blue-500' : 'border-gray-300 bg-gray-50 text-gray-600'
+                    className={`col-span-2 px-4 py-2 border rounded-lg focus:outline-none ${isEditMode ? 'border-gray-300 focus:ring-2 focus:ring-teal-500' : 'border-gray-300 bg-gray-50 text-gray-600'
                       }`}
                   />
                 </div>
@@ -1100,7 +1100,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                       name="gstRate"
                       value={editFormData.gstRate}
                       onChange={handleEditFormChange}
-                      className="col-span-2 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="col-span-2 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                     >
                       {GST_RATES.map(rate => (
                         <option key={rate} value={rate}>
@@ -1126,7 +1126,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                       name="uom"
                       value={editFormData.uom}
                       onChange={handleEditFormChange}
-                      className="col-span-2 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="col-span-2 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                     >
                       <option value="">Select UOM</option>
                       {UOM_LIST.map(uom => (
@@ -1154,7 +1154,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                     onChange={handleEditFormChange}
                     readOnly={!isEditMode}
                     rows={4}
-                    className={`col-span-2 px-4 py-2 border rounded-lg focus:outline-none resize-none ${isEditMode ? 'border-gray-300 focus:ring-2 focus:ring-blue-500' : 'border-gray-300 bg-gray-50 text-gray-600'
+                    className={`col-span-2 px-4 py-2 border rounded-lg focus:outline-none resize-none ${isEditMode ? 'border-gray-300 focus:ring-2 focus:ring-teal-500' : 'border-gray-300 bg-gray-50 text-gray-600'
                       }`}
                   />
                 </div>
@@ -1167,7 +1167,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                       name="expenseLedger"
                       value={editFormData.expenseLedger}
                       onChange={handleEditFormChange}
-                      className="col-span-2 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="col-span-2 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                     >
                       <option value="">Select expense ledger</option>
                       {ledgers.map((ledger: any, index: number) => (
@@ -1199,7 +1199,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                     </button>
                     <button
                       onClick={() => setIsEditMode(true)}
-                      className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                      className="px-6 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-medium"
                     >
                       Edit
                     </button>
@@ -1221,7 +1221,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                     </button>
                     <button
                       onClick={handleSaveEdit}
-                      className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                      className="px-6 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-medium"
                     >
                       Save
                     </button>
