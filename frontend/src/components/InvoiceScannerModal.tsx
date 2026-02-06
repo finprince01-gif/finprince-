@@ -199,7 +199,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose }) =>
                                     disabled={isExtracting}
                                     className={`inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${isExtracting
                                         ? 'bg-gray-400 cursor-not-allowed'
-                                        : 'bg-blue-600 hover:bg-blue-700'
+                                        : 'bg-teal-600 hover:bg-teal-700'
                                         }`}
                                 >
                                     <Icon name={isExtracting ? "spinner" : "upload"} className={`w-5 h-5 mr-2 ${isExtracting ? 'animate-spin' : ''}`} />
@@ -209,7 +209,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose }) =>
                                 {extractedData.length > 0 && (
                                     <button
                                         onClick={handleDownloadExcel}
-                                        className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700"
+                                        className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-teal-600 hover:bg-teal-700"
                                     >
                                         <Icon name="download" className="w-5 h-5 mr-2" />
                                         Download Excel
@@ -230,9 +230,9 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose }) =>
                         <div className="border rounded-lg overflow-hidden">
                             <div className="overflow-x-auto">
                                 <table className="min-w-full divide-y divide-gray-200">
-                                    <thead className="bg-blue-600">
+                                    <thead className="bg-teal-600">
                                         <tr>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider sticky left-0 bg-blue-600">
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider sticky left-0 bg-teal-600">
                                                 #
                                             </th>
                                             {dynamicHeaders.map((key: string, idx) => (
@@ -272,3 +272,4 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose }) =>
 };
 
 export default InvoiceScannerModal;
+

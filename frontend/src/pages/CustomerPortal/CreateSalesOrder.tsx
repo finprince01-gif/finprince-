@@ -240,7 +240,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                             </div>
                             <div className="flex items-end">
                                 <button
-                                    className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition-colors"
+                                    className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition-colors"
                                     onClick={() => alert('Import Customer PO functionality')}
                                 >
                                     Import Customer PO
@@ -474,7 +474,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                         {/* Add Row Button */}
                         <button
                             onClick={handleAddItem}
-                            className="mt-4 flex items-center gap-2 text-indigo-600 hover:text-indigo-700 text-sm font-medium"
+                            className="mt-4 flex items-center gap-2 text-teal-600 hover:text-indigo-700 text-sm font-medium"
                         >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -498,7 +498,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                 </div>
                                 <div className="flex justify-between pt-3 border-t border-gray-300">
                                     <span className="text-sm font-semibold text-gray-900">Net Value Total:</span>
-                                    <span className="text-lg font-bold text-indigo-600">₹{netValueTotal.toFixed(2)}</span>
+                                    <span className="text-lg font-bold text-teal-600">₹{netValueTotal.toFixed(2)}</span>
                                 </div>
                             </div>
                         </div>
@@ -619,7 +619,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                         </button>
                         <button
                             onClick={handleSave}
-                            className="px-6 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
+                            className="px-6 py-2 bg-teal-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
                         >
                             Save
                         </button>
@@ -631,3 +631,4 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
 };
 
 export default CreateSalesOrder;
+

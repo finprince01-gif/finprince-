@@ -102,25 +102,25 @@ const App: React.FC = () => {
    * Returns: Object with feature flags and limits
    */
   const getPlanLimits = (plan?: string) => {
-    const plans = {
-      'Basic': {
-        maxUploads: 100,
+    const plans: Record<string, any> = {
+      'Free': {
+        maxUploads: 5,
         hasAI: false,
-        hasReports: true, // Reports available for all plans
-        hasSettings: true, // Settings available for all plans
+        hasReports: true,
+        hasSettings: true,
         hasMultipleCompanies: false,
         hasAdvancedFeatures: false
       },
-      'Pro': {
-        maxUploads: 1000,
+      'Starter': {
+        maxUploads: 100,
         hasAI: true,
         hasReports: true,
         hasSettings: true,
         hasMultipleCompanies: true,
         hasAdvancedFeatures: false
       },
-      'Enterprise': {
-        maxUploads: 5000,
+      'Pro': {
+        maxUploads: 999999, // Unlimited
         hasAI: true,
         hasReports: true,
         hasSettings: true,
@@ -129,7 +129,12 @@ const App: React.FC = () => {
       }
     };
 
-    return plans[plan || 'Basic'] || plans['Basic'];
+    // Map legacy names to new names
+    let activePlan = plan || 'Free';
+    if (activePlan === 'Basic') activePlan = 'Starter';
+    if (activePlan === 'Enterprise') activePlan = 'Pro';
+
+    return plans[activePlan] || plans['Free'];
   };
 
   /**
@@ -428,7 +433,7 @@ const App: React.FC = () => {
       setCompanyDetails(prev => ({ ...prev, name: userCompanyName }));
 
       // Save user's plan for access control
-      const userSelectedPlan = user?.selected_plan || user?.selectedPlan || 'Basic';
+      const userSelectedPlan = user?.selected_plan || user?.selectedPlan || 'Free';
       localStorage.setItem('userPlan', userSelectedPlan);
 
       // Clear logout flag since user is logging in
@@ -721,12 +726,18 @@ const App: React.FC = () => {
   }, []);
 
   const handleInvoiceUpload = useCallback(async (file: File, voucherType?: string) => {
-    // Check upload limits before processing
-    const userPlan = getUserPlan();
-    const planLimits = getPlanLimits(userPlan);
+    // Check monthly upload limits (matching plan description: "per month")
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
 
-    if (vouchers.length >= planLimits.maxUploads) {
-      setError(`Upload limit exceeded! Your ${userPlan} plan only allows ${planLimits.maxUploads} voucher uploads. Please upgrade your plan for more uploads.`);
+    const monthlyVoucherCount = vouchers.filter(v => {
+      const vDate = new Date(v.date);
+      return vDate.getMonth() === currentMonth && vDate.getFullYear() === currentYear;
+    }).length;
+
+    if (monthlyVoucherCount >= planLimits.maxUploads) {
+      setError(`Upload limit exceeded! Your ${userPlan} plan only allows ${planLimits.maxUploads} voucher uploads per month. Please upgrade your plan for more uploads.`);
       return;
     }
 
@@ -1122,7 +1133,7 @@ const App: React.FC = () => {
       {/* Deactivation Modal */}
       <Modal isOpen={showDeactivationModal} title="Account Deactivated" type="warning">
         <div className="text-center">
-          <Icon name="exclamation-triangle" className="mx-auto h-12 w-12 text-orange-400" />
+          <Icon name="exclamation-triangle" className="mx-auto h-12 w-12 text-amber-500" />
           <h3 className="mt-2 text-sm font-medium text-gray-900">Your account has been deactivated</h3>
           <p className="mt-1 text-sm text-gray-500">
             Please contact your administrator or support for assistance.

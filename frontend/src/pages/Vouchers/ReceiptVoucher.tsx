@@ -268,8 +268,8 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                 <button
                     onClick={() => setActiveTab('single')}
                     className={`px-6 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'single'
-                        ? 'bg-orange-600 text-white'
-                        : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-orange-500'
+                        ? 'bg-teal-600 text-white'
+                        : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-teal-500'
                         }`}
                 >
                     Receipt Voucher - Single
@@ -277,8 +277,8 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                 <button
                     onClick={() => setActiveTab('bulk')}
                     className={`px-6 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'bulk'
-                        ? 'bg-orange-600 text-white'
-                        : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-orange-500'
+                        ? 'bg-teal-600 text-white'
+                        : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-teal-500'
                         }`}
                 >
                     Receipt Voucher - Bulk
@@ -296,7 +296,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                                 type="date"
                                 value={date}
                                 onChange={(e) => setDate(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                             />
                         </div>
                         <div>
@@ -304,7 +304,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                             <select
                                 value={selectedReceiptConfig}
                                 onChange={(e) => setSelectedReceiptConfig(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                             >
                                 <option value="">Select</option>
                                 {receiptVoucherConfigs.map((config) => (
@@ -333,7 +333,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                                 <select
                                     value={receiveIn}
                                     onChange={(e) => setReceiveIn(e.target.value)}
-                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                                 >
                                     <option value="">Select Receive In</option>
                                     <option value="cash">Cash</option>
@@ -350,7 +350,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                                 <select
                                     value={receiveFrom}
                                     onChange={(e) => setReceiveFrom(e.target.value)}
-                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                                 >
                                     <option value="">Select Receive From</option>
                                     <option value="customer1">Customer 1</option>
@@ -397,7 +397,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                                                 <td className="px-6 py-4 text-center">
                                                     <button
                                                         onClick={() => handleReceive(index)}
-                                                        className="px-4 py-1.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-medium rounded"
+                                                        className="px-4 py-1.5 bg-teal-500 hover:bg-teal-600 text-white text-xs font-medium rounded"
                                                     >
                                                         Receive
                                                     </button>
@@ -408,10 +408,10 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                                                         value={txn.receipt || ''}
                                                         onChange={(e) => handleReceiptChange(index, parseFloat(e.target.value) || 0)}
                                                         placeholder="0"
-                                                        className="w-24 px-3 py-1.5 text-right border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+                                                        className="w-24 px-3 py-1.5 text-right border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
                                                     />
                                                 </td>
-                                                <td className="px-6 py-4 text-sm text-gray-700 text-right font-medium text-green-600">
+                                                <td className="px-6 py-4 text-sm text-gray-700 text-right font-medium text-teal-600">
                                                     ₹{Math.max(0, txn.receipt - txn.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                 </td>
                                             </tr>
@@ -442,7 +442,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                         </button>
                         <button
                             onClick={handlePostReceipt}
-                            className="px-8 py-2 bg-orange-600 hover:bg-orange-700 text-white font-medium rounded-lg text-sm"
+                            className="px-8 py-2 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg text-sm"
                         >
                             Post Receipt
                         </button>
@@ -463,7 +463,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                                     type="date"
                                     value={date}
                                     onChange={e => setDate(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                                 />
                             </div>
                             <div>
@@ -484,7 +484,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                                 <select
                                     value={receiveIn}
                                     onChange={e => setReceiveIn(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                                 >
                                     <option value="">Select</option>
                                     <option value="cash">Cash</option>
@@ -512,7 +512,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                                             key={row.id}
                                             value={row.receiveFrom}
                                             onChange={e => handleReceiptRowChange(row.id, 'receiveFrom', e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
                                         >
                                             <option value="">Customer Name</option>
                                             <option value="customer1">Customer 1</option>
@@ -523,7 +523,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                                 <button
                                     type="button"
                                     onClick={handleAddReceiptRow}
-                                    className="mt-2 text-orange-600 hover:text-orange-700 text-3xl font-bold"
+                                    className="mt-2 text-teal-600 hover:text-teal-700 text-3xl font-bold"
                                 >
                                     +
                                 </button>
@@ -539,7 +539,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                                             value={row.amount || ''}
                                             onChange={e => handleReceiptRowChange(row.id, 'amount', parseFloat(e.target.value) || 0)}
                                             placeholder="Receive now/Advance total"
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
                                         />
                                     ))}
                                 </div>
@@ -548,20 +548,20 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
 
                         {/* Total Receipt */}
                         <div className="flex justify-center">
-                            <button className="px-8 py-2 bg-orange-600 text-white rounded-md font-medium">
+                            <button className="px-8 py-2 bg-teal-600 text-white rounded-md font-medium">
                                 Total Receipt
                             </button>
                         </div>
 
                         {/* Posting Note */}
-                        <div className="bg-orange-50 border-2 border-orange-200 rounded-lg p-4">
+                        <div className="bg-teal-50 border-2 border-teal-200 rounded-lg p-4">
                             <label className="block text-sm font-medium text-gray-700 mb-2">Posting Note</label>
                             <textarea
                                 value={postingNote}
                                 onChange={e => setPostingNote(e.target.value)}
                                 placeholder="Enter posting note..."
                                 rows={3}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none text-sm"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none text-sm"
                             />
                         </div>
 
@@ -575,7 +575,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                             </button>
                             <button
                                 onClick={handlePostReceipt}
-                                className="px-6 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700"
+                                className="px-6 py-2 text-sm font-medium text-white bg-teal-600 rounded-lg hover:bg-teal-700"
                             >
                                 Post
                             </button>
@@ -583,7 +583,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                     </div>
 
                     {/* Right Panel - Transaction List */}
-                    <div className="bg-blue-500 rounded-lg p-6">
+                    <div className="bg-teal-500 rounded-lg p-6">
                         <div className="text-center mb-4">
                             <h4 className="text-white font-semibold text-sm">
                                 {selectedCustomer || 'Customer Name'} (Whose data is displayed below)
@@ -631,7 +631,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                                                             className="w-full px-2 py-1 border border-gray-300 rounded text-center"
                                                         />
                                                     </td>
-                                                    <td className="py-3 px-2 text-right text-green-600 font-medium">
+                                                    <td className="py-3 px-2 text-right text-teal-600 font-medium">
                                                         {(Math.max(0, transaction.receiveNow - transaction.amount)).toFixed(2)}
                                                     </td>
                                                 </tr>
@@ -679,7 +679,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                             <button
                                 onClick={() => setShowAdvanceSection(!showAdvanceSection)}
                                 className={`px-8 py-2 text-sm font-medium rounded-lg ${showAdvanceSection
-                                    ? 'bg-orange-600 text-white'
+                                    ? 'bg-teal-600 text-white'
                                     : 'bg-white text-gray-700 border-2 border-gray-300'
                                     }`}
                             >
@@ -694,3 +694,4 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
 };
 
 export default ReceiptVoucher;
+

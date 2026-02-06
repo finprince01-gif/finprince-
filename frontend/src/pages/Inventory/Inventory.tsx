@@ -734,7 +734,7 @@ const InventoryPage: React.FC = () => {
             {/* Manual address entry for Customer Location and Other types */}
             {(locationType === 'customer_location' || locationType === 'customs_warehouse' || locationType === 'other_third_party') && (
               <>
-                <div className="bg-blue-50 border border-blue-200 rounded p-3 text-sm text-blue-700">
+                <div className="bg-teal-50 border border-teal-200 rounded p-3 text-sm text-teal-700">
                   📌 Manual Address Entry
                 </div>
               </>
@@ -782,7 +782,7 @@ const InventoryPage: React.FC = () => {
                       <tr key={loc.id} className={isSelected ? 'bg-teal-50' : ''}>
                         <td className="px-6 py-4"><input type="radio" checked={isSelected} onChange={() => setSelectedLocation(loc)} className="text-teal-600 focus:ring-teal-500" /></td>
                         <td className="px-6 py-4 text-sm font-medium text-gray-900 cursor-pointer" onClick={() => setSelectedLocation(loc)}>{loc.name}</td>
-                        <td className="px-6 py-4 text-sm text-gray-500"><span className="px-2 font-semibold rounded-full bg-blue-100 text-blue-800 text-xs">{loc.location_type_display}</span></td>
+                        <td className="px-6 py-4 text-sm text-gray-500"><span className="px-2 font-semibold rounded-full bg-teal-100 text-teal-800 text-xs">{loc.location_type_display}</span></td>
                         <td className="px-6 py-4 text-right">
                           {isSelected && (
                             <div className="inline-flex gap-2">
@@ -1149,7 +1149,7 @@ const InventoryPage: React.FC = () => {
                 {canCreateGRN && (
                   <button
                     onClick={() => setShowGRNForm(true)}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-teal-600 hover:bg-teal-700"
                   >
                     ➕ Add New GRN
                   </button>
@@ -1829,8 +1829,8 @@ const InventoryPage: React.FC = () => {
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-r">Item Code</th>
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-r">Item Name</th>
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-r">UOM</th>
-                                  <th className="px-3 py-2 text-center text-xs font-semibold text-gray-700 border-r bg-blue-50">Vendor's RDC Qty</th>
-                                  <th className="px-3 py-2 text-center text-xs font-semibold text-gray-700 border-r bg-green-50">Received Qty</th>
+                                  <th className="px-3 py-2 text-center text-xs font-semibold text-gray-700 border-r bg-teal-50">Vendor's RDC Qty</th>
+                                  <th className="px-3 py-2 text-center text-xs font-semibold text-gray-700 border-r bg-teal-50">Received Qty</th>
                                   <th className="px-3 py-2 text-center text-xs font-semibold text-gray-700 border-r">Accepted Qty</th>
                                   <th className="px-3 py-2 text-center text-xs font-semibold text-gray-700 border-r">Rejected Qty</th>
                                   <th className="px-3 py-2 text-center text-xs font-semibold text-gray-700 border-r">Shortage/Excess</th>
@@ -1844,8 +1844,8 @@ const InventoryPage: React.FC = () => {
                                     <td className="px-3 py-2 border-r"><input type="text" value={item.itemCode} onChange={(e) => handleIssueSlipItemChange(index, 'itemCode', e.target.value)} className="w-24 px-2 py-1 border border-gray-300 rounded text-sm" /></td>
                                     <td className="px-3 py-2 border-r"><input type="text" value={item.itemName} onChange={(e) => handleIssueSlipItemChange(index, 'itemName', e.target.value)} className="w-32 px-2 py-1 border border-gray-300 rounded text-sm" /></td>
                                     <td className="px-3 py-2 border-r"><input type="text" value={item.uom} readOnly className="w-16 px-2 py-1 bg-gray-50 border border-gray-200 rounded text-sm" /></td>
-                                    <td className="px-3 py-2 border-r bg-blue-50"><input type="number" value={item.vendorQty || ''} onChange={(e) => handleIssueSlipItemChange(index, 'vendorQty', e.target.value)} placeholder="Vendor Qty" className="w-20 px-2 py-1 border border-blue-300 rounded text-sm" /></td>
-                                    <td className="px-3 py-2 border-r bg-green-50"><input type="number" value={item.receivedQty || ''} onChange={(e) => handleIssueSlipItemChange(index, 'receivedQty', e.target.value)} placeholder="Recv Qty" className="w-20 px-2 py-1 border border-green-300 rounded text-sm" /></td>
+                                    <td className="px-3 py-2 border-r bg-teal-50"><input type="number" value={item.vendorQty || ''} onChange={(e) => handleIssueSlipItemChange(index, 'vendorQty', e.target.value)} placeholder="Vendor Qty" className="w-20 px-2 py-1 border border-teal-300 rounded text-sm" /></td>
+                                    <td className="px-3 py-2 border-r bg-teal-50"><input type="number" value={item.receivedQty || ''} onChange={(e) => handleIssueSlipItemChange(index, 'receivedQty', e.target.value)} placeholder="Recv Qty" className="w-20 px-2 py-1 border border-teal-300 rounded text-sm" /></td>
                                     <td className="px-3 py-2 border-r"><input type="number" value={item.acceptedQty || ''} onChange={(e) => handleIssueSlipItemChange(index, 'acceptedQty', e.target.value)} placeholder="Accept" className="w-20 px-2 py-1 border border-gray-300 rounded text-sm" /></td>
                                     <td className="px-3 py-2 border-r"><input type="number" value={item.rejectedQty || ''} onChange={(e) => handleIssueSlipItemChange(index, 'rejectedQty', e.target.value)} placeholder="Reject" className="w-20 px-2 py-1 border border-gray-300 rounded text-sm" /></td>
                                     <td className="px-3 py-2 border-r"><input type="number" value={item.shortageExcessQty || ''} onChange={(e) => handleIssueSlipItemChange(index, 'shortageExcessQty', e.target.value)} readOnly className="w-20 px-2 py-1 bg-gray-50 border border-gray-200 rounded text-sm" /></td>
@@ -1868,7 +1868,7 @@ const InventoryPage: React.FC = () => {
                             </table>
                           )}
                         </div>
-                        <div className="mt-2 text-sm text-blue-600 italic">
+                        <div className="mt-2 text-sm text-teal-600 italic">
                           {jwItemTab === 'outward'
                             ? '* Items fetched from Job Work Outward.'
                             : '* Verify received quantities against Vendor Delivery Challan.'}
@@ -3262,7 +3262,7 @@ const InventoryPage: React.FC = () => {
                         value="purchases"
                         checked={grnType === 'purchases'}
                         onChange={(e) => setGrnType(e.target.value)}
-                        className="text-blue-600 focus:ring-blue-500"
+                        className="text-teal-600 focus:ring-teal-500"
                       />
                       <span className="text-gray-700 font-medium">Purchases</span>
                     </label>
@@ -3273,7 +3273,7 @@ const InventoryPage: React.FC = () => {
                         value="sales_return"
                         checked={grnType === 'sales_return'}
                         onChange={(e) => setGrnType(e.target.value)}
-                        className="text-blue-600 focus:ring-blue-500"
+                        className="text-teal-600 focus:ring-teal-500"
                       />
                       <span className="text-gray-700 font-medium">Sales Return</span>
                     </label>
@@ -3283,19 +3283,19 @@ const InventoryPage: React.FC = () => {
                   <div className="grid grid-cols-4 gap-5">
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">GRN No.</label>
-                      <input type="text" value={grnNumber} onChange={(e) => setGrnNumber(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      <input type="text" value={grnNumber} onChange={(e) => setGrnNumber(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Date</label>
-                      <input type="date" value={grnDate} onChange={(e) => setGrnDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      <input type="date" value={grnDate} onChange={(e) => setGrnDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Time</label>
-                      <input type="time" value={grnTime} onChange={(e) => setGrnTime(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      <input type="time" value={grnTime} onChange={(e) => setGrnTime(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Location</label>
-                      <select value={grnLocation} onChange={(e) => setGrnLocation(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <select value={grnLocation} onChange={(e) => setGrnLocation(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
                         <option value="">Select Location</option>
                         {locations.filter(l => l.location_type === 'company_premises').map(loc => (
                           <option key={loc.id} value={loc.id}>{loc.name}</option>
@@ -3311,14 +3311,14 @@ const InventoryPage: React.FC = () => {
                       <div className="grid grid-cols-2 gap-5 mt-4">
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Vendor Name</label>
-                          <select value={grnVendorName} onChange={(e) => setGrnVendorName(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                          <select value={grnVendorName} onChange={(e) => setGrnVendorName(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
                             <option value="">Select Vendor</option>
                             <option value="Vendor A">Vendor A</option>
                           </select>
                         </div>
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Branch</label>
-                          <select value={grnBranch} onChange={(e) => setGrnBranch(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                          <select value={grnBranch} onChange={(e) => setGrnBranch(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
                             <option value="">Select Branch</option>
                             <option value="Main">Main</option>
                           </select>
@@ -3328,25 +3328,25 @@ const InventoryPage: React.FC = () => {
                       <div className="grid grid-cols-2 gap-5 mt-4">
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Address</label>
-                          <textarea value={grnAddress} onChange={(e) => setGrnAddress(e.target.value)} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                          <textarea value={grnAddress} onChange={(e) => setGrnAddress(e.target.value)} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
                         </div>
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">GSTIN No.</label>
-                          <input type="text" value={grnGstin} onChange={(e) => setGrnGstin(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                          <input type="text" value={grnGstin} onChange={(e) => setGrnGstin(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
                         </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-5 mt-4">
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Purchase Order No.</label>
-                          <select value={grnReferenceNo} onChange={(e) => setGrnReferenceNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                          <select value={grnReferenceNo} onChange={(e) => setGrnReferenceNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
                             <option value="">Select Pending PO</option>
                             <option value="PO-001">PO-001</option>
                           </select>
                         </div>
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Supplier Invoice No.</label>
-                          <input type="text" value={grnSecondaryRefNo} onChange={(e) => setGrnSecondaryRefNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                          <input type="text" value={grnSecondaryRefNo} onChange={(e) => setGrnSecondaryRefNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
                         </div>
                       </div>
                     </>
@@ -3356,14 +3356,14 @@ const InventoryPage: React.FC = () => {
                       <div className="grid grid-cols-2 gap-5 mt-4">
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Customer Name</label>
-                          <select value={grnCustomerName} onChange={(e) => setGrnCustomerName(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                          <select value={grnCustomerName} onChange={(e) => setGrnCustomerName(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
                             <option value="">Select Customer</option>
                             <option value="Customer A">Customer A</option>
                           </select>
                         </div>
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Branch</label>
-                          <select value={grnBranch} onChange={(e) => setGrnBranch(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                          <select value={grnBranch} onChange={(e) => setGrnBranch(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
                             <option value="">Select Branch</option>
                             <option value="Main">Main</option>
                           </select>
@@ -3373,25 +3373,25 @@ const InventoryPage: React.FC = () => {
                       <div className="grid grid-cols-2 gap-5 mt-4">
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Address</label>
-                          <textarea value={grnAddress} onChange={(e) => setGrnAddress(e.target.value)} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                          <textarea value={grnAddress} onChange={(e) => setGrnAddress(e.target.value)} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
                         </div>
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">GSTIN No.</label>
-                          <input type="text" value={grnGstin} onChange={(e) => setGrnGstin(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                          <input type="text" value={grnGstin} onChange={(e) => setGrnGstin(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
                         </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-5 mt-4">
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Sales Voucher No.</label>
-                          <select value={grnReferenceNo} onChange={(e) => setGrnReferenceNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                          <select value={grnReferenceNo} onChange={(e) => setGrnReferenceNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
                             <option value="">Select Sales Voucher</option>
                             <option value="SV-001">SV-001</option>
                           </select>
                         </div>
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Debit Note No.</label>
-                          <input type="text" value={grnSecondaryRefNo} onChange={(e) => setGrnSecondaryRefNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                          <input type="text" value={grnSecondaryRefNo} onChange={(e) => setGrnSecondaryRefNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
                         </div>
                       </div>
                     </>
@@ -3544,7 +3544,7 @@ const InventoryPage: React.FC = () => {
                         </tbody>
                       </table>
                       <div className="p-2">
-                        <button onClick={() => setGrnItems([...grnItems, {}])} className="text-blue-600 font-semibold text-sm">+ Add Item</button>
+                        <button onClick={() => setGrnItems([...grnItems, {}])} className="text-teal-600 font-semibold text-sm">+ Add Item</button>
                       </div>
                     </div>
                   </div>
@@ -3553,17 +3553,17 @@ const InventoryPage: React.FC = () => {
                   {grnType === 'sales_return' && (
                     <div className="mt-4">
                       <label className="block text-sm font-bold text-gray-700 mb-2">Reasons for Return (mandatory) <span className="text-red-500">*</span></label>
-                      <textarea value={grnReason} onChange={(e) => setGrnReason(e.target.value)} rows={3} className="w-full px-3 py-2 border-2 border-blue-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter reason..." />
+                      <textarea value={grnReason} onChange={(e) => setGrnReason(e.target.value)} rows={3} className="w-full px-3 py-2 border-2 border-teal-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Enter reason..." />
                     </div>
                   )}
 
                   <div className="mt-6">
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Posting Note</label>
-                    <textarea value={grnPostingNote} onChange={(e) => setGrnPostingNote(e.target.value)} rows={3} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <textarea value={grnPostingNote} onChange={(e) => setGrnPostingNote(e.target.value)} rows={3} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
                   </div>
 
                   <div className="flex gap-3 justify-end border-t border-gray-200 pt-5 mt-4">
-                    <button onClick={handleGRNSubmit} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-semibold text-sm">Post & Close</button>
+                    <button onClick={handleGRNSubmit} className="px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700 font-semibold text-sm">Post & Close</button>
                     <button onClick={() => setShowGRNForm(false)} className="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 font-semibold text-sm">Cancel</button>
                   </div>
                 </div>
@@ -3732,7 +3732,7 @@ const InventoryPage: React.FC = () => {
                     <td className="px-6 py-4 text-center space-x-2">
                       <button
                         onClick={() => handleEditItemOpen(item)}
-                        className="inline-block px-3 py-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 font-medium text-sm"
+                        className="inline-block px-3 py-1 bg-teal-100 text-teal-600 rounded hover:bg-teal-200 font-medium text-sm"
                       >
                         Edit
                       </button>
@@ -4295,7 +4295,7 @@ const InventoryPage: React.FC = () => {
                               setIsEditModeGRNSeries(true);
                               setSelectedGrnSeries(series);
                             }}
-                            className="text-white bg-blue-600 px-3 py-1 rounded text-xs hover:bg-blue-700"
+                            className="text-white bg-teal-600 px-3 py-1 rounded text-xs hover:bg-teal-700"
                             title="Edit"
                           >
                             ✎ Edit
@@ -4546,7 +4546,7 @@ const InventoryPage: React.FC = () => {
                               setIsEditModeIssueSlipSeries(true);
                               setSelectedIssueSlipSeries(series);
                             }}
-                            className="text-white bg-blue-600 px-3 py-1 rounded text-xs hover:bg-blue-700"
+                            className="text-white bg-teal-600 px-3 py-1 rounded text-xs hover:bg-teal-700"
                             title="Edit"
                           >
                             ✎ Edit
@@ -4588,7 +4588,7 @@ const InventoryPage: React.FC = () => {
         <div className="mb-6">
           <nav className="flex space-x-8 border-b border-gray-200" aria-label="GRN & Issue Slip Sub-tabs">
             {grnIssueSlipSubTabs.map((subTab) => (
-              <button key={subTab} onClick={() => setActiveGRNIssueSlipSubTab(subTab)} className={`pb-3 px-6 text-sm font-medium transition-all relative ${activeGRNIssueSlipSubTab === subTab ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500 hover:text-gray-700'}`}>
+              <button key={subTab} onClick={() => setActiveGRNIssueSlipSubTab(subTab)} className={`pb-3 px-6 text-sm font-medium transition-all relative ${activeGRNIssueSlipSubTab === subTab ? 'text-teal-600 border-b-2 border-teal-600' : 'text-gray-500 hover:text-gray-700'}`}>
                 {subTab.toUpperCase()}
               </button>
             ))}
@@ -4607,7 +4607,7 @@ const InventoryPage: React.FC = () => {
       <div className="mb-6">
         <nav className="flex space-x-8 border-b border-gray-200" aria-label="Master Sub-tabs">
           {masterSubTabs.map((subTab) => (
-            <button key={subTab} onClick={() => setActiveMasterSubTab(subTab)} className={`pb-3 px-6 text-sm font-medium transition-all relative ${activeMasterSubTab === subTab ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500 hover:text-gray-700'}`}>
+            <button key={subTab} onClick={() => setActiveMasterSubTab(subTab)} className={`pb-3 px-6 text-sm font-medium transition-all relative ${activeMasterSubTab === subTab ? 'text-teal-600 border-b-2 border-teal-600' : 'text-gray-500 hover:text-gray-700'}`}>
               {subTab.toUpperCase()}
             </button>
           ))}
@@ -4633,7 +4633,7 @@ const InventoryPage: React.FC = () => {
       </div>
       <div className="flex space-x-6 mb-6 border-b border-gray-200">
         {visibleTabs.map((tab) => (
-          <button key={tab} onClick={() => setActiveTab(tab)} className={`pb-2 text-sm font-medium transition-colors ${activeTab === tab ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>
+          <button key={tab} onClick={() => setActiveTab(tab)} className={`pb-2 text-sm font-medium transition-colors ${activeTab === tab ? 'text-teal-600 border-b-2 border-teal-600' : 'text-gray-500 hover:text-gray-700'}`}>
             {tab.toUpperCase()}
           </button>
         ))}
@@ -4646,3 +4646,4 @@ const InventoryPage: React.FC = () => {
 };
 
 export default InventoryPage;
+

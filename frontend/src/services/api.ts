@@ -414,7 +414,7 @@ class ApiService {
         formData.append('file', file);
         if (type) formData.append('type', type);
         formData.append('save', String(save));
-        return httpClient.postFormData('/api/ai/invoice-extract/', formData);
+        return httpClient.postFormData('/api/ai/extract-invoice/', formData);
     }
 
     async extractStockItemsFromFile(file: File) {

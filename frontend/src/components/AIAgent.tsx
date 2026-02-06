@@ -176,7 +176,7 @@ const AIAgent: React.FC<AIAgentProps> = ({ isOpen, onClose, messages, onSendMess
             <div key={index}>
               <div className={`flex items-end gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 {msg.role === 'model' && <div className="w-10 h-10 flex items-center justify-center flex-shrink-0"><img src="/src/assets/fox-logo-transparent.png" alt="Kiki" className="w-full h-full object-contain filter drop-shadow-sm" /></div>}
-                <div className={`max-w-xs md:max-w-sm rounded-lg px-4 py-2 text-sm ${msg.role === 'user' ? 'bg-orange-500 text-white rounded-br-none' : 'bg-gray-100 text-gray-800 rounded-bl-none'}`}>
+                <div className={`max-w-xs md:max-w-sm rounded-lg px-4 py-2 text-sm ${msg.role === 'user' ? 'bg-teal-500 text-white rounded-br-none' : 'bg-gray-100 text-gray-800 rounded-bl-none'}`}>
                   {msg.text}
                 </div>
               </div>
@@ -186,7 +186,7 @@ const AIAgent: React.FC<AIAgentProps> = ({ isOpen, onClose, messages, onSendMess
                   <ul className="space-y-1">
                     {msg.sources.map((source, i) => (
                       <li key={i} className="truncate">
-                        <a href={source.uri} target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline">
+                        <a href={source.uri} target="_blank" rel="noopener noreferrer" className="text-teal-600 hover:underline">
                           {i + 1}. {source.title}
                         </a>
                       </li>
@@ -213,8 +213,8 @@ const AIAgent: React.FC<AIAgentProps> = ({ isOpen, onClose, messages, onSendMess
 
         {/* Queue Status */}
         {queueStatus && queueStatus.code === 'QUEUED' && (
-          <div className="px-4 py-2 bg-orange-50 border-t border-orange-200">
-            <div className="text-xs text-orange-800 text-center">
+          <div className="px-4 py-2 bg-teal-50 border-t border-teal-200">
+            <div className="text-xs text-teal-800 text-center">
               <Icon name="clock" className="w-3 h-3 inline mr-1" />
               Request queued (position {queueStatus.queuePosition})
               {queueStatus.estimatedWaitSeconds && (
@@ -243,9 +243,9 @@ const AIAgent: React.FC<AIAgentProps> = ({ isOpen, onClose, messages, onSendMess
               placeholder="Ask about your data..."
               rows={1}
               disabled={isLoading}
-              className="w-full pl-4 pr-12 py-2 border border-gray-300 rounded-full resize-none focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:bg-gray-100"
+              className="w-full pl-4 pr-12 py-2 border border-gray-300 rounded-full resize-none focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-100"
             />
-            <button onClick={handleSend} disabled={isLoading || !input.trim()} className="absolute right-2 top-1/2 -translate-y-1/2 bg-orange-600 text-white rounded-full p-2 disabled:bg-gray-300 hover:bg-orange-700">
+            <button onClick={handleSend} disabled={isLoading || !input.trim()} className="absolute right-2 top-1/2 -translate-y-1/2 bg-teal-600 text-white rounded-full p-2 disabled:bg-gray-300 hover:bg-teal-700">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5"><path d="M3.105 3.105a.75.75 0 01.053 1.053L6.37 8.25H13.5a.75.75 0 010 1.5H6.37l-3.212 4.092a.75.75 0 01-1.106-.998l3.75-4.75a.75.75 0 010-.998l-3.75-4.75a.75.75 0 011.053-.053z"></path></svg>
             </button>
           </div>
@@ -254,7 +254,7 @@ const AIAgent: React.FC<AIAgentProps> = ({ isOpen, onClose, messages, onSendMess
               <div className="relative">
                 <input type="checkbox" id="grounding-toggle" className="sr-only" checked={useGrounding} onChange={() => setUseGrounding(!useGrounding)} />
                 <div className="block bg-gray-200 w-10 h-6 rounded-full"></div>
-                <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${useGrounding ? 'translate-x-full bg-orange-600' : ''}`}></div>
+                <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${useGrounding ? 'translate-x-full bg-teal-600' : ''}`}></div>
               </div>
               <div className="ml-3 text-xs text-gray-600">Search the web</div>
             </label>
@@ -277,3 +277,4 @@ const AIAgent: React.FC<AIAgentProps> = ({ isOpen, onClose, messages, onSendMess
 };
 
 export default AIAgent;
+

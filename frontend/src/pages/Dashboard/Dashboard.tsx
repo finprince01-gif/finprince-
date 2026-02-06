@@ -98,10 +98,10 @@ const MonthlyActivityChart: React.FC<{ data: { month: string; sales: number; pur
                             <Line
                                 type="monotone"
                                 dataKey="sales"
-                                stroke="#f97316"
+                                stroke="#0d9488"
                                 strokeWidth={3}
-                                dot={{ fill: '#f97316', strokeWidth: 2, r: 5 }}
-                                activeDot={{ r: 7, stroke: '#f97316', strokeWidth: 2 }}
+                                dot={{ fill: '#0d9488', strokeWidth: 2, r: 5 }}
+                                activeDot={{ r: 7, stroke: '#0d9488', strokeWidth: 2 }}
                                 name="Sales"
                             />
                             <Line
@@ -120,9 +120,9 @@ const MonthlyActivityChart: React.FC<{ data: { month: string; sales: number; pur
 
             {/* Data summary */}
             <div className="grid grid-cols-2 gap-4 mt-6 text-center">
-                <div className="bg-orange-50 p-3 rounded-lg">
-                    <p className="text-xs text-orange-600 font-medium">Total Sales</p>
-                    <p className="text-lg font-bold text-orange-800">₹{(totalSales / 1000).toFixed(1)}k</p>
+                <div className="bg-teal-50 p-3 rounded-lg">
+                    <p className="text-xs text-teal-600 font-medium">Total Sales</p>
+                    <p className="text-lg font-bold text-teal-800">₹{(totalSales / 1000).toFixed(1)}k</p>
                 </div>
                 <div className="bg-red-50 p-3 rounded-lg">
                     <p className="text-xs text-red-600 font-medium">Total Purchases</p>
@@ -271,10 +271,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ companyName, vouchers, le
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                <StatCard title="Total Sales" value={`₹${(totalSales / 1000).toFixed(1)}k`} icon={<Icon name="arrow-up-right" className="w-6 h-6 text-green-600" />} color="bg-green-100" />
+                <StatCard title="Total Sales" value={`₹${(totalSales / 1000).toFixed(1)}k`} icon={<Icon name="arrow-up-right" className="w-6 h-6 text-teal-600" />} color="bg-green-100" />
                 <StatCard title="Total Purchases" value={`₹${(totalPurchases / 1000).toFixed(1)}k`} icon={<Icon name="arrow-down-left" className="w-6 h-6 text-red-600" />} color="bg-red-100" />
-                <StatCard title="Receivables" value={`₹${(totalReceivables / 1000).toFixed(1)}k`} icon={<Icon name="users" className="w-6 h-6 text-orange-600" />} color="bg-orange-100" />
-                <StatCard title="Payables" value={`₹${(totalPayables / 1000).toFixed(1)}k`} icon={<Icon name="wallet" className="w-6 h-6 text-orange-600" />} color="bg-orange-100" />
+                <StatCard title="Receivables" value={`₹${(totalReceivables / 1000).toFixed(1)}k`} icon={<Icon name="users" className="w-6 h-6 text-teal-600" />} color="bg-teal-100" />
+                <StatCard title="Payables" value={`₹${(totalPayables / 1000).toFixed(1)}k`} icon={<Icon name="wallet" className="w-6 h-6 text-teal-600" />} color="bg-teal-100" />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
@@ -308,3 +308,4 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ companyName, vouchers, le
 };
 
 export default DashboardPage;
+

@@ -369,3 +369,4 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
 };
 
 export default CreateIssueSlipModal;
+

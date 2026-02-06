@@ -1331,7 +1331,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                 key={tab}
                                 onClick={() => setActiveTab(tab as VendorTab)}
                                 className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === tab
-                                    ? 'border-blue-500 text-blue-600'
+                                    ? 'border-teal-500 text-teal-600'
                                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                     }`}
                             >
@@ -2051,7 +2051,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         </button>
                                                     </div>
                                                     {uploadedFiles.msmeFile && (
-                                                        <p className="mt-1 text-xs text-green-600">✓ {uploadedFiles.msmeFile.name}</p>
+                                                        <p className="mt-1 text-xs text-teal-600">✓ {uploadedFiles.msmeFile.name}</p>
                                                     )}
                                                 </div>
                                                 <div>
@@ -2085,7 +2085,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         </button>
                                                     </div>
                                                     {uploadedFiles.fssaiFile && (
-                                                        <p className="mt-1 text-xs text-green-600">✓ {uploadedFiles.fssaiFile.name}</p>
+                                                        <p className="mt-1 text-xs text-teal-600">✓ {uploadedFiles.fssaiFile.name}</p>
                                                     )}
                                                 </div>
                                                 <div>
@@ -2119,7 +2119,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         </button>
                                                     </div>
                                                     {uploadedFiles.iecFile && (
-                                                        <p className="mt-1 text-xs text-green-600">✓ {uploadedFiles.iecFile.name}</p>
+                                                        <p className="mt-1 text-xs text-teal-600">✓ {uploadedFiles.iecFile.name}</p>
                                                     )}
                                                 </div>
                                                 <div>
@@ -2153,7 +2153,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         </button>
                                                     </div>
                                                     {uploadedFiles.eouFile && (
-                                                        <p className="mt-1 text-xs text-green-600">✓ {uploadedFiles.eouFile.name}</p>
+                                                        <p className="mt-1 text-xs text-teal-600">✓ {uploadedFiles.eouFile.name}</p>
                                                     )}
                                                 </div>
                                                 <div>
@@ -2207,17 +2207,17 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 const rateInfo = getTDSRateInfo(tdsSectionApplicable);
 
                                                 return rateInfo ? (
-                                                    <div className="mt-4 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-md">
+                                                    <div className="mt-4 p-4 bg-blue-50 border-l-4 border-teal-500 rounded-md">
                                                         <div className="flex items-start gap-3">
-                                                            <svg className="w-6 h-6 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <svg className="w-6 h-6 text-teal-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                                             </svg>
                                                             <div className="flex-1">
-                                                                <h4 className="text-sm font-semibold text-blue-800 mb-2">TDS Rate Information</h4>
-                                                                <div className="space-y-1 text-sm text-blue-700">
+                                                                <h4 className="text-sm font-semibold text-teal-800 mb-2">TDS Rate Information</h4>
+                                                                <div className="space-y-1 text-sm text-teal-700">
                                                                     <p><span className="font-medium">TDS Rate:</span> {rateInfo.tdsRate}</p>
                                                                     <p><span className="font-medium">Penalty Rate:</span> {rateInfo.penaltyRate}</p>
-                                                                    <p className="mt-2 text-xs text-blue-600 italic">{rateInfo.description}</p>
+                                                                    <p className="mt-2 text-xs text-teal-600 italic">{rateInfo.description}</p>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -2356,7 +2356,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                         {/* Edit Button */}
                                                                         <button
                                                                             type="button"
-                                                                            className="text-blue-600 hover:text-blue-900"
+                                                                            className="text-teal-600 hover:text-teal-900"
                                                                             title="Edit item"
                                                                         >
                                                                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2366,7 +2366,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                         {/* Save Button */}
                                                                         <button
                                                                             type="button"
-                                                                            className="text-green-600 hover:text-green-900"
+                                                                            className="text-teal-600 hover:text-green-900"
                                                                             title="Save item"
                                                                         >
                                                                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2759,9 +2759,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                             className="p-6 border-2 border-gray-200 rounded-lg hover:border-teal-500 hover:bg-teal-50 transition-all text-left group"
                                                         >
                                                             <div className="flex items-center justify-between mb-4">
-                                                                <div className={`p-3 rounded-full ${tab === 'Create PO' ? 'bg-blue-100 text-blue-600' :
-                                                                    tab === 'Pending PO' ? 'bg-orange-100 text-orange-600' :
-                                                                        'bg-green-100 text-green-600'
+                                                                <div className={`p-3 rounded-full ${tab === 'Create PO' ? 'bg-blue-100 text-teal-600' :
+                                                                    tab === 'Pending PO' ? 'bg-teal-100 text-teal-600' :
+                                                                        'bg-green-100 text-teal-600'
                                                                     }`}>
                                                                     {/* Icons based on tab */}
                                                                     {tab === 'Create PO' && (
@@ -2843,13 +2843,13 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                             {activeCreatePOSubTab === 'Pending for Approval' && (
                                                                 <div className="bg-white rounded-lg shadow overflow-hidden border border-gray-200">
                                                                     <table className="min-w-full divide-y divide-gray-200">
-                                                                        <thead className="bg-orange-50">
+                                                                        <thead className="bg-teal-50">
                                                                             <tr>
-                                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-orange-800 uppercase tracking-wider">PO#</th>
-                                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-orange-800 uppercase tracking-wider">PO Date</th>
-                                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-orange-800 uppercase tracking-wider">Vendor Name</th>
-                                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-orange-800 uppercase tracking-wider">Address</th>
-                                                                                <th className="px-6 py-3 text-right text-xs font-semibold text-orange-800 uppercase tracking-wider">Action</th>
+                                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-teal-800 uppercase tracking-wider">PO#</th>
+                                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-teal-800 uppercase tracking-wider">PO Date</th>
+                                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-teal-800 uppercase tracking-wider">Vendor Name</th>
+                                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-teal-800 uppercase tracking-wider">Address</th>
+                                                                                <th className="px-6 py-3 text-right text-xs font-semibold text-teal-800 uppercase tracking-wider">Action</th>
                                                                             </tr>
                                                                         </thead>
                                                                         <tbody className="bg-white divide-y divide-gray-200">
@@ -2869,7 +2869,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                                                             <button
                                                                                                 onClick={() => handleViewPO(po)}
-                                                                                                className="text-blue-600 hover:text-blue-900"
+                                                                                                className="text-teal-600 hover:text-teal-900"
                                                                                                 title="View PO"
                                                                                             >
                                                                                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2890,11 +2890,11 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                     <table className="min-w-full divide-y divide-gray-200">
                                                                         <thead className="bg-blue-50">
                                                                             <tr>
-                                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-blue-800 uppercase tracking-wider">PO#</th>
-                                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-blue-800 uppercase tracking-wider">PO Date</th>
-                                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-blue-800 uppercase tracking-wider">Vendor Name</th>
-                                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-blue-800 uppercase tracking-wider">Address</th>
-                                                                                <th className="px-6 py-3 text-right text-xs font-semibold text-blue-800 uppercase tracking-wider">Action</th>
+                                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-teal-800 uppercase tracking-wider">PO#</th>
+                                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-teal-800 uppercase tracking-wider">PO Date</th>
+                                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-teal-800 uppercase tracking-wider">Vendor Name</th>
+                                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-teal-800 uppercase tracking-wider">Address</th>
+                                                                                <th className="px-6 py-3 text-right text-xs font-semibold text-teal-800 uppercase tracking-wider">Action</th>
                                                                             </tr>
                                                                         </thead>
                                                                         <tbody className="bg-white divide-y divide-gray-200">
@@ -2912,12 +2912,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{po.vendorName}</td>
                                                                                         <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title={po.address}>{po.address}</td>
                                                                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                                                            <button className="text-indigo-600 hover:text-indigo-900 mr-3" title="Mail PO">
+                                                                                            <button className="text-teal-600 hover:text-indigo-900 mr-3" title="Mail PO">
                                                                                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                                                                                             </button>
                                                                                             <button
                                                                                                 onClick={() => handleViewPO(po)}
-                                                                                                className="text-blue-600 hover:text-blue-900"
+                                                                                                className="text-teal-600 hover:text-teal-900"
                                                                                                 title="View">
                                                                                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                                                                             </button>
@@ -2965,7 +2965,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                 </span>
                                                                             </td>
                                                                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                                                <button className="text-blue-600 hover:text-blue-900" title="View">
+                                                                                <button className="text-teal-600 hover:text-teal-900" title="View">
                                                                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                                                                 </button>
                                                                             </td>
@@ -3009,7 +3009,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                 </span>
                                                                             </td>
                                                                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                                                <button className="text-blue-600 hover:text-blue-900" title="View">
+                                                                                <button className="text-teal-600 hover:text-teal-900" title="View">
                                                                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                                                                 </button>
                                                                             </td>
@@ -3144,7 +3144,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                             <tr key={entry.id} className="hover:bg-gray-50 transition-colors">
                                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(entry.date)}</td>
                                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.takenFrom}</td>
-                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600">{entry.invoiceNo || '-'}</td>
+                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-teal-600">{entry.invoiceNo || '-'}</td>
                                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.ledger}</td>
                                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                                                                                     <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full 
@@ -3229,7 +3229,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                             };
                                                                                             setSelectedProcurementVendor(procurementItem);
                                                                                         }}
-                                                                                        className="text-blue-600 hover:text-blue-900 hover:underline font-medium text-left"
+                                                                                        className="text-teal-600 hover:text-teal-900 hover:underline font-medium text-left"
                                                                                         title="View Ledger"
                                                                                     >
                                                                                         {vendor.vendorName}
@@ -3437,7 +3437,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                         }}
                                                                                         className={`px-3 py-1 text-white text-xs rounded ${bill.status === 'Approved' || bill.status === 'Initiated'
                                                                                             ? 'bg-red-600 hover:bg-red-700'
-                                                                                            : 'bg-green-600 hover:bg-green-700'
+                                                                                            : 'bg-teal-600 hover:bg-teal-700'
                                                                                             }`}
                                                                                         title={bill.status === 'Approved' || bill.status === 'Initiated' ? "Unapprove" : "Approve (Super users only)"}
                                                                                     >
@@ -3452,7 +3452,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                     {bill.status !== 'Posted' && (
                                                                                         <>
                                                                                             <button
-                                                                                                className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+                                                                                                className="px-3 py-1 bg-teal-600 text-white text-xs rounded hover:bg-teal-700"
                                                                                                 title="Initiate & Post"
                                                                                             >
                                                                                                 Initiate & Post
@@ -3475,7 +3475,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                             <td className="px-6 py-4 whitespace-nowrap">
                                                                                 <div className="flex items-center space-x-2">
                                                                                     <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${bill.status === 'Posted' ? 'bg-green-100 text-green-800' :
-                                                                                        bill.status === 'Approved' ? 'bg-blue-100 text-blue-800' :
+                                                                                        bill.status === 'Approved' ? 'bg-blue-100 text-teal-800' :
                                                                                             bill.status === 'Initiated' ? 'bg-purple-100 text-purple-800' :
                                                                                                 'bg-yellow-100 text-yellow-800'
                                                                                         }`}>
@@ -3921,7 +3921,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         <div className="grid grid-cols-2 gap-6">
                                             <div>
                                                 <label className="block text-sm font-semibold text-gray-700 mb-1">PO Number</label>
-                                                <p className="text-lg font-bold text-blue-900">{selectedPO.poNumber}</p>
+                                                <p className="text-lg font-bold text-teal-900">{selectedPO.poNumber}</p>
                                             </div>
                                             <div>
                                                 <label className="block text-sm font-semibold text-gray-700 mb-1">PO Date</label>
@@ -3930,8 +3930,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             <div>
                                                 <label className="block text-sm font-semibold text-gray-700 mb-1">Status</label>
                                                 <span className={`px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full ${selectedPO.status === 'Pending Approval'
-                                                    ? 'bg-orange-100 text-orange-800 border border-orange-200'
-                                                    : 'bg-blue-100 text-blue-800 border border-blue-200'
+                                                    ? 'bg-teal-100 text-teal-800 border border-teal-200'
+                                                    : 'bg-blue-100 text-teal-800 border border-blue-200'
                                                     }`}>
                                                     {selectedPO.status}
                                                 </span>
@@ -3954,7 +3954,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         value={selectedPO.address}
                                                         onChange={(e) => setSelectedPO({ ...selectedPO, address: e.target.value })}
                                                         rows={3}
-                                                        className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                                                     />
                                                 ) : (
                                                     <p className="text-gray-900">{selectedPO.address}</p>
@@ -3985,7 +3985,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         </div>
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">Total Value</label>
-                                            <p className="text-lg font-bold text-blue-900">₹ 0.00</p>
+                                            <p className="text-lg font-bold text-teal-900">₹ 0.00</p>
                                         </div>
                                     </div>
 
@@ -4000,7 +4000,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         type="date"
                                                         value={selectedPO.receiveBy || ''}
                                                         onChange={(e) => setSelectedPO({ ...selectedPO, receiveBy: e.target.value })}
-                                                        className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                                                     />
                                                 ) : (
                                                     <p className="text-gray-900">{selectedPO.receiveBy || '-'}</p>
@@ -4013,7 +4013,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         type="text"
                                                         value={selectedPO.receiveAt || ''}
                                                         onChange={(e) => setSelectedPO({ ...selectedPO, receiveAt: e.target.value })}
-                                                        className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                                                         placeholder="Enter location"
                                                     />
                                                 ) : (
@@ -4027,7 +4027,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         value={selectedPO.deliveryTerms || ''}
                                                         onChange={(e) => setSelectedPO({ ...selectedPO, deliveryTerms: e.target.value })}
                                                         rows={2}
-                                                        className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                                                         placeholder="Enter delivery terms"
                                                     />
                                                 ) : (
@@ -4086,7 +4086,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             {!isEditingPO && selectedPO.status === 'Pending Approval' && (
                                                 <button
                                                     onClick={handleApprovePO}
-                                                    className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                                                    className="px-6 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700"
                                                 >
                                                     Approve PO
                                                 </button>
@@ -4094,7 +4094,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             {!isEditingPO && selectedPO.status === 'Approved' && (
                                                 <button
                                                     onClick={handleMailPO}
-                                                    className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                                                    className="px-6 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700"
                                                 >
                                                     Mail PO
                                                 </button>
@@ -4251,15 +4251,15 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             {/* Toast Notification */}
             {toast.show && (
                 <div className="fixed top-4 right-4 z-[9999] animate-slide-in-right">
-                    <div className={`flex items-start gap-3 px-6 py-4 rounded-lg shadow-2xl border-l-4 min-w-[320px] max-w-md backdrop-blur-sm ${toast.type === 'success' ? 'bg-green-50 border-green-500 text-green-800' :
+                    <div className={`flex items-start gap-3 px-6 py-4 rounded-lg shadow-2xl border-l-4 min-w-[320px] max-w-md backdrop-blur-sm ${toast.type === 'success' ? 'bg-green-50 border-teal-500 text-green-800' :
                         toast.type === 'error' ? 'bg-red-50 border-red-500 text-red-800' :
                             toast.type === 'warning' ? 'bg-yellow-50 border-yellow-500 text-yellow-800' :
-                                'bg-blue-50 border-blue-500 text-blue-800'
+                                'bg-blue-50 border-teal-500 text-teal-800'
                         }`}>
                         {/* Icon */}
                         <div className="flex-shrink-0 mt-0.5">
                             {toast.type === 'success' && (
-                                <svg className="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-6 h-6 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                             )}
@@ -4274,7 +4274,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                 </svg>
                             )}
                             {toast.type === 'info' && (
-                                <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-6 h-6 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                             )}
@@ -4304,4 +4304,5 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 };
 
 export default VendorPortalPage;
+
 

@@ -2,6 +2,7 @@ import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import type { MassUploadFile, ExtractedInvoiceData, Voucher, Ledger, StockItem, CompanyDetails, SalesPurchaseVoucher, PaymentReceiptVoucher, ContraVoucher, JournalVoucher, VoucherItem, ExtractedLineItem, VoucherType } from '../types';
 import Icon from './Icon';
 import { apiService } from '../services';
+import { extractInvoiceDataWithRetry } from '../services/geminiService';
 
 // Let TypeScript know that the XLSX library is available globally
 declare const XLSX: any;
@@ -48,7 +49,7 @@ const UploadDropzone: React.FC<{ onFilesSelected: (files: FileList) => void }> =
 
     return (
         <div
-            className={`w-full h-full flex flex-col items-center justify-center border-4 border-dashed rounded-lg transition-colors ${isDragging ? 'border-blue-500 bg-blue-50' : 'border-slate-300 bg-slate-100'}`}
+            className={`w-full h-full flex flex-col items-center justify-center border-4 border-dashed rounded-lg transition-colors ${isDragging ? 'border-teal-500 bg-teal-50' : 'border-slate-300 bg-slate-100'}`}
             onDragEnter={e => handleDrag(e, true)}
             onDragLeave={e => handleDrag(e, false)}
             onDragOver={e => handleDrag(e, true)}
@@ -59,7 +60,7 @@ const UploadDropzone: React.FC<{ onFilesSelected: (files: FileList) => void }> =
             <p className="text-slate-500 mt-1">Supports images (PNG, JPG), PDF files, and Excel files.</p>
             <button
                 onClick={() => inputRef.current?.click()}
-                className="mt-6 px-6 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700"
+                className="mt-6 px-6 py-2 bg-teal-600 text-white font-semibold rounded-md hover:bg-teal-700"
             >
                 Or click to browse
             </button>
@@ -191,7 +192,7 @@ const MassUploadModal: React.FC<MassUploadModalProps> = ({ onClose, onComplete, 
                         const vouchers = await processExcel(file.file);
                         setFiles(prev => prev.map(f => f.id === file.id ? { ...f, status: 'success', extractedData: vouchers } : f));
                     } else {
-                        const data = await apiService.extractInvoiceData(file.file, voucherType, false);
+                        const data = await extractInvoiceDataWithRetry(file.file);
                         setFiles(prev => prev.map(f => f.id === file.id ? { ...f, status: 'success', extractedData: data } : f));
                     }
                 } catch (error) {
@@ -295,42 +296,48 @@ const MassUploadModal: React.FC<MassUploadModalProps> = ({ onClose, onComplete, 
                 } else {
                     // Image/PDF with extracted data
                     const data = file.extractedData as ExtractedInvoiceData;
-                    const partyLedger = ledgers.find(l => l.name.toLowerCase() === data.sellerName.toLowerCase());
-                    const isInterState = (partyLedger?.state && companyDetails.state)
-                        ? partyLedger.state.toLowerCase() !== companyDetails.state.toLowerCase()
-                        : false;
+                    const totals = calculateVoucherTotals(data, data.sellerName || 'Unknown Party');
 
                     const items: VoucherItem[] = (data.lineItems || []).filter(item => item != null).map(item => {
-                        const stockItem = stockItems.find(si => si.name.toLowerCase() === item.itemDescription.toLowerCase());
+                        const stockItem = stockItems.find(si => si.name.toLowerCase() === (item.itemDescription || '').toLowerCase());
                         const gstRate = stockItem?.gstRate || 18;
                         const quantity = Number(item.quantity) || 0;
                         const rate = Number(item.rate) || 0;
                         const taxableAmount = quantity * rate;
                         const tax = taxableAmount * (gstRate / 100);
                         return {
-                            name: item.itemDescription, qty: quantity, rate: rate, taxableAmount,
-                            cgstAmount: isInterState ? 0 : tax / 2, sgstAmount: isInterState ? 0 : tax / 2,
-                            igstAmount: isInterState ? tax : 0, totalAmount: taxableAmount + tax,
+                            name: item.itemDescription || 'Unknown Item',
+                            qty: quantity,
+                            rate: rate,
+                            taxableAmount: taxableAmount,
+                            cgstAmount: totals.isInterState ? 0 : tax / 2,
+                            sgstAmount: totals.isInterState ? 0 : tax / 2,
+                            igstAmount: totals.isInterState ? tax : 0,
+                            totalAmount: taxableAmount + tax,
                         };
                     });
 
-                    const { totalTaxableAmount, totalCgst, totalSgst, totalIgst, grandTotal } = items.reduce((acc, item) => ({
-                        totalTaxableAmount: acc.totalTaxableAmount + item.taxableAmount, totalCgst: acc.totalCgst + item.cgstAmount,
-                        totalSgst: acc.totalSgst + item.sgstAmount, totalIgst: acc.totalIgst + item.igstAmount, grandTotal: acc.grandTotal + item.totalAmount,
-                    }), { totalTaxableAmount: 0, totalCgst: 0, totalSgst: 0, totalIgst: 0, grandTotal: 0 });
-
-                    const invoiceDate = new Date(data.invoiceDate);
+                    const invoiceDateStr = typeof data.invoiceDate === 'string' ? data.invoiceDate : new Date().toISOString().split('T')[0];
+                    const invoiceDate = new Date(invoiceDateStr);
                     const validInvoiceDate = !isNaN(invoiceDate.getTime()) ? invoiceDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
 
                     const dueDateValue = data.dueDate ? new Date(data.dueDate) : null;
                     const validDueDate = dueDateValue && !isNaN(dueDateValue.getTime()) ? dueDateValue.toISOString().split('T')[0] : undefined;
 
                     const voucher: SalesPurchaseVoucher = {
-                        id: '', type: voucherType, date: validInvoiceDate,
-                        invoiceNo: data.invoiceNumber,
+                        id: Math.random().toString(36).substr(2, 9),
+                        type: voucherType as 'Sales' | 'Purchase',
+                        date: validInvoiceDate,
+                        invoiceNo: data.invoiceNumber || '',
                         dueDate: validDueDate,
-                        party: data.sellerName, isInterState, items,
-                        totalTaxableAmount, totalCgst, totalSgst, totalIgst, total: grandTotal,
+                        party: data.sellerName || 'Unknown Party',
+                        isInterState: totals.isInterState,
+                        items,
+                        totalTaxableAmount: totals.totalTaxableAmount,
+                        totalCgst: totals.totalCgst,
+                        totalSgst: totals.totalSgst,
+                        totalIgst: totals.totalIgst,
+                        total: totals.grandTotal,
                         narration: `Auto-imported from ${file.file.name}`,
                     };
                     vouchersToCreate.push(voucher);
@@ -352,8 +359,8 @@ const MassUploadModal: React.FC<MassUploadModalProps> = ({ onClose, onComplete, 
     const StatusPill: React.FC<{ status: MassUploadFile['status'] }> = ({ status }) => {
         const styles = {
             pending: 'bg-slate-200 text-slate-600',
-            processing: 'bg-blue-100 text-blue-600 animate-pulse',
-            success: 'bg-green-100 text-green-700',
+            processing: 'bg-teal-100 text-teal-600 animate-pulse',
+            success: 'bg-green-100 text-teal-700',
             error: 'bg-red-100 text-red-700',
         }[status];
         const icon = {
@@ -375,7 +382,7 @@ const MassUploadModal: React.FC<MassUploadModalProps> = ({ onClose, onComplete, 
             <style>{`
                   .review-input { width: 100%; border: 1px solid transparent; background: #f8fafc; border-radius: 4px; padding: 4px 6px; transition: all 0.2s; color: #1e293b; }
                   .review-input:hover { border-color: #cbd5e1; }
-                  .review-input:focus { border-color: #3b82f6; background: white; box-shadow: 0 0 0 1px #3b82f6; }
+                  .review-input:focus { border-color: #0d9488; background: white; box-shadow: 0 0 0 1px #0d9488; }
                   .sub-table-header { padding: 0.5rem 0.75rem; text-align: left; font-size: 0.75rem; font-weight: 600; color: #4b5563; }
              `}</style>
             <div className="bg-slate-50 rounded-xl shadow-2xl w-full max-w-7xl h-[90vh] flex flex-col">
@@ -395,49 +402,57 @@ const MassUploadModal: React.FC<MassUploadModalProps> = ({ onClose, onComplete, 
                                     <tr>
                                         <th className="p-3 text-left font-semibold text-slate-600">File</th>
                                         <th className="p-3 text-left font-semibold text-slate-600 w-32">Status</th>
-                                        <th className="p-3 text-left font-semibold text-slate-600">Seller Name</th>
-                                        <th className="p-3 text-left font-semibold text-slate-600 w-40">Invoice No.</th>
-                                        <th className="p-3 text-left font-semibold text-slate-600 w-36">Invoice Date</th>
-                                        <th className="p-3 text-left font-semibold text-slate-600 w-36">Due Date</th>
+                                        <th className="p-3 text-left font-semibold text-slate-600 w-36">Date</th>
+                                        <th className="p-3 text-left font-semibold text-slate-600 w-36">Inv No.</th>
+                                        <th className="p-3 text-left font-semibold text-slate-600">Party</th>
                                         <th className="p-3 text-right font-semibold text-slate-600 w-36">Amount</th>
                                         <th className="p-3 w-12"></th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    {files.map(file => {
-                                        const isExcel = Array.isArray(file.extractedData);
-                                        return <tr key={file.id} className="border-b border-slate-200 bg-white">
-                                            <td className="p-2 font-medium text-slate-700 truncate" title={file.file.name}>{file.file.name}</td>
-                                            <td className="p-2"><StatusPill status={file.status} /></td>
-                                            <td className="p-1">
-                                                {file.status === 'success' && (isExcel ? `Excel file with ${file.extractedData.length} vouchers` : <input type="text" value={file.extractedData?.sellerName || ''} onChange={e => handleDataChange(file.id, 'sellerName', e.target.value)} className="review-input" />)}
+                                <tbody className="divide-y divide-slate-200">
+                                    {files.map((file, index) => (
+                                        <tr key={index} className="hover:bg-slate-50 transition-colors">
+                                            <td className="p-3">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-slate-500">
+                                                        {file.file.type.includes('image') ? '🖼️' : '📄'}
+                                                    </div>
+                                                    <span className="text-sm font-medium text-slate-700 truncate max-w-[150px]" title={file.file.name}>
+                                                        {file.file.name}
+                                                    </span>
+                                                </div>
                                             </td>
-                                            <td className="p-1">
-                                                {file.status === 'success' && (isExcel ? '' : <input type="text" value={file.extractedData?.invoiceNumber || ''} onChange={e => handleDataChange(file.id, 'invoiceNumber', e.target.value)} className="review-input" />)}
+                                            <td className="p-3">
+                                                <StatusPill status={file.status} />
                                             </td>
-                                            <td className="p-1">
-                                                {file.status === 'success' && (isExcel ? '' : (() => {
+                                            <td className="p-3">
+                                                {file.status === 'success' && (Array.isArray(file.extractedData) ? '' : (() => {
                                                     const invoiceDate = new Date(file.extractedData?.invoiceDate || Date.now());
                                                     const validValue = !isNaN(invoiceDate.getTime()) ? invoiceDate.toISOString().split('T')[0] : '';
                                                     return <input type="date" value={validValue} onChange={e => handleDataChange(file.id, 'invoiceDate', e.target.value)} className="review-input" />;
                                                 })())}
                                             </td>
-                                            <td className="p-1">
-                                                {file.status === 'success' && (isExcel ? '' : (() => {
-                                                    const dueDate = file.extractedData?.dueDate ? new Date(file.extractedData.dueDate) : null;
-                                                    const validValue = dueDate && !isNaN(dueDate.getTime()) ? dueDate.toISOString().split('T')[0] : '';
-                                                    return <input type="date" value={validValue} onChange={e => handleDataChange(file.id, 'dueDate', e.target.value)} className="review-input" />;
-                                                })())}
+                                            <td className="p-3">
+                                                {file.status === 'success' && (Array.isArray(file.extractedData) ? '' : <input type="text" value={file.extractedData?.invoiceNumber || ''} onChange={e => handleDataChange(file.id, 'invoiceNumber', e.target.value)} className="review-input" />)}
                                             </td>
-                                            <td className="p-1 text-right">
-                                                {file.status === 'success' && (isExcel ? file.extractedData.reduce((sum, v) => sum + (v.total || v.amount || 0), 0).toFixed(2) : <input type="number" value={Number(file.extractedData?.totalAmount || 0).toFixed(2)} readOnly className="review-input text-right font-mono bg-slate-100" />)}
+                                            <td className="p-3">
+                                                {file.status === 'success' && (Array.isArray(file.extractedData) ? `Excel file with ${file.extractedData.length} vouchers` : <input type="text" value={file.extractedData?.sellerName || ''} onChange={e => handleDataChange(file.id, 'sellerName', e.target.value)} className="review-input" />)}
                                             </td>
-                                            <td className="p-2 text-center">
-                                                <button onClick={() => handleDeleteFile(file.id)} className="text-slate-400 hover:text-red-500" title="Remove file"><Icon name="trash" className="w-4 h-4" /></button>
+                                            <td className="p-3 text-right">
+                                                {file.status === 'success' && (Array.isArray(file.extractedData) ? file.extractedData.reduce((sum, v) => sum + (v.total || v.amount || 0), 0).toFixed(2) : <input type="number" value={Number(file.extractedData?.totalAmount || 0).toFixed(2)} readOnly className="review-input text-right font-mono bg-slate-100" />)}
+                                            </td>
+                                            <td className="p-3">
+                                                <button
+                                                    onClick={() => handleDeleteFile(file.id)}
+                                                    className="text-slate-400 hover:text-red-500 transition-colors"
+                                                >
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                    </svg>
+                                                </button>
                                             </td>
                                         </tr>
-                                    }
-                                    )}
+                                    ))}
                                 </tbody>
                             </table>
                         )}
@@ -451,12 +466,12 @@ const MassUploadModal: React.FC<MassUploadModalProps> = ({ onClose, onComplete, 
                         <div className="flex items-center space-x-2">
                             <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-slate-200">Cancel</button>
                             {isProcessing ? (
-                                <button disabled className="px-4 py-2 text-sm font-medium text-white bg-blue-400 rounded-md flex items-center cursor-not-allowed"><Icon name="spinner" className="animate-spin w-4 h-4 mr-2" />Processing...</button>
+                                <button disabled className="px-4 py-2 text-sm font-medium text-white bg-teal-400 rounded-md flex items-center cursor-not-allowed"><Icon name="spinner" className="animate-spin w-4 h-4 mr-2" />Processing...</button>
                             ) : (
                                 !hasPendingFiles ? (
-                                    <button onClick={handleSave} disabled={successCount === 0} className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md flex items-center hover:bg-green-700 disabled:bg-gray-400"><Icon name="check-circle" className="w-5 h-5 mr-2" /> Save {successCount} Vouchers</button>
+                                    <button onClick={handleSave} disabled={successCount === 0} className="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-md flex items-center hover:bg-teal-700 disabled:bg-gray-400"><Icon name="check-circle" className="w-5 h-5 mr-2" /> Save {successCount} Vouchers</button>
                                 ) : (
-                                    <button onClick={startProcessing} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md flex items-center hover:bg-blue-700"><Icon name="wand-sparkles" className="w-5 h-5 mr-2" /> Start Processing</button>
+                                    <button onClick={startProcessing} className="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-md flex items-center hover:bg-teal-700"><Icon name="wand-sparkles" className="w-5 h-5 mr-2" /> Start Processing</button>
                                 )
                             )}
                         </div>
@@ -468,3 +483,4 @@ const MassUploadModal: React.FC<MassUploadModalProps> = ({ onClose, onComplete, 
 };
 
 export default MassUploadModal;
+
