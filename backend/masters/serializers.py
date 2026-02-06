@@ -25,9 +25,6 @@ class VoucherConfigurationSerializer(serializers.ModelSerializer):
             'start_from',
             'current_number',
             'required_digits',
-            'effective_from',
-            'effective_to',
-            'update_customer_master',
             'include_from_existing_series_id',
             'is_active',
             'created_at',
@@ -37,13 +34,6 @@ class VoucherConfigurationSerializer(serializers.ModelSerializer):
     
     def validate(self, data):
         """Custom validation for voucher configuration."""
-        # Validate effective dates
-        if data.get('effective_from') and data.get('effective_to'):
-            if data['effective_from'] > data['effective_to']:
-                raise serializers.ValidationError({
-                    'effective_to': 'Effective To date must be after Effective From date'
-                })
-        
         # Validate required_digits
         if data.get('required_digits', 0) < 1:
             raise serializers.ValidationError({

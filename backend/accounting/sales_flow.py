@@ -150,14 +150,11 @@ def generate_sales_invoice_number(tenant_id: str, voucher_type_id: int) -> str:
         tenant_id=tenant_id,
         voucher_type='sales',
         voucher_name=voucher_type.name,
-        is_active=True,
-        effective_from__lte=today,
-        effective_to__gte=today
+        is_active=True
     ).first()
     
     if not config:
         # Create default configuration if none exists
-        from datetime import date
         config = VoucherConfiguration.objects.create(
             tenant_id=tenant_id,
             voucher_type='sales',
@@ -168,8 +165,6 @@ def generate_sales_invoice_number(tenant_id: str, voucher_type_id: int) -> str:
             start_from=1,
             current_number=1,
             required_digits=4,
-            effective_from=date(today.year, 4, 1),  # Financial year start
-            effective_to=date(today.year + 1, 3, 31),  # Financial year end
             is_active=True
         )
     

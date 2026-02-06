@@ -188,12 +188,7 @@ class VoucherConfiguration(BaseModel):
     current_number = models.PositiveBigIntegerField(default=1)
     required_digits = models.IntegerField(default=4)
     
-    # Effective Period
-    effective_from = models.DateField()
-    effective_to = models.DateField()
-    
     # Sales-specific fields
-    update_customer_master = models.BooleanField(null=True, blank=True)
     include_from_existing_series_id = models.BigIntegerField(null=True, blank=True)
     
     # Status
@@ -201,10 +196,9 @@ class VoucherConfiguration(BaseModel):
     
     class Meta:
         db_table = 'voucher_configurations'
-        unique_together = ('tenant_id', 'voucher_type', 'voucher_name', 'effective_from')
+        unique_together = ('tenant_id', 'voucher_type', 'voucher_name')
         indexes = [
             models.Index(fields=['tenant_id', 'voucher_type']),
-            models.Index(fields=['effective_from', 'effective_to']),
         ]
     
     def __str__(self):
@@ -903,10 +897,7 @@ class MasterVoucherSales(models.Model):
     current_number = models.IntegerField(default=1, help_text="Current number in sequence")
     required_digits = models.IntegerField(default=4, help_text="Number of digits for padding")
     enable_auto_numbering = models.BooleanField(default=True, help_text="Enable automatic numbering")
-    update_customer_master = models.BooleanField(default=False, help_text="Update customer master")
     include_from_existing_series = models.CharField(max_length=200, blank=True, null=True, help_text="Include from existing series")
-    effective_from = models.DateField(blank=True, null=True, help_text="Effective from date")
-    effective_to = models.DateField(blank=True, null=True, help_text="Effective to date")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -934,8 +925,6 @@ class MasterVoucherCreditNote(models.Model):
     required_digits = models.IntegerField(default=4, help_text="Number of digits for padding")
     enable_auto_numbering = models.BooleanField(default=True, help_text="Enable automatic numbering")
     include_from_existing_series = models.CharField(max_length=200, blank=True, null=True, help_text="Include from existing series")
-    effective_from = models.DateField(blank=True, null=True, help_text="Effective from date")
-    effective_to = models.DateField(blank=True, null=True, help_text="Effective to date")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -963,8 +952,6 @@ class MasterVoucherReceipts(models.Model):
     required_digits = models.IntegerField(default=4, help_text="Number of digits for padding")
     enable_auto_numbering = models.BooleanField(default=True, help_text="Enable automatic numbering")
     include_from_existing_series = models.CharField(max_length=200, blank=True, null=True, help_text="Include from existing series")
-    effective_from = models.DateField(blank=True, null=True, help_text="Effective from date")
-    effective_to = models.DateField(blank=True, null=True, help_text="Effective to date")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -992,8 +979,6 @@ class MasterVoucherPurchases(models.Model):
     required_digits = models.IntegerField(default=4, help_text="Number of digits for padding")
     enable_auto_numbering = models.BooleanField(default=True, help_text="Enable automatic numbering")
     include_from_existing_series = models.CharField(max_length=200, blank=True, null=True, help_text="Include from existing series")
-    effective_from = models.DateField(blank=True, null=True, help_text="Effective from date")
-    effective_to = models.DateField(blank=True, null=True, help_text="Effective to date")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1021,8 +1006,6 @@ class MasterVoucherDebitNote(models.Model):
     required_digits = models.IntegerField(default=4, help_text="Number of digits for padding")
     enable_auto_numbering = models.BooleanField(default=True, help_text="Enable automatic numbering")
     include_from_existing_series = models.CharField(max_length=200, blank=True, null=True, help_text="Include from existing series")
-    effective_from = models.DateField(blank=True, null=True, help_text="Effective from date")
-    effective_to = models.DateField(blank=True, null=True, help_text="Effective to date")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1050,8 +1033,6 @@ class MasterVoucherPayments(models.Model):
     required_digits = models.IntegerField(default=4, help_text="Number of digits for padding")
     enable_auto_numbering = models.BooleanField(default=True, help_text="Enable automatic numbering")
     include_from_existing_series = models.CharField(max_length=200, blank=True, null=True, help_text="Include from existing series")
-    effective_from = models.DateField(blank=True, null=True, help_text="Effective from date")
-    effective_to = models.DateField(blank=True, null=True, help_text="Effective to date")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1079,8 +1060,6 @@ class MasterVoucherExpenses(models.Model):
     required_digits = models.IntegerField(default=4, help_text="Number of digits for padding")
     enable_auto_numbering = models.BooleanField(default=True, help_text="Enable automatic numbering")
     include_from_existing_series = models.CharField(max_length=200, blank=True, null=True, help_text="Include from existing series")
-    effective_from = models.DateField(blank=True, null=True, help_text="Effective from date")
-    effective_to = models.DateField(blank=True, null=True, help_text="Effective to date")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1108,8 +1087,6 @@ class MasterVoucherJournal(models.Model):
     required_digits = models.IntegerField(default=4, help_text="Number of digits for padding")
     enable_auto_numbering = models.BooleanField(default=True, help_text="Enable automatic numbering")
     include_from_existing_series = models.CharField(max_length=200, blank=True, null=True, help_text="Include from existing series")
-    effective_from = models.DateField(blank=True, null=True, help_text="Effective from date")
-    effective_to = models.DateField(blank=True, null=True, help_text="Effective to date")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1137,8 +1114,6 @@ class MasterVoucherContra(models.Model):
     required_digits = models.IntegerField(default=4, help_text="Number of digits for padding")
     enable_auto_numbering = models.BooleanField(default=True, help_text="Enable automatic numbering")
     include_from_existing_series = models.CharField(max_length=200, blank=True, null=True, help_text="Include from existing series")
-    effective_from = models.DateField(blank=True, null=True, help_text="Effective from date")
-    effective_to = models.DateField(blank=True, null=True, help_text="Effective to date")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
