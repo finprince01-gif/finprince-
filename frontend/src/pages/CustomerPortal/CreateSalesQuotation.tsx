@@ -1,18 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { httpClient } from '../../services/httpClient';
 
 interface ItemRow {
     id: number;
+    db_id?: number | string; // To track existing items for partial updates if needed
     itemCode: string;
     itemName: string;
     minOrderQty: string;
     basePrice: string;
     maxDiscount: string;
     bestPrice: string;
+    uom: string;
 }
 
 interface SpecificItemRow {
     id: number;
+    db_id?: number | string;
     itemCode: string;
     itemName: string;
     customerItemName: string;
@@ -20,16 +23,28 @@ interface SpecificItemRow {
     basePrice: string;
     discount: string;
     negotiatedPrice: string;
+    uom: string;
+}
+
+interface InventoryItem {
+    id: number | string;
+    item_code: string;
+    item_name: string;
+    uom: string;
+    rate: string | number;
 }
 
 interface CreateSalesQuotationProps {
     onCancel: () => void;
+    editId?: string | null;
+    editType?: QuotationType | null;
 }
 
 type QuotationType = 'General Customer Quote' | 'Specific Customer Quote';
 
-const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel }) => {
-    const [quotationType, setQuotationType] = useState<QuotationType>('General Customer Quote');
+const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, editId, editType }) => {
+    const [quotationType, setQuotationType] = useState<QuotationType>(editType || 'General Customer Quote');
+    const [loading, setLoading] = useState(false);
 
     // General Customer Quote states
     const [quoteNumber, setQuoteNumber] = useState('');
@@ -37,8 +52,11 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel })
     const [effectiveFrom, setEffectiveFrom] = useState('');
     const [effectiveTo, setEffectiveTo] = useState('');
     const [items, setItems] = useState<ItemRow[]>([
-        { id: 1, itemCode: '', itemName: '', minOrderQty: '', basePrice: '', maxDiscount: '', bestPrice: '' }
+        { id: 1, itemCode: '', itemName: '', minOrderQty: '', basePrice: '', maxDiscount: '', bestPrice: '', uom: '' }
     ]);
+    const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+    const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
+    const [showSuggestions, setShowSuggestions] = useState<{ rowId: number, type: 'general' | 'specific' } | null>(null);
 
     // Specific Customer Quote states
     const [specificQuoteNumber, setSpecificQuoteNumber] = useState('');
@@ -52,8 +70,91 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel })
     const [tentativeDeliveryDate, setTentativeDeliveryDate] = useState('');
     const [paymentTerms, setPaymentTerms] = useState('');
     const [specificItems, setSpecificItems] = useState<SpecificItemRow[]>([
-        { id: 1, itemCode: '', itemName: '', customerItemName: '', minOrderQty: '', basePrice: '', discount: '', negotiatedPrice: '' }
+        { id: 1, itemCode: '', itemName: '', customerItemName: '', minOrderQty: '', basePrice: '', discount: '', negotiatedPrice: '', uom: '' }
     ]);
+
+    // Fetch Inventory Items
+    useEffect(() => {
+        const fetchInventory = async () => {
+            try {
+                const response = await httpClient.get('/api/inventory/items/');
+                if (Array.isArray(response)) {
+                    setInventoryItems(response);
+                } else if ((response as any).results) {
+                    setInventoryItems((response as any).results);
+                }
+            } catch (error) {
+                console.error('Error fetching inventory items:', error);
+            }
+        };
+        fetchInventory();
+    }, []);
+
+    useEffect(() => {
+        const fetchQuotationData = async () => {
+            if (!editId) return;
+            setLoading(true);
+            try {
+                const endpoint = quotationType === 'General Customer Quote'
+                    ? `/api/customerportal/sales-quotations-general/${editId}/`
+                    : `/api/customerportal/sales-quotations-specific/${editId}/`;
+
+                const data = await httpClient.get(endpoint) as any;
+
+                if (quotationType === 'General Customer Quote') {
+                    setQuoteNumber(data.quote_number);
+                    setCustomerCategory(data.customer_category);
+                    setEffectiveFrom(data.effective_from || '');
+                    setEffectiveTo(data.effective_to || '');
+                    if (data.items && data.items.length > 0) {
+                        setItems(data.items.map((item: any, idx: number) => ({
+                            id: idx + 1,
+                            db_id: item.id,
+                            itemCode: item.item_code,
+                            itemName: item.item_name,
+                            minOrderQty: item.min_order_qty.toString(),
+                            basePrice: item.base_price.toString(),
+                            maxDiscount: item.max_discount.toString(),
+                            bestPrice: item.best_price.toString(),
+                            uom: item.uom || ''
+                        })));
+                    }
+                } else {
+                    setSpecificQuoteNumber(data.quote_number);
+                    setCustomerName(data.customer_name);
+                    setBranch(data.branch);
+                    setAddress(data.address);
+                    setEmail(data.email);
+                    setContactNo(data.contact_no);
+                    setValidityFrom(data.validity_from || '');
+                    setValidityTo(data.validity_to || '');
+                    setTentativeDeliveryDate(data.tentative_delivery_date || '');
+                    setPaymentTerms(data.payment_terms || '');
+                    if (data.items && data.items.length > 0) {
+                        setSpecificItems(data.items.map((item: any, idx: number) => ({
+                            id: idx + 1,
+                            db_id: item.id,
+                            itemCode: item.item_code,
+                            itemName: item.item_name,
+                            customerItemName: item.customer_item_name,
+                            minOrderQty: item.min_order_qty.toString(),
+                            basePrice: item.base_price.toString(),
+                            discount: item.discount.toString(),
+                            negotiatedPrice: item.negotiated_price.toString(),
+                            uom: item.uom || ''
+                        })));
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching quotation for edit:', error);
+                alert('Failed to load quotation details for editing.');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchQuotationData();
+    }, [editId, quotationType]);
 
     const handleAddItem = () => {
         const newItem: ItemRow = {
@@ -63,7 +164,8 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel })
             minOrderQty: '',
             basePrice: '',
             maxDiscount: '',
-            bestPrice: ''
+            bestPrice: '',
+            uom: ''
         };
         setItems([...items, newItem]);
     };
@@ -75,9 +177,45 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel })
     };
 
     const handleItemChange = (id: number, field: keyof ItemRow, value: string) => {
-        setItems(items.map(item =>
-            item.id === id ? { ...item, [field]: value } : item
-        ));
+        if (field === 'itemCode') {
+            const selected = inventoryItems.find(i => i.item_code === value);
+            if (selected) {
+                setItems(items.map(item =>
+                    item.id === id ? {
+                        ...item,
+                        itemCode: selected.item_code,
+                        itemName: selected.item_name,
+                        basePrice: selected.rate.toString(),
+                        uom: selected.uom || ''
+                    } : item
+                ));
+            } else {
+                setItems(items.map(item =>
+                    item.id === id ? { ...item, [field]: value } : item
+                ));
+            }
+        } else if (field === 'itemName') {
+            const selected = inventoryItems.find(i => i.item_name === value);
+            if (selected) {
+                setItems(items.map(item =>
+                    item.id === id ? {
+                        ...item,
+                        itemCode: selected.item_code,
+                        itemName: selected.item_name,
+                        basePrice: selected.rate.toString(),
+                        uom: selected.uom || ''
+                    } : item
+                ));
+            } else {
+                setItems(items.map(item =>
+                    item.id === id ? { ...item, [field]: value } : item
+                ));
+            }
+        } else {
+            setItems(items.map(item =>
+                item.id === id ? { ...item, [field]: value } : item
+            ));
+        }
     };
 
     const handleAddSpecificItem = () => {
@@ -89,7 +227,8 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel })
             minOrderQty: '',
             basePrice: '',
             discount: '',
-            negotiatedPrice: ''
+            negotiatedPrice: '',
+            uom: ''
         };
         setSpecificItems([...specificItems, newItem]);
     };
@@ -101,9 +240,45 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel })
     };
 
     const handleSpecificItemChange = (id: number, field: keyof SpecificItemRow, value: string) => {
-        setSpecificItems(specificItems.map(item =>
-            item.id === id ? { ...item, [field]: value } : item
-        ));
+        if (field === 'itemCode') {
+            const selected = inventoryItems.find(i => i.item_code === value);
+            if (selected) {
+                setSpecificItems(specificItems.map(item =>
+                    item.id === id ? {
+                        ...item,
+                        itemCode: selected.item_code,
+                        itemName: selected.item_name,
+                        basePrice: selected.rate.toString(),
+                        uom: selected.uom || ''
+                    } : item
+                ));
+            } else {
+                setSpecificItems(specificItems.map(item =>
+                    item.id === id ? { ...item, [field]: value } : item
+                ));
+            }
+        } else if (field === 'itemName') {
+            const selected = inventoryItems.find(i => i.item_name === value);
+            if (selected) {
+                setSpecificItems(specificItems.map(item =>
+                    item.id === id ? {
+                        ...item,
+                        itemCode: selected.item_code,
+                        itemName: selected.item_name,
+                        basePrice: selected.rate.toString(),
+                        uom: selected.uom || ''
+                    } : item
+                ));
+            } else {
+                setSpecificItems(specificItems.map(item =>
+                    item.id === id ? { ...item, [field]: value } : item
+                ));
+            }
+        } else {
+            setSpecificItems(specificItems.map(item =>
+                item.id === id ? { ...item, [field]: value } : item
+            ));
+        }
     };
 
     const handleSave = async () => {
@@ -115,6 +290,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel })
                     effective_from: effectiveFrom || null,
                     effective_to: effectiveTo || null,
                     items: items.map(item => ({
+                        ...(item.db_id ? { id: item.db_id } : {}), // Include ID for existing items if backend supports it
                         item_code: item.itemCode,
                         item_name: item.itemName,
                         min_order_qty: parseFloat(item.minOrderQty) || 0,
@@ -123,7 +299,11 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel })
                         best_price: parseFloat(item.bestPrice) || 0
                     }))
                 };
-                await httpClient.post('/api/customerportal/sales-quotations-general/', payload);
+                if (editId) {
+                    await httpClient.patch(`/api/customerportal/sales-quotations-general/${editId}/`, payload);
+                } else {
+                    await httpClient.post('/api/customerportal/sales-quotations-general/', payload);
+                }
             } else {
                 const payload = {
                     quote_number: specificQuoteNumber,
@@ -137,6 +317,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel })
                     tentative_delivery_date: tentativeDeliveryDate || null,
                     payment_terms: paymentTerms,
                     items: specificItems.map(item => ({
+                        ...(item.db_id ? { id: item.db_id } : {}),
                         item_code: item.itemCode,
                         item_name: item.itemName,
                         customer_item_name: item.customerItemName,
@@ -146,9 +327,13 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel })
                         negotiated_price: parseFloat(item.negotiatedPrice) || 0
                     }))
                 };
-                await httpClient.post('/api/customerportal/sales-quotations-specific/', payload);
+                if (editId) {
+                    await httpClient.patch(`/api/customerportal/sales-quotations-specific/${editId}/`, payload);
+                } else {
+                    await httpClient.post('/api/customerportal/sales-quotations-specific/', payload);
+                }
             }
-            alert('Quotation saved successfully!');
+            alert(`Quotation ${editId ? 'updated' : 'saved'} successfully!`);
             onCancel();
         } catch (error: any) {
             console.error('Error saving quotation:', error);
@@ -159,23 +344,36 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel })
 
     return (
         <div className="min-h-screen bg-gray-50">
-
+            {loading && (
+                <div className="fixed inset-0 bg-white/50 backdrop-blur-sm z-50 flex flex-col items-center justify-center gap-3">
+                    <div className="w-10 h-10 border-4 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
+                    <p className="text-gray-600 font-medium italic">Loading quotation details...</p>
+                </div>
+            )}
 
             {/* Main Content */}
             <div className="px-8 py-6">
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
                     {/* Page Title */}
-                    <h2 className="text-2xl font-bold text-gray-900 mb-6">Create Sales Quotation</h2>
+                    <div className="flex items-center justify-between mb-6">
+                        <h2 className="text-2xl font-bold text-gray-900">{editId ? 'Edit' : 'Create'} Sales Quotation</h2>
+                        {editId && (
+                            <span className="px-3 py-1 bg-teal-100 text-teal-800 text-xs font-bold rounded-full uppercase tracking-wider">
+                                Edit Mode
+                            </span>
+                        )}
+                    </div>
 
                     {/* Quotation Type Selector */}
                     <div className="mb-8 bg-gray-50 p-2 rounded-lg inline-flex gap-2">
                         {(['General Customer Quote', 'Specific Customer Quote'] as QuotationType[]).map((type) => (
                             <button
                                 key={type}
-                                onClick={() => setQuotationType(type)}
+                                onClick={() => !editId && setQuotationType(type)}
+                                disabled={!!editId && quotationType !== type}
                                 className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${quotationType === type
                                     ? 'bg-white text-indigo-700 shadow-sm'
-                                    : 'text-gray-600 hover:bg-white/50'
+                                    : !!editId ? 'text-gray-400 cursor-not-allowed' : 'text-gray-600 hover:bg-white/50'
                                     }`}
                             >
                                 {type}
@@ -253,6 +451,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel })
                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Name</th>
                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Minimum Order Quantity</th>
                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Base Price</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">UOM</th>
                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Maximum Discount</th>
                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Best Price</th>
                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
@@ -263,21 +462,40 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel })
                                                 <tr key={item.id} className="hover:bg-gray-50">
                                                     <td className="px-4 py-3 text-sm text-gray-900">{index + 1}</td>
                                                     <td className="px-4 py-3">
-                                                        <input
-                                                            type="text"
+                                                        <select
                                                             value={item.itemCode}
                                                             onChange={(e) => handleItemChange(item.id, 'itemCode', e.target.value)}
-                                                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                                            placeholder="Code"
-                                                        />
+                                                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                                        >
+                                                            <option value="">Select Item Code</option>
+                                                            {inventoryItems.map((invItem) => (
+                                                                <option key={`code-${invItem.id}`} value={invItem.item_code}>
+                                                                    {invItem.item_code}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <select
+                                                            value={item.itemName}
+                                                            onChange={(e) => handleItemChange(item.id, 'itemName', e.target.value)}
+                                                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                                        >
+                                                            <option value="">Select Item Name</option>
+                                                            {inventoryItems.map((invItem) => (
+                                                                <option key={`name-${invItem.id}`} value={invItem.item_name}>
+                                                                    {invItem.item_name}
+                                                                </option>
+                                                            ))}
+                                                        </select>
                                                     </td>
                                                     <td className="px-4 py-3">
                                                         <input
                                                             type="text"
-                                                            value={item.itemName}
-                                                            onChange={(e) => handleItemChange(item.id, 'itemName', e.target.value)}
-                                                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                                            placeholder="Name"
+                                                            value={item.uom}
+                                                            readOnly
+                                                            className="w-full px-2 py-1 border border-gray-200 rounded text-sm bg-gray-50 text-gray-500"
+                                                            placeholder="UOM"
                                                         />
                                                     </td>
                                                     <td className="px-4 py-3">
@@ -471,6 +689,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel })
                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer Item Name</th>
                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Minimum Order Quantity</th>
                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Base Price</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">UOM</th>
                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Discount</th>
                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Negotiated Price</th>
                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
@@ -481,22 +700,32 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel })
                                                 <tr key={item.id} className="hover:bg-gray-50">
                                                     <td className="px-4 py-3 text-sm text-gray-900">{index + 1}</td>
                                                     <td className="px-4 py-3">
-                                                        <input
-                                                            type="text"
+                                                        <select
                                                             value={item.itemCode}
                                                             onChange={(e) => handleSpecificItemChange(item.id, 'itemCode', e.target.value)}
-                                                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                                            placeholder="Code"
-                                                        />
+                                                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                                        >
+                                                            <option value="">Select Item Code</option>
+                                                            {inventoryItems.map((invItem) => (
+                                                                <option key={`code-${invItem.id}`} value={invItem.item_code}>
+                                                                    {invItem.item_code}
+                                                                </option>
+                                                            ))}
+                                                        </select>
                                                     </td>
                                                     <td className="px-4 py-3">
-                                                        <input
-                                                            type="text"
+                                                        <select
                                                             value={item.itemName}
                                                             onChange={(e) => handleSpecificItemChange(item.id, 'itemName', e.target.value)}
-                                                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                                            placeholder="Name"
-                                                        />
+                                                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                                        >
+                                                            <option value="">Select Item Name</option>
+                                                            {inventoryItems.map((invItem) => (
+                                                                <option key={`name-${invItem.id}`} value={invItem.item_name}>
+                                                                    {invItem.item_name}
+                                                                </option>
+                                                            ))}
+                                                        </select>
                                                     </td>
                                                     <td className="px-4 py-3">
                                                         <input
@@ -505,6 +734,15 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel })
                                                             onChange={(e) => handleSpecificItemChange(item.id, 'customerItemName', e.target.value)}
                                                             className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
                                                             placeholder="Customer Name"
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <input
+                                                            type="text"
+                                                            value={item.uom}
+                                                            readOnly
+                                                            className="w-full px-2 py-1 border border-gray-200 rounded text-sm bg-gray-50 text-gray-500"
+                                                            placeholder="UOM"
                                                         />
                                                     </td>
                                                     <td className="px-4 py-3">
@@ -620,8 +858,8 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel })
                         </button>
                     </div>
                 </div>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 };
 

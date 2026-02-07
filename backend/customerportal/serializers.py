@@ -133,6 +133,84 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
             'updated_at': instance.updated_at.isoformat() if instance.updated_at else None,
             'created_by': instance.created_by,
             'updated_by': instance.updated_by,
+            
+            # Form-compatible structure for GST & Branch Configuration
+            'gst_details': {
+                'gstins': [gst.gstin for gst in instance.gst_details.all() if gst.gstin],
+                'branches': [
+                    {
+                        'id': gst.id,
+                        'gstin': gst.gstin,
+                        'defaultRef': gst.branch_reference_name,
+                        'address': gst.branch_address,
+                        'contactPerson': gst.branch_contact_person,
+                        'email': gst.branch_email,
+                        'contactNumber': gst.branch_contact_number
+                    }
+                    for gst in instance.gst_details.all()
+                ]
+            },
+            
+            # Compatibility list for dropdowns
+            'branches': [
+                {
+                    'id': gst.id,
+                    'gstin': gst.gstin,
+                    'branch_reference_name': gst.branch_reference_name or "Main Branch",
+                }
+                for gst in instance.gst_details.all()
+            ],
+            
+            # Products/Services
+            'products_services': {
+                'items': [
+                    {
+                        'id': item.id,
+                        'itemCode': item.item_code,
+                        'itemName': item.item_name,
+                        'custItemCode': item.customer_item_code,
+                        'custItemName': item.customer_item_name,
+                        'uom': item.uom,
+                        'custUom': item.customer_uom
+                    }
+                    for item in instance.product_services.all()
+                ]
+            },
+            
+            # Banking Information
+            'banking_info': {
+                'accounts': [
+                    {
+                        'id': bank.id,
+                        'accountNumber': bank.account_number,
+                        'bankName': bank.bank_name,
+                        'ifscCode': bank.ifsc_code,
+                        'branchName': bank.branch_name,
+                        'swiftCode': bank.swift_code,
+                        'associatedBranches': bank.associated_branches or []
+                    }
+                    for bank in instance.banking_details.all()
+                ]
+            },
+            
+            # Flattened Statutory Details
+            'msme_no': getattr(instance.tds_details, 'msme_no', None) if hasattr(instance, 'tds_details') else None,
+            'fssai_no': getattr(instance.tds_details, 'fssai_no', None) if hasattr(instance, 'tds_details') else None,
+            'iec_code': getattr(instance.tds_details, 'iec_code', None) if hasattr(instance, 'tds_details') else None,
+            'eou_status': getattr(instance.tds_details, 'eou_status', None) if hasattr(instance, 'tds_details') else None,
+            'tcs_section': getattr(instance.tds_details, 'tcs_section', None) if hasattr(instance, 'tds_details') else None,
+            'tcs_enabled': getattr(instance.tds_details, 'tcs_enabled', False) if hasattr(instance, 'tds_details') else False,
+            'tds_section': getattr(instance.tds_details, 'tds_section', None) if hasattr(instance, 'tds_details') else None,
+            'tds_enabled': getattr(instance.tds_details, 'tds_enabled', False) if hasattr(instance, 'tds_details') else False,
+            
+            # Flattened Terms & Conditions
+            'credit_period': getattr(instance.terms_conditions, 'credit_period', None) if hasattr(instance, 'terms_conditions') else None,
+            'credit_terms': getattr(instance.terms_conditions, 'credit_terms', None) if hasattr(instance, 'terms_conditions') else None,
+            'penalty_terms': getattr(instance.terms_conditions, 'penalty_terms', None) if hasattr(instance, 'terms_conditions') else None,
+            'delivery_terms': getattr(instance.terms_conditions, 'delivery_terms', None) if hasattr(instance, 'terms_conditions') else None,
+            'warranty_details': getattr(instance.terms_conditions, 'warranty_details', None) if hasattr(instance, 'terms_conditions') else None,
+            'force_majeure': getattr(instance.terms_conditions, 'force_majeure', None) if hasattr(instance, 'terms_conditions') else None,
+            'dispute_terms': getattr(instance.terms_conditions, 'dispute_terms', None) if hasattr(instance, 'terms_conditions') else None,
         }
 
 
@@ -202,7 +280,7 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
                 basic_details = super().create(validated_data)
                 logger.info(f"✅ Basic Details created: ID={basic_details.id}, Code={basic_details.customer_code}")
                 
-                # 2. Create GST Details (ALWAYS create at least one record, even if empty)
+                # 2. Create GST Details
                 logger.info("Creating GST Details...")
                 gstins = []
                 branches = []
@@ -210,48 +288,48 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
                 if gst_details_data:
                     gstins = gst_details_data.get('gstins', [])
                     branches = gst_details_data.get('branches', [])
-                    logger.info(f"  GSTINs to create: {gstins}")
-                    logger.info(f"  Branches to create: {branches}")
                 
-                # If no GSTINs provided, create one empty/unregistered record
-                if not gstins and not branches:
-                    logger.info("  No GSTINs provided, creating empty GST record...")
-                    gst_record = CustomerMasterCustomerGSTDetails.objects.create(
+                # Use a set to track processed GSTINs to avoid duplicates
+                processed_gstins = set()
+                
+                # Process branches first (they have more detail)
+                for branch in branches:
+                    branch_gstin = branch.get('gstin')
+                    CustomerMasterCustomerGSTDetails.objects.create(
+                        customer_basic_detail=basic_details,
+                        tenant_id=basic_details.tenant_id,
+                        gstin=branch_gstin,
+                        branch_reference_name=branch.get('defaultRef'),
+                        branch_address=branch.get('address'),
+                        branch_contact_person=branch.get('contactPerson'),
+                        branch_email=branch.get('email'),
+                        branch_contact_number=branch.get('contactNumber'),
+                        created_by=basic_details.created_by
+                    )
+                    if branch_gstin:
+                        processed_gstins.add(branch_gstin)
+                
+                # Process remaining GSTINs that didn't have specific branch info
+                for gstin in gstins:
+                    if gstin and gstin not in processed_gstins:
+                        CustomerMasterCustomerGSTDetails.objects.create(
+                            customer_basic_detail=basic_details,
+                            tenant_id=basic_details.tenant_id,
+                            gstin=gstin,
+                            is_unregistered=False,
+                            created_by=basic_details.created_by
+                        )
+                        processed_gstins.add(gstin)
+                
+                # If truly nothing provided, create one empty/unregistered record
+                if not processed_gstins and not branches:
+                    CustomerMasterCustomerGSTDetails.objects.create(
                         customer_basic_detail=basic_details,
                         tenant_id=basic_details.tenant_id,
                         gstin=None,
                         is_unregistered=True,
                         created_by=basic_details.created_by
                     )
-                    logger.info(f"  ✅ Empty GST Detail created: ID={gst_record.id}")
-                else:
-                    # Create GST detail for each GSTIN
-                    for gstin in gstins:
-                        if gstin:
-                            gst_record = CustomerMasterCustomerGSTDetails.objects.create(
-                                customer_basic_detail=basic_details,
-                                tenant_id=basic_details.tenant_id,
-                                gstin=gstin,
-                                is_unregistered=False,
-                                created_by=basic_details.created_by
-                            )
-                            logger.info(f"  ✅ GST Detail created: ID={gst_record.id}, GSTIN={gstin}")
-                    
-                    # Create branch details
-                    for branch in branches:
-                        # Allow branch creation even if GSTIN is missing (for unregistered customers)
-                        branch_record = CustomerMasterCustomerGSTDetails.objects.create(
-                            customer_basic_detail=basic_details,
-                            tenant_id=basic_details.tenant_id,
-                            gstin=branch.get('gstin'),
-                            branch_reference_name=branch.get('defaultRef'),
-                            branch_address=branch.get('address'),
-                            branch_contact_person=branch.get('contactPerson'),
-                            branch_email=branch.get('email'),
-                            branch_contact_number=branch.get('contactNumber'),
-                            created_by=basic_details.created_by
-                        )
-                        logger.info(f"  ✅ Branch Detail created: ID={branch_record.id}")
                 
                 # 3. Create Product/Service mappings (ALWAYS create at least one record, even if empty)
                 logger.info("Creating Product/Service mappings...")
@@ -422,26 +500,43 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
                 # Delete existing GST details
                 CustomerMasterCustomerGSTDetails.objects.filter(customer_basic_detail=instance).delete()
                 
-                # Create new ones
                 gstins = gst_details_data.get('gstins', [])
                 branches = gst_details_data.get('branches', [])
-                
-                for gstin in gstins:
-                    CustomerMasterCustomerGSTDetails.objects.create(
-                        customer_basic_detail=instance,
-                        tenant_id=instance.tenant_id,
-                        gstin=gstin,
-                        is_unregistered=False,
-                        updated_by=instance.updated_by
-                    )
+                processed_gstins = set()
                 
                 for branch in branches:
+                    branch_gstin = branch.get('gstin')
                     CustomerMasterCustomerGSTDetails.objects.create(
                         customer_basic_detail=instance,
                         tenant_id=instance.tenant_id,
-                        gstin=branch.get('gstin'),
+                        gstin=branch_gstin,
                         branch_reference_name=branch.get('defaultRef'),
                         branch_address=branch.get('address'),
+                        branch_contact_person=branch.get('contactPerson'),
+                        branch_email=branch.get('email'),
+                        branch_contact_number=branch.get('contactNumber'),
+                        updated_by=instance.updated_by
+                    )
+                    if branch_gstin:
+                        processed_gstins.add(branch_gstin)
+                
+                for gstin in gstins:
+                    if gstin and gstin not in processed_gstins:
+                        CustomerMasterCustomerGSTDetails.objects.create(
+                            customer_basic_detail=instance,
+                            tenant_id=instance.tenant_id,
+                            gstin=gstin,
+                            is_unregistered=False,
+                            updated_by=instance.updated_by
+                        )
+                        processed_gstins.add(gstin)
+                
+                if not processed_gstins and not branches:
+                    CustomerMasterCustomerGSTDetails.objects.create(
+                        customer_basic_detail=instance,
+                        tenant_id=instance.tenant_id,
+                        gstin=None,
+                        is_unregistered=True,
                         updated_by=instance.updated_by
                     )
             

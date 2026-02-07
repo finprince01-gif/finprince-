@@ -855,8 +855,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     }
 
     setItems(currentItems => currentItems.map(item => {
-      const stockItem = stockItems.find(si => si.name.toLowerCase() === item.name.toLowerCase());
-      if (!stockItem || !item.name) {
+      if (!item.name) return item;
+      const stockItem = stockItems.find(si => si.name && si.name.toLowerCase() === item.name.toLowerCase());
+
+      if (!stockItem) {
         return item;
       }
 

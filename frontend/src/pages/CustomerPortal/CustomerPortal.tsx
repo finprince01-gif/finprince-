@@ -82,7 +82,21 @@ const CustomerPortalPage: React.FC = () => {
     const [activeSalesQuotationSubTab, setActiveSalesQuotationSubTab] = useState<SalesQuotationSubTab>('General Customer Quote');
     const [activeSalesOrderSubTab, setActiveSalesOrderSubTab] = useState<SalesOrderSubTab>('Pending & Cancelled');
     const [showCreateQuotation, setShowCreateQuotation] = useState(false);
+    const [editQuotationId, setEditQuotationId] = useState<string | null>(null);
+    const [editQuotationType, setEditQuotationType] = useState<SalesQuotationSubTab | null>(null);
     const [showCreateOrder, setShowCreateOrder] = useState(false);
+
+    const handleEditQuotation = (id: string, type: SalesQuotationSubTab) => {
+        setEditQuotationId(id);
+        setEditQuotationType(type);
+        setShowCreateQuotation(true);
+    };
+
+    const handleCreateQuotation = () => {
+        setEditQuotationId(null);
+        setEditQuotationType(null);
+        setShowCreateQuotation(true);
+    };
 
     return (
         <div className="flex-1 bg-sky-50 min-h-screen">
@@ -170,10 +184,19 @@ const CustomerPortalPage: React.FC = () => {
                         <div className="bg-white rounded-lg shadow-sm p-8 text-center min-h-[500px]">
                             {activeTransactionSubTab === 'Sales Quotation' && (
                                 showCreateQuotation ? (
-                                    <CreateSalesQuotation onCancel={() => setShowCreateQuotation(false)} />
+                                    <CreateSalesQuotation
+                                        onCancel={() => {
+                                            setShowCreateQuotation(false);
+                                            setEditQuotationId(null);
+                                            setEditQuotationType(null);
+                                        }}
+                                        editId={editQuotationId}
+                                        editType={activeSalesQuotationSubTab}
+                                    />
                                 ) : (
                                     <SalesQuotationList
-                                        onCreateQuotation={() => setShowCreateQuotation(true)}
+                                        onCreateQuotation={handleCreateQuotation}
+                                        onEditQuotation={handleEditQuotation}
                                     />
 
                                 )
@@ -2942,6 +2965,8 @@ const LongTermContractsContent: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [contracts, setContracts] = useState<any[]>([]);
     const [customers, setCustomers] = useState<any[]>([]);
+    const [filteredBranches, setFilteredBranches] = useState<any[]>([]);
+    const [branchLoading, setBranchLoading] = useState(false);
 
     // Basic Details State
     const [basicDetails, setBasicDetails] = useState({
@@ -3206,13 +3231,36 @@ const LongTermContractsContent: React.FC = () => {
                                             <select
                                                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
                                                 value={basicDetails.customerId}
-                                                onChange={(e) => {
+                                                onChange={async (e) => {
+                                                    const selectedId = e.target.value;
                                                     const selectedOption = e.target.options[e.target.selectedIndex];
+
                                                     setBasicDetails({
                                                         ...basicDetails,
-                                                        customerId: e.target.value,
-                                                        customerName: selectedOption.text
+                                                        customerId: selectedId,
+                                                        customerName: selectedOption.text,
+                                                        branchId: '' // Reset branch when customer changes
                                                     });
+
+                                                    if (selectedId) {
+                                                        setBranchLoading(true);
+                                                        try {
+                                                            // Fetch full customer details to get the latest branches from GST details
+                                                            const response = await httpClient.get(`/api/customerportal/customer-master/${selectedId}/`) as any;
+                                                            if (response && response.branches) {
+                                                                setFilteredBranches(response.branches);
+                                                            } else {
+                                                                setFilteredBranches([]);
+                                                            }
+                                                        } catch (error) {
+                                                            console.error('Error fetching customer branches:', error);
+                                                            setFilteredBranches([]);
+                                                        } finally {
+                                                            setBranchLoading(false);
+                                                        }
+                                                    } else {
+                                                        setFilteredBranches([]);
+                                                    }
                                                 }}
                                             >
                                                 <option value="">Select Customer</option>
@@ -3226,13 +3274,21 @@ const LongTermContractsContent: React.FC = () => {
                                         <div>
                                             <label className="block text-xs font-semibold text-gray-700 mb-1">Branch <span className="text-red-500">*</span></label>
                                             <select
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
+                                                className={`w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white ${(!basicDetails.customerId || branchLoading) ? 'bg-gray-50 cursor-not-allowed opacity-60' : ''}`}
                                                 value={basicDetails.branchId}
+                                                disabled={!basicDetails.customerId || branchLoading}
                                                 onChange={(e) => setBasicDetails({ ...basicDetails, branchId: e.target.value })}
                                             >
-                                                <option value="">Select Branch</option>
-                                                <option value="1">Bangalore HO</option>
-                                                <option value="2">Pune Branch</option>
+                                                <option value="">
+                                                    {branchLoading
+                                                        ? 'Fetching branches...'
+                                                        : (basicDetails.customerId ? 'Select Branch' : 'Select Customer First')}
+                                                </option>
+                                                {!branchLoading && filteredBranches.map((branch) => (
+                                                    <option key={branch.id} value={branch.id}>
+                                                        {branch.branch_reference_name}
+                                                    </option>
+                                                ))}
                                             </select>
                                         </div>
                                         <div>

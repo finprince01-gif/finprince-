@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { Eye, Mail, Pencil } from 'lucide-react';
+import { httpClient } from '../../services/httpClient';
+import SalesQuotationViewModal from './SalesQuotationViewModal';
 
 interface SalesQuotationListProps {
     onCreateQuotation: () => void;
+    onEditQuotation: (id: string, type: QuotationType) => void;
 }
 
 type QuotationType = 'General Customer Quote' | 'Specific Customer Quote';
@@ -23,44 +26,76 @@ interface SpecificQuotation {
     amount: string;
 }
 
-const SalesQuotationList: React.FC<SalesQuotationListProps> = ({ onCreateQuotation }) => {
+const SalesQuotationList: React.FC<SalesQuotationListProps> = ({ onCreateQuotation, onEditQuotation }) => {
     const [activeType, setActiveType] = useState<QuotationType>('General Customer Quote');
+    const [generalQuotations, setGeneralQuotations] = useState<GeneralQuotation[]>([]);
+    const [specificQuotations, setSpecificQuotations] = useState<SpecificQuotation[]>([]);
+    const [loading, setLoading] = useState(true);
 
-    // Mock Data for General Quote
-    const generalQuotations: GeneralQuotation[] = [
-        {
-            id: '1',
-            quoteNumber: 'Q-GEN-001',
-            customerCategory: 'Wholesale',
-            validityPeriod: '2023-10-01 to 2023-12-31'
-        },
-        {
-            id: '2',
-            quoteNumber: 'Q-GEN-002',
-            customerCategory: 'Retail',
-            validityPeriod: '2024-01-01 to 2024-03-31'
-        }
-    ];
+    // View Modal State
+    const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+    const [selectedQuotationId, setSelectedQuotationId] = useState<string | null>(null);
 
-    // Mock Data for Specific Quote
-    const specificQuotations: SpecificQuotation[] = [
-        {
-            id: '1',
-            quoteNumber: 'Q-SPC-001',
-            customerReferenceName: 'Tech Solutions Inc.',
-            tentativeDeliveryDate: '2023-11-15',
-            validity: '30 Days',
-            amount: '₹15,000'
-        },
-        {
-            id: '2',
-            quoteNumber: 'Q-SPC-002',
-            customerReferenceName: 'Global Corp',
-            tentativeDeliveryDate: '2023-12-01',
-            validity: '15 Days',
-            amount: '₹28,500'
+    const handleView = (id: string) => {
+        setSelectedQuotationId(id);
+        setIsViewModalOpen(true);
+    };
+
+    const fetchGeneralQuotations = async () => {
+        try {
+            const data = await httpClient.get('/api/customerportal/sales-quotations-general/') as any[];
+            const mappedData: GeneralQuotation[] = data.map((item: any) => ({
+                id: item.id.toString(),
+                quoteNumber: item.quote_number,
+                customerCategory: item.customer_category,
+                validityPeriod: (item.effective_from && item.effective_to)
+                    ? `${item.effective_from} to ${item.effective_to}`
+                    : 'N/A'
+            }));
+            setGeneralQuotations(mappedData);
+        } catch (error) {
+            console.error('Error fetching general quotations:', error);
         }
-    ];
+    };
+
+    const fetchSpecificQuotations = async () => {
+        try {
+            const data = await httpClient.get('/api/customerportal/sales-quotations-specific/') as any[];
+            const mappedData: SpecificQuotation[] = data.map((item: any) => {
+                // Calculate total amount from items if possible
+                const totalAmount = Array.isArray(item.items)
+                    ? item.items.reduce((sum: number, row: any) => sum + (parseFloat(row.negotiated_price) || 0), 0)
+                    : 0;
+
+                return {
+                    id: item.id.toString(),
+                    quoteNumber: item.quote_number,
+                    customerReferenceName: item.customer_name,
+                    tentativeDeliveryDate: item.tentative_delivery_date || 'N/A',
+                    validity: (item.validity_from && item.validity_to)
+                        ? `${item.validity_from} to ${item.validity_to}`
+                        : 'N/A',
+                    amount: `₹${totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                };
+            });
+            setSpecificQuotations(mappedData);
+        } catch (error) {
+            console.error('Error fetching specific quotations:', error);
+        }
+    };
+
+    React.useEffect(() => {
+        const loadData = async () => {
+            setLoading(true);
+            if (activeType === 'General Customer Quote') {
+                await fetchGeneralQuotations();
+            } else {
+                await fetchSpecificQuotations();
+            }
+            setLoading(false);
+        };
+        loadData();
+    }, [activeType]);
 
     return (
         <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
@@ -74,8 +109,8 @@ const SalesQuotationList: React.FC<SalesQuotationListProps> = ({ onCreateQuotati
                         <button
                             onClick={() => setActiveType('General Customer Quote')}
                             className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeType === 'General Customer Quote'
-                                    ? 'bg-teal-600 text-white shadow-sm'
-                                    : 'text-gray-600 hover:text-gray-900'
+                                ? 'bg-teal-600 text-white shadow-sm'
+                                : 'text-gray-600 hover:text-gray-900'
                                 }`}
                         >
                             General Customer Quote
@@ -83,8 +118,8 @@ const SalesQuotationList: React.FC<SalesQuotationListProps> = ({ onCreateQuotati
                         <button
                             onClick={() => setActiveType('Specific Customer Quote')}
                             className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeType === 'Specific Customer Quote'
-                                    ? 'bg-teal-600 text-white shadow-sm'
-                                    : 'text-gray-600 hover:text-gray-900'
+                                ? 'bg-teal-600 text-white shadow-sm'
+                                : 'text-gray-600 hover:text-gray-900'
                                 }`}
                         >
                             Specific Customer Quote
@@ -141,7 +176,16 @@ const SalesQuotationList: React.FC<SalesQuotationListProps> = ({ onCreateQuotati
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                        {activeType === 'General Customer Quote' ? (
+                        {loading ? (
+                            <tr>
+                                <td colSpan={activeType === 'General Customer Quote' ? 4 : 6} className="px-6 py-12 text-center text-sm text-gray-500">
+                                    <div className="flex items-center justify-center gap-2">
+                                        <div className="w-4 h-4 border-2 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
+                                        Fetching quotations...
+                                    </div>
+                                </td>
+                            </tr>
+                        ) : activeType === 'General Customer Quote' ? (
                             generalQuotations.length > 0 ? (
                                 generalQuotations.map((quote) => (
                                     <tr key={quote.id} className="hover:bg-gray-50 transition-colors">
@@ -158,10 +202,18 @@ const SalesQuotationList: React.FC<SalesQuotationListProps> = ({ onCreateQuotati
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                             <div className="flex items-center justify-end space-x-3">
-                                                <button className="text-gray-400 hover:text-teal-600 transition-colors tooltip-trigger" title="View">
+                                                <button
+                                                    onClick={() => handleView(quote.id)}
+                                                    className="text-gray-400 hover:text-teal-600 transition-colors tooltip-trigger"
+                                                    title="View"
+                                                >
                                                     <Eye size={18} />
                                                 </button>
-                                                <button className="text-gray-400 hover:text-teal-600 transition-colors tooltip-trigger" title="Edit">
+                                                <button
+                                                    onClick={() => onEditQuotation(quote.id, activeType)}
+                                                    className="text-gray-400 hover:text-teal-600 transition-colors tooltip-trigger"
+                                                    title="Edit"
+                                                >
                                                     <Pencil size={18} />
                                                 </button>
                                                 <button className="text-gray-400 hover:text-teal-600 transition-colors tooltip-trigger" title="Mail">
@@ -201,10 +253,18 @@ const SalesQuotationList: React.FC<SalesQuotationListProps> = ({ onCreateQuotati
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                             <div className="flex items-center justify-end space-x-3">
-                                                <button className="text-gray-400 hover:text-teal-600 transition-colors tooltip-trigger" title="View">
+                                                <button
+                                                    onClick={() => handleView(quote.id)}
+                                                    className="text-gray-400 hover:text-teal-600 transition-colors tooltip-trigger"
+                                                    title="View"
+                                                >
                                                     <Eye size={18} />
                                                 </button>
-                                                <button className="text-gray-400 hover:text-teal-600 transition-colors tooltip-trigger" title="Edit">
+                                                <button
+                                                    onClick={() => onEditQuotation(quote.id, activeType)}
+                                                    className="text-gray-400 hover:text-teal-600 transition-colors tooltip-trigger"
+                                                    title="Edit"
+                                                >
                                                     <Pencil size={18} />
                                                 </button>
                                                 <button className="text-gray-400 hover:text-teal-600 transition-colors tooltip-trigger" title="Mail">
@@ -225,6 +285,14 @@ const SalesQuotationList: React.FC<SalesQuotationListProps> = ({ onCreateQuotati
                     </tbody>
                 </table>
             </div>
+
+            {/* View Modal */}
+            <SalesQuotationViewModal
+                isOpen={isViewModalOpen}
+                onClose={() => setIsViewModalOpen(false)}
+                quotationId={selectedQuotationId}
+                type={activeType}
+            />
         </div>
     );
 };
