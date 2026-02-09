@@ -57,11 +57,13 @@ class VendorGSTDetailsDatabase:
             return None
     
     @staticmethod
-    def get_gst_details_by_tenant(tenant_id, is_active=True):
-        """Retrieve all GST details for a tenant"""
+    def get_gst_details_by_tenant(tenant_id, is_active=True, vendor_id=None):
+        """Retrieve all GST details for a tenant, optionally filtered by vendor"""
         queryset = VendorMasterGSTDetails.objects.filter(tenant_id=tenant_id)
         if is_active is not None:
             queryset = queryset.filter(is_active=is_active)
+        if vendor_id:
+            queryset = queryset.filter(vendor_basic_detail_id=vendor_id)
         return queryset.order_by('-created_at')
     
     @staticmethod

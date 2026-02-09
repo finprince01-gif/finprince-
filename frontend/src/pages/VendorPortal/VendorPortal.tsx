@@ -1,9 +1,11 @@
 // Vendor Portal - Master Configuration
 import React, { useState, useEffect } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { usePermissions } from '../../hooks/usePermissions';
 import { httpClient } from '../../services/httpClient';
 import CategoryHierarchicalDropdown from '../../components/CategoryHierarchicalDropdown';
 import { InventoryCategoryWizard } from '../../components/InventoryCategoryWizard';
+import SearchableDropdown from '../../components/SearchableDropdown';
 
 type VendorTab = 'Master' | 'Transaction';
 type MasterSubTab = 'Category' | 'PO Settings' | 'Vendor Creation' | 'Basic Details' | 'GST Details' | 'Products/Services' | 'TDS & Other Statutory' | 'Banking Info' | 'Terms & Conditions';
@@ -210,6 +212,45 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         }
     ]);
     const [loadingGstFetch, setLoadingGstFetch] = useState(false);
+
+    // Vendor List State for Dropdowns
+    const [vendorList, setVendorList] = useState<VendorBasicDetail[]>([]);
+    const [loadingVendors, setLoadingVendors] = useState(false);
+
+    // Fetch Vendors
+    const fetchVendors = async () => {
+        try {
+            setLoadingVendors(true);
+            const response = await httpClient.get<VendorBasicDetail[] | any>('/api/vendors/basic-details/');
+            // Handle pagination or list
+            const data = Array.isArray(response) ? response : (response.results || []);
+            setVendorList(data);
+        } catch (error) {
+            console.error('Error fetching vendors:', error);
+        } finally {
+            setLoadingVendors(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchVendors();
+    }, []);
+
+
+
+    // Vendor Branch State
+    const [availableBranches, setAvailableBranches] = useState<any[]>([]);
+
+    const fetchVendorBranches = async (vendorId: number) => {
+        try {
+            const response = await httpClient.get<any>(`/api/vendors/gst-details/?vendor_basic_detail=${vendorId}`);
+            const data = Array.isArray(response) ? response : (response.results || []);
+            setAvailableBranches(data);
+        } catch (error) {
+            console.error('Error fetching vendor branches:', error);
+            setAvailableBranches([]);
+        }
+    };
 
     // GST Handler Functions
     const handleAddGstRecord = () => {
@@ -434,7 +475,30 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     };
 
     const handleCreatePOFormChange = (field: string, value: string) => {
-        setCreatePOForm({ ...createPOForm, [field]: value });
+        setCreatePOForm(prev => {
+            const updated = { ...prev, [field]: value };
+
+            if (field === 'vendorName') {
+                const selectedVendor = vendorList.find(v => v.vendor_name === value);
+                if (selectedVendor) {
+                    fetchVendorBranches(selectedVendor.id);
+                } else {
+                    setAvailableBranches([]);
+                }
+            }
+
+            if (field === 'branch') {
+                const selectedBranch = availableBranches.find(b => (b.reference_name || b.id.toString()) === value);
+                if (selectedBranch) {
+                    updated.addressLine1 = selectedBranch.branch_address || '';
+                    updated.emailAddress = selectedBranch.branch_email || '';
+                    updated.state = selectedBranch.gst_state || '';
+                    // Reset other address fields or try to parse if possible, for now just basic fill
+                }
+            }
+
+            return updated;
+        });
     };
 
     const handleSubmitPO = async () => {
@@ -633,7 +697,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         bankName: string;
         branchName: string;
         swiftCode: string;
-        vendorBranch: string;
+        vendorBranch: string[];
         accountType: 'Savings' | 'Current';
     }
 
@@ -773,7 +837,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     ];
 
     const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([
-        { id: 1, accountNumber: '', bankName: '', ifscCode: '', branchName: '', swiftCode: '', vendorBranch: '', accountType: 'Savings' }
+        { id: 1, accountNumber: '', bankName: '', ifscCode: '', branchName: '', swiftCode: '', vendorBranch: [], accountType: 'Savings' }
     ]);
 
     // Payment Bills Interface and Data
@@ -868,14 +932,15 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const [contactPerson, setContactPerson] = useState('');
     const [vendorEmail, setVendorEmail] = useState('');
     const [contactNo, setContactNo] = useState('');
+    const [vendorCategory, setVendorCategory] = useState('');
     const [isAlsoCustomer, setIsAlsoCustomer] = useState(false);
 
     // Handle Basic Details Form Submit (Navigation Only)
     const handleBasicDetailsSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         console.log('Refactored: Basic Details -> Next');
-        if (!vendorName || !vendorEmail || !contactNo) {
-            alert('Please fill in all required fields (Vendor Name, Email, Contact No)');
+        if (!vendorName || !vendorEmail || !contactNo || !vendorCategory) {
+            alert('Please fill in all required fields (Vendor Name, Email, Contact No, Vendor Category)');
             return;
         }
         setActiveMasterSubTab('GST Details');
@@ -976,6 +1041,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 contact_person: contactPerson || undefined,
                 email: vendorEmail,
                 contact_no: contactNo,
+                vendor_category: vendorCategory || null,
                 is_also_customer: isAlsoCustomer
             };
             const basicRes: any = await httpClient.post('/api/vendors/basic-details/', basicPayload);
@@ -1046,7 +1112,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 ifsc_code: bank.ifscCode,
                 branch_name: bank.branchName,
                 swift_code: bank.swiftCode,
-                vendor_branch: bank.vendorBranch,
+                vendor_branch: Array.isArray(bank.vendorBranch) ? bank.vendorBranch.join(',') : bank.vendorBranch,
                 account_type: bank.accountType ? bank.accountType.toLowerCase().replace(' ', '_') : 'savings',
                 is_active: true
             }));
@@ -1088,16 +1154,41 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     interface ProductServiceItem {
         id: number;
         hsnSacCode: string;
-        itemCode: string;
-        itemName: string;
+        itemCode: string; // This will hold the SELECTED VALUE (string)
+        itemName: string; // This will hold the SELECTED VALUE (string)
         supplierItemCode: string;
         supplierItemName: string;
     }
 
+    interface SimplifiedInventoryItem {
+        id: number;
+        item_code: string;
+        item_name: string;
+        hsn_code?: string;
+    }
+
+    const [inventoryItems, setInventoryItems] = useState<SimplifiedInventoryItem[]>([]);
     const [items, setItems] = useState<ProductServiceItem[]>([
         { id: 1, hsnSacCode: '', itemCode: '', itemName: '', supplierItemCode: '', supplierItemName: '' },
         { id: 2, hsnSacCode: '', itemCode: '', itemName: '', supplierItemCode: '', supplierItemName: '' },
     ]);
+
+    // Fetch Inventory Items for Dropdown
+    useEffect(() => {
+        const fetchItems = async () => {
+            try {
+                const response = await httpClient.get<SimplifiedInventoryItem[]>('/api/inventory/items/');
+                // Ensure unique values for dropdowns if API returns duplicates or handle in component
+                setInventoryItems(Array.isArray(response) ? response : []);
+            } catch (error) {
+                console.error('Error fetching inventory items:', error);
+            }
+        };
+
+        if (activeMasterSubTab === 'Products/Services') {
+            fetchItems();
+        }
+    }, [activeMasterSubTab]);
 
     const handleAddItem = () => {
         setItems([...items, {
@@ -1117,9 +1208,28 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     };
 
     const handleItemChange = (id: number, field: keyof ProductServiceItem, value: string) => {
-        setItems(items.map(item =>
-            item.id === id ? { ...item, [field]: value } : item
-        ));
+        setItems(prevItems => prevItems.map(item => {
+            if (item.id !== id) return item;
+
+            const newItem = { ...item, [field]: value };
+
+            // Auto-fill logic
+            if (field === 'itemCode') {
+                const foundItem = inventoryItems.find(i => i.item_code === value);
+                if (foundItem) {
+                    newItem.itemName = foundItem.item_name;
+                    newItem.hsnSacCode = foundItem.hsn_code || '';
+                }
+            } else if (field === 'itemName') {
+                const foundItem = inventoryItems.find(i => i.item_name === value);
+                if (foundItem) {
+                    newItem.itemCode = foundItem.item_code;
+                    newItem.hsnSacCode = foundItem.hsn_code || '';
+                }
+            }
+
+            return newItem;
+        }));
     };
 
     // Update createdVendorId when basic details are saved
@@ -1392,6 +1502,27 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 throw error;
                                             }
                                         }}
+                                        onEditCategory={async (data) => {
+                                            try {
+                                                await httpClient.put(`/api/vendors/categories/${data.id}/`, {
+                                                    category: data.category,
+                                                    group: data.group,
+                                                    subgroup: data.subgroup,
+                                                    is_active: true
+                                                });
+                                            } catch (error: any) {
+                                                console.error('Error updating category:', error);
+                                                throw error;
+                                            }
+                                        }}
+                                        onDeleteCategory={async (id) => {
+                                            try {
+                                                await httpClient.delete(`/api/vendors/categories/${id}/`);
+                                            } catch (error: any) {
+                                                console.error('Error deleting category:', error);
+                                                throw error;
+                                            }
+                                        }}
                                     />
                                 )}
 
@@ -1424,6 +1555,15 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         Category <span className="text-red-500">*</span>
                                                     </label>
                                                     <CategoryHierarchicalDropdown
+                                                        apiEndpoint="/api/vendors/categories/"
+                                                        systemCategories={[
+                                                            'Raw Material',
+                                                            'Work in Progress',
+                                                            'Finished Goods',
+                                                            'Stores and Spares',
+                                                            'Packing Material',
+                                                            'Stock in Trade'
+                                                        ]}
                                                         onSelect={(selection) => {
                                                             setPoCategoryId(selection.id);
                                                             setPoCategoryPath(selection.fullPath);
@@ -1601,6 +1741,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         <form className="space-y-6" onSubmit={handleBasicDetailsSubmit}>
                                             {/* Row 1: Vendor Code and Vendor Name */}
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                {/* Vendor Code */}
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                                         Vendor Code
@@ -1613,6 +1754,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         placeholder="Auto-generated or manual"
                                                     />
                                                 </div>
+
+                                                {/* Vendor Name */}
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                                         Vendor Name <span className="text-red-500">*</span>
@@ -1626,10 +1769,22 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         required
                                                     />
                                                 </div>
-                                            </div>
 
-                                            {/* Row 2: PAN No. and Contact Person */}
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                {/* Vendor Category */}
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        Vendor Category <span className="text-red-500">*</span>
+                                                    </label>
+                                                    <CategoryHierarchicalDropdown
+                                                        apiEndpoint="/api/vendors/categories/"
+                                                        value={vendorCategory}
+                                                        onSelect={(selection) => setVendorCategory(selection.fullPath)}
+                                                        placeholder="Select Category"
+                                                        className="w-full"
+                                                    />
+                                                </div>
+
+                                                {/* PAN No */}
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                                         PAN No.
@@ -1643,6 +1798,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         maxLength={10}
                                                     />
                                                 </div>
+
+                                                {/* Contact Person */}
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                                         Contact Person
@@ -1655,10 +1812,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         placeholder="Primary contact name"
                                                     />
                                                 </div>
-                                            </div>
 
-                                            {/* Row 3: Email address and Contact No */}
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                {/* Email address */}
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                                         Email address <span className="text-red-500">*</span>
@@ -1672,6 +1827,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         required
                                                     />
                                                 </div>
+
+                                                {/* Contact No */}
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                                         Contact No <span className="text-red-500">*</span>
@@ -2286,7 +2443,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                 No
                                                             </th>
                                                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
-                                                                HSN | SAC Code
+                                                                HSN / SAC Code
                                                             </th>
                                                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
                                                                 Item Code
@@ -2315,28 +2472,30 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                     <input
                                                                         type="text"
                                                                         className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-teal-500 focus:border-teal-500"
-                                                                        placeholder="HSN | SAC Code"
+                                                                        placeholder="HSN / SAC Code"
                                                                         value={item.hsnSacCode}
                                                                         onChange={(e) => handleItemChange(item.id, 'hsnSacCode', e.target.value)}
                                                                     />
                                                                 </td>
                                                                 <td className="px-4 py-3 border-r border-gray-200">
-                                                                    <input
-                                                                        type="text"
-                                                                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-teal-500 focus:border-teal-500"
-                                                                        placeholder="Item Code"
-                                                                        value={item.itemCode}
-                                                                        onChange={(e) => handleItemChange(item.id, 'itemCode', e.target.value)}
-                                                                    />
+                                                                    <div style={{ minWidth: '150px' }}>
+                                                                        <SearchableDropdown
+                                                                            options={inventoryItems.map(i => i.item_code).filter(Boolean)}
+                                                                            value={item.itemCode}
+                                                                            onChange={(val) => handleItemChange(item.id, 'itemCode', val)}
+                                                                            placeholder="Select Code"
+                                                                        />
+                                                                    </div>
                                                                 </td>
                                                                 <td className="px-4 py-3 border-r border-gray-200">
-                                                                    <input
-                                                                        type="text"
-                                                                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-teal-500 focus:border-teal-500"
-                                                                        placeholder="Item Name"
-                                                                        value={item.itemName}
-                                                                        onChange={(e) => handleItemChange(item.id, 'itemName', e.target.value)}
-                                                                    />
+                                                                    <div style={{ minWidth: '200px' }}>
+                                                                        <SearchableDropdown
+                                                                            options={inventoryItems.map(i => i.item_name).filter(Boolean)}
+                                                                            value={item.itemName}
+                                                                            onChange={(val) => handleItemChange(item.id, 'itemName', val)}
+                                                                            placeholder="Select Item"
+                                                                        />
+                                                                    </div>
                                                                 </td>
                                                                 <td className="px-4 py-3 border-r border-gray-200">
                                                                     <input
@@ -2358,26 +2517,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                 </td>
                                                                 <td className="px-4 py-3 text-center">
                                                                     <div className="flex items-center justify-center gap-2">
-                                                                        {/* Edit Button */}
-                                                                        <button
-                                                                            type="button"
-                                                                            className="text-teal-600 hover:text-teal-900"
-                                                                            title="Edit item"
-                                                                        >
-                                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                                                            </svg>
-                                                                        </button>
-                                                                        {/* Save Button */}
-                                                                        <button
-                                                                            type="button"
-                                                                            className="text-teal-600 hover:text-green-900"
-                                                                            title="Save item"
-                                                                        >
-                                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                                                            </svg>
-                                                                        </button>
+
                                                                         {/* Delete Button */}
                                                                         <button
                                                                             type="button"
@@ -2530,23 +2670,70 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                             />
                                                         </div>
 
-                                                        <div>
-                                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        <div className="relative">
+                                                            <div className="block text-sm font-medium text-gray-700 mb-2">
                                                                 Associate to a vendor branch
-                                                            </label>
-                                                            <select
-                                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
-                                                                value={bank.vendorBranch}
-                                                                onChange={(e) => handleBankChange(bank.id, 'vendorBranch', e.target.value)}
-                                                            >
-                                                                <option value="">Select vendor branch</option>
-                                                                <option value="branch1">Main Branch</option>
-                                                                <option value="branch2">Regional Office - North</option>
-                                                                <option value="branch3">Regional Office - South</option>
-                                                            </select>
-                                                            <p className="text-xs text-gray-500 mt-1">
-                                                                Drop-down list of reference Names to select with option to multiple branches. Do not show if only one GSTIN & place of business is available.
-                                                            </p>
+                                                            </div>
+                                                            <div className="relative">
+                                                                <button
+                                                                    type="button"
+                                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 bg-white text-left flex justify-between items-center"
+                                                                    onClick={() => {
+                                                                        const dropdown = document.getElementById(`vendor-branch-dropdown-${bank.id}`);
+                                                                        if (dropdown) {
+                                                                            dropdown.classList.toggle('hidden');
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <span className="truncate">
+                                                                        {bank.vendorBranch && bank.vendorBranch.length > 0
+                                                                            ? `${bank.vendorBranch.length} Selected`
+                                                                            : "Select vendor branch"}
+                                                                    </span>
+                                                                    <ChevronDown className="w-4 h-4 text-gray-500" />
+                                                                </button>
+
+                                                                {/* Dropdown Content */}
+                                                                <div
+                                                                    id={`vendor-branch-dropdown-${bank.id}`}
+                                                                    className="hidden absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm"
+                                                                >
+                                                                    {/* Collect all branches from GST records */}
+                                                                    {(() => {
+                                                                        const allBranches = gstRecords.flatMap(record =>
+                                                                            record.placesOfBusiness.map(pob => pob.referenceName).filter(Boolean)
+                                                                        );
+
+                                                                        if (allBranches.length === 0) {
+                                                                            return <div className="px-4 py-2 text-gray-500 italic">No branches available</div>;
+                                                                        }
+
+                                                                        return allBranches.map((branchName, idx) => (
+                                                                            <div key={`${branchName}-${idx}`} className="flex items-center px-4 py-2 hover:bg-gray-100 cursor-pointer" onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                const currentBranches = bank.vendorBranch || [];
+                                                                                const isSelected = currentBranches.includes(branchName);
+                                                                                let newBranches;
+                                                                                if (isSelected) {
+                                                                                    newBranches = currentBranches.filter(b => b !== branchName);
+                                                                                } else {
+                                                                                    newBranches = [...currentBranches, branchName];
+                                                                                }
+                                                                                handleBankChange(bank.id, 'vendorBranch', newBranches);
+                                                                            }}>
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    checked={(bank.vendorBranch || []).includes(branchName)}
+                                                                                    onChange={() => { }} // Handled by div click
+                                                                                    className="h-4 w-4 text-teal-600 focus:ring-teal-500 border-gray-300 rounded mr-3 pointer-events-none"
+                                                                                />
+                                                                                <span className="text-gray-900">{branchName}</span>
+                                                                            </div>
+                                                                        ));
+                                                                    })()}
+                                                                </div>
+                                                            </div>
+
                                                         </div>
                                                     </div>
                                                 ))}
@@ -2693,7 +2880,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    Dispute and Redressal Terms
+                                                    Dispute Redressal Terms
                                                 </label>
                                                 <textarea
                                                     rows={3}
@@ -3551,7 +3738,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 <option value="series1">Series 1</option>
                                                 <option value="series2">Series 2</option>
                                             </select>
-                                            <p className="text-xs text-gray-500 mt-1">Show as "New PO" when clicked "New"</p>
+
                                         </div>
 
                                         <div>
@@ -3573,8 +3760,11 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                                             >
                                                 <option value="">Select Vendor</option>
-                                                <option value="vendor1">Vendor 1</option>
-                                                <option value="vendor2">Vendor 2</option>
+                                                {vendorList.map((vendor) => (
+                                                    <option key={vendor.id} value={vendor.vendor_name}>
+                                                        {vendor.vendor_name}
+                                                    </option>
+                                                ))}
                                             </select>
                                         </div>
 
@@ -3586,10 +3776,13 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                                             >
                                                 <option value="">Select Branch</option>
-                                                <option value="branch1">Branch 1</option>
-                                                <option value="branch2">Branch 2</option>
+                                                {availableBranches.map((branch: any) => (
+                                                    <option key={branch.id} value={branch.reference_name || branch.id}>
+                                                        {branch.reference_name || 'Main Branch'}
+                                                    </option>
+                                                ))}
                                             </select>
-                                            <p className="text-xs text-gray-500 mt-1">Reference Name in Vendor Master</p>
+
                                         </div>
 
 
@@ -3725,7 +3918,6 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                     value={item.itemCode}
                                                                     onChange={(e) => handlePOItemChange(item.id, 'itemCode', e.target.value)}
                                                                     className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                                                    placeholder="Pull from vendor"
                                                                 />
                                                             </td>
                                                             <td className="px-3 py-2">
@@ -3750,7 +3942,6 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                     value={item.quantity}
                                                                     onChange={(e) => handlePOItemChange(item.id, 'quantity', e.target.value)}
                                                                     className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                                                    placeholder="Qty+UoC"
                                                                 />
                                                             </td>
                                                             <td className="px-3 py-2">
@@ -3767,7 +3958,6 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                     value={item.finalRate}
                                                                     onChange={(e) => handlePOItemChange(item.id, 'finalRate', e.target.value)}
                                                                     className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                                                    placeholder="Manual entry"
                                                                 />
                                                             </td>
                                                             <td className="px-3 py-2">
@@ -3776,7 +3966,6 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                     value={item.taxableValue}
                                                                     onChange={(e) => handlePOItemChange(item.id, 'taxableValue', e.target.value)}
                                                                     className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                                                    placeholder="Quantity x"
                                                                 />
                                                             </td>
                                                             <td className="px-3 py-2">
@@ -3854,7 +4043,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 onChange={(e) => handleCreatePOFormChange('receiveBy', e.target.value)}
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                                             />
-                                            <p className="text-xs text-gray-500 mt-1">Calendar option to select date</p>
+
                                         </div>
 
                                         <div>
@@ -3869,7 +4058,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 <option value="warehouse2">Warehouse 2</option>
                                                 <option value="store1">Store 1</option>
                                             </select>
-                                            <p className="text-xs text-gray-500 mt-1">Drop-down of locations from Inventory Module</p>
+
                                         </div>
 
                                         <div className="col-span-2">

@@ -22,6 +22,7 @@ class VendorBasicDetailSerializer(serializers.ModelSerializer):
             'contact_person',
             'email',
             'contact_no',
+            'vendor_category',
             'is_also_customer',
             'is_active',
             'created_at',
@@ -46,6 +47,7 @@ class VendorBasicDetailCreateSerializer(serializers.ModelSerializer):
             'contact_person',
             'email',
             'contact_no',
+            'vendor_category',
             'is_also_customer'
         ]
     
@@ -96,6 +98,7 @@ class VendorBasicDetailUpdateSerializer(serializers.ModelSerializer):
             'contact_person',
             'email',
             'contact_no',
+            'vendor_category',
             'is_also_customer',
             'is_active'
         ]
