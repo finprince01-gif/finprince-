@@ -74,7 +74,7 @@ const MonthlyActivityChart: React.FC<{ data: { month: string; sales: number; pur
                         }}
                     />
                     <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: '500', paddingBottom: '20px' }} />
-                    <Line type="monotone" dataKey="sales" name="Sales" stroke="#4f46e5" strokeWidth={2} dot={{ r: 3, fill: '#4f46e5', strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                    <Line type="monotone" dataKey="sales" name="Sales" stroke="#16a34a" strokeWidth={2} dot={{ r: 3, fill: '#16a34a', strokeWidth: 0 }} activeDot={{ r: 5 }} />
                     <Line type="monotone" dataKey="purchases" name="Purchases" stroke="#ef4444" strokeWidth={2} dot={{ r: 3, fill: '#ef4444', strokeWidth: 0 }} activeDot={{ r: 5 }} />
                 </LineChart>
             </ResponsiveContainer>
@@ -159,7 +159,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, companyName, 
                         <h3 className="text-[15px] font-bold text-slate-800 uppercase tracking-wider">Revenue Trend</h3>
                         <div className="flex gap-4">
                             <div className="flex items-center gap-2">
-                                <div className="w-2.5 h-2.5 rounded-[4px] bg-indigo-600" />
+                                <div className="w-2.5 h-2.5 rounded-[4px] bg-green-600" />
                                 <span className="text-[11px] font-medium text-slate-500 uppercase">Sales</span>
                             </div>
                             <div className="flex items-center gap-2">
@@ -185,7 +185,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, companyName, 
                                 <div className="flex items-center gap-3 overflow-hidden">
                                     <Icon
                                         name={v.type.toLowerCase() === 'sales' ? 'arrow-up-right' : 'vouchers'}
-                                        className={`w-3.5 h-3.5 ${v.type.toLowerCase() === 'sales' ? 'text-indigo-600' : 'text-slate-400'}`}
+                                        className={`w-3.5 h-3.5 ${v.type.toLowerCase() === 'sales' ? 'text-green-600' : 'text-slate-400'}`}
                                     />
                                     <div className="overflow-hidden">
                                         <p className="text-[13px] font-semibold text-slate-700 truncate">{v.type}</p>
