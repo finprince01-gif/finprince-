@@ -904,7 +904,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             ifscCode: '',
             branchName: '',
             swiftCode: '',
-            vendorBranch: '',
+            vendorBranch: [],
             accountType: 'Savings'
         };
         setBankAccounts([...bankAccounts, newBank]);
@@ -1461,2089 +1461,2188 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 ))}
             </div>
 
-                            <div className="bg-white rounded-lg shadow p-0 overflow-hidden">
-
-                                {activeMasterSubTab === 'Category' && (
-                                    <InventoryCategoryWizard
-                                        apiEndpoint="/api/vendors/categories/"
-                                        allowCreateGroup={false}
-                                        disableGroupCreation={true}
-                                        systemCategories={[
-                                            'Raw Material',
-                                            'Work in Progress',
-                                            'Finished Goods',
-                                            'Stores and Spares',
-                                            'Packing Material',
-                                            'Stock in Trade'
-                                        ]}
-                                        onCreateCategory={async (data) => {
-                                            try {
-                                                await httpClient.post('/api/vendors/categories/', {
-                                                    category: data.category,
-                                                    group: data.group,
-                                                    subgroup: data.subgroup,
-                                                    is_active: true
-                                                });
-                                                alert('Category created successfully!');
-                                            } catch (error: any) {
-                                                console.error('Error creating category:', error);
-                                                throw error;
-                                            }
-                                        }}
-                                        onEditCategory={async (data) => {
-                                            try {
-                                                await httpClient.put(`/api/vendors/categories/${data.id}/`, {
-                                                    category: data.category,
-                                                    group: data.group,
-                                                    subgroup: data.subgroup,
-                                                    is_active: true
-                                                });
-                                            } catch (error: any) {
-                                                console.error('Error updating category:', error);
-                                                throw error;
-                                            }
-                                        }}
-                                        onDeleteCategory={async (id) => {
-                                            try {
-                                                await httpClient.delete(`/api/vendors/categories/${id}/`);
-                                            } catch (error: any) {
-                                                console.error('Error deleting category:', error);
-                                                throw error;
-                                            }
-                                        }}
-                                    />
-                                )}
-
-                        <div className="erp-card p-0 overflow-hidden">
-
-                            {activeMasterSubTab === 'Category' && (
-                                <InventoryCategoryWizard
-                                    apiEndpoint="/api/vendors/categories/"
-                                    allowCreateGroup={false}
-                                    disableGroupCreation={true}
-                                    systemCategories={[
-                                        'Raw Material',
-                                        'Work in Progress',
-                                        'Finished Goods',
-                                        'Stores and Spares',
-                                        'Packing Material',
-                                        'Stock in Trade'
-                                    ]}
-                                    onCreateCategory={async (data) => {
-                                        try {
-                                            await httpClient.post('/api/vendors/categories/', {
-                                                category: data.category,
-                                                group: data.group,
-                                                subgroup: data.subgroup,
-                                                is_active: true
-                                            });
-                                            alert('Category created successfully!');
-                                        } catch (error: any) {
-                                            console.error('Error creating category:', error);
-                                            throw error;
-                                        }
-                                    }}
-                                />
-                            )}
-
-                            {activeMasterSubTab === 'PO Settings' && (
-                                <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
-                                    {/* Left Box: Form (Questions) */}
-                                    <div className="lg:col-span-1 border-r border-gray-200 pr-0 lg:pr-8">
-                                        <h3 className="text-lg font-semibold text-gray-800 mb-4">
-                                            {isEditModePO ? 'Edit Series' : 'New PO Series'}
-                                        </h3>
-                                        <form onSubmit={handlePOSubmit} className="space-y-4">
-                                            {/* Name */}
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                    Name of PO Series <span className="text-red-500">*</span>
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={poName}
-                                                    onChange={(e) => setPoName(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                    placeholder="e.g. Standard PO"
-                                                    required
-                                                />
-                                            </div>
-
-                                            {/* Category */}
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                    Category <span className="text-red-500">*</span>
-                                                </label>
-                                                <CategoryHierarchicalDropdown
-                                                    onSelect={(selection) => {
-                                                        setPoCategoryId(selection.id);
-                                                        setPoCategoryPath(selection.fullPath);
-                                                    }}
-                                                    value={poCategoryPath}
-                                                />
-                                            </div>
-
-                                            {/* Prefix & Suffix */}
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-1">Prefix</label>
-                                                    <input
-                                                        type="text"
-                                                        value={poPrefix}
-                                                        onChange={(e) => setPoPrefix(e.target.value)}
-                                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                        placeholder="PO/"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                        Category <span className="text-red-500">*</span>
-                                                    </label>
-                                                    <CategoryHierarchicalDropdown
-                                                        apiEndpoint="/api/vendors/categories/"
-                                                        systemCategories={[
-                                                            'Raw Material',
-                                                            'Work in Progress',
-                                                            'Finished Goods',
-                                                            'Stores and Spares',
-                                                            'Packing Material',
-                                                            'Stock in Trade'
-                                                        ]}
-                                                        onSelect={(selection) => {
-                                                            setPoCategoryId(selection.id);
-                                                            setPoCategoryPath(selection.fullPath);
-                                                        }}
-                                                        value={poCategoryPath}
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            {/* Year & Digits */}
-                                            <div className="grid grid-cols-2 gap-4 items-center">
-                                                <div className="flex items-center mt-6">
-                                                    <input
-                                                        id="poAutoYear"
-                                                        type="checkbox"
-                                                        checked={poAutoYear}
-                                                        onChange={(e) => setPoAutoYear(e.target.checked)}
-                                                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                                                    />
-                                                    <label htmlFor="poAutoYear" className="ml-2 block text-sm text-gray-700">
-                                                        Auto Year
-                                                    </label>
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-1">Digits</label>
-                                                    <input
-                                                        type="number"
-                                                        min="1"
-                                                        max="10"
-                                                        value={poDigits}
-                                                        onChange={(e) => setPoDigits(Number(e.target.value))}
-                                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            {/* Preview Box */}
-                                            <div className="bg-gray-100 p-6 rounded-[4px] text-center">
-                                                <p className="text-xs uppercase text-gray-500 font-semibold mb-2">SAMPLE PREVIEW</p>
-                                                <p className="text-xl font-bold text-gray-800">
-                                                    {getPreview()}
-                                                </p>
-                                            </div>
-
-                                            {/* Actions */}
-                                            <div className="flex gap-3 pt-4">
-                                                <button
-                                                    type="submit"
-                                                    className="flex-1 px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
-                                                >
-                                                    {isEditModePO ? 'Update Series' : 'Save Series'}
-                                                </button>
-                                                {isEditModePO && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={resetPOForm}
-                                                        className="px-4 py-2 border border-slate-200 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
-                                                    >
-                                                        Cancel
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </form>
-                                    </div>
-
-                                    {/* Right Box: Existing Locations (Existing Series) */}
-                                    <div className="lg:col-span-2">
-                                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Existing Series</h3>
-                                        <div className="border border-slate-200 rounded-[4px] overflow-hidden">
-                                            <table className="min-w-full divide-y divide-gray-200">
-                                                <thead className="bg-gray-50">
-                                                    <tr>
-                                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
-                                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
-                                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="bg-white divide-y divide-gray-200">
-                                                    {loadingPOSeries ? (
-                                                        <tr><td colSpan={4} className="px-6 py-4 text-center text-gray-500">Loading...</td></tr>
-                                                    ) : poSeriesList.length === 0 ? (
-                                                        <tr><td colSpan={4} className="px-6 py-4 text-center text-gray-500">No series found.</td></tr>
-                                                    ) : (
-                                                        poSeriesList.map(series => (
-                                                            <tr key={series.id} className="hover:bg-gray-50">
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                                                    {series.name}
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                                    {series.category_path || series.category_name || '-'}
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                                    {/* Show summary of config */}
-                                                                    {series.prefix}...{series.suffix} ({series.digits} digits)
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                                    <button
-                                                                        onClick={() => handleEditPO(series)}
-                                                                        className="text-indigo-600 hover:text-indigo-900 mr-4"
-                                                                    >
-                                                                        Edit
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={() => handleDeletePO(series.id)}
-                                                                        className="text-red-600 hover:text-red-900"
-                                                                    >
-                                                                        Delete
-                                                                    </button>
-                                                                </td>
-                                                            </tr>
-                                                        ))
-                                                    )}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {activeMasterSubTab === 'Vendor Creation' && (
-                                <div className="p-6">
-                                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Vendor Creation</h3>
-                                    <p className="text-gray-600">Select a tab below to configure vendor details:</p>
-                                    <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-4">
-                                        {['Basic Details', 'GST Details', 'Products/Services', 'TDS & Other Statutory', 'Banking Info', 'Terms & Conditions'].map((tab) => (
-                                            <button
-                                                key={tab}
-                                                onClick={() => setActiveMasterSubTab(tab as MasterSubTab)}
-                                                className="p-4 border-2 border-gray-200 rounded-[4px] hover:border-indigo-500 hover:bg-indigo-50/50 transition-all text-left"
-                                            >
-                                                <div className="font-medium text-gray-900">{tab}</div>
-                                                <div className="text-xs text-gray-500 mt-1">Configure {tab.toLowerCase()}</div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {activeMasterSubTab === 'Basic Details' && (
-                                <div className="p-6">
-                                    <div className="flex items-center mb-6">
-                                        <button
-                                            onClick={() => setActiveMasterSubTab('Vendor Creation')}
-                                            className="mr-4 p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
-                                            title="Back to Vendor Creation"
-                                        >
-                                            <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                                        </button>
-                                        <h3 className="text-lg font-semibold text-gray-800">Basic Details</h3>
-                                    </div>
-                                    <form className="space-y-6" onSubmit={handleBasicDetailsSubmit}>
-                                        {/* Row 1: Vendor Code and Vendor Name */}
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    Vendor Code
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={vendorCode}
-                                                    onChange={(e) => setVendorCode(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                    placeholder="Auto-generated or manual"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    Vendor Name <span className="text-red-500">*</span>
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={vendorName}
-                                                    onChange={(e) => setVendorName(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                    placeholder="Enter vendor name"
-                                                    required
-                                                />
-                                            </div>
-                                        </div>
-                                        <form className="space-y-6" onSubmit={handleBasicDetailsSubmit}>
-                                            {/* Row 1: Vendor Code and Vendor Name */}
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                {/* Vendor Code */}
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                        Vendor Code
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={vendorCode}
-                                                        onChange={(e) => setVendorCode(e.target.value)}
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
-                                                        placeholder="Auto-generated or manual"
-                                                    />
-                                                </div>
-
-                                                {/* Vendor Name */}
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                        Vendor Name <span className="text-red-500">*</span>
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={vendorName}
-                                                        onChange={(e) => setVendorName(e.target.value)}
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
-                                                        placeholder="Enter vendor name"
-                                                        required
-                                                    />
-                                                </div>
-
-                                                {/* Vendor Category */}
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                        Vendor Category <span className="text-red-500">*</span>
-                                                    </label>
-                                                    <CategoryHierarchicalDropdown
-                                                        apiEndpoint="/api/vendors/categories/"
-                                                        value={vendorCategory}
-                                                        onSelect={(selection) => setVendorCategory(selection.fullPath)}
-                                                        placeholder="Select Category"
-                                                        className="w-full"
-                                                    />
-                                                </div>
-
-                                                {/* PAN No */}
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                        PAN No.
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={panNo}
-                                                        onChange={(e) => setPanNo(e.target.value)}
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
-                                                        placeholder="AAAAA0000A"
-                                                        maxLength={10}
-                                                    />
-                                                </div>
-
-                                                {/* Contact Person */}
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                        Contact Person
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={contactPerson}
-                                                        onChange={(e) => setContactPerson(e.target.value)}
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
-                                                        placeholder="Primary contact name"
-                                                    />
-                                                </div>
-
-                                                {/* Email address */}
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                        Email address <span className="text-red-500">*</span>
-                                                    </label>
-                                                    <input
-                                                        type="email"
-                                                        value={vendorEmail}
-                                                        onChange={(e) => setVendorEmail(e.target.value)}
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
-                                                        placeholder="vendor@example.com"
-                                                        required
-                                                    />
-                                                </div>
-
-                                                {/* Contact No */}
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                        Contact No <span className="text-red-500">*</span>
-                                                    </label>
-                                                    <input
-                                                        type="tel"
-                                                        value={contactNo}
-                                                        onChange={(e) => {
-                                                            const value = e.target.value;
-                                                            if (/^\d*$/.test(value)) {
-                                                                setContactNo(value);
-                                                            }
-                                                        }}
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
-                                                        placeholder="+91 XXXXX XXXXX"
-                                                        required
-                                                    />
-                                                </div>
-                                                <p className="mt-2 text-xs text-gray-500">
-                                                    If "Yes" is clicked, search for customer using PAN No & Vendor Name
-                                                </p>
-                                            </div>
-
-                                            {/* Customer Link Section (shown when Yes is clicked) */}
-                                            <div className="hidden mt-4 p-4 bg-slate-50/50 border border-blue-200 rounded-[4px]">
-                                                <div className="space-y-3">
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-sm font-medium text-gray-700">
-                                                            Link the vendor to this customer:
-                                                        </span>
-                                                    </div>
-                                                    <div className="flex gap-3">
-                                                        <button
-                                                            type="button"
-                                                            className="flex-1 px-4 py-2 border-2 border-indigo-500 text-indigo-600 rounded-[4px] hover:bg-indigo-50/50 focus:outline-none"
-                                                        >
-                                                            Yes
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            className="flex-1 px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-[4px] hover:bg-gray-50 focus:outline-none"
-                                                        >
-                                                            No
-                                                        </button>
-                                                    </div>
-                                                    <div className="text-sm text-gray-600">
-                                                        <span className="font-medium">Customer Code - Customer Name</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* No Customer Found Section */}
-                                            <div className="hidden mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-[4px]">
-                                                <div className="space-y-3">
-                                                    <p className="text-sm text-gray-700">
-                                                        No customer found with matching PAN No & Vendor Name
-                                                    </p>
-                                                    <div className="flex gap-3">
-                                                        <button
-                                                            type="button"
-                                                            className="px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
-                                                        >
-                                                            Create a Customer
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            className="px-4 py-2 border border-slate-200 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
-                                                        >
-                                                            Skip
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Action Buttons */}
-                                        <div className="flex justify-between pt-4">
-                                            <button
-                                                type="button"
-                                                onClick={() => setActiveMasterSubTab('Vendor Creation')}
-                                                className="px-6 py-2 border border-slate-200 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
-                                            >
-                                                Back
-                                            </button>
-                                            <button
-                                                type="submit"
-                                                className="px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
-                                            >
-                                                Next
-                                            </button>
-                                        </div>
-                                    </form>
-                                </div>
-                            )}
-
-                            {activeMasterSubTab === 'GST Details' && (
-                                <div className="p-6">
-                                    <div className="flex justify-between items-center mb-6">
-                                        <div className="flex items-center">
-                                            <button
-                                                onClick={() => setActiveMasterSubTab('Vendor Creation')}
-                                                className="mr-4 p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
-                                                title="Back to Vendor Creation"
-                                            >
-                                                <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                                            </button>
-                                            <h3 className="text-lg font-semibold text-gray-800">GST Details</h3>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={handleAddGstRecord}
-                                            className="px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
-                                        >
-                                            + Add Another GSTIN
-                                        </button>
-                                    </div>
-
-                                    <form className="space-y-8" onSubmit={handleGSTDetailsSubmit}>
-                                        {gstRecords.map((record, index) => (
-                                            <div key={record.id} className="border border-slate-200 rounded-[4px] p-4 bg-gray-50">
-                                                {/* GSTIN Accordion Header */}
-                                                <div className="flex justify-between items-center cursor-pointer mb-4" onClick={() => toggleGstExpand(record.id)}>
-                                                    <div className="flex items-center gap-2">
-                                                        <svg className={`w-5 h-5 transition-transform ${record.isExpanded ? 'transform rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                                        </svg>
-                                                        <h4 className="font-medium text-gray-800">GSTIN #{index + 1} {record.gstin ? `- ${record.gstin}` : ''}</h4>
-                                                    </div>
-                                                    {index > 0 && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => { e.stopPropagation(); handleRemoveGstRecord(record.id); }}
-                                                            className="text-red-500 hover:text-red-700 text-sm"
-                                                        >
-                                                            Remove
-                                                        </button>
-                                                    )}
-                                                </div>
-
-                                                {/* GSTIN Body */}
-                                                {record.isExpanded && (
-                                                    <div className="space-y-6 pl-4 border-l-2 border-slate-100">
-
-                                                        {/* GSTIN & Fetch */}
-                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                            <div>
-                                                                <label className="block text-sm font-medium text-gray-700 mb-2">GSTIN</label>
-                                                                <div className="flex gap-2">
-                                                                    <input
-                                                                        type="text"
-                                                                        value={record.gstin}
-                                                                        onChange={(e) => handleGstChange(record.id, 'gstin', e.target.value)}
-                                                                        className="flex-1 px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100"
-                                                                        placeholder="22AAAAA0000A1Z5"
-                                                                        disabled={record.registrationType === 'unregistered'}
-                                                                    />
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => handleFetchGstDetails(record.id)}
-                                                                        disabled={record.registrationType === 'unregistered' || loadingGstFetch || !record.gstin}
-                                                                        className="px-4 py-2 border border-indigo-500 text-indigo-600 rounded-[4px] hover:bg-indigo-50/50 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                                                                    >
-                                                                        {loadingGstFetch ? 'Fetching...' : 'Fetch Branch Details'}
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-
-                                                            <div>
-                                                                <label className="block text-sm font-medium text-gray-700 mb-2">Registration Type</label>
-                                                                <select
-                                                                    value={record.registrationType}
-                                                                    onChange={(e) => handleGstChange(record.id, 'registrationType', e.target.value)}
-                                                                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                                >
-                                                                    <option value="regular">Regular</option>
-                                                                    <option value="composition">Composition</option>
-                                                                    <option value="consumer">Consumer</option>
-                                                                    <option value="unregistered">Unregistered</option>
-                                                                    <option value="overseas">Overseas</option>
-                                                                    <option value="special_economic_zone">Special Economic Zone (SEZ)</option>
-                                                                    <option value="deemed_export">Deemed Export</option>
-                                                                </select>
-                                                            </div>
-
-                                                            {record.registrationType !== 'unregistered' && (
-                                                                <>
-                                                                    <div>
-                                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Legal Name</label>
-                                                                        <input
-                                                                            type="text"
-                                                                            value={record.legalName || ''}
-                                                                            readOnly
-                                                                            className="w-full px-4 py-2 border border-slate-200 rounded-[4px] bg-gray-100 cursor-not-allowed"
-                                                                        />
-                                                                    </div>
-                                                                    <div>
-                                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Trade Name</label>
-                                                                        <input
-                                                                            type="text"
-                                                                            value={record.tradeName || ''}
-                                                                            readOnly
-                                                                            className="w-full px-4 py-2 border border-slate-200 rounded-[4px] bg-gray-100 cursor-not-allowed"
-                                                                        />
-                                                                    </div>
-                                                                </>
-                                                            )}
-                                                        </div>
-
-                                                        {/* Places of Business */}
-                                                        <div className="mt-6">
-                                                            <h5 className="font-medium text-gray-700 mb-3 flex items-center justify-between">
-                                                                <span>Places of Business</span>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleAddPob(record.id)}
-                                                                    className="text-xs font-medium text-indigo-600 hover:text-slate-700 border border-indigo-600 rounded px-2 py-1 hover:bg-indigo-50/50 transition-colors"
-                                                                >
-                                                                    + Add Manual Branch
-                                                                </button>
-                                                            </h5>
-
-                                                            {record.placesOfBusiness.length > 0 ? (
-                                                                <div className="space-y-4">
-                                                                    {record.placesOfBusiness.map((pob, pIndex) => (
-                                                                        <div key={pob.id} className="border border-slate-200 rounded p-3 bg-white">
-                                                                            {/* POB Accordion */}
-                                                                            <div className="flex justify-between items-center cursor-pointer" onClick={() => togglePobExpand(record.id, pob.id)}>
-                                                                                <div className="flex items-center gap-2">
-                                                                                    <svg className={`w-4 h-4 transition-transform ${pob.isExpanded ? 'transform rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                                                                    </svg>
-                                                                                    <span className="font-medium text-sm text-gray-800">{pob.referenceName || `Branch ${pIndex + 1}`} - {pob.address}</span>
-                                                                                </div>
-                                                                                <button
-                                                                                    type="button"
-                                                                                    onClick={(e) => { e.stopPropagation(); handleRemovePob(record.id, pob.id); }}
-                                                                                    className="text-red-500 hover:text-red-700 text-xs px-2 border border-transparent hover:border-red-200 rounded"
-                                                                                >
-                                                                                    Remove
-                                                                                </button>
-                                                                            </div>
-
-                                                                            {/* POB Fields */}
-                                                                            {pob.isExpanded && (
-                                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
-                                                                                    <div>
-                                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">Reference Name</label>
-                                                                                        <input type="text" value={pob.referenceName} onChange={(e) => updatePobField(record.id, pob.id, 'referenceName', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" />
-                                                                                    </div>
-                                                                                    <div>
-                                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">Address</label>
-                                                                                        <textarea
-                                                                                            rows={2}
-                                                                                            value={pob.address}
-                                                                                            onChange={(e) => updatePobField(record.id, pob.id, 'address', e.target.value)}
-                                                                                            className={`w-full px-3 py-1.5 border border-slate-200 rounded text-sm ${record.registrationType !== 'unregistered' && pob.address && pob.referenceName !== '' ? 'bg-gray-50' : ''}`}
-                                                                                            placeholder="Enter address"
-                                                                                        />
-                                                                                    </div>
-                                                                                    <div>
-                                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">Contact Person</label>
-                                                                                        <input type="text" value={pob.contactPerson} onChange={(e) => updatePobField(record.id, pob.id, 'contactPerson', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" />
-                                                                                    </div>
-                                                                                    <div>
-                                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">Email Address</label>
-                                                                                        <input type="email" value={pob.email} onChange={(e) => updatePobField(record.id, pob.id, 'email', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" />
-                                                                                    </div>
-                                                                                    <div>
-                                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">Contact No</label>
-                                                                                        <input type="tel" value={pob.contactNumber} onChange={(e) => updatePobField(record.id, pob.id, 'contactNumber', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" />
-                                                                                    </div>
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            ) : (
-                                                                <div className="p-4 bg-gray-50 border border-slate-200 rounded text-sm text-gray-500 text-center">
-                                                                    {record.registrationType === 'unregistered' ?
-                                                                        'Add a branch manually to continue.' :
-                                                                        'No places of business found. Fetch via GSTIN or add manually.'
-                                                                    }
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ))}
-
-                                        <div className="flex justify-between pt-4">
-                                            <button
-                                                type="button"
-                                                onClick={() => setActiveMasterSubTab('Basic Details')}
-                                                className="px-6 py-2 border border-slate-200 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
-                                            >
-                                                Back
-                                            </button>
-                                            <button
-                                                type="submit"
-                                                className="px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
-                                            >
-                                                Next
-                                            </button>
-                                        </div>
-                                        <div className="space-y-6">
-                                            {/* Table for Items */}
-                                            <div className="overflow-x-auto">
-                                                <table className="min-w-full border border-gray-200">
-                                                    <thead className="bg-gray-50">
-                                                        <tr>
-                                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
-                                                                No
-                                                            </th>
-                                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
-                                                                HSN / SAC Code
-                                                            </th>
-                                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
-                                                                Item Code
-                                                            </th>
-                                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
-                                                                Item Name
-                                                            </th>
-                                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
-                                                                Supplier Item Code
-                                                            </th>
-                                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
-                                                                Supplier Item Name
-                                                            </th>
-                                                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider">
-                                                                Action
-                                                            </th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody className="bg-white divide-y divide-gray-200">
-                                                        {items.map((item, index) => (
-                                                            <tr key={item.id} className="hover:bg-gray-50">
-                                                                <td className="px-4 py-3 text-sm text-gray-900 border-r border-gray-200">
-                                                                    {index + 1}.
-                                                                </td>
-                                                                <td className="px-4 py-3 border-r border-gray-200">
-                                                                    <input
-                                                                        type="text"
-                                                                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-teal-500 focus:border-teal-500"
-                                                                        placeholder="HSN / SAC Code"
-                                                                        value={item.hsnSacCode}
-                                                                        onChange={(e) => handleItemChange(item.id, 'hsnSacCode', e.target.value)}
-                                                                    />
-                                                                </td>
-                                                                <td className="px-4 py-3 border-r border-gray-200">
-                                                                    <div style={{ minWidth: '150px' }}>
-                                                                        <SearchableDropdown
-                                                                            options={inventoryItems.map(i => i.item_code).filter(Boolean)}
-                                                                            value={item.itemCode}
-                                                                            onChange={(val) => handleItemChange(item.id, 'itemCode', val)}
-                                                                            placeholder="Select Code"
-                                                                        />
-                                                                    </div>
-                                                                </td>
-                                                                <td className="px-4 py-3 border-r border-gray-200">
-                                                                    <div style={{ minWidth: '200px' }}>
-                                                                        <SearchableDropdown
-                                                                            options={inventoryItems.map(i => i.item_name).filter(Boolean)}
-                                                                            value={item.itemName}
-                                                                            onChange={(val) => handleItemChange(item.id, 'itemName', val)}
-                                                                            placeholder="Select Item"
-                                                                        />
-                                                                    </div>
-                                                                </td>
-                                                                <td className="px-4 py-3 border-r border-gray-200">
-                                                                    <input
-                                                                        type="text"
-                                                                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-teal-500 focus:border-teal-500"
-                                                                        placeholder="Supplier Code"
-                                                                        value={item.supplierItemCode}
-                                                                        onChange={(e) => handleItemChange(item.id, 'supplierItemCode', e.target.value)}
-                                                                    />
-                                                                </td>
-                                                                <td className="px-4 py-3 border-r border-gray-200">
-                                                                    <input
-                                                                        type="text"
-                                                                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-teal-500 focus:border-teal-500"
-                                                                        placeholder="Supplier Item Name"
-                                                                        value={item.supplierItemName}
-                                                                        onChange={(e) => handleItemChange(item.id, 'supplierItemName', e.target.value)}
-                                                                    />
-                                                                </td>
-                                                                <td className="px-4 py-3 text-center">
-                                                                    <div className="flex items-center justify-center gap-2">
-
-                                                                        {/* Delete Button */}
-                                                                        <button
-                                                                            type="button"
-                                                                            className="text-red-600 hover:text-red-900"
-                                                                            title="Delete item"
-                                                                            onClick={() => handleRemoveItem(item.id)}
-                                                                        >
-                                                                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                                                                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                                                                            </svg>
-                                                                        </button>
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-
-                                            {/* Add More Button */}
-                                            <div className="flex items-center gap-2">
-                                                <button
-                                                    type="button"
-                                                    className="flex items-center gap-2 px-4 py-2 border-2 border-teal-500 text-teal-600 rounded-full hover:bg-teal-50 focus:outline-none"
-                                                    onClick={handleAddItem}
-                                                >
-                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                                    </svg>
-                                                    <span className="text-sm font-medium">Add More Items</span>
-                                                </button>
-                                            </div>
-
-                                            {/* Next Button */}
-                                            <div className="flex justify-between pt-4">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setActiveMasterSubTab('GST Details')}
-                                                    className="px-6 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
-                                                >
-                                                    Back
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={handleProductServicesSubmit}
-                                                    className="px-8 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-teal-600 hover:bg-teal-700 focus:outline-none"
-                                                >
-                                                    Next
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {activeMasterSubTab === 'Banking Info' && (
-                                    <div className="p-6">
-                                        <div className="flex items-center mb-6">
-                                            <button
-                                                onClick={() => setActiveMasterSubTab('Vendor Creation')}
-                                                className="mr-4 p-2 hover:bg-gray-100 rounded-full transition-colors"
-                                                title="Back to Vendor Creation"
-                                            >
-                                                <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                                            </button>
-                                            <h3 className="text-lg font-semibold text-gray-800">Banking Information</h3>
-                                        </div>
-                                        <form onSubmit={handleBankingDetailsSubmit} className="space-y-6">
-                                            <div className="space-y-8">
-                                                {bankAccounts.map((bank, index) => (
-                                                    <div key={bank.id} className={`space-y-6 ${index > 0 ? 'pt-8 border-t border-gray-200' : ''}`}>
-                                                        {index > 0 && (
-                                                            <div className="flex justify-between items-center">
-                                                                <h4 className="text-md font-medium text-gray-900">Bank Account #{index + 1}</h4>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleRemoveBank(bank.id)}
-                                                                    className="text-red-600 hover:text-red-800 text-sm font-medium flex items-center gap-1"
-                                                                >
-                                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                                    </svg>
-                                                                    Remove
-                                                                </button>
-                                                            </div>
-                                                        )}
-
-                                                        <div>
-                                                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                                Bank account No.
-                                                            </label>
-                                                            <input
-                                                                type="text"
-                                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
-                                                                placeholder="Enter bank account number"
-                                                                value={bank.accountNumber}
-                                                                onChange={(e) => handleBankChange(bank.id, 'accountNumber', e.target.value)}
-                                                            />
-                                                        </div>
-
-                                                        <div>
-                                                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                                Bank Name
-                                                            </label>
-                                                            <input
-                                                                type="text"
-                                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
-                                                                placeholder="Enter bank name"
-                                                                value={bank.bankName}
-                                                                onChange={(e) => handleBankChange(bank.id, 'bankName', e.target.value)}
-                                                            />
-                                                        </div>
-
-                                                        <div>
-                                                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                                IFSC Code
-                                                            </label>
-                                                            <input
-                                                                type="text"
-                                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
-                                                                placeholder="Enter IFSC Code"
-                                                                maxLength={11}
-                                                                value={bank.ifscCode}
-                                                                onChange={(e) => handleBankChange(bank.id, 'ifscCode', e.target.value)}
-                                                            />
-                                                        </div>
-
-                                                        <div>
-                                                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                                Branch Name
-                                                            </label>
-                                                            <input
-                                                                type="text"
-                                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
-                                                                placeholder="Enter branch name"
-                                                                value={bank.branchName}
-                                                                onChange={(e) => handleBankChange(bank.id, 'branchName', e.target.value)}
-                                                            />
-                                                        </div>
-
-                                                        <div>
-                                                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                                Swift Code
-                                                            </label>
-                                                            <input
-                                                                type="text"
-                                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
-                                                                placeholder="Enter Swift Code (for international transactions)"
-                                                                value={bank.swiftCode}
-                                                                onChange={(e) => handleBankChange(bank.id, 'swiftCode', e.target.value)}
-                                                            />
-                                                        </div>
-
-                                                        <div className="relative">
-                                                            <div className="block text-sm font-medium text-gray-700 mb-2">
-                                                                Associate to a vendor branch
-                                                            </div>
-                                                            <div className="relative">
-                                                                <button
-                                                                    type="button"
-                                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 bg-white text-left flex justify-between items-center"
-                                                                    onClick={() => {
-                                                                        const dropdown = document.getElementById(`vendor-branch-dropdown-${bank.id}`);
-                                                                        if (dropdown) {
-                                                                            dropdown.classList.toggle('hidden');
-                                                                        }
-                                                                    }}
-                                                                >
-                                                                    <span className="truncate">
-                                                                        {bank.vendorBranch && bank.vendorBranch.length > 0
-                                                                            ? `${bank.vendorBranch.length} Selected`
-                                                                            : "Select vendor branch"}
-                                                                    </span>
-                                                                    <ChevronDown className="w-4 h-4 text-gray-500" />
-                                                                </button>
-
-                                                                {/* Dropdown Content */}
-                                                                <div
-                                                                    id={`vendor-branch-dropdown-${bank.id}`}
-                                                                    className="hidden absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm"
-                                                                >
-                                                                    {/* Collect all branches from GST records */}
-                                                                    {(() => {
-                                                                        const allBranches = gstRecords.flatMap(record =>
-                                                                            record.placesOfBusiness.map(pob => pob.referenceName).filter(Boolean)
-                                                                        );
-
-                                                                        if (allBranches.length === 0) {
-                                                                            return <div className="px-4 py-2 text-gray-500 italic">No branches available</div>;
-                                                                        }
-
-                                                                        return allBranches.map((branchName, idx) => (
-                                                                            <div key={`${branchName}-${idx}`} className="flex items-center px-4 py-2 hover:bg-gray-100 cursor-pointer" onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                const currentBranches = bank.vendorBranch || [];
-                                                                                const isSelected = currentBranches.includes(branchName);
-                                                                                let newBranches;
-                                                                                if (isSelected) {
-                                                                                    newBranches = currentBranches.filter(b => b !== branchName);
-                                                                                } else {
-                                                                                    newBranches = [...currentBranches, branchName];
-                                                                                }
-                                                                                handleBankChange(bank.id, 'vendorBranch', newBranches);
-                                                                            }}>
-                                                                                <input
-                                                                                    type="checkbox"
-                                                                                    checked={(bank.vendorBranch || []).includes(branchName)}
-                                                                                    onChange={() => { }} // Handled by div click
-                                                                                    className="h-4 w-4 text-teal-600 focus:ring-teal-500 border-gray-300 rounded mr-3 pointer-events-none"
-                                                                                />
-                                                                                <span className="text-gray-900">{branchName}</span>
-                                                                            </div>
-                                                                        ));
-                                                                    })()}
-                                                                </div>
-                                                            </div>
-
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-
-                                            {/* Add Another Bank Button */}
-                                            <div className="pt-2">
-                                                <button
-                                                    type="button"
-                                                    className="flex items-center gap-2 px-4 py-2 border-2 border-teal-500 text-teal-600 rounded-md hover:bg-teal-50 focus:outline-none"
-                                                    onClick={handleAddBank}
-                                                >
-                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                                    </svg>
-                                                    <span className="text-sm font-medium">Another Bank</span>
-                                                </button>
-                                            </div>
-
-                                            {/* Next Button */}
-                                            <div className="flex justify-between pt-4">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setActiveMasterSubTab('TDS & Other Statutory')}
-                                                    className="px-6 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
-                                                >
-                                                    Back
-                                                </button>
-                                                <button
-                                                    type="submit"
-                                                    className="px-8 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-teal-600 hover:bg-teal-700 focus:outline-none"
-                                                >
-                                                    Next
-                                                </button>
-                                            </div>
-                                        </form>
-                                    </div>
-                                    <form onSubmit={handleTDSDetailsSubmit} className="space-y-6">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    MSME Udyam No
-                                                </label>
-                                                <div className="flex gap-2">
-                                                    <input
-                                                        type="text"
-                                                        value={msmeUdyamNo}
-                                                        onChange={(e) => setMsmeUdyamNo(e.target.value)}
-                                                        className="flex-1 px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                        placeholder="MSME Udyam Registration Number"
-                                                    />
-                                                    <input
-                                                        type="file"
-                                                        id="msme-file-upload"
-                                                        className="hidden"
-                                                        accept=".pdf,.jpg,.jpeg,.png"
-                                                        onChange={(e) => handleFileUpload('msmeFile', e.target.files?.[0] || null)}
-                                                    />
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => document.getElementById('msme-file-upload')?.click()}
-                                                        className="px-4 py-2 bg-indigo-50/50 border border-indigo-300 rounded-[4px] hover:bg-indigo-50 transition-colors flex items-center gap-2 text-slate-700"
-                                                        title="Upload MSME Registration Certificate"
-                                                    >
-                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                                                        </svg>
-                                                    </button>
-                                                </div>
-                                                {uploadedFiles.msmeFile && (
-                                                    <p className="mt-1 text-xs text-indigo-600">✓ {uploadedFiles.msmeFile.name}</p>
-                                                )}
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    FSSAI License No
-                                                </label>
-                                                <div className="flex gap-2">
-                                                    <input
-                                                        type="text"
-                                                        value={fssaiLicenseNo}
-                                                        onChange={(e) => setFssaiLicenseNo(e.target.value)}
-                                                        className="flex-1 px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                        placeholder="FSSAI License Number"
-                                                    />
-                                                    <input
-                                                        type="file"
-                                                        id="fssai-file-upload"
-                                                        className="hidden"
-                                                        accept=".pdf,.jpg,.jpeg,.png"
-                                                        onChange={(e) => handleFileUpload('fssaiFile', e.target.files?.[0] || null)}
-                                                    />
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => document.getElementById('fssai-file-upload')?.click()}
-                                                        className="px-4 py-2 bg-indigo-50/50 border border-indigo-300 rounded-[4px] hover:bg-indigo-50 transition-colors flex items-center gap-2 text-slate-700"
-                                                        title="Upload FSSAI License"
-                                                    >
-                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                                                        </svg>
-                                                    </button>
-                                                </div>
-                                                {uploadedFiles.fssaiFile && (
-                                                    <p className="mt-1 text-xs text-indigo-600">✓ {uploadedFiles.fssaiFile.name}</p>
-                                                )}
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    Import Export Code (IEC)
-                                                </label>
-                                                <div className="flex gap-2">
-                                                    <input
-                                                        type="text"
-                                                        value={importExportCode}
-                                                        onChange={(e) => setImportExportCode(e.target.value)}
-                                                        className="flex-1 px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                        placeholder="Import Export Code"
-                                                    />
-                                                    <input
-                                                        type="file"
-                                                        id="iec-file-upload"
-                                                        className="hidden"
-                                                        accept=".pdf,.jpg,.jpeg,.png"
-                                                        onChange={(e) => handleFileUpload('iecFile', e.target.files?.[0] || null)}
-                                                    />
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => document.getElementById('iec-file-upload')?.click()}
-                                                        className="px-4 py-2 bg-indigo-50/50 border border-indigo-300 rounded-[4px] hover:bg-indigo-50 transition-colors flex items-center gap-2 text-slate-700"
-                                                        title="Upload IEC Certificate"
-                                                    >
-                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                                                        </svg>
-                                                    </button>
-                                                </div>
-                                                {uploadedFiles.iecFile && (
-                                                    <p className="mt-1 text-xs text-indigo-600">✓ {uploadedFiles.iecFile.name}</p>
-                                                )}
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    EOU Status
-                                                </label>
-                                                <div className="flex gap-2">
-                                                    <input
-                                                        type="text"
-                                                        value={eouStatus}
-                                                        onChange={(e) => setEouStatus(e.target.value)}
-                                                        className="flex-1 px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                        placeholder="Export Oriented Unit Status"
-                                                    />
-                                                    <input
-                                                        type="file"
-                                                        id="eou-file-upload"
-                                                        className="hidden"
-                                                        accept=".pdf,.jpg,.jpeg,.png"
-                                                        onChange={(e) => handleFileUpload('eouFile', e.target.files?.[0] || null)}
-                                                    />
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => document.getElementById('eou-file-upload')?.click()}
-                                                        className="px-4 py-2 bg-indigo-50/50 border border-indigo-300 rounded-[4px] hover:bg-indigo-50 transition-colors flex items-center gap-2 text-slate-700"
-                                                        title="Upload Letter of Permission / Green Card"
-                                                    >
-                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                                                        </svg>
-                                                    </button>
-                                                </div>
-                                                {uploadedFiles.eouFile && (
-                                                    <p className="mt-1 text-xs text-indigo-600">✓ {uploadedFiles.eouFile.name}</p>
-                                                )}
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    TDS Section Applicable
-                                                </label>
-                                                <select
-                                                    value={tdsSectionApplicable}
-                                                    onChange={(e) => setTdsSectionApplicable(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                                                >
-                                                    <option value="">Select TDS Section</option>
-                                                    <option value="Section 194C">Section 194C - Contracts (Individual/HUF & Others)</option>
-                                                    <option value="Section 194H">Section 194H - Commission/Brokerage</option>
-                                                    <option value="Section 194-I">Section 194-I - Rent (Land, Building, Furniture & Fitting, Plant & Machinery, Equipment)</option>
-                                                    <option value="Section 194J">Section 194J - Professional Services, Technical Services, Director's Remuneration</option>
-                                                    <option value="Section 194Q">Section 194Q - Purchase of Goods</option>
-                                                    <option value="Section 194A">Section 194A - Interest other than interest on securities</option>
-                                                    <option value="Section 194R">Section 194R - Benefit or Perquisite</option>
-                                                    <option value="Section 194-IA">Section 194-IA - Immovable Property Transfer</option>
-                                                    <option value="Section 194-IB">Section 194-IB - Rent by Individual or HUF</option>
-                                                    <option value="Section 194-IC">Section 194-IC - Joint Development Agreements</option>
-                                                    <option value="Section 194M">Section 194M - Contractors & Professionals</option>
-                                                    <option value="Section 194-O">Section 194-O - E-Commerce</option>
-                                                    <option value="Section 195">Section 195 - Payment to Non-Residents</option>
-                                                </select>
-                                            </div>
-                                        </div>
-
-                                        {/* TDS Rate Information */}
-                                        {tdsSectionApplicable && (() => {
-                                            const getTDSRateInfo = (section: string) => {
-                                                const rates: { [key: string]: { tdsRate: string; penaltyRate: string; description: string } } = {
-                                                    'Section 194C': { tdsRate: '1% / 2%', penaltyRate: '20%', description: 'Payment to Contractors who are Individuals or Hindu Undivided Family (HUF) / Payment to Contractors other than Individuals & HUF' },
-                                                    'Section 194H': { tdsRate: '2%', penaltyRate: '20%', description: 'Commission and Brokerage to agents' },
-                                                    'Section 194-I': { tdsRate: '2% / 10%', penaltyRate: '20%', description: 'Rent on Land, Building, or Furniture & fitting / Rent on Plant & Machinery, or Equipment' },
-                                                    'Section 194J': { tdsRate: '2% / 10%', penaltyRate: '20%', description: 'Fees for Technical Services, Call Center Operations, Royalty on sale & distribution of films / Professional Services, Royalty from other than films, Non-Compete Fees, etc. / Director\'s Remuneration' },
-                                                    'Section 194Q': { tdsRate: '0.10%', penaltyRate: '5%', description: 'Purchase of Goods of aggregate value exceeding Rs. 50 Lakhs' },
-                                                    'Section 194A': { tdsRate: '10%', penaltyRate: '20%', description: 'Interest payments made on loans, FDs, advances, etc., other than interest on securities' },
-                                                    'Section 194R': { tdsRate: '10%', penaltyRate: '20%', description: 'Benefit or Perquisite given by a business or professional exceeding Rs 20,000' },
-                                                    'Section 194-IA': { tdsRate: '1%', penaltyRate: '20%', description: 'Transfer of immovable property valuing Rs 50 lakhs or more' },
-                                                    'Section 194-IB': { tdsRate: '2%', penaltyRate: '20%', description: 'Rent exceeding Rs 50,000 per month paid by Individual & HUFs who are not subject to tax audit' },
-                                                    'Section 194-IC': { tdsRate: '10%', penaltyRate: '20%', description: 'Payment of monetary consideration under a specified Joint Development Agreements' },
-                                                    'Section 194M': { tdsRate: '5%', penaltyRate: '20%', description: 'Payment exceeding Rs 50 Lakhs to contractors or professionals by Individuals & HUFs who are not subject to tax audit' },
-                                                    'Section 194-O': { tdsRate: '1%', penaltyRate: '5%', description: 'Facilitating sales or services by an E-commerce operator for an E-commerce participant' },
-                                                    'Section 195': { tdsRate: 'Specify "Rate" & "Nature"', penaltyRate: '-', description: 'Any payment subject to tax made to a Non-Resident or Foreign Company' }
-                                                };
-                                                return rates[section] || null;
-                                            };
-
-                                            const rateInfo = getTDSRateInfo(tdsSectionApplicable);
-
-                                            return rateInfo ? (
-                                                <div className="mt-4 p-4 bg-slate-50/50 border-l-4 border-indigo-500 rounded-[4px]">
-                                                    <div className="flex items-start gap-3">
-                                                        <svg className="w-6 h-6 text-indigo-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                        </svg>
-                                                        <div className="flex-1">
-                                                            <h4 className="text-sm font-semibold text-slate-700 mb-2">TDS Rate Information</h4>
-                                                            <div className="space-y-1 text-sm text-slate-700">
-                                                                <p><span className="font-medium">TDS Rate:</span> {rateInfo.tdsRate}</p>
-                                                                <p><span className="font-medium">Penalty Rate:</span> {rateInfo.penaltyRate}</p>
-                                                                <p className="mt-2 text-xs text-indigo-600 italic">{rateInfo.description}</p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ) : null;
-                                        })()}
-
-                                        {/* Enable automatic TDS Posting Checkbox */}
-                                        <div className="flex items-center gap-2 pt-2">
-                                            <input
-                                                type="checkbox"
-                                                id="enableAutomaticTDS"
-                                                checked={enableAutomaticTdsPosting}
-                                                onChange={(e) => setEnableAutomaticTdsPosting(e.target.checked)}
-                                                className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                                            />
-                                            <label htmlFor="enableAutomaticTDS" className="text-sm font-medium text-gray-700">
-                                                Enable automatic TDS Posting
-                                            </label>
-                                        </div>
-
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    Dispute Redressal Terms
-                                                </label>
-                                                <textarea
-                                                    rows={3}
-                                                    value={disputeRedressalTerms}
-                                                    onChange={(e) => setDisputeRedressalTerms(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
-                                                    placeholder="Enter dispute resolution and redressal terms..."
-                                                />
-                                            </div>
-
-
-                            {activeMasterSubTab === 'Products/Services' && (
-                                <div className="p-6">
-                                    <div className="flex items-center mb-6">
-                                        <button
-                                            onClick={() => setActiveMasterSubTab('Vendor Creation')}
-                                            className="mr-4 p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
-                                            title="Back to Vendor Creation"
-                                        >
-                                            <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                                        </button>
-                                        <h3 className="text-lg font-semibold text-gray-800">Products/Services</h3>
-                                    </div>
-                                    <div className="space-y-6">
-                                        {/* Table for Items */}
-                                        <div className="overflow-x-auto">
-                                            <table className="min-w-full border border-slate-200">
-                                                <thead className="bg-gray-50">
-                                                    <tr>
-                                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
-                                                            No
-                                                        </th>
-                                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
-                                                            HSN | SAC Code
-                                                        </th>
-                                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
-                                                            Item Code
-                                                        </th>
-                                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
-                                                            Item Name
-                                                        </th>
-                                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
-                                                            Supplier Item Code
-                                                        </th>
-                                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
-                                                            Supplier Item Name
-                                                        </th>
-                                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider">
-                                                            Action
-                                                        </th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="bg-white divide-y divide-gray-200">
-                                                    {items.map((item, index) => (
-                                                        <tr key={item.id} className="hover:bg-gray-50">
-                                                            <td className="px-4 py-3 text-sm text-gray-900 border-r border-gray-200">
-                                                                {index + 1}.
-                                                            </td>
-                                                            <td className="px-4 py-3 border-r border-gray-200">
-                                                                <input
-                                                                    type="text"
-                                                                    className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                                                    placeholder="HSN | SAC Code"
-                                                                    value={item.hsnSacCode}
-                                                                    onChange={(e) => handleItemChange(item.id, 'hsnSacCode', e.target.value)}
-                                                                />
-                                                            </td>
-                                                            <td className="px-4 py-3 border-r border-gray-200">
-                                                                <input
-                                                                    type="text"
-                                                                    className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                                                    placeholder="Item Code"
-                                                                    value={item.itemCode}
-                                                                    onChange={(e) => handleItemChange(item.id, 'itemCode', e.target.value)}
-                                                                />
-                                                            </td>
-                                                            <td className="px-4 py-3 border-r border-gray-200">
-                                                                <input
-                                                                    type="text"
-                                                                    className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                                                    placeholder="Item Name"
-                                                                    value={item.itemName}
-                                                                    onChange={(e) => handleItemChange(item.id, 'itemName', e.target.value)}
-                                                                />
-                                                            </td>
-                                                            <td className="px-4 py-3 border-r border-gray-200">
-                                                                <input
-                                                                    type="text"
-                                                                    className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                                                    placeholder="Supplier Code"
-                                                                    value={item.supplierItemCode}
-                                                                    onChange={(e) => handleItemChange(item.id, 'supplierItemCode', e.target.value)}
-                                                                />
-                                                            </td>
-                                                            <td className="px-4 py-3 border-r border-gray-200">
-                                                                <input
-                                                                    type="text"
-                                                                    className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                                                    placeholder="Supplier Item Name"
-                                                                    value={item.supplierItemName}
-                                                                    onChange={(e) => handleItemChange(item.id, 'supplierItemName', e.target.value)}
-                                                                />
-                                                            </td>
-                                                            <td className="px-4 py-3 text-center">
-                                                                <div className="flex items-center justify-center gap-2">
-                                                                    {/* Edit Button */}
-                                                                    <button
-                                                                        type="button"
-                                                                        className="text-indigo-600 hover:text-indigo-900"
-                                                                        title="Edit item"
-                                                                    >
-                                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                                                        </svg>
-                                                                    </button>
-                                                                    {/* Save Button */}
-                                                                    <button
-                                                                        type="button"
-                                                                        className="text-indigo-600 hover:text-green-900"
-                                                                        title="Save item"
-                                                                    >
-                                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                                                        </svg>
-                                                                    </button>
-                                                                    {/* Delete Button */}
-                                                                    <button
-                                                                        type="button"
-                                                                        className="text-red-600 hover:text-red-900"
-                                                                        title="Delete item"
-                                                                        onClick={() => handleRemoveItem(item.id)}
-                                                                    >
-                                                                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                                                            <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                                                                        </svg>
-                                                                    </button>
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-
-                                        {/* Add More Button */}
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                type="button"
-                                                className="flex items-center gap-2 px-4 py-2 border-2 border-indigo-500 text-indigo-600 rounded-[4px] hover:bg-indigo-50/50 focus:outline-none"
-                                                onClick={handleAddItem}
-                                            >
-                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                                </svg>
-                                                <span className="text-sm font-medium">Add More Items</span>
-                                            </button>
-                                        </div>
-
-                                        {/* Next Button */}
-                                        <div className="flex justify-between pt-4">
-                                            <button
-                                                type="button"
-                                                onClick={() => setActiveMasterSubTab('GST Details')}
-                                                className="px-6 py-2 border border-slate-200 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
-                                            >
-                                                Back
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={handleProductServicesSubmit}
-                                                className="px-8 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
-                                            >
-                                                Next
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {activeMasterSubTab === 'Banking Info' && (
-                                <div className="p-6">
-                                    <div className="flex items-center mb-6">
-                                        <button
-                                            onClick={() => setActiveMasterSubTab('Vendor Creation')}
-                                            className="mr-4 p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
-                                            title="Back to Vendor Creation"
-                                        >
-                                            <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                                        </button>
-                                        <h3 className="text-lg font-semibold text-gray-800">Banking Information</h3>
-                                    </div>
-                                    <form onSubmit={handleBankingDetailsSubmit} className="space-y-6">
-                                        <div className="space-y-8">
-                                            {bankAccounts.map((bank, index) => (
-                                                <div key={bank.id} className={`space-y-6 ${index > 0 ? 'pt-8 border-t border-gray-200' : ''}`}>
-                                                    {index > 0 && (
-                                                        <div className="flex justify-between items-center">
-                                                            <h4 className="text-md font-medium text-gray-900">Bank Account #{index + 1}</h4>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleRemoveBank(bank.id)}
-                                                                className="text-red-600 hover:text-red-800 text-sm font-medium flex items-center gap-1"
-                                                            >
-                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                                </svg>
-                                                                Remove
-                                                            </button>
-                                                        </div>
-                                                    )}
-
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                            Bank account No.
-                                                        </label>
-                                                        <input
-                                                            type="text"
-                                                            className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                            placeholder="Enter bank account number"
-                                                            value={bank.accountNumber}
-                                                            onChange={(e) => handleBankChange(bank.id, 'accountNumber', e.target.value)}
-                                                        />
-                                                    </div>
-
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                            Bank Name
-                                                        </label>
-                                                        <input
-                                                            type="text"
-                                                            className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                            placeholder="Enter bank name"
-                                                            value={bank.bankName}
-                                                            onChange={(e) => handleBankChange(bank.id, 'bankName', e.target.value)}
-                                                        />
-                                                    </div>
-
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                            IFSC Code
-                                                        </label>
-                                                        <input
-                                                            type="text"
-                                                            className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                            placeholder="Enter IFSC Code"
-                                                            maxLength={11}
-                                                            value={bank.ifscCode}
-                                                            onChange={(e) => handleBankChange(bank.id, 'ifscCode', e.target.value)}
-                                                        />
-                                                    </div>
-
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                            Branch Name
-                                                        </label>
-                                                        <input
-                                                            type="text"
-                                                            className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                            placeholder="Enter branch name"
-                                                            value={bank.branchName}
-                                                            onChange={(e) => handleBankChange(bank.id, 'branchName', e.target.value)}
-                                                        />
-                                                    </div>
-
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                            Swift Code
-                                                        </label>
-                                                        <input
-                                                            type="text"
-                                                            className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                            placeholder="Enter Swift Code (for international transactions)"
-                                                            value={bank.swiftCode}
-                                                            onChange={(e) => handleBankChange(bank.id, 'swiftCode', e.target.value)}
-                                                        />
-                                                    </div>
-
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                            Associate to a vendor branch
-                                                        </label>
-                                                        <select
-                                                            className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                            value={bank.vendorBranch}
-                                                            onChange={(e) => handleBankChange(bank.id, 'vendorBranch', e.target.value)}
-                                                        >
-                                                            <option value="">Select vendor branch</option>
-                                                            <option value="branch1">Main Branch</option>
-                                                            <option value="branch2">Regional Office - North</option>
-                                                            <option value="branch3">Regional Office - South</option>
-                                                        </select>
-                                                        <p className="text-xs text-gray-500 mt-1">
-                                                            Drop-down list of reference Names to select with option to multiple branches. Do not show if only one GSTIN & place of business is available.
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-
-                                        {/* Add Another Bank Button */}
-                                        <div className="pt-2">
-                                            <button
-                                                type="button"
-                                                className="flex items-center gap-2 px-4 py-2 border-2 border-indigo-500 text-indigo-600 rounded-[4px] hover:bg-indigo-50/50 focus:outline-none"
-                                                onClick={handleAddBank}
-                                            >
-                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                                </svg>
-                                                <span className="text-sm font-medium">Another Bank</span>
-                                            </button>
-                                        </div>
-
-                                        {/* Next Button */}
-                                        <div className="flex justify-between pt-4">
-                                            <button
-                                                type="button"
-                                                onClick={() => setActiveMasterSubTab('TDS & Other Statutory')}
-                                                className="px-6 py-2 border border-slate-200 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
-                                            >
-                                                Back
-                                            </button>
-                                            <button
-                                                type="submit"
-                                                className="px-8 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
-                                            >
-                                                Next
-                                            </button>
-                                        </div>
-                                    </form>
-                                </div>
-                            )}
-
-                            {activeMasterSubTab === 'Terms & Conditions' && (
-                                <div className="p-6">
-                                    <div className="flex items-center mb-6">
-                                        <button
-                                            onClick={() => setActiveMasterSubTab('Vendor Creation')}
-                                            className="mr-4 p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
-                                            title="Back to Vendor Creation"
-                                        >
-                                            <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                                        </button>
-                                        <h3 className="text-lg font-semibold text-gray-800">Terms & Conditions</h3>
-                                    </div>
-                                    <form onSubmit={handleFinish} className="space-y-6">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                Credit Limit
-                                            </label>
-                                            <input
-                                                type="number"
-                                                step="0.01"
-                                                value={creditLimit}
-                                                onChange={(e) => setCreditLimit(e.target.value)}
-                                                className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                placeholder="0.00"
-                                            />
-                                        </div>
-
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                Credit Period
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={creditPeriod}
-                                                onChange={(e) => setCreditPeriod(e.target.value)}
-                                                className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                placeholder="Enter credit period (e.g., 30 days, 60 days)"
-                                            />
-                                        </div>
-
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                Credit Terms
-                                            </label>
-                                            <textarea
-                                                rows={3}
-                                                value={creditTerms}
-                                                onChange={(e) => setCreditTerms(e.target.value)}
-                                                className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                placeholder="Enter credit terms and conditions..."
-                                            />
-                                        </div>
-
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                Penalty Terms
-                                            </label>
-                                            <textarea
-                                                rows={3}
-                                                value={penaltyTerms}
-                                                onChange={(e) => setPenaltyTerms(e.target.value)}
-                                                className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                placeholder="Enter penalty terms for late payments or breaches..."
-                                            />
-                                        </div>
-
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                Delivery Terms
-                                            </label>
-                                            <textarea
-                                                rows={3}
-                                                value={deliveryTerms}
-                                                onChange={(e) => setDeliveryTerms(e.target.value)}
-                                                className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                placeholder="Delivery terms, lead time, shipping conditions..."
-                                            />
-                                        </div>
-
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                Warranty / Guarantee Details
-                                            </label>
-                                            <textarea
-                                                rows={3}
-                                                value={warrantyGuaranteeDetails}
-                                                onChange={(e) => setWarrantyGuaranteeDetails(e.target.value)}
-                                                className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                placeholder="Enter warranty and guarantee terms..."
-                                            />
-                                        </div>
-
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                Force Majeure
-                                            </label>
-                                            <textarea
-                                                rows={3}
-                                                value={forceMajeure}
-                                                onChange={(e) => setForceMajeure(e.target.value)}
-                                                className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                placeholder="Enter force majeure clauses..."
-                                            />
-                                        </div>
-
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                Dispute and Redressal Terms
-                                            </label>
-                                            <textarea
-                                                rows={3}
-                                                value={disputeRedressalTerms}
-                                                onChange={(e) => setDisputeRedressalTerms(e.target.value)}
-                                                className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                placeholder="Enter dispute resolution and redressal terms..."
-                                            />
-                                        </div>
-
-                                        <div className="flex justify-between pt-4">
-                                            <button
-                                                type="button"
-                                                onClick={() => setActiveMasterSubTab('Banking Info')}
-                                                className="px-6 py-2 border border-slate-200 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
-                                            >
-                                                Back
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => handleFinish()}
-                                                disabled={isSubmitting}
-                                                className={`px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white focus:outline-none ${isSubmitting ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'
-                                                    }`}
-                                            >
-                                                {isSubmitting ? 'Saving...' : 'Finish (Save)'}
-                                            </button>
-                                        </div>
-                                    </form>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                )}
-
-                {activeTab === 'Transaction' && (
-                    <div>
-                        {/* Sub-tabs for Transaction */}
-                        <div className="mb-6">
-                            <nav className="flex space-x-8 border-b border-gray-200">
-                                {['Purchase Orders', 'Procurement', 'Payment'].map((subTab) => (
+            {activeTab === 'Master' && (
+                <div className="erp-card p-0 overflow-hidden">
+                    {/* Sub-tabs for Vendor Master */}
+                    <div className="px-6 pt-4 border-b border-gray-200">
+                        <nav className="flex space-x-8">
+                            {['Category', 'PO Settings', 'Vendor Creation'].map((subTab) => {
+                                const isVendorCreationActive = subTab === 'Vendor Creation' &&
+                                    ['Vendor Creation', 'Basic Details', 'GST Details', 'Products/Services', 'TDS & Other Statutory', 'Banking Info', 'Terms & Conditions'].includes(activeMasterSubTab);
+                                const isActive = activeMasterSubTab === subTab || isVendorCreationActive;
+
+                                return (
                                     <button
                                         key={subTab}
-                                        onClick={() => setActiveTransactionSubTab(subTab as TransactionSubTab)}
-                                        className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTransactionSubTab === subTab
+                                        onClick={() => setActiveMasterSubTab(subTab as MasterSubTab)}
+                                        className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors ${isActive
                                             ? 'border-indigo-500 text-indigo-600'
                                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                             }`}
                                     >
-                                        {subTab.toUpperCase()}
+                                        {subTab}
+                                    </button>
+                                );
+                            })}
+                        </nav>
+                    </div>
+
+                    {activeMasterSubTab === 'Category' && (
+                        <InventoryCategoryWizard
+                            apiEndpoint="/api/vendors/categories/"
+                            allowCreateGroup={false}
+                            disableGroupCreation={true}
+                            systemCategories={[
+                                'Raw Material',
+                                'Work in Progress',
+                                'Finished Goods',
+                                'Stores and Spares',
+                                'Packing Material',
+                                'Stock in Trade'
+                            ]}
+                            onCreateCategory={async (data) => {
+                                try {
+                                    await httpClient.post('/api/vendors/categories/', {
+                                        category: data.category,
+                                        group: data.group,
+                                        subgroup: data.subgroup,
+                                        is_active: true
+                                    });
+                                    alert('Category created successfully!');
+                                } catch (error: any) {
+                                    console.error('Error creating category:', error);
+                                    throw error;
+                                }
+                            }}
+                            onEditCategory={async (data) => {
+                                try {
+                                    await httpClient.put(`/api/vendors/categories/${data.id}/`, {
+                                        category: data.category,
+                                        group: data.group,
+                                        subgroup: data.subgroup,
+                                        is_active: true
+                                    });
+                                } catch (error: any) {
+                                    console.error('Error updating category:', error);
+                                    throw error;
+                                }
+                            }}
+                            onDeleteCategory={async (id) => {
+                                try {
+                                    await httpClient.delete(`/api/vendors/categories/${id}/`);
+                                } catch (error: any) {
+                                    console.error('Error deleting category:', error);
+                                    throw error;
+                                }
+                            }}
+                        />
+                    )}
+
+                    {activeMasterSubTab === 'PO Settings' && (
+                        <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
+                            {/* Left Box: Form (Questions) */}
+                            <div className="lg:col-span-1 border-r border-gray-200 pr-0 lg:pr-8">
+                                <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                                    {isEditModePO ? 'Edit Series' : 'New PO Series'}
+                                </h3>
+                                <form onSubmit={handlePOSubmit} className="space-y-4">
+                                    {/* Name */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Name of PO Series <span className="text-red-500">*</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={poName}
+                                            onChange={(e) => setPoName(e.target.value)}
+                                            className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                            placeholder="e.g. Standard PO"
+                                            required
+                                        />
+                                    </div>
+
+                                    {/* Category */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Category <span className="text-red-500">*</span>
+                                        </label>
+                                        <CategoryHierarchicalDropdown
+                                            onSelect={(selection) => {
+                                                setPoCategoryId(selection.id);
+                                                setPoCategoryPath(selection.fullPath);
+                                            }}
+                                            value={poCategoryPath}
+                                        />
+                                    </div>
+
+                                    {/* Prefix & Suffix */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Prefix</label>
+                                            <input
+                                                type="text"
+                                                value={poPrefix}
+                                                onChange={(e) => setPoPrefix(e.target.value)}
+                                                className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                placeholder="PO/"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Category <span className="text-red-500">*</span>
+                                            </label>
+                                            <CategoryHierarchicalDropdown
+                                                apiEndpoint="/api/vendors/categories/"
+                                                systemCategories={[
+                                                    'Raw Material',
+                                                    'Work in Progress',
+                                                    'Finished Goods',
+                                                    'Stores and Spares',
+                                                    'Packing Material',
+                                                    'Stock in Trade'
+                                                ]}
+                                                onSelect={(selection) => {
+                                                    setPoCategoryId(selection.id);
+                                                    setPoCategoryPath(selection.fullPath);
+                                                }}
+                                                value={poCategoryPath}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Year & Digits */}
+                                    <div className="grid grid-cols-2 gap-4 items-center">
+                                        <div className="flex items-center mt-6">
+                                            <input
+                                                id="poAutoYear"
+                                                type="checkbox"
+                                                checked={poAutoYear}
+                                                onChange={(e) => setPoAutoYear(e.target.checked)}
+                                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                            />
+                                            <label htmlFor="poAutoYear" className="ml-2 block text-sm text-gray-700">
+                                                Auto Year
+                                            </label>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Digits</label>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                max="10"
+                                                value={poDigits}
+                                                onChange={(e) => setPoDigits(Number(e.target.value))}
+                                                className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Preview Box */}
+                                    <div className="bg-gray-100 p-6 rounded-[4px] text-center">
+                                        <p className="text-xs uppercase text-gray-500 font-semibold mb-2">SAMPLE PREVIEW</p>
+                                        <p className="text-xl font-bold text-gray-800">
+                                            {getPreview()}
+                                        </p>
+                                    </div>
+
+                                    {/* Actions */}
+                                    <div className="flex gap-3 pt-4">
+                                        <button
+                                            type="submit"
+                                            className="flex-1 px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
+                                        >
+                                            {isEditModePO ? 'Update Series' : 'Save Series'}
+                                        </button>
+                                        {isEditModePO && (
+                                            <button
+                                                type="button"
+                                                onClick={resetPOForm}
+                                                className="px-4 py-2 border border-slate-200 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
+                                            >
+                                                Cancel
+                                            </button>
+                                        )}
+                                    </div>
+                                </form>
+                            </div>
+
+                            {/* Right Box: Existing Locations (Existing Series) */}
+                            <div className="lg:col-span-2">
+                                <h3 className="text-lg font-semibold text-gray-800 mb-4">Existing Series</h3>
+                                <div className="border border-slate-200 rounded-[4px] overflow-hidden">
+                                    <table className="min-w-full divide-y divide-gray-200">
+                                        <thead className="bg-gray-50">
+                                            <tr>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
+                                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white divide-y divide-gray-200">
+                                            {loadingPOSeries ? (
+                                                <tr><td colSpan={4} className="px-6 py-4 text-center text-gray-500">Loading...</td></tr>
+                                            ) : poSeriesList.length === 0 ? (
+                                                <tr><td colSpan={4} className="px-6 py-4 text-center text-gray-500">No series found.</td></tr>
+                                            ) : (
+                                                poSeriesList.map(series => (
+                                                    <tr key={series.id} className="hover:bg-gray-50">
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                                            {series.name}
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                            {series.category_path || series.category_name || '-'}
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                            {/* Show summary of config */}
+                                                            {series.prefix}...{series.suffix} ({series.digits} digits)
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                            <button
+                                                                onClick={() => handleEditPO(series)}
+                                                                className="text-indigo-600 hover:text-indigo-900 mr-4"
+                                                            >
+                                                                Edit
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDeletePO(series.id)}
+                                                                className="text-red-600 hover:text-red-900"
+                                                            >
+                                                                Delete
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeMasterSubTab === 'Vendor Creation' && (
+                        <div className="p-6">
+                            <h3 className="text-lg font-semibold text-gray-800 mb-4">Vendor Creation</h3>
+                            <p className="text-gray-600">Select a tab below to configure vendor details:</p>
+                            <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-4">
+                                {['Basic Details', 'GST Details', 'Products/Services', 'TDS & Other Statutory', 'Banking Info', 'Terms & Conditions'].map((tab) => (
+                                    <button
+                                        key={tab}
+                                        onClick={() => setActiveMasterSubTab(tab as MasterSubTab)}
+                                        className="p-4 border-2 border-gray-200 rounded-[4px] hover:border-indigo-500 hover:bg-indigo-50/50 transition-all text-left"
+                                    >
+                                        <div className="font-medium text-gray-900">{tab}</div>
+                                        <div className="text-xs text-gray-500 mt-1">Configure {tab.toLowerCase()}</div>
                                     </button>
                                 ))}
-                            </nav>
+                            </div>
                         </div>
+                    )}
 
-                        <div className="p-6 erp-card">
-                            {activeTransactionSubTab === 'Purchase Orders' && (
-                                <div>
-                                    {activePOSubTab === 'Dashboard' && (
-                                        <div>
-                                            <h3 className="text-lg font-semibold text-gray-800 mb-4">Purchase Orders</h3>
-                                            <p className="text-gray-600 mb-6">Select an option to manage purchase orders:</p>
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                                {['Create PO', 'Pending PO', 'Executed PO'].map((tab) => (
-                                                    <button
-                                                        key={tab}
-                                                        onClick={() => setActivePOSubTab(tab as POSubTab)}
-                                                        className="p-6 border-2 border-gray-200 rounded-[4px] hover:border-indigo-500 hover:bg-indigo-50/50 transition-all text-left group"
-                                                    >
-                                                        <div className="flex items-center justify-between mb-4">
-                                                            <div className={`p-3 rounded-[4px] ${tab === 'Create PO' ? 'bg-blue-100 text-indigo-600' :
-                                                                tab === 'Pending PO' ? 'bg-indigo-50 text-indigo-600' :
-                                                                    'bg-slate-100 text-indigo-600'
-                                                                }`}>
-                                                                {/* Icons based on tab */}
-                                                                {tab === 'Create PO' && (
-                                                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                                                                )}
-                                                                {tab === 'Pending PO' && (
-                                                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                                                )}
-                                                                {tab === 'Executed PO' && (
-                                                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                                                )}
-                                                            </div>
-                                                            <svg className="w-5 h-5 text-gray-400 group-hover:text-indigo-500 transform group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                                                        </div>
-                                                        <div className="font-semibold text-gray-900 text-lg">{tab}</div>
-                                                        <div className="text-sm text-gray-500 mt-2">
-                                                            {tab === 'Create PO' ? 'Create new purchase orders' :
-                                                                tab === 'Pending PO' ? 'View and manage pending orders' :
-                                                                    'History of completed orders'}
-                                                        </div>
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
+                    {activeMasterSubTab === 'Basic Details' && (
+                        <div className="p-6">
+                            <div className="flex items-center mb-6">
+                                <button
+                                    onClick={() => setActiveMasterSubTab('Vendor Creation')}
+                                    className="mr-4 p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
+                                    title="Back to Vendor Creation"
+                                >
+                                    <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                                </button>
+                                <h3 className="text-lg font-semibold text-gray-800">Basic Details</h3>
+                            </div>
 
-                                    {activePOSubTab !== 'Dashboard' && (
-                                        <div>
-                                            <div className="flex items-center gap-4 mb-6">
-                                                <button
-                                                    onClick={() => setActivePOSubTab('Dashboard')}
-                                                    className="p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
-                                                    title="Back to Dashboard"
-                                                >
-                                                    <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                                                </button>
-                                                <div>
-                                                    <h3 className="text-xl font-bold text-gray-800">{activePOSubTab}</h3>
-                                                    <p className="text-sm text-gray-500">Manage your {activePOSubTab.toLowerCase()} details here.</p>
-                                                </div>
-                                            </div>
+                            <form className="space-y-6" onSubmit={handleBasicDetailsSubmit}>
+                                {/* Row 1: Vendor Code and Vendor Name */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {/* Vendor Code */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Vendor Code
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={vendorCode}
+                                            onChange={(e) => setVendorCode(e.target.value)}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                            placeholder="Auto-generated or manual"
+                                        />
+                                    </div>
 
-                                            {/* Content Placeholders */}
-                                            {activePOSubTab === 'Create PO' && (
-                                                <div>
-                                                    {/* Create PO Button */}
-                                                    <div className="mb-6">
-                                                        <button
-                                                            onClick={() => setShowCreatePOModal(true)}
-                                                            className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors">
-                                                            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                                            </svg>
-                                                            Create PO
-                                                        </button>
-                                                    </div>
+                                    {/* Vendor Name */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Vendor Name <span className="text-red-500">*</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={vendorName}
+                                            onChange={(e) => setVendorName(e.target.value)}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                            placeholder="Enter vendor name"
+                                            required
+                                        />
+                                    </div>
 
-                                                    {/* Sub-tabs for Create PO */}
-                                                    <div className="mb-6">
-                                                        <nav className="flex space-x-8 border-b border-gray-200">
-                                                            {['Pending for Approval', 'Mail PO'].map((tab) => (
-                                                                <button
-                                                                    key={tab}
-                                                                    onClick={() => setActiveCreatePOSubTab(tab as CreatePOSubTab)}
-                                                                    className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeCreatePOSubTab === tab
-                                                                        ? 'border-indigo-500 text-indigo-600'
-                                                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                                                        }`}
-                                                                >
-                                                                    {tab.toUpperCase()}
-                                                                </button>
-                                                            ))}
-                                                        </nav>
-                                                    </div>
+                                    {/* Vendor Category */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Vendor Category <span className="text-red-500">*</span>
+                                        </label>
+                                        <CategoryHierarchicalDropdown
+                                            apiEndpoint="/api/vendors/categories/"
+                                            value={vendorCategory}
+                                            onSelect={(selection) => setVendorCategory(selection.fullPath)}
+                                            placeholder="Select Category"
+                                            className="w-full"
+                                        />
+                                    </div>
 
-                                                    {/* Content for Create PO Sub-tabs */}
-                                                    <div className="p-4 bg-gray-50 border border-slate-200 rounded-[4px]">
+                                    {/* PAN No */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            PAN No.
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={panNo}
+                                            onChange={(e) => setPanNo(e.target.value)}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                            placeholder="AAAAA0000A"
+                                            maxLength={10}
+                                        />
+                                    </div>
 
-                                                        {activeCreatePOSubTab === 'Pending for Approval' && (
-                                                            <div className="erp-card overflow-hidden border border-slate-200">
-                                                                <table className="min-w-full divide-y divide-gray-200">
-                                                                    <thead className="bg-indigo-50/50">
-                                                                        <tr>
-                                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO#</th>
-                                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO Date</th>
-                                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Vendor Name</th>
-                                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Address</th>
-                                                                            <th className="px-6 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Action</th>
-                                                                        </tr>
-                                                                    </thead>
-                                                                    <tbody className="bg-white divide-y divide-gray-200">
-                                                                        {purchaseOrders.filter(po => po.status === 'Pending Approval').length === 0 ? (
-                                                                            <tr>
-                                                                                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
-                                                                                    No purchase orders pending approval.
-                                                                                </td>
-                                                                            </tr>
-                                                                        ) : (
-                                                                            purchaseOrders.filter(po => po.status === 'Pending Approval').map((po) => (
-                                                                                <tr key={po.id} className="hover:bg-gray-50 transition-colors">
-                                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{po.poNumber}</td>
-                                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(po.poDate)}</td>
-                                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{po.vendorName}</td>
-                                                                                    <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title={po.address}>{po.address}</td>
-                                                                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                                                        <button
-                                                                                            onClick={() => handleViewPO(po)}
-                                                                                            className="text-indigo-600 hover:text-indigo-900"
-                                                                                            title="View PO"
-                                                                                        >
-                                                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                                                            </svg>
-                                                                                        </button>
-                                                                                    </td>
-                                                                                </tr>
-                                                                            ))
-                                                                        )}
-                                                                    </tbody>
-                                                                </table>
-                                                            </div>
-                                                        )}
-                                                        {activeCreatePOSubTab === 'Mail PO' && (
-                                                            <div className="erp-card overflow-hidden border border-slate-200">
-                                                                <table className="min-w-full divide-y divide-gray-200">
-                                                                    <thead className="bg-slate-50/50">
-                                                                        <tr>
-                                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO#</th>
-                                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO Date</th>
-                                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Vendor Name</th>
-                                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Address</th>
-                                                                            <th className="px-6 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Action</th>
-                                                                        </tr>
-                                                                    </thead>
-                                                                    <tbody className="bg-white divide-y divide-gray-200">
-                                                                        {purchaseOrders.filter(po => po.status === 'Approved').length === 0 ? (
-                                                                            <tr>
-                                                                                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
-                                                                                    No approved purchase orders found.
-                                                                                </td>
-                                                                            </tr>
-                                                                        ) : (
-                                                                            purchaseOrders.filter(po => po.status === 'Approved').map((po) => (
-                                                                                <tr key={po.id} className="hover:bg-gray-50 transition-colors">
-                                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{po.poNumber}</td>
-                                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(po.poDate)}</td>
-                                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{po.vendorName}</td>
-                                                                                    <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title={po.address}>{po.address}</td>
-                                                                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                                                        <button className="text-indigo-600 hover:text-indigo-900 mr-3" title="Mail PO">
-                                                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                                                                                        </button>
-                                                                                        <button
-                                                                                            onClick={() => handleViewPO(po)}
-                                                                                            className="text-indigo-600 hover:text-indigo-900"
-                                                                                            title="View">
-                                                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                                                                                        </button>
-                                                                                    </td>
-                                                                                </tr>
-                                                                            ))
-                                                                        )}
-                                                                    </tbody>
-                                                                </table>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            )}
-                                            {activePOSubTab === 'Pending PO' && (
-                                                <div className="erp-card overflow-hidden border border-slate-200">
-                                                    <table className="min-w-full divide-y divide-gray-200">
-                                                        <thead className="bg-slate-50/50">
-                                                            <tr>
-                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO#</th>
-                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO Date</th>
-                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Vendor Name</th>
-                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Address</th>
-                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Status</th>
-                                                                <th className="px-6 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Action</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="bg-white divide-y divide-gray-200">
-                                                            {purchaseOrders.filter(po => po.status === 'Mailed').length === 0 ? (
-                                                                <tr>
-                                                                    <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
-                                                                        No pending purchase orders found (Mailed).
-                                                                    </td>
-                                                                </tr>
-                                                            ) : (
-                                                                purchaseOrders.filter(po => po.status === 'Mailed').map((po) => (
-                                                                    <tr key={po.id} className="hover:bg-gray-50 transition-colors">
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{po.poNumber}</td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(po.poDate)}</td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{po.vendorName}</td>
-                                                                        <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title={po.address}>{po.address}</td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap">
-                                                                            <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] bg-slate-100 text-slate-700 border border-amber-200">
-                                                                                {po.status}
-                                                                            </span>
-                                                                        </td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                                            <button className="text-indigo-600 hover:text-indigo-900" title="View">
-                                                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                                                                            </button>
-                                                                        </td>
-                                                                    </tr>
-                                                                ))
-                                                            )}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            )}
-                                            {activePOSubTab === 'Executed PO' && (
-                                                <div className="erp-card overflow-hidden border border-slate-200">
-                                                    <table className="min-w-full divide-y divide-gray-200">
-                                                        <thead className="bg-slate-50/50">
-                                                            <tr>
-                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO#</th>
-                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO Date</th>
-                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Vendor Name</th>
-                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Address</th>
-                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Status</th>
-                                                                <th className="px-6 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Action</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="bg-white divide-y divide-gray-200">
-                                                            {purchaseOrders.filter(po => po.status === 'Closed').length === 0 ? (
-                                                                <tr>
-                                                                    <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
-                                                                        No executed purchase orders found (Closed).
-                                                                    </td>
-                                                                </tr>
-                                                            ) : (
-                                                                purchaseOrders.filter(po => po.status === 'Closed').map((po) => (
-                                                                    <tr key={po.id} className="hover:bg-gray-50 transition-colors">
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{po.poNumber}</td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(po.poDate)}</td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{po.vendorName}</td>
-                                                                        <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title={po.address}>{po.address}</td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap">
-                                                                            <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] bg-slate-100 text-slate-700 border border-green-200">
-                                                                                {po.status}
-                                                                            </span>
-                                                                        </td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                                            <button className="text-indigo-600 hover:text-indigo-900" title="View">
-                                                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                                                                            </button>
-                                                                        </td>
-                                                                    </tr>
-                                                                ))
-                                                            )}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
+                                    {/* Contact Person */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Contact Person
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={contactPerson}
+                                            onChange={(e) => setContactPerson(e.target.value)}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                            placeholder="Primary contact name"
+                                        />
+                                    </div>
+
+                                    {/* Email address */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Email address <span className="text-red-500">*</span>
+                                        </label>
+                                        <input
+                                            type="email"
+                                            value={vendorEmail}
+                                            onChange={(e) => setVendorEmail(e.target.value)}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                            placeholder="vendor@example.com"
+                                            required
+                                        />
+                                    </div>
+
+                                    {/* Contact No */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Contact No <span className="text-red-500">*</span>
+                                        </label>
+                                        <input
+                                            type="tel"
+                                            value={contactNo}
+                                            onChange={(e) => {
+                                                const value = e.target.value;
+                                                if (/^\d*$/.test(value)) {
+                                                    setContactNo(value);
+                                                }
+                                            }}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                            placeholder="+91 XXXXX XXXXX"
+                                            required
+                                        />
+                                    </div>
+                                    <p className="mt-2 text-xs text-gray-500">
+                                        If "Yes" is clicked, search for customer using PAN No & Vendor Name
+                                    </p>
                                 </div>
-                            )}
-                            {activeTransactionSubTab === 'Procurement' && (
-                                <div>
-                                    {activeProcurementSubTab === 'Dashboard' ? (
-                                        <div>
-                                            <div className="mb-8">
-                                                <h2 className="text-2xl font-bold text-gray-800">Procurement</h2>
-                                                <p className="text-sm text-gray-500 mt-1">Select a procurement category to manage.</p>
+
+                                {/* Customer Link Section (shown when Yes is clicked) */}
+                                <div className="hidden mt-4 p-4 bg-slate-50/50 border border-blue-200 rounded-[4px]">
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-sm font-medium text-gray-700">
+                                                Link the vendor to this customer:
+                                            </span>
+                                        </div>
+                                        <div className="flex gap-3">
+                                            <button
+                                                type="button"
+                                                className="flex-1 px-4 py-2 border-2 border-indigo-500 text-indigo-600 rounded-[4px] hover:bg-indigo-50/50 focus:outline-none"
+                                            >
+                                                Yes
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="flex-1 px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-[4px] hover:bg-gray-50 focus:outline-none"
+                                            >
+                                                No
+                                            </button>
+                                        </div>
+                                        <div className="text-sm text-gray-600">
+                                            <span className="font-medium">Customer Code - Customer Name</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* No Customer Found Section */}
+                                <div className="hidden mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-[4px]">
+                                    <div className="space-y-3">
+                                        <p className="text-sm text-gray-700">
+                                            No customer found with matching PAN No & Vendor Name
+                                        </p>
+                                        <div className="flex gap-3">
+                                            <button
+                                                type="button"
+                                                className="px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
+                                            >
+                                                Create a Customer
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="px-4 py-2 border border-slate-200 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
+                                            >
+                                                Skip
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+
+                                {/* Action Buttons */}
+
+                                <div className="flex justify-between pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveMasterSubTab('Vendor Creation')}
+                                        className="px-6 py-2 border border-slate-200 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
+                                    >
+                                        Back
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
+                                    >
+                                        Next
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    )}
+
+                    {activeMasterSubTab === 'GST Details' && (
+                        <div className="p-6">
+                            <div className="flex items-center">
+                                <button
+                                    onClick={() => setActiveMasterSubTab('Vendor Creation')}
+                                    className="mr-4 p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
+                                    title="Back to Vendor Creation"
+                                >
+                                    <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                                </button>
+                                <h3 className="text-lg font-semibold text-gray-800">GST Details</h3>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleAddGstRecord}
+                                className="px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
+                            >
+                                + Add Another GSTIN
+                            </button>
+
+                            <form className="space-y-8" onSubmit={handleGSTDetailsSubmit}>
+                                {gstRecords.map((record, index) => (
+                                    <div key={record.id} className="border border-slate-200 rounded-[4px] p-4 bg-gray-50">
+                                        {/* GSTIN Accordion Header */}
+                                        <div className="flex justify-between items-center cursor-pointer mb-4" onClick={() => toggleGstExpand(record.id)}>
+                                            <div className="flex items-center gap-2">
+                                                <svg className="w-5 h-5 transition-transform" style={{ transform: record.isExpanded ? 'rotate(180deg)' : 'none' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                </svg>
+                                                <h4 className="font-medium text-gray-800">GSTIN #{index + 1} {record.gstin ? `- ${record.gstin}` : ''}</h4>
+                                            </div>
+                                            {index > 0 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => { e.stopPropagation(); handleRemoveGstRecord(record.id); }}
+                                                    className="text-red-500 hover:text-red-700 text-sm"
+                                                >
+                                                    Remove
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {/* GSTIN Body */}
+                                        {record.isExpanded && (
+                                            <div className="space-y-6 pl-4 border-l-2 border-slate-100">
+
+                                                {/* GSTIN & Fetch */}
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">GSTIN</label>
+                                                        <div className="flex gap-2">
+                                                            <input
+                                                                type="text"
+                                                                value={record.gstin}
+                                                                onChange={(e) => handleGstChange(record.id, 'gstin', e.target.value)}
+                                                                className="flex-1 px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100"
+                                                                placeholder="22AAAAA0000A1Z5"
+                                                                disabled={record.registrationType === 'unregistered'}
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleFetchGstDetails(record.id)}
+                                                                disabled={record.registrationType === 'unregistered' || loadingGstFetch || !record.gstin}
+                                                                className="px-4 py-2 border border-indigo-500 text-indigo-600 rounded-[4px] hover:bg-indigo-50/50 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                                            >
+                                                                {loadingGstFetch ? 'Fetching...' : 'Fetch Branch Details'}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Registration Type</label>
+                                                        <select
+                                                            value={record.registrationType}
+                                                            onChange={(e) => handleGstChange(record.id, 'registrationType', e.target.value)}
+                                                            className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                        >
+                                                            <option value="regular">Regular</option>
+                                                            <option value="composition">Composition</option>
+                                                            <option value="consumer">Consumer</option>
+                                                            <option value="unregistered">Unregistered</option>
+                                                            <option value="overseas">Overseas</option>
+                                                            <option value="special_economic_zone">Special Economic Zone (SEZ)</option>
+                                                            <option value="deemed_export">Deemed Export</option>
+                                                        </select>
+                                                    </div>
+
+                                                    {record.registrationType !== 'unregistered' && (
+                                                        <>
+                                                            <div>
+                                                                <label className="block text-sm font-medium text-gray-700 mb-2">Legal Name</label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={record.legalName || ''}
+                                                                    readOnly
+                                                                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] bg-gray-100 cursor-not-allowed"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label className="block text-sm font-medium text-gray-700 mb-2">Trade Name</label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={record.tradeName || ''}
+                                                                    readOnly
+                                                                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] bg-gray-100 cursor-not-allowed"
+                                                                />
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </div>
+
+                                                {/* Places of Business */}
+                                                <div className="mt-6">
+                                                    <h5 className="font-medium text-gray-700 mb-3 flex items-center justify-between">
+                                                        <span>Places of Business</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleAddPob(record.id)}
+                                                            className="text-xs font-medium text-indigo-600 hover:text-slate-700 border border-indigo-600 rounded px-2 py-1 hover:bg-indigo-50/50 transition-colors"
+                                                        >
+                                                            + Add Manual Branch
+                                                        </button>
+                                                    </h5>
+
+                                                    {record.placesOfBusiness.length > 0 ? (
+                                                        <div className="space-y-4">
+                                                            {record.placesOfBusiness.map((pob, pIndex) => (
+                                                                <div key={pob.id} className="border border-slate-200 rounded p-3 bg-white">
+                                                                    {/* POB Accordion */}
+                                                                    <div className="flex justify-between items-center cursor-pointer" onClick={() => togglePobExpand(record.id, pob.id)}>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <svg className={`w-4 h-4 transition-transform ${pob.isExpanded ? 'transform rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                                            </svg>
+                                                                            <span className="font-medium text-sm text-gray-800">{pob.referenceName || `Branch ${pIndex + 1}`} - {pob.address}</span>
+                                                                        </div>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={(e) => { e.stopPropagation(); handleRemovePob(record.id, pob.id); }}
+                                                                            className="text-red-500 hover:text-red-700 text-xs px-2 border border-transparent hover:border-red-200 rounded"
+                                                                        >
+                                                                            Remove
+                                                                        </button>
+                                                                    </div>
+
+                                                                    {/* POB Fields */}
+                                                                    {pob.isExpanded && (
+                                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                                                                            <div>
+                                                                                <label className="block text-xs font-medium text-gray-500 mb-1">Reference Name</label>
+                                                                                <input type="text" value={pob.referenceName} onChange={(e) => updatePobField(record.id, pob.id, 'referenceName', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" />
+                                                                            </div>
+                                                                            <div>
+                                                                                <label className="block text-xs font-medium text-gray-500 mb-1">Address</label>
+                                                                                <textarea
+                                                                                    rows={2}
+                                                                                    value={pob.address}
+                                                                                    onChange={(e) => updatePobField(record.id, pob.id, 'address', e.target.value)}
+                                                                                    className={`w-full px-3 py-1.5 border border-slate-200 rounded text-sm ${record.registrationType !== 'unregistered' && pob.address && pob.referenceName !== '' ? 'bg-gray-50' : ''}`}
+                                                                                    placeholder="Enter address"
+                                                                                />
+                                                                            </div>
+                                                                            <div>
+                                                                                <label className="block text-xs font-medium text-gray-500 mb-1">Contact Person</label>
+                                                                                <input type="text" value={pob.contactPerson} onChange={(e) => updatePobField(record.id, pob.id, 'contactPerson', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" />
+                                                                            </div>
+                                                                            <div>
+                                                                                <label className="block text-xs font-medium text-gray-500 mb-1">Email Address</label>
+                                                                                <input type="email" value={pob.email} onChange={(e) => updatePobField(record.id, pob.id, 'email', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" />
+                                                                            </div>
+                                                                            <div>
+                                                                                <label className="block text-xs font-medium text-gray-500 mb-1">Contact No</label>
+                                                                                <input type="tel" value={pob.contactNumber} onChange={(e) => updatePobField(record.id, pob.id, 'contactNumber', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" />
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="p-4 bg-gray-50 border border-slate-200 rounded text-sm text-gray-500 text-center">
+                                                            {record.registrationType === 'unregistered' ?
+                                                                'Add a branch manually to continue.' :
+                                                                'No places of business found. Fetch via GSTIN or add manually.'
+                                                            }
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+
+                                <div className="flex justify-between pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveMasterSubTab('Basic Details')}
+                                        className="px-6 py-2 border border-slate-200 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
+                                    >
+                                        Back
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
+                                    >
+                                        Next
+                                    </button>
+                                </div>
+
+                            </form>
+                        </div>
+                    )}
+
+                    {activeMasterSubTab === 'Banking Info' && (
+                        <div className="p-6">
+                            <div className="flex items-center mb-6">
+                                <button
+                                    onClick={() => setActiveMasterSubTab('Vendor Creation')}
+                                    className="mr-4 p-2 hover:bg-gray-100 rounded-full transition-colors"
+                                    title="Back to Vendor Creation"
+                                >
+                                    <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                                </button>
+                                <h3 className="text-lg font-semibold text-gray-800">Banking Information</h3>
+                            </div>
+                            <form onSubmit={handleBankingDetailsSubmit} className="space-y-6">
+                                <div className="space-y-8">
+                                    {bankAccounts.map((bank, index) => (
+                                        <div key={bank.id} className={`space-y-6 ${index > 0 ? 'pt-8 border-t border-gray-200' : ''}`}>
+                                            {index > 0 && (
+                                                <div className="flex justify-between items-center">
+                                                    <h4 className="text-md font-medium text-gray-900">Bank Account #{index + 1}</h4>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveBank(bank.id)}
+                                                        className="text-red-600 hover:text-red-800 text-sm font-medium flex items-center gap-1"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                        </svg>
+                                                        Remove
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    Bank account No.
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    placeholder="Enter bank account number"
+                                                    value={bank.accountNumber}
+                                                    onChange={(e) => handleBankChange(bank.id, 'accountNumber', e.target.value)}
+                                                />
                                             </div>
 
-                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                                {[
-                                                    { name: 'Raw Material', desc: 'Manage raw material procurement', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /> },
-                                                    { name: 'Stock-in Trade', desc: 'Manage stock-in trade items', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /> },
-                                                    { name: 'Consumables', desc: 'Manage consumable items', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /> },
-                                                    { name: 'Stores & Spares', desc: 'Manage stores and spares', icon: <g><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></g> },
-                                                    { name: 'Services', desc: 'Manage service procurement', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /> },
-                                                ].map((item) => (
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    Bank Name
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    placeholder="Enter bank name"
+                                                    value={bank.bankName}
+                                                    onChange={(e) => handleBankChange(bank.id, 'bankName', e.target.value)}
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    IFSC Code
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    placeholder="Enter IFSC Code"
+                                                    maxLength={11}
+                                                    value={bank.ifscCode}
+                                                    onChange={(e) => handleBankChange(bank.id, 'ifscCode', e.target.value)}
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    Branch Name
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    placeholder="Enter branch name"
+                                                    value={bank.branchName}
+                                                    onChange={(e) => handleBankChange(bank.id, 'branchName', e.target.value)}
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    Swift Code
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    placeholder="Enter Swift Code (for international transactions)"
+                                                    value={bank.swiftCode}
+                                                    onChange={(e) => handleBankChange(bank.id, 'swiftCode', e.target.value)}
+                                                />
+                                            </div>
+
+                                            <div className="relative">
+                                                <div className="block text-sm font-medium text-gray-700 mb-2">
+                                                    Associate to a vendor branch
+                                                </div>
+                                                <div className="relative">
+                                                    <button
+                                                        type="button"
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 bg-white text-left flex justify-between items-center"
+                                                        onClick={() => {
+                                                            const dropdown = document.getElementById(`vendor-branch-dropdown-${bank.id}`);
+                                                            if (dropdown) {
+                                                                dropdown.classList.toggle('hidden');
+                                                            }
+                                                        }}
+                                                    >
+                                                        <span className="truncate">
+                                                            {bank.vendorBranch && bank.vendorBranch.length > 0
+                                                                ? `${bank.vendorBranch.length} Selected`
+                                                                : "Select vendor branch"}
+                                                        </span>
+                                                        <ChevronDown className="w-4 h-4 text-gray-500" />
+                                                    </button>
+
+                                                    {/* Dropdown Content */}
+                                                    <div
+                                                        id={`vendor-branch-dropdown-${bank.id}`}
+                                                        className="hidden absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm"
+                                                    >
+                                                        {/* Collect all branches from GST records */}
+                                                        {(() => {
+                                                            const allBranches = gstRecords.flatMap(record =>
+                                                                record.placesOfBusiness.map(pob => pob.referenceName).filter(Boolean)
+                                                            );
+
+                                                            if (allBranches.length === 0) {
+                                                                return <div className="px-4 py-2 text-gray-500 italic">No branches available</div>;
+                                                            }
+
+                                                            return allBranches.map((branchName, idx) => (
+                                                                <div key={`${branchName}-${idx}`} className="flex items-center px-4 py-2 hover:bg-gray-100 cursor-pointer" onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    const currentBranches = bank.vendorBranch || [];
+                                                                    const isSelected = currentBranches.includes(branchName);
+                                                                    let newBranches;
+                                                                    if (isSelected) {
+                                                                        newBranches = currentBranches.filter(b => b !== branchName);
+                                                                    } else {
+                                                                        newBranches = [...currentBranches, branchName];
+                                                                    }
+                                                                    handleBankChange(bank.id, 'vendorBranch', newBranches);
+                                                                }}>
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={(bank.vendorBranch || []).includes(branchName)}
+                                                                        onChange={() => { }} // Handled by div click
+                                                                        className="h-4 w-4 text-teal-600 focus:ring-teal-500 border-gray-300 rounded mr-3 pointer-events-none"
+                                                                    />
+                                                                    <span className="text-gray-900">{branchName}</span>
+                                                                </div>
+                                                            ));
+                                                        })()}
+                                                    </div>
+                                                </div>
+
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Add Another Bank Button */}
+                                <div className="pt-2">
+                                    <button
+                                        type="button"
+                                        className="flex items-center gap-2 px-4 py-2 border-2 border-teal-500 text-teal-600 rounded-md hover:bg-teal-50 focus:outline-none"
+                                        onClick={handleAddBank}
+                                    >
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                        </svg>
+                                        <span className="text-sm font-medium">Another Bank</span>
+                                    </button>
+                                </div>
+
+                                {/* Next Button */}
+                                <div className="flex justify-between pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveMasterSubTab('TDS & Other Statutory')}
+                                        className="px-6 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
+                                    >
+                                        Back
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="px-8 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-teal-600 hover:bg-teal-700 focus:outline-none"
+                                    >
+                                        Next
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    )}
+
+                    {activeMasterSubTab === 'TDS & Other Statutory' && (
+                        <div className="p-6">
+                            <div className="flex items-center mb-6">
+                                <button
+                                    onClick={() => setActiveMasterSubTab('Vendor Creation')}
+                                    className="mr-4 p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
+                                    title="Back to Vendor Creation"
+                                >
+                                    <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                                </button>
+                                <h3 className="text-lg font-semibold text-gray-800">TDS & Other Statutory</h3>
+                            </div>
+                            <form onSubmit={handleTDSDetailsSubmit} className="space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            MSME Udyam No
+                                        </label>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                value={msmeUdyamNo}
+                                                onChange={(e) => setMsmeUdyamNo(e.target.value)}
+                                                className="flex-1 px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                placeholder="MSME Udyam Registration Number"
+                                            />
+                                            <input
+                                                type="file"
+                                                id="msme-file-upload"
+                                                className="hidden"
+                                                accept=".pdf,.jpg,.jpeg,.png"
+                                                onChange={(e) => handleFileUpload('msmeFile', e.target.files?.[0] || null)}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => document.getElementById('msme-file-upload')?.click()}
+                                                className="px-4 py-2 bg-indigo-50/50 border border-indigo-300 rounded-[4px] hover:bg-indigo-50 transition-colors flex items-center gap-2 text-slate-700"
+                                                title="Upload MSME Registration Certificate"
+                                            >
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                        {uploadedFiles.msmeFile && (
+                                            <p className="mt-1 text-xs text-indigo-600">✓ {uploadedFiles.msmeFile.name}</p>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            FSSAI License No
+                                        </label>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                value={fssaiLicenseNo}
+                                                onChange={(e) => setFssaiLicenseNo(e.target.value)}
+                                                className="flex-1 px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                placeholder="FSSAI License Number"
+                                            />
+                                            <input
+                                                type="file"
+                                                id="fssai-file-upload"
+                                                className="hidden"
+                                                accept=".pdf,.jpg,.jpeg,.png"
+                                                onChange={(e) => handleFileUpload('fssaiFile', e.target.files?.[0] || null)}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => document.getElementById('fssai-file-upload')?.click()}
+                                                className="px-4 py-2 bg-indigo-50/50 border border-indigo-300 rounded-[4px] hover:bg-indigo-50 transition-colors flex items-center gap-2 text-slate-700"
+                                                title="Upload FSSAI License"
+                                            >
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                        {uploadedFiles.fssaiFile && (
+                                            <p className="mt-1 text-xs text-indigo-600">✓ {uploadedFiles.fssaiFile.name}</p>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Import Export Code (IEC)
+                                        </label>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                value={importExportCode}
+                                                onChange={(e) => setImportExportCode(e.target.value)}
+                                                className="flex-1 px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                placeholder="Import Export Code"
+                                            />
+                                            <input
+                                                type="file"
+                                                id="iec-file-upload"
+                                                className="hidden"
+                                                accept=".pdf,.jpg,.jpeg,.png"
+                                                onChange={(e) => handleFileUpload('iecFile', e.target.files?.[0] || null)}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => document.getElementById('iec-file-upload')?.click()}
+                                                className="px-4 py-2 bg-indigo-50/50 border border-indigo-300 rounded-[4px] hover:bg-indigo-50 transition-colors flex items-center gap-2 text-slate-700"
+                                                title="Upload IEC Certificate"
+                                            >
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                        {uploadedFiles.iecFile && (
+                                            <p className="mt-1 text-xs text-indigo-600">✓ {uploadedFiles.iecFile.name}</p>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            EOU Status
+                                        </label>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                value={eouStatus}
+                                                onChange={(e) => setEouStatus(e.target.value)}
+                                                className="flex-1 px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                placeholder="Export Oriented Unit Status"
+                                            />
+                                            <input
+                                                type="file"
+                                                id="eou-file-upload"
+                                                className="hidden"
+                                                accept=".pdf,.jpg,.jpeg,.png"
+                                                onChange={(e) => handleFileUpload('eouFile', e.target.files?.[0] || null)}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => document.getElementById('eou-file-upload')?.click()}
+                                                className="px-4 py-2 bg-indigo-50/50 border border-indigo-300 rounded-[4px] hover:bg-indigo-50 transition-colors flex items-center gap-2 text-slate-700"
+                                                title="Upload Letter of Permission / Green Card"
+                                            >
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                        {uploadedFiles.eouFile && (
+                                            <p className="mt-1 text-xs text-indigo-600">✓ {uploadedFiles.eouFile.name}</p>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            TDS Section Applicable
+                                        </label>
+                                        <select
+                                            value={tdsSectionApplicable}
+                                            onChange={(e) => setTdsSectionApplicable(e.target.value)}
+                                            className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                        >
+                                            <option value="">Select TDS Section</option>
+                                            <option value="Section 194C">Section 194C - Contracts (Individual/HUF & Others)</option>
+                                            <option value="Section 194H">Section 194H - Commission/Brokerage</option>
+                                            <option value="Section 194-I">Section 194-I - Rent (Land, Building, Furniture & Fitting, Plant & Machinery, Equipment)</option>
+                                            <option value="Section 194J">Section 194J - Professional Services, Technical Services, Director's Remuneration</option>
+                                            <option value="Section 194Q">Section 194Q - Purchase of Goods</option>
+                                            <option value="Section 194A">Section 194A - Interest other than interest on securities</option>
+                                            <option value="Section 194R">Section 194R - Benefit or Perquisite</option>
+                                            <option value="Section 194-IA">Section 194-IA - Immovable Property Transfer</option>
+                                            <option value="Section 194-IB">Section 194-IB - Rent by Individual or HUF</option>
+                                            <option value="Section 194-IC">Section 194-IC - Joint Development Agreements</option>
+                                            <option value="Section 194M">Section 194M - Contractors & Professionals</option>
+                                            <option value="Section 194-O">Section 194-O - E-Commerce</option>
+                                            <option value="Section 195">Section 195 - Payment to Non-Residents</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                {/* TDS Rate Information */}
+                                {tdsSectionApplicable && (() => {
+                                    const getTDSRateInfo = (section: string) => {
+                                        const rates: { [key: string]: { tdsRate: string; penaltyRate: string; description: string } } = {
+                                            'Section 194C': { tdsRate: '1% / 2%', penaltyRate: '20%', description: 'Payment to Contractors who are Individuals or Hindu Undivided Family (HUF) / Payment to Contractors other than Individuals & HUF' },
+                                            'Section 194H': { tdsRate: '2%', penaltyRate: '20%', description: 'Commission and Brokerage to agents' },
+                                            'Section 194-I': { tdsRate: '2% / 10%', penaltyRate: '20%', description: 'Rent on Land, Building, or Furniture & fitting / Rent on Plant & Machinery, or Equipment' },
+                                            'Section 194J': { tdsRate: '2% / 10%', penaltyRate: '20%', description: 'Fees for Technical Services, Call Center Operations, Royalty on sale & distribution of films / Professional Services, Royalty from other than films, Non-Compete Fees, etc. / Director\'s Remuneration' },
+                                            'Section 194Q': { tdsRate: '0.10%', penaltyRate: '5%', description: 'Purchase of Goods of aggregate value exceeding Rs. 50 Lakhs' },
+                                            'Section 194A': { tdsRate: '10%', penaltyRate: '20%', description: 'Interest payments made on loans, FDs, advances, etc., other than interest on securities' },
+                                            'Section 194R': { tdsRate: '10%', penaltyRate: '20%', description: 'Benefit or Perquisite given by a business or professional exceeding Rs 20,000' },
+                                            'Section 194-IA': { tdsRate: '1%', penaltyRate: '20%', description: 'Transfer of immovable property valuing Rs 50 lakhs or more' },
+                                            'Section 194-IB': { tdsRate: '2%', penaltyRate: '20%', description: 'Rent exceeding Rs 50,000 per month paid by Individual & HUFs who are not subject to tax audit' },
+                                            'Section 194-IC': { tdsRate: '10%', penaltyRate: '20%', description: 'Payment of monetary consideration under a specified Joint Development Agreements' },
+                                            'Section 194M': { tdsRate: '5%', penaltyRate: '20%', description: 'Payment exceeding Rs 50 Lakhs to contractors or professionals by Individuals & HUFs who are not subject to tax audit' },
+                                            'Section 194-O': { tdsRate: '1%', penaltyRate: '5%', description: 'Facilitating sales or services by an E-commerce operator for an E-commerce participant' },
+                                            'Section 195': { tdsRate: 'Specify "Rate" & "Nature"', penaltyRate: '-', description: 'Any payment subject to tax made to a Non-Resident or Foreign Company' }
+                                        };
+                                        return rates[section] || null;
+                                    };
+
+                                    const rateInfo = getTDSRateInfo(tdsSectionApplicable);
+
+                                    return rateInfo ? (
+                                        <div className="mt-4 p-4 bg-slate-50/50 border-l-4 border-indigo-500 rounded-[4px]">
+                                            <div className="flex items-start gap-3">
+                                                <svg className="w-6 h-6 text-indigo-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                                <div className="flex-1">
+                                                    <h4 className="text-sm font-semibold text-slate-700 mb-2">TDS Rate Information</h4>
+                                                    <div className="space-y-1 text-sm text-slate-700">
+                                                        <p><span className="font-medium">TDS Rate:</span> {rateInfo.tdsRate}</p>
+                                                        <p><span className="font-medium">Penalty Rate:</span> {rateInfo.penaltyRate}</p>
+                                                        <p className="mt-2 text-xs text-indigo-600 italic">{rateInfo.description}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : null;
+                                })()}
+
+                                {/* Enable automatic TDS Posting Checkbox */}
+                                <div className="flex items-center gap-2 pt-2">
+                                    <input
+                                        type="checkbox"
+                                        id="enableAutomaticTDS"
+                                        checked={enableAutomaticTdsPosting}
+                                        onChange={(e) => setEnableAutomaticTdsPosting(e.target.checked)}
+                                        className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                    />
+                                    <label htmlFor="enableAutomaticTDS" className="text-sm font-medium text-gray-700">
+                                        Enable automatic TDS Posting
+                                    </label>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Dispute Redressal Terms
+                                    </label>
+                                    <textarea
+                                        rows={3}
+                                        value={disputeRedressalTerms}
+                                        onChange={(e) => setDisputeRedressalTerms(e.target.value)}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                        placeholder="Enter dispute resolution and redressal terms..."
+                                    />
+                                </div>
+
+                                <div className="flex justify-between pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveMasterSubTab('Vendor Creation')}
+                                        className="px-6 py-2 border border-slate-200 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
+                                    >
+                                        Back
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
+                                    >
+                                        Next
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    )}
+
+                    {activeMasterSubTab === 'Products/Services' && (
+                        <div className="p-6">
+                            <div className="flex items-center mb-6">
+                                <button
+                                    onClick={() => setActiveMasterSubTab('Vendor Creation')}
+                                    className="mr-4 p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
+                                    title="Back to Vendor Creation"
+                                >
+                                    <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                                </button>
+                                <h3 className="text-lg font-semibold text-gray-800">Products/Services</h3>
+                            </div>
+                            <div className="space-y-6">
+                                {/* Table for Items */}
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-full border border-slate-200">
+                                        <thead className="bg-gray-50">
+                                            <tr>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
+                                                    No
+                                                </th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
+                                                    HSN | SAC Code
+                                                </th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
+                                                    Item Code
+                                                </th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
+                                                    Item Name
+                                                </th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
+                                                    Supplier Item Code
+                                                </th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
+                                                    Supplier Item Name
+                                                </th>
+                                                <th className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider">
+                                                    Action
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white divide-y divide-gray-200">
+                                            {items.map((item, index) => (
+                                                <tr key={item.id} className="hover:bg-gray-50">
+                                                    <td className="px-4 py-3 text-sm text-gray-900 border-r border-gray-200">
+                                                        {index + 1}.
+                                                    </td>
+                                                    <td className="px-4 py-3 border-r border-gray-200">
+                                                        <input
+                                                            type="text"
+                                                            className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                                            placeholder="HSN | SAC Code"
+                                                            value={item.hsnSacCode}
+                                                            onChange={(e) => handleItemChange(item.id, 'hsnSacCode', e.target.value)}
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3 border-r border-gray-200">
+                                                        <input
+                                                            type="text"
+                                                            className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                                            placeholder="Item Code"
+                                                            value={item.itemCode}
+                                                            onChange={(e) => handleItemChange(item.id, 'itemCode', e.target.value)}
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3 border-r border-gray-200">
+                                                        <input
+                                                            type="text"
+                                                            className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                                            placeholder="Item Name"
+                                                            value={item.itemName}
+                                                            onChange={(e) => handleItemChange(item.id, 'itemName', e.target.value)}
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3 border-r border-gray-200">
+                                                        <input
+                                                            type="text"
+                                                            className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                                            placeholder="Supplier Code"
+                                                            value={item.supplierItemCode}
+                                                            onChange={(e) => handleItemChange(item.id, 'supplierItemCode', e.target.value)}
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3 border-r border-gray-200">
+                                                        <input
+                                                            type="text"
+                                                            className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                                            placeholder="Supplier Item Name"
+                                                            value={item.supplierItemName}
+                                                            onChange={(e) => handleItemChange(item.id, 'supplierItemName', e.target.value)}
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3 text-center">
+                                                        <div className="flex items-center justify-center gap-2">
+                                                            {/* Edit Button */}
+                                                            <button
+                                                                type="button"
+                                                                className="text-indigo-600 hover:text-indigo-900"
+                                                                title="Edit item"
+                                                            >
+                                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                                </svg>
+                                                            </button>
+                                                            {/* Save Button */}
+                                                            <button
+                                                                type="button"
+                                                                className="text-indigo-600 hover:text-green-900"
+                                                                title="Save item"
+                                                            >
+                                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                                </svg>
+                                                            </button>
+                                                            {/* Delete Button */}
+                                                            <button
+                                                                type="button"
+                                                                className="text-red-600 hover:text-red-900"
+                                                                title="Delete item"
+                                                                onClick={() => handleRemoveItem(item.id)}
+                                                            >
+                                                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                                                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                                                                </svg>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                {/* Add More Button */}
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        className="flex items-center gap-2 px-4 py-2 border-2 border-indigo-500 text-indigo-600 rounded-[4px] hover:bg-indigo-50/50 focus:outline-none"
+                                        onClick={handleAddItem}
+                                    >
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                        </svg>
+                                        <span className="text-sm font-medium">Add More Items</span>
+                                    </button>
+                                </div>
+
+                                {/* Next Button */}
+                                <div className="flex justify-between pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveMasterSubTab('GST Details')}
+                                        className="px-6 py-2 border border-slate-200 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
+                                    >
+                                        Back
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleProductServicesSubmit}
+                                        className="px-8 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
+                                    >
+                                        Next
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeMasterSubTab === 'Banking Info' && (
+                        <div className="p-6">
+                            <div className="flex items-center mb-6">
+                                <button
+                                    onClick={() => setActiveMasterSubTab('Vendor Creation')}
+                                    className="mr-4 p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
+                                    title="Back to Vendor Creation"
+                                >
+                                    <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                                </button>
+                                <h3 className="text-lg font-semibold text-gray-800">Banking Information</h3>
+                            </div>
+                            <form onSubmit={handleBankingDetailsSubmit} className="space-y-6">
+                                <div className="space-y-8">
+                                    {bankAccounts.map((bank, index) => (
+                                        <div key={bank.id} className={`space-y-6 ${index > 0 ? 'pt-8 border-t border-gray-200' : ''}`}>
+                                            {index > 0 && (
+                                                <div className="flex justify-between items-center">
+                                                    <h4 className="text-md font-medium text-gray-900">Bank Account #{index + 1}</h4>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveBank(bank.id)}
+                                                        className="text-red-600 hover:text-red-800 text-sm font-medium flex items-center gap-1"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                        </svg>
+                                                        Remove
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    Bank account No.
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                    placeholder="Enter bank account number"
+                                                    value={bank.accountNumber}
+                                                    onChange={(e) => handleBankChange(bank.id, 'accountNumber', e.target.value)}
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    Bank Name
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                    placeholder="Enter bank name"
+                                                    value={bank.bankName}
+                                                    onChange={(e) => handleBankChange(bank.id, 'bankName', e.target.value)}
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    IFSC Code
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                    placeholder="Enter IFSC Code"
+                                                    maxLength={11}
+                                                    value={bank.ifscCode}
+                                                    onChange={(e) => handleBankChange(bank.id, 'ifscCode', e.target.value)}
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    Branch Name
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                    placeholder="Enter branch name"
+                                                    value={bank.branchName}
+                                                    onChange={(e) => handleBankChange(bank.id, 'branchName', e.target.value)}
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    Swift Code
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                    placeholder="Enter Swift Code (for international transactions)"
+                                                    value={bank.swiftCode}
+                                                    onChange={(e) => handleBankChange(bank.id, 'swiftCode', e.target.value)}
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    Associate to a vendor branch
+                                                </label>
+                                                <select
+                                                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                    value={bank.vendorBranch}
+                                                    onChange={(e) => handleBankChange(bank.id, 'vendorBranch', e.target.value)}
+                                                >
+                                                    <option value="">Select vendor branch</option>
+                                                    <option value="branch1">Main Branch</option>
+                                                    <option value="branch2">Regional Office - North</option>
+                                                    <option value="branch3">Regional Office - South</option>
+                                                </select>
+                                                <p className="text-xs text-gray-500 mt-1">
+                                                    Drop-down list of reference Names to select with option to multiple branches. Do not show if only one GSTIN & place of business is available.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Add Another Bank Button */}
+                                <div className="pt-2">
+                                    <button
+                                        type="button"
+                                        className="flex items-center gap-2 px-4 py-2 border-2 border-indigo-500 text-indigo-600 rounded-[4px] hover:bg-indigo-50/50 focus:outline-none"
+                                        onClick={handleAddBank}
+                                    >
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                        </svg>
+                                        <span className="text-sm font-medium">Another Bank</span>
+                                    </button>
+                                </div>
+
+                                {/* Next Button */}
+                                <div className="flex justify-between pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveMasterSubTab('TDS & Other Statutory')}
+                                        className="px-6 py-2 border border-slate-200 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
+                                    >
+                                        Back
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="px-8 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
+                                    >
+                                        Next
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    )}
+
+                    {activeMasterSubTab === 'Terms & Conditions' && (
+                        <div className="p-6">
+                            <div className="flex items-center mb-6">
+                                <button
+                                    onClick={() => setActiveMasterSubTab('Vendor Creation')}
+                                    className="mr-4 p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
+                                    title="Back to Vendor Creation"
+                                >
+                                    <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                                </button>
+                                <h3 className="text-lg font-semibold text-gray-800">Terms & Conditions</h3>
+                            </div>
+                            <form onSubmit={handleFinish} className="space-y-6">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Credit Limit
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={creditLimit}
+                                        onChange={(e) => setCreditLimit(e.target.value)}
+                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="0.00"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Credit Period
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={creditPeriod}
+                                        onChange={(e) => setCreditPeriod(e.target.value)}
+                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="Enter credit period (e.g., 30 days, 60 days)"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Credit Terms
+                                    </label>
+                                    <textarea
+                                        rows={3}
+                                        value={creditTerms}
+                                        onChange={(e) => setCreditTerms(e.target.value)}
+                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="Enter credit terms and conditions..."
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Penalty Terms
+                                    </label>
+                                    <textarea
+                                        rows={3}
+                                        value={penaltyTerms}
+                                        onChange={(e) => setPenaltyTerms(e.target.value)}
+                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="Enter penalty terms for late payments or breaches..."
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Delivery Terms
+                                    </label>
+                                    <textarea
+                                        rows={3}
+                                        value={deliveryTerms}
+                                        onChange={(e) => setDeliveryTerms(e.target.value)}
+                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="Delivery terms, lead time, shipping conditions..."
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Warranty / Guarantee Details
+                                    </label>
+                                    <textarea
+                                        rows={3}
+                                        value={warrantyGuaranteeDetails}
+                                        onChange={(e) => setWarrantyGuaranteeDetails(e.target.value)}
+                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="Enter warranty and guarantee terms..."
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Force Majeure
+                                    </label>
+                                    <textarea
+                                        rows={3}
+                                        value={forceMajeure}
+                                        onChange={(e) => setForceMajeure(e.target.value)}
+                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="Enter force majeure clauses..."
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Dispute and Redressal Terms
+                                    </label>
+                                    <textarea
+                                        rows={3}
+                                        value={disputeRedressalTerms}
+                                        onChange={(e) => setDisputeRedressalTerms(e.target.value)}
+                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="Enter dispute resolution and redressal terms..."
+                                    />
+                                </div>
+
+                                <div className="flex justify-between pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveMasterSubTab('Banking Info')}
+                                        className="px-6 py-2 border border-slate-200 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
+                                    >
+                                        Back
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleFinish()}
+                                        disabled={isSubmitting}
+                                        className={`px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white focus:outline-none ${isSubmitting ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'
+                                            }`}
+                                    >
+                                        {isSubmitting ? 'Saving...' : 'Finish (Save)'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    )}
+                </div>
+            )}
+
+
+
+            {activeTab === 'Transaction' && (
+                <div>
+                    {/* Sub-tabs for Transaction */}
+                    <div className="mb-6">
+                        <nav className="flex space-x-8 border-b border-gray-200">
+                            {['Purchase Orders', 'Procurement', 'Payment'].map((subTab) => (
+                                <button
+                                    key={subTab}
+                                    onClick={() => setActiveTransactionSubTab(subTab as TransactionSubTab)}
+                                    className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTransactionSubTab === subTab
+                                        ? 'border-indigo-500 text-indigo-600'
+                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                        }`}
+                                >
+                                    {subTab.toUpperCase()}
+                                </button>
+                            ))}
+                        </nav>
+                    </div>
+
+                    <div className="p-6 erp-card">
+                        {activeTransactionSubTab === 'Purchase Orders' && (
+                            <div>
+                                {activePOSubTab === 'Dashboard' && (
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Purchase Orders</h3>
+                                        <p className="text-gray-600 mb-6">Select an option to manage purchase orders:</p>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                            {['Create PO', 'Pending PO', 'Executed PO'].map((tab) => (
+                                                <button
+                                                    key={tab}
+                                                    onClick={() => setActivePOSubTab(tab as POSubTab)}
+                                                    className="p-6 border-2 border-gray-200 rounded-[4px] hover:border-indigo-500 hover:bg-indigo-50/50 transition-all text-left group"
+                                                >
+                                                    <div className="flex items-center justify-between mb-4">
+                                                        <div className={`p-3 rounded-[4px] ${tab === 'Create PO' ? 'bg-blue-100 text-indigo-600' :
+                                                            tab === 'Pending PO' ? 'bg-indigo-50 text-indigo-600' :
+                                                                'bg-slate-100 text-indigo-600'
+                                                            }`}>
+                                                            {/* Icons based on tab */}
+                                                            {tab === 'Create PO' && (
+                                                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                                                            )}
+                                                            {tab === 'Pending PO' && (
+                                                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                            )}
+                                                            {tab === 'Executed PO' && (
+                                                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                            )}
+                                                        </div>
+                                                        <svg className="w-5 h-5 text-gray-400 group-hover:text-indigo-500 transform group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                                                    </div>
+                                                    <div className="font-semibold text-gray-900 text-lg">{tab}</div>
+                                                    <div className="text-sm text-gray-500 mt-2">
+                                                        {tab === 'Create PO' ? 'Create new purchase orders' :
+                                                            tab === 'Pending PO' ? 'View and manage pending orders' :
+                                                                'History of completed orders'}
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activePOSubTab !== 'Dashboard' && (
+                                    <div>
+                                        <div className="flex items-center gap-4 mb-6">
+                                            <button
+                                                onClick={() => setActivePOSubTab('Dashboard')}
+                                                className="p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
+                                                title="Back to Dashboard"
+                                            >
+                                                <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                                            </button>
+                                            <div>
+                                                <h3 className="text-xl font-bold text-gray-800">{activePOSubTab}</h3>
+                                                <p className="text-sm text-gray-500">Manage your {activePOSubTab.toLowerCase()} details here.</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Content Placeholders */}
+                                        {activePOSubTab === 'Create PO' && (
+                                            <div>
+                                                {/* Create PO Button */}
+                                                <div className="mb-6">
+                                                    <button
+                                                        onClick={() => setShowCreatePOModal(true)}
+                                                        className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors">
+                                                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                                        </svg>
+                                                        Create PO
+                                                    </button>
+                                                </div>
+
+                                                {/* Sub-tabs for Create PO */}
+                                                <div className="mb-6">
+                                                    <nav className="flex space-x-8 border-b border-gray-200">
+                                                        {['Pending for Approval', 'Mail PO'].map((tab) => (
+                                                            <button
+                                                                key={tab}
+                                                                onClick={() => setActiveCreatePOSubTab(tab as CreatePOSubTab)}
+                                                                className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeCreatePOSubTab === tab
+                                                                    ? 'border-indigo-500 text-indigo-600'
+                                                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                                                    }`}
+                                                            >
+                                                                {tab.toUpperCase()}
+                                                            </button>
+                                                        ))}
+                                                    </nav>
+                                                </div>
+
+                                                {/* Content for Create PO Sub-tabs */}
+                                                <div className="p-4 bg-gray-50 border border-slate-200 rounded-[4px]">
+
+                                                    {activeCreatePOSubTab === 'Pending for Approval' && (
+                                                        <div className="erp-card overflow-hidden border border-slate-200">
+                                                            <table className="min-w-full divide-y divide-gray-200">
+                                                                <thead className="bg-indigo-50/50">
+                                                                    <tr>
+                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO#</th>
+                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO Date</th>
+                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Vendor Name</th>
+                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Address</th>
+                                                                        <th className="px-6 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Action</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody className="bg-white divide-y divide-gray-200">
+                                                                    {purchaseOrders.filter(po => po.status === 'Pending Approval').length === 0 ? (
+                                                                        <tr>
+                                                                            <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                                                                                No purchase orders pending approval.
+                                                                            </td>
+                                                                        </tr>
+                                                                    ) : (
+                                                                        purchaseOrders.filter(po => po.status === 'Pending Approval').map((po) => (
+                                                                            <tr key={po.id} className="hover:bg-gray-50 transition-colors">
+                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{po.poNumber}</td>
+                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(po.poDate)}</td>
+                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{po.vendorName}</td>
+                                                                                <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title={po.address}>{po.address}</td>
+                                                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                                                    <button
+                                                                                        onClick={() => handleViewPO(po)}
+                                                                                        className="text-indigo-600 hover:text-indigo-900"
+                                                                                        title="View PO"
+                                                                                    >
+                                                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                                                        </svg>
+                                                                                    </button>
+                                                                                </td>
+                                                                            </tr>
+                                                                        ))
+                                                                    )}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    )}
+                                                    {activeCreatePOSubTab === 'Mail PO' && (
+                                                        <div className="erp-card overflow-hidden border border-slate-200">
+                                                            <table className="min-w-full divide-y divide-gray-200">
+                                                                <thead className="bg-slate-50/50">
+                                                                    <tr>
+                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO#</th>
+                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO Date</th>
+                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Vendor Name</th>
+                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Address</th>
+                                                                        <th className="px-6 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Action</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody className="bg-white divide-y divide-gray-200">
+                                                                    {purchaseOrders.filter(po => po.status === 'Approved').length === 0 ? (
+                                                                        <tr>
+                                                                            <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                                                                                No approved purchase orders found.
+                                                                            </td>
+                                                                        </tr>
+                                                                    ) : (
+                                                                        purchaseOrders.filter(po => po.status === 'Approved').map((po) => (
+                                                                            <tr key={po.id} className="hover:bg-gray-50 transition-colors">
+                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{po.poNumber}</td>
+                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(po.poDate)}</td>
+                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{po.vendorName}</td>
+                                                                                <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title={po.address}>{po.address}</td>
+                                                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                                                    <button className="text-indigo-600 hover:text-indigo-900 mr-3" title="Mail PO">
+                                                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                                                                                    </button>
+                                                                                    <button
+                                                                                        onClick={() => handleViewPO(po)}
+                                                                                        className="text-indigo-600 hover:text-indigo-900"
+                                                                                        title="View">
+                                                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                                                                    </button>
+                                                                                </td>
+                                                                            </tr>
+                                                                        ))
+                                                                    )}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {activePOSubTab === 'Pending PO' && (
+                                            <div className="erp-card overflow-hidden border border-slate-200">
+                                                <table className="min-w-full divide-y divide-gray-200">
+                                                    <thead className="bg-slate-50/50">
+                                                        <tr>
+                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO#</th>
+                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO Date</th>
+                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Vendor Name</th>
+                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Address</th>
+                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Status</th>
+                                                            <th className="px-6 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Action</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="bg-white divide-y divide-gray-200">
+                                                        {purchaseOrders.filter(po => po.status === 'Mailed').length === 0 ? (
+                                                            <tr>
+                                                                <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                                                                    No pending purchase orders found (Mailed).
+                                                                </td>
+                                                            </tr>
+                                                        ) : (
+                                                            purchaseOrders.filter(po => po.status === 'Mailed').map((po) => (
+                                                                <tr key={po.id} className="hover:bg-gray-50 transition-colors">
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{po.poNumber}</td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(po.poDate)}</td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{po.vendorName}</td>
+                                                                    <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title={po.address}>{po.address}</td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                                        <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] bg-slate-100 text-slate-700 border border-amber-200">
+                                                                            {po.status}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                                        <button className="text-indigo-600 hover:text-indigo-900" title="View">
+                                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                                                        </button>
+                                                                    </td>
+                                                                </tr>
+                                                            ))
+                                                        )}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        )}
+                                        {activePOSubTab === 'Executed PO' && (
+                                            <div className="erp-card overflow-hidden border border-slate-200">
+                                                <table className="min-w-full divide-y divide-gray-200">
+                                                    <thead className="bg-slate-50/50">
+                                                        <tr>
+                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO#</th>
+                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO Date</th>
+                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Vendor Name</th>
+                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Address</th>
+                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Status</th>
+                                                            <th className="px-6 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Action</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="bg-white divide-y divide-gray-200">
+                                                        {purchaseOrders.filter(po => po.status === 'Closed').length === 0 ? (
+                                                            <tr>
+                                                                <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                                                                    No executed purchase orders found (Closed).
+                                                                </td>
+                                                            </tr>
+                                                        ) : (
+                                                            purchaseOrders.filter(po => po.status === 'Closed').map((po) => (
+                                                                <tr key={po.id} className="hover:bg-gray-50 transition-colors">
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{po.poNumber}</td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(po.poDate)}</td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{po.vendorName}</td>
+                                                                    <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title={po.address}>{po.address}</td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                                        <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] bg-slate-100 text-slate-700 border border-green-200">
+                                                                            {po.status}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                                        <button className="text-indigo-600 hover:text-indigo-900" title="View">
+                                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                                                        </button>
+                                                                    </td>
+                                                                </tr>
+                                                            ))
+                                                        )}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        {activeTransactionSubTab === 'Procurement' && (
+                            <div>
+                                {activeProcurementSubTab === 'Dashboard' ? (
+                                    <div>
+                                        <div className="mb-8">
+                                            <h2 className="text-2xl font-bold text-gray-800">Procurement</h2>
+                                            <p className="text-sm text-gray-500 mt-1">Select a procurement category to manage.</p>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                            {[
+                                                { name: 'Raw Material', desc: 'Manage raw material procurement', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /> },
+                                                { name: 'Stock-in Trade', desc: 'Manage stock-in trade items', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /> },
+                                                { name: 'Consumables', desc: 'Manage consumable items', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /> },
+                                                { name: 'Stores & Spares', desc: 'Manage stores and spares', icon: <g><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></g> },
+                                                { name: 'Services', desc: 'Manage service procurement', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /> },
+                                            ].map((item) => (
+                                                <button
+                                                    key={item.name}
+                                                    onClick={() => setActiveProcurementSubTab(item.name as ProcurementSubTab)}
+                                                    className="p-6 border-2 border-gray-200 rounded-[4px] hover:border-indigo-500 hover:shadow-none border border-slate-200 transition-all duration-200 text-left group bg-white"
+                                                >
+                                                    <div className="flex items-center justify-between mb-4">
+                                                        <div className="w-12 h-12 bg-indigo-50/50 rounded-[4px] flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                {item.icon}
+                                                            </svg>
+                                                        </div>
+                                                        <svg className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                        </svg>
+                                                    </div>
+                                                    <h3 className="text-lg font-bold text-gray-800 group-hover:text-indigo-600 transition-colors">{item.name}</h3>
+                                                    <p className="text-sm text-gray-500 mt-1">{item.desc}</p>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div>
+                                        {selectedProcurementVendor ? (
+                                            <div className="erp-card border border-slate-200">
+                                                <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                                                    <div className="flex items-center space-x-4">
+                                                        <button onClick={() => setSelectedProcurementVendor(null)} className="text-gray-500 hover:text-gray-700 p-1 rounded-[4px] hover:bg-gray-100 transition-colors">
+                                                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                                                        </button>
+                                                        <h2 className="text-xl font-bold text-gray-800">{selectedProcurementVendor.vendorName}</h2>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => setIsMonthView(!isMonthView)}
+                                                        className="px-4 py-2 bg-white border border-slate-200 rounded hover:bg-gray-50 text-sm font-medium text-gray-700"
+                                                    >
+                                                        {isMonthView ? 'Bill-wise View' : 'Month View'}
+                                                    </button>
+                                                </div>
+                                                <div className="overflow-x-auto">
+                                                    {isMonthView ? (
+                                                        <table className="min-w-full divide-y divide-gray-200">
+                                                            <thead className="bg-gray-50">
+                                                                <tr>
+                                                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Month</th>
+                                                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Debit</th>
+                                                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Credit</th>
+                                                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Closing balance</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="bg-white divide-y divide-gray-200">
+                                                                {mockMonthlySummary.map((item) => (
+                                                                    <tr key={item.month} className="hover:bg-gray-50 transition-colors">
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{item.month}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.debit > 0 ? item.debit.toLocaleString('en-IN') : '-'}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.credit > 0 ? item.credit.toLocaleString('en-IN') : '-'}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{item.closingBalance.toLocaleString('en-IN')}Cr</td>
+                                                                    </tr>
+                                                                ))}
+                                                                <tr className="bg-gray-50 font-bold border-t-2 border-gray-300">
+                                                                    <td className="px-6 py-4 text-left text-sm text-gray-900 uppercase">Total</td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-indigo-600 border-t-2 border-gray-400">
+                                                                        {mockMonthlySummary.reduce((acc, curr) => acc + curr.debit, 0).toLocaleString('en-IN')}
+                                                                    </td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-indigo-600 border-t-2 border-gray-400">
+                                                                        {mockMonthlySummary.reduce((acc, curr) => acc + curr.credit, 0).toLocaleString('en-IN')}
+                                                                    </td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"></td>
+                                                                </tr>
+                                                            </tbody>
+                                                        </table>
+                                                    ) : (
+                                                        <table className="min-w-full divide-y divide-gray-200">
+                                                            <thead className="bg-gray-50">
+                                                                <tr>
+                                                                    {[
+                                                                        { label: 'Date', key: 'date' },
+                                                                        { label: 'Transfer from', key: 'transferFrom' },
+                                                                        { label: 'Invoice No', key: 'invoiceNo' },
+                                                                        { label: 'Ledger', key: 'ledger' },
+                                                                        { label: 'Status', key: 'status' },
+                                                                        { label: 'Debit', key: 'debit' },
+                                                                        { label: 'Credit', key: 'credit' },
+                                                                        { label: 'Running balance', key: 'runningBalance' }
+                                                                    ].map((header) => (
+                                                                        <th key={header.key} className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider align-top">
+                                                                            <div className="mb-2">{header.label}</div>
+                                                                            <input
+                                                                                type="text"
+                                                                                placeholder={`Filter ${header.label}`}
+                                                                                value={ledgerFilters[header.key as keyof typeof ledgerFilters]}
+                                                                                onChange={(e) => setLedgerFilters({ ...ledgerFilters, [header.key]: e.target.value })}
+                                                                                className="block w-full text-xs border-gray-300 rounded-[4px] shadow-none border border-slate-200 focus:border-indigo-500 focus:ring-indigo-500 py-1 px-2"
+                                                                            />
+                                                                        </th>
+                                                                    ))}
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="bg-white divide-y divide-gray-200">
+                                                                {filteredLedgerEntries.map((entry) => (
+                                                                    <tr key={entry.id} className="hover:bg-gray-50 transition-colors">
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(entry.date)}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.takenFrom}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-indigo-600">{entry.invoiceNo || '-'}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.ledger}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                                                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] 
+                                                                                        ${entry.status === 'Paid' ? 'bg-slate-100 text-slate-700' :
+                                                                                    entry.status === 'Unpaid' ? 'bg-red-100 text-red-800' :
+                                                                                        'bg-yellow-100 text-yellow-800'}`}>
+                                                                                {entry.status}
+                                                                            </span>
+                                                                        </td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.debit > 0 ? entry.debit.toLocaleString('en-IN') : '-'}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.credit > 0 ? entry.credit.toLocaleString('en-IN') : '-'}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{entry.runningBalance.toLocaleString('en-IN')}Cr</td>
+                                                                    </tr>
+                                                                ))}
+                                                                {/* Totals Footer */}
+                                                                <tr className="bg-gray-50 font-bold border-t-2 border-gray-300">
+                                                                    <td colSpan={5} className="px-6 py-4 text-right text-sm text-gray-900 uppercase">Total</td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-t-2 border-gray-400">
+                                                                        {filteredLedgerEntries.reduce((acc, curr) => acc + curr.debit, 0).toLocaleString('en-IN')}
+                                                                    </td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-t-2 border-gray-400">
+                                                                        {filteredLedgerEntries.reduce((acc, curr) => acc + curr.credit, 0).toLocaleString('en-IN')}
+                                                                    </td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"></td>
+                                                                </tr>
+                                                            </tbody>
+                                                        </table>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div>
+                                                <div className="flex items-center justify-between mb-6">
+                                                    <div>
+                                                        <div className="flex items-center space-x-2 text-sm text-gray-500 mb-1">
+                                                            <button onClick={() => setActiveProcurementSubTab('Dashboard')} className="hover:text-indigo-600 hover:underline">
+                                                                Procurement
+                                                            </button>
+                                                            <span>/</span>
+                                                            <span className="text-indigo-600 font-medium">{activeProcurementSubTab}</span>
+                                                        </div>
+                                                        <h2 className="text-2xl font-bold text-gray-800">{activeProcurementSubTab}</h2>
+                                                        <p className="text-sm text-gray-500">Manage {activeProcurementSubTab.toLowerCase()} details here.</p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => setActiveProcurementSubTab('Dashboard')}
+                                                        className="px-4 py-2 border border-slate-200 rounded-[4px] text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                                    >
+                                                        Back to Dashboard
+                                                    </button>
+                                                </div>
+
+                                                {/* Aging Table with Columns */}
+                                                <div className="erp-card border border-slate-200 overflow-hidden">
+                                                    <div className="overflow-x-auto">
+                                                        <table className="min-w-full divide-y divide-gray-200">
+                                                            <thead className="bg-gray-50">
+                                                                <tr>
+                                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vendor Code</th>
+                                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vendor Name</th>
+                                                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">0-45</th>
+                                                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">45-90</th>
+                                                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">&gt;6m</th>
+                                                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">&gt;1yr</th>
+
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="bg-white divide-y divide-gray-200">
+                                                                {vendorAgingTableData.map((vendor) => (
+                                                                    <tr key={vendor.id} className="hover:bg-gray-50 transition-colors">
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{vendor.vendorCode}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                                                            <button
+                                                                                onClick={() => {
+                                                                                    // Convert to ProcurementItem format for ledger view
+                                                                                    const procurementItem: ProcurementItem = {
+                                                                                        id: vendor.id,
+                                                                                        vendorCode: vendor.vendorCode,
+                                                                                        vendorName: vendor.vendorName,
+                                                                                        amount: vendor.amount0to45 !== '-' ? vendor.amount0to45 : vendor.amount45to90,
+                                                                                        status: vendor.status
+                                                                                    };
+                                                                                    setSelectedProcurementVendor(procurementItem);
+                                                                                }}
+                                                                                className="text-indigo-600 hover:text-indigo-900 hover:underline font-medium text-left"
+                                                                                title="View Ledger"
+                                                                            >
+                                                                                {vendor.vendorName}
+                                                                            </button>
+                                                                        </td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">{vendor.amount0to45}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">{vendor.amount45to90}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">{vendor.amount6m}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">{vendor.amount1yr}</td>
+
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        {activeTransactionSubTab === 'Payment' && (
+                            <div>
+                                {activePaymentSubTab === 'Dashboard' ? (
+                                    <div>
+                                        <div className="mb-8">
+                                            <h2 className="text-2xl font-bold text-gray-800">Payment</h2>
+                                            <p className="text-sm text-gray-500 mt-1">Select a procurement category to manage.</p>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                            {[
+                                                { name: 'Raw Material', desc: 'Manage raw material procurement', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /> },
+                                                { name: 'Stock-in Trade', desc: 'Manage stock-in trade items', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /> },
+                                                { name: 'Consumables', desc: 'Manage consumable items', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /> },
+                                                { name: 'Stores & Spares', desc: 'Manage stores and spares', icon: <g><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></g> },
+                                                { name: 'Services', desc: 'Manage service procurement', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /> },
+                                            ].map((item) => {
+                                                const totalPendingAmount = paymentBills
+                                                    .filter(bill => bill.status !== 'Posted' && bill.category === item.name)
+                                                    .reduce((sum, bill) => {
+                                                        const amount = parseFloat(bill.amount.replace(/[^0-9.-]+/g, ""));
+                                                        return sum + amount;
+                                                    }, 0);
+                                                const formattedTotal = totalPendingAmount.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
+
+                                                return (
                                                     <button
                                                         key={item.name}
-                                                        onClick={() => setActiveProcurementSubTab(item.name as ProcurementSubTab)}
-                                                        className="p-6 border-2 border-gray-200 rounded-[4px] hover:border-indigo-500 hover:shadow-none border border-slate-200 transition-all duration-200 text-left group bg-white"
+                                                        onClick={() => setActivePaymentSubTab(item.name as ProcurementSubTab)}
+                                                        className="p-6 border-2 border-gray-200 rounded-[4px] hover:border-indigo-500 hover:shadow-none border border-slate-200 transition-all duration-200 text-left group bg-white relative"
                                                     >
                                                         <div className="flex items-center justify-between mb-4">
                                                             <div className="w-12 h-12 bg-indigo-50/50 rounded-[4px] flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
@@ -3555,468 +3654,232 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                                             </svg>
                                                         </div>
-                                                        <h3 className="text-lg font-bold text-gray-800 group-hover:text-indigo-600 transition-colors">{item.name}</h3>
-                                                        <p className="text-sm text-gray-500 mt-1">{item.desc}</p>
+                                                        <div className="flex justify-between items-end">
+                                                            <div>
+                                                                <h3 className="text-lg font-bold text-gray-800 group-hover:text-indigo-600 transition-colors">{item.name}</h3>
+                                                                <p className="text-sm text-gray-500 mt-1">{item.desc}</p>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <p className="text-lg font-bold text-gray-800">{formattedTotal}</p>
+                                                                <p className="text-xs text-red-600 font-semibold mt-1">Credit</p>
+                                                            </div>
+                                                        </div>
                                                     </button>
-                                                ))}
-                                            </div>
+                                                );
+                                            })}
                                         </div>
-                                    ) : (
-                                        <div>
-                                            {selectedProcurementVendor ? (
-                                                <div className="erp-card border border-slate-200">
-                                                    <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                                                        <div className="flex items-center space-x-4">
-                                                            <button onClick={() => setSelectedProcurementVendor(null)} className="text-gray-500 hover:text-gray-700 p-1 rounded-[4px] hover:bg-gray-100 transition-colors">
-                                                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-                                                            </button>
-                                                            <h2 className="text-xl font-bold text-gray-800">{selectedProcurementVendor.vendorName}</h2>
-                                                        </div>
-                                                        <button
-                                                            onClick={() => setIsMonthView(!isMonthView)}
-                                                            className="px-4 py-2 bg-white border border-slate-200 rounded hover:bg-gray-50 text-sm font-medium text-gray-700"
-                                                        >
-                                                            {isMonthView ? 'Bill-wise View' : 'Month View'}
-                                                        </button>
-                                                    </div>
-                                                    <div className="overflow-x-auto">
-                                                        {isMonthView ? (
-                                                            <table className="min-w-full divide-y divide-gray-200">
-                                                                <thead className="bg-gray-50">
-                                                                    <tr>
-                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Month</th>
-                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Debit</th>
-                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Credit</th>
-                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Closing balance</th>
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody className="bg-white divide-y divide-gray-200">
-                                                                    {mockMonthlySummary.map((item) => (
-                                                                        <tr key={item.month} className="hover:bg-gray-50 transition-colors">
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{item.month}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.debit > 0 ? item.debit.toLocaleString('en-IN') : '-'}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.credit > 0 ? item.credit.toLocaleString('en-IN') : '-'}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{item.closingBalance.toLocaleString('en-IN')}Cr</td>
-                                                                        </tr>
-                                                                    ))}
-                                                                    <tr className="bg-gray-50 font-bold border-t-2 border-gray-300">
-                                                                        <td className="px-6 py-4 text-left text-sm text-gray-900 uppercase">Total</td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-indigo-600 border-t-2 border-gray-400">
-                                                                            {mockMonthlySummary.reduce((acc, curr) => acc + curr.debit, 0).toLocaleString('en-IN')}
-                                                                        </td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-indigo-600 border-t-2 border-gray-400">
-                                                                            {mockMonthlySummary.reduce((acc, curr) => acc + curr.credit, 0).toLocaleString('en-IN')}
-                                                                        </td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"></td>
-                                                                    </tr>
-                                                                </tbody>
-                                                            </table>
-                                                        ) : (
-                                                            <table className="min-w-full divide-y divide-gray-200">
-                                                                <thead className="bg-gray-50">
-                                                                    <tr>
-                                                                        {[
-                                                                            { label: 'Date', key: 'date' },
-                                                                            { label: 'Transfer from', key: 'transferFrom' },
-                                                                            { label: 'Invoice No', key: 'invoiceNo' },
-                                                                            { label: 'Ledger', key: 'ledger' },
-                                                                            { label: 'Status', key: 'status' },
-                                                                            { label: 'Debit', key: 'debit' },
-                                                                            { label: 'Credit', key: 'credit' },
-                                                                            { label: 'Running balance', key: 'runningBalance' }
-                                                                        ].map((header) => (
-                                                                            <th key={header.key} className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider align-top">
-                                                                                <div className="mb-2">{header.label}</div>
-                                                                                <input
-                                                                                    type="text"
-                                                                                    placeholder={`Filter ${header.label}`}
-                                                                                    value={ledgerFilters[header.key as keyof typeof ledgerFilters]}
-                                                                                    onChange={(e) => setLedgerFilters({ ...ledgerFilters, [header.key]: e.target.value })}
-                                                                                    className="block w-full text-xs border-gray-300 rounded-[4px] shadow-none border border-slate-200 focus:border-indigo-500 focus:ring-indigo-500 py-1 px-2"
-                                                                                />
-                                                                            </th>
-                                                                        ))}
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody className="bg-white divide-y divide-gray-200">
-                                                                    {filteredLedgerEntries.map((entry) => (
-                                                                        <tr key={entry.id} className="hover:bg-gray-50 transition-colors">
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(entry.date)}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.takenFrom}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-indigo-600">{entry.invoiceNo || '-'}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.ledger}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                                                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] 
-                                                                                        ${entry.status === 'Paid' ? 'bg-slate-100 text-slate-700' :
-                                                                                        entry.status === 'Unpaid' ? 'bg-red-100 text-red-800' :
-                                                                                            'bg-yellow-100 text-yellow-800'}`}>
-                                                                                    {entry.status}
-                                                                                </span>
-                                                                            </td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.debit > 0 ? entry.debit.toLocaleString('en-IN') : '-'}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.credit > 0 ? entry.credit.toLocaleString('en-IN') : '-'}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{entry.runningBalance.toLocaleString('en-IN')}Cr</td>
-                                                                        </tr>
-                                                                    ))}
-                                                                    {/* Totals Footer */}
-                                                                    <tr className="bg-gray-50 font-bold border-t-2 border-gray-300">
-                                                                        <td colSpan={5} className="px-6 py-4 text-right text-sm text-gray-900 uppercase">Total</td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-t-2 border-gray-400">
-                                                                            {filteredLedgerEntries.reduce((acc, curr) => acc + curr.debit, 0).toLocaleString('en-IN')}
-                                                                        </td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-t-2 border-gray-400">
-                                                                            {filteredLedgerEntries.reduce((acc, curr) => acc + curr.credit, 0).toLocaleString('en-IN')}
-                                                                        </td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"></td>
-                                                                    </tr>
-                                                                </tbody>
-                                                            </table>
-                                                        )}
-                                                    </div>
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <div className="flex items-center justify-between mb-6">
+                                            <div>
+                                                <div className="flex items-center space-x-2 text-sm text-gray-500 mb-1">
+                                                    <button onClick={() => setActivePaymentSubTab('Dashboard')} className="hover:text-indigo-600 hover:underline">
+                                                        Payment
+                                                    </button>
+                                                    <span>/</span>
+                                                    <span className="text-indigo-600 font-medium">{activePaymentSubTab}</span>
                                                 </div>
-                                            ) : (
-                                                <div>
-                                                    <div className="flex items-center justify-between mb-6">
-                                                        <div>
-                                                            <div className="flex items-center space-x-2 text-sm text-gray-500 mb-1">
-                                                                <button onClick={() => setActiveProcurementSubTab('Dashboard')} className="hover:text-indigo-600 hover:underline">
-                                                                    Procurement
-                                                                </button>
-                                                                <span>/</span>
-                                                                <span className="text-indigo-600 font-medium">{activeProcurementSubTab}</span>
-                                                            </div>
-                                                            <h2 className="text-2xl font-bold text-gray-800">{activeProcurementSubTab}</h2>
-                                                            <p className="text-sm text-gray-500">Manage {activeProcurementSubTab.toLowerCase()} details here.</p>
-                                                        </div>
-                                                        <button
-                                                            onClick={() => setActiveProcurementSubTab('Dashboard')}
-                                                            className="px-4 py-2 border border-slate-200 rounded-[4px] text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                                                        >
-                                                            Back to Dashboard
-                                                        </button>
-                                                    </div>
-
-                                                    {/* Aging Table with Columns */}
-                                                    <div className="erp-card border border-slate-200 overflow-hidden">
-                                                        <div className="overflow-x-auto">
-                                                            <table className="min-w-full divide-y divide-gray-200">
-                                                                <thead className="bg-gray-50">
-                                                                    <tr>
-                                                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vendor Code</th>
-                                                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vendor Name</th>
-                                                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">0-45</th>
-                                                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">45-90</th>
-                                                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">&gt;6m</th>
-                                                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">&gt;1yr</th>
-
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody className="bg-white divide-y divide-gray-200">
-                                                                    {vendorAgingTableData.map((vendor) => (
-                                                                        <tr key={vendor.id} className="hover:bg-gray-50 transition-colors">
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{vendor.vendorCode}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                                                                <button
-                                                                                    onClick={() => {
-                                                                                        // Convert to ProcurementItem format for ledger view
-                                                                                        const procurementItem: ProcurementItem = {
-                                                                                            id: vendor.id,
-                                                                                            vendorCode: vendor.vendorCode,
-                                                                                            vendorName: vendor.vendorName,
-                                                                                            amount: vendor.amount0to45 !== '-' ? vendor.amount0to45 : vendor.amount45to90,
-                                                                                            status: vendor.status
-                                                                                        };
-                                                                                        setSelectedProcurementVendor(procurementItem);
-                                                                                    }}
-                                                                                    className="text-indigo-600 hover:text-indigo-900 hover:underline font-medium text-left"
-                                                                                    title="View Ledger"
-                                                                                >
-                                                                                    {vendor.vendorName}
-                                                                                </button>
-                                                                            </td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">{vendor.amount0to45}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">{vendor.amount45to90}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">{vendor.amount6m}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">{vendor.amount1yr}</td>
-
-                                                                        </tr>
-                                                                    ))}
-                                                                </tbody>
-                                                            </table>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            )}
+                                                <h2 className="text-2xl font-bold text-gray-800">{activePaymentSubTab}</h2>
+                                                <p className="text-sm text-gray-500">Manage {activePaymentSubTab.toLowerCase()} payments here.</p>
+                                            </div>
+                                            <button
+                                                onClick={() => setActivePaymentSubTab('Dashboard')}
+                                                className="px-4 py-2 border border-slate-200 rounded-[4px] text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                            >
+                                                Back to Dashboard
+                                            </button>
                                         </div>
-                                    )}
-                                </div>
-                            )}
-                            {activeTransactionSubTab === 'Payment' && (
-                                <div>
-                                    {activePaymentSubTab === 'Dashboard' ? (
-                                        <div>
-                                            <div className="mb-8">
-                                                <h2 className="text-2xl font-bold text-gray-800">Payment</h2>
-                                                <p className="text-sm text-gray-500 mt-1">Select a procurement category to manage.</p>
-                                            </div>
 
-                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                                {[
-                                                    { name: 'Raw Material', desc: 'Manage raw material procurement', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /> },
-                                                    { name: 'Stock-in Trade', desc: 'Manage stock-in trade items', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /> },
-                                                    { name: 'Consumables', desc: 'Manage consumable items', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /> },
-                                                    { name: 'Stores & Spares', desc: 'Manage stores and spares', icon: <g><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></g> },
-                                                    { name: 'Services', desc: 'Manage service procurement', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /> },
-                                                ].map((item) => {
-                                                    const totalPendingAmount = paymentBills
-                                                        .filter(bill => bill.status !== 'Posted' && bill.category === item.name)
-                                                        .reduce((sum, bill) => {
-                                                            const amount = parseFloat(bill.amount.replace(/[^0-9.-]+/g, ""));
-                                                            return sum + amount;
-                                                        }, 0);
-                                                    const formattedTotal = totalPendingAmount.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
-
-                                                    return (
-                                                        <button
-                                                            key={item.name}
-                                                            onClick={() => setActivePaymentSubTab(item.name as ProcurementSubTab)}
-                                                            className="p-6 border-2 border-gray-200 rounded-[4px] hover:border-indigo-500 hover:shadow-none border border-slate-200 transition-all duration-200 text-left group bg-white relative"
-                                                        >
-                                                            <div className="flex items-center justify-between mb-4">
-                                                                <div className="w-12 h-12 bg-indigo-50/50 rounded-[4px] flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                                                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                        {item.icon}
-                                                                    </svg>
-                                                                </div>
-                                                                <svg className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                                                </svg>
-                                                            </div>
-                                                            <div className="flex justify-between items-end">
-                                                                <div>
-                                                                    <h3 className="text-lg font-bold text-gray-800 group-hover:text-indigo-600 transition-colors">{item.name}</h3>
-                                                                    <p className="text-sm text-gray-500 mt-1">{item.desc}</p>
-                                                                </div>
-                                                                <div className="text-right">
-                                                                    <p className="text-lg font-bold text-gray-800">{formattedTotal}</p>
-                                                                    <p className="text-xs text-red-600 font-semibold mt-1">Credit</p>
-                                                                </div>
-                                                            </div>
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
+                                        {/* Sort Controls */}
+                                        <div className="mb-4 flex justify-end">
+                                            <select
+                                                value={paymentSortOrder}
+                                                onChange={(e) => setPaymentSortOrder(e.target.value as 'recent' | 'earliest')}
+                                                className="px-4 py-2 border border-slate-200 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                            >
+                                                <option value="recent">Recent bills on top</option>
+                                                <option value="earliest">Earliest bills on top</option>
+                                            </select>
                                         </div>
-                                    ) : (
-                                        <div>
-                                            <div className="flex items-center justify-between mb-6">
-                                                <div>
-                                                    <div className="flex items-center space-x-2 text-sm text-gray-500 mb-1">
-                                                        <button onClick={() => setActivePaymentSubTab('Dashboard')} className="hover:text-indigo-600 hover:underline">
-                                                            Payment
-                                                        </button>
-                                                        <span>/</span>
-                                                        <span className="text-indigo-600 font-medium">{activePaymentSubTab}</span>
-                                                    </div>
-                                                    <h2 className="text-2xl font-bold text-gray-800">{activePaymentSubTab}</h2>
-                                                    <p className="text-sm text-gray-500">Manage {activePaymentSubTab.toLowerCase()} payments here.</p>
-                                                </div>
-                                                <button
-                                                    onClick={() => setActivePaymentSubTab('Dashboard')}
-                                                    className="px-4 py-2 border border-slate-200 rounded-[4px] text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                                                >
-                                                    Back to Dashboard
-                                                </button>
-                                            </div>
 
-                                            {/* Sort Controls */}
-                                            <div className="mb-4 flex justify-end">
-                                                <select
-                                                    value={paymentSortOrder}
-                                                    onChange={(e) => setPaymentSortOrder(e.target.value as 'recent' | 'earliest')}
-                                                    className="px-4 py-2 border border-slate-200 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                >
-                                                    <option value="recent">Recent bills on top</option>
-                                                    <option value="earliest">Earliest bills on top</option>
-                                                </select>
-                                            </div>
+                                        {/* Payment Bills Table */}
+                                        <div className="erp-card border border-slate-200 overflow-hidden">
+                                            <div className="overflow-x-auto">
+                                                <table className="min-w-full divide-y divide-gray-200">
+                                                    <thead className="bg-gray-50">
+                                                        <tr>
+                                                            {[
+                                                                { label: 'Date', key: 'date' },
+                                                                { label: 'Vendor Reference Name', key: 'vendorReferenceName' },
+                                                                { label: 'Voucher No', key: 'voucherNo' },
+                                                                { label: 'Supplier Invoice No.', key: 'supplierInvoiceNo' },
+                                                                { label: 'Amount', key: 'amount' },
+                                                                { label: 'Approve', key: 'approve' },
+                                                                { label: 'Action', key: 'action' },
+                                                                { label: 'Status', key: 'status' }
+                                                            ].map((header) => (
+                                                                <th key={header.key} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider align-top">
+                                                                    <div className="mb-2">{header.label}</div>
+                                                                    {['approve', 'action'].includes(header.key) ? (
+                                                                        <input
+                                                                            type="text"
+                                                                            placeholder={`Filter ${header.label}`}
+                                                                            disabled
+                                                                            className="block w-full text-xs border-gray-300 rounded-[4px] shadow-none border border-slate-200 bg-gray-100 py-1 px-2"
+                                                                        />
+                                                                    ) : (
+                                                                        <input
+                                                                            type="text"
+                                                                            placeholder={`Filter ${header.label}`}
+                                                                            value={paymentBillFilters[header.key as keyof typeof paymentBillFilters] || ''}
+                                                                            onChange={(e) => setPaymentBillFilters({ ...paymentBillFilters, [header.key]: e.target.value })}
+                                                                            className="block w-full text-xs border-gray-300 rounded-[4px] shadow-none border border-slate-200 focus:border-indigo-500 focus:ring-indigo-500 py-1 px-2"
+                                                                        />
+                                                                    )}
+                                                                </th>
+                                                            ))}
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="bg-white divide-y divide-gray-200">
+                                                        {[...paymentBills]
+                                                            .filter(bill => {
+                                                                // Filter by category and exclude Posted
+                                                                if (bill.status === 'Posted' || bill.category !== activePaymentSubTab) {
+                                                                    return false;
+                                                                }
 
-                                            {/* Payment Bills Table */}
-                                            <div className="erp-card border border-slate-200 overflow-hidden">
-                                                <div className="overflow-x-auto">
-                                                    <table className="min-w-full divide-y divide-gray-200">
-                                                        <thead className="bg-gray-50">
-                                                            <tr>
-                                                                {[
-                                                                    { label: 'Date', key: 'date' },
-                                                                    { label: 'Vendor Reference Name', key: 'vendorReferenceName' },
-                                                                    { label: 'Voucher No', key: 'voucherNo' },
-                                                                    { label: 'Supplier Invoice No.', key: 'supplierInvoiceNo' },
-                                                                    { label: 'Amount', key: 'amount' },
-                                                                    { label: 'Approve', key: 'approve' },
-                                                                    { label: 'Action', key: 'action' },
-                                                                    { label: 'Status', key: 'status' }
-                                                                ].map((header) => (
-                                                                    <th key={header.key} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider align-top">
-                                                                        <div className="mb-2">{header.label}</div>
-                                                                        {['approve', 'action'].includes(header.key) ? (
-                                                                            <input
-                                                                                type="text"
-                                                                                placeholder={`Filter ${header.label}`}
-                                                                                disabled
-                                                                                className="block w-full text-xs border-gray-300 rounded-[4px] shadow-none border border-slate-200 bg-gray-100 py-1 px-2"
-                                                                            />
-                                                                        ) : (
-                                                                            <input
-                                                                                type="text"
-                                                                                placeholder={`Filter ${header.label}`}
-                                                                                value={paymentBillFilters[header.key as keyof typeof paymentBillFilters] || ''}
-                                                                                onChange={(e) => setPaymentBillFilters({ ...paymentBillFilters, [header.key]: e.target.value })}
-                                                                                className="block w-full text-xs border-gray-300 rounded-[4px] shadow-none border border-slate-200 focus:border-indigo-500 focus:ring-indigo-500 py-1 px-2"
-                                                                            />
+                                                                // Apply user filters
+                                                                const matchesDate = bill.date.toLowerCase().includes(paymentBillFilters.date.toLowerCase());
+                                                                const matchesVendor = bill.vendorReferenceName.toLowerCase().includes(paymentBillFilters.vendorReferenceName.toLowerCase());
+                                                                const matchesVoucher = bill.voucherNo.toLowerCase().includes(paymentBillFilters.voucherNo.toLowerCase());
+                                                                const matchesInvoice = bill.supplierInvoiceNo.toLowerCase().includes(paymentBillFilters.supplierInvoiceNo.toLowerCase());
+                                                                const matchesAmount = bill.amount.toLowerCase().includes(paymentBillFilters.amount.toLowerCase());
+                                                                const matchesStatus = bill.status.toLowerCase().includes(paymentBillFilters.status.toLowerCase());
+
+                                                                return matchesDate && matchesVendor && matchesVoucher && matchesInvoice && matchesAmount && matchesStatus;
+                                                            })
+                                                            .sort((a, b) => {
+                                                                const dateA = new Date(a.date).getTime();
+                                                                const dateB = new Date(b.date).getTime();
+                                                                return paymentSortOrder === 'recent' ? dateB - dateA : dateA - dateB;
+                                                            })
+                                                            .map((bill) => (
+                                                                <tr key={bill.id} className="hover:bg-gray-50 transition-colors">
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(bill.date)}</td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{bill.vendorReferenceName}</td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{bill.voucherNo}</td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{bill.supplierInvoiceNo}</td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{bill.amount}</td>
+
+                                                                    {/* Approve Column */}
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                                                        {bill.status !== 'Posted' && (
+                                                                            <button
+                                                                                onClick={() => {
+                                                                                    // Toggle between Pending and Approved
+                                                                                    const now = new Date();
+                                                                                    const formattedDate = now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                                                                    const newStatus = bill.status === 'Approved' ? 'Pending' : 'Approved';
+                                                                                    const actionType = newStatus === 'Approved' ? 'Approved' : 'Unapproved';
+
+                                                                                    setPaymentBills(paymentBills.map(b =>
+                                                                                        b.id === bill.id
+                                                                                            ? {
+                                                                                                ...b,
+                                                                                                status: newStatus,
+                                                                                                actionLog: [
+                                                                                                    ...(b.actionLog || []),
+                                                                                                    { action: actionType, user: 'Current User', date: formattedDate }
+                                                                                                ]
+                                                                                            }
+                                                                                            : b
+                                                                                    ));
+                                                                                }}
+                                                                                className={`px-3 py-1 text-white text-xs rounded ${bill.status === 'Approved' || bill.status === 'Initiated'
+                                                                                    ? 'bg-red-600 hover:bg-red-700'
+                                                                                    : 'bg-indigo-600 hover:bg-indigo-700'
+                                                                                    }`}
+                                                                                title={bill.status === 'Approved' || bill.status === 'Initiated' ? "Unapprove" : "Approve (Super users only)"}
+                                                                            >
+                                                                                {bill.status === 'Approved' || bill.status === 'Initiated' ? 'Unapprove' : 'Approve'}
+                                                                            </button>
                                                                         )}
-                                                                    </th>
-                                                                ))}
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="bg-white divide-y divide-gray-200">
-                                                            {[...paymentBills]
-                                                                .filter(bill => {
-                                                                    // Filter by category and exclude Posted
-                                                                    if (bill.status === 'Posted' || bill.category !== activePaymentSubTab) {
-                                                                        return false;
-                                                                    }
+                                                                    </td>
 
-                                                                    // Apply user filters
-                                                                    const matchesDate = bill.date.toLowerCase().includes(paymentBillFilters.date.toLowerCase());
-                                                                    const matchesVendor = bill.vendorReferenceName.toLowerCase().includes(paymentBillFilters.vendorReferenceName.toLowerCase());
-                                                                    const matchesVoucher = bill.voucherNo.toLowerCase().includes(paymentBillFilters.voucherNo.toLowerCase());
-                                                                    const matchesInvoice = bill.supplierInvoiceNo.toLowerCase().includes(paymentBillFilters.supplierInvoiceNo.toLowerCase());
-                                                                    const matchesAmount = bill.amount.toLowerCase().includes(paymentBillFilters.amount.toLowerCase());
-                                                                    const matchesStatus = bill.status.toLowerCase().includes(paymentBillFilters.status.toLowerCase());
-
-                                                                    return matchesDate && matchesVendor && matchesVoucher && matchesInvoice && matchesAmount && matchesStatus;
-                                                                })
-                                                                .sort((a, b) => {
-                                                                    const dateA = new Date(a.date).getTime();
-                                                                    const dateB = new Date(b.date).getTime();
-                                                                    return paymentSortOrder === 'recent' ? dateB - dateA : dateA - dateB;
-                                                                })
-                                                                .map((bill) => (
-                                                                    <tr key={bill.id} className="hover:bg-gray-50 transition-colors">
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(bill.date)}</td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{bill.vendorReferenceName}</td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{bill.voucherNo}</td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{bill.supplierInvoiceNo}</td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{bill.amount}</td>
-
-                                                                        {/* Approve Column */}
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                                                    {/* Action Column */}
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                                                        <div className="flex flex-col space-y-2">
                                                                             {bill.status !== 'Posted' && (
-                                                                                <button
-                                                                                    onClick={() => {
-                                                                                        // Toggle between Pending and Approved
-                                                                                        const now = new Date();
-                                                                                        const formattedDate = now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                                                                                        const newStatus = bill.status === 'Approved' ? 'Pending' : 'Approved';
-                                                                                        const actionType = newStatus === 'Approved' ? 'Approved' : 'Unapproved';
-
-                                                                                        setPaymentBills(paymentBills.map(b =>
-                                                                                            b.id === bill.id
-                                                                                                ? {
-                                                                                                    ...b,
-                                                                                                    status: newStatus,
-                                                                                                    actionLog: [
-                                                                                                        ...(b.actionLog || []),
-                                                                                                        { action: actionType, user: 'Current User', date: formattedDate }
-                                                                                                    ]
-                                                                                                }
-                                                                                                : b
-                                                                                        ));
-                                                                                    }}
-                                                                                    className={`px-3 py-1 text-white text-xs rounded ${bill.status === 'Approved' || bill.status === 'Initiated'
-                                                                                        ? 'bg-red-600 hover:bg-red-700'
-                                                                                        : 'bg-indigo-600 hover:bg-indigo-700'
-                                                                                        }`}
-                                                                                    title={bill.status === 'Approved' || bill.status === 'Initiated' ? "Unapprove" : "Approve (Super users only)"}
-                                                                                >
-                                                                                    {bill.status === 'Approved' || bill.status === 'Initiated' ? 'Unapprove' : 'Approve'}
-                                                                                </button>
-                                                                            )}
-                                                                        </td>
-
-                                                                        {/* Action Column */}
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                                                            <div className="flex flex-col space-y-2">
-                                                                                {bill.status !== 'Posted' && (
-                                                                                    <>
-                                                                                        <button
-                                                                                            className="px-3 py-1 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700"
-                                                                                            title="Initiate & Post"
-                                                                                        >
-                                                                                            Initiate & Post
-                                                                                        </button>
-                                                                                        <button
-                                                                                            onClick={() => {
-                                                                                                setSelectedBillForPayment(bill);
-                                                                                                setShowPostPaymentModal(true);
-                                                                                            }}
-                                                                                            className="px-3 py-1 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700"
-                                                                                            title="Post Payment"
-                                                                                        >
-                                                                                            Post
-                                                                                        </button>
-                                                                                    </>
-                                                                                )}
-                                                                            </div>
-                                                                        </td>
-
-                                                                        <td className="px-6 py-4 whitespace-nowrap">
-                                                                            <div className="flex items-center space-x-2">
-                                                                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${bill.status === 'Posted' ? 'bg-slate-100 text-slate-700' :
-                                                                                    bill.status === 'Approved' ? 'bg-blue-100 text-slate-700' :
-                                                                                        bill.status === 'Initiated' ? 'bg-purple-100 text-purple-800' :
-                                                                                            'bg-yellow-100 text-yellow-800'
-                                                                                    }`}>
-                                                                                    {bill.status}
-                                                                                </span>
-                                                                                {bill.actionLog && bill.actionLog.length > 0 && (
+                                                                                <>
+                                                                                    <button
+                                                                                        className="px-3 py-1 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700"
+                                                                                        title="Initiate & Post"
+                                                                                    >
+                                                                                        Initiate & Post
+                                                                                    </button>
                                                                                     <button
                                                                                         onClick={() => {
-                                                                                            const logMessages = bill.actionLog?.map(log =>
-                                                                                                `${log.action} by ${log.user} on ${log.date}`
-                                                                                            ).join('\n');
-                                                                                            showToast(`Action History:\n\n${logMessages}`, 'info');
+                                                                                            setSelectedBillForPayment(bill);
+                                                                                            setShowPostPaymentModal(true);
                                                                                         }}
-                                                                                        className="text-gray-500 hover:text-indigo-600 focus:outline-none transition-colors"
-                                                                                        title="View Action History"
+                                                                                        className="px-3 py-1 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700"
+                                                                                        title="Post Payment"
                                                                                     >
-                                                                                        <span className="sr-only">View info</span>
-                                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                                                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                                                                                        </svg>
+                                                                                        Post
                                                                                     </button>
-                                                                                )}
-                                                                            </div>
-                                                                        </td>
-                                                                    </tr>
-                                                                ))}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
+                                                                                </>
+                                                                            )}
+                                                                        </div>
+                                                                    </td>
+
+                                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                                        <div className="flex items-center space-x-2">
+                                                                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${bill.status === 'Posted' ? 'bg-slate-100 text-slate-700' :
+                                                                                bill.status === 'Approved' ? 'bg-blue-100 text-slate-700' :
+                                                                                    bill.status === 'Initiated' ? 'bg-purple-100 text-purple-800' :
+                                                                                        'bg-yellow-100 text-yellow-800'
+                                                                                }`}>
+                                                                                {bill.status}
+                                                                            </span>
+                                                                            {bill.actionLog && bill.actionLog.length > 0 && (
+                                                                                <button
+                                                                                    onClick={() => {
+                                                                                        const logMessages = bill.actionLog?.map(log =>
+                                                                                            `${log.action} by ${log.user} on ${log.date}`
+                                                                                        ).join('\n');
+                                                                                        showToast(`Action History:\n\n${logMessages}`, 'info');
+                                                                                    }}
+                                                                                    className="text-gray-500 hover:text-indigo-600 focus:outline-none transition-colors"
+                                                                                    title="View Action History"
+                                                                                >
+                                                                                    <span className="sr-only">View info</span>
+                                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                                                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                                                                                    </svg>
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                    </tbody>
+                                                </table>
                                             </div>
                                         </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
-                )}
+                </div>
+            )}
 
 
 
-                {/* Create PO Modal */}
-                {showCreatePOModal && (
+            {/* Create PO Modal */}
+            {
+                showCreatePOModal && (
                     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
                         <div className="relative top-10 mx-auto p-8 border w-11/12 max-w-6xl shadow-none border border-slate-200 rounded-[4px] bg-white mb-20">
                             <div className="flex justify-between items-center mb-6">
@@ -4032,8 +3895,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                             </div>
 
                             <div className="space-y-6">
-                                {/* Form Fields */}
-                                <div className="grid grid-cols-2 gap-6">
+                                {/* Consolidated Form Fields */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">PO Series Name</label>
                                         <select
@@ -4059,22 +3922,21 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         />
                                     </div>
 
-                                <div className="space-y-6">
-                                    {/* Form Fields */}
-                                    <div className="grid grid-cols-2 gap-6">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">PO Series Name</label>
-                                            <select
-                                                value={createPOForm.poSeriesName}
-                                                onChange={(e) => handleCreatePOFormChange('poSeriesName', e.target.value)}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
-                                            >
-                                                <option value="">Select Vendor Settings</option>
-                                                <option value="series1">Series 1</option>
-                                                <option value="series2">Series 2</option>
-                                            </select>
-
-                                        </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">Vendor Name</label>
+                                        <select
+                                            value={createPOForm.vendorName}
+                                            onChange={(e) => handleCreatePOFormChange('vendorName', e.target.value)}
+                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        >
+                                            <option value="">Select Vendor</option>
+                                            {vendorList.map((vendor) => (
+                                                <option key={vendor.id} value={vendor.vendor_name}>
+                                                    {vendor.vendor_name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
 
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">Branch</label>
@@ -4084,46 +3946,16 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                         >
                                             <option value="">Select Branch</option>
-                                            <option value="branch1">Branch 1</option>
-                                            <option value="branch2">Branch 2</option>
+                                            {availableBranches.map((branch: any) => (
+                                                <option key={branch.id} value={branch.reference_name || branch.id}>
+                                                    {branch.reference_name || 'Main Branch'}
+                                                </option>
+                                            ))}
                                         </select>
                                         <p className="text-xs text-gray-500 mt-1">Reference Name in Vendor Master</p>
                                     </div>
 
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Vendor Name</label>
-                                            <select
-                                                value={createPOForm.vendorName}
-                                                onChange={(e) => handleCreatePOFormChange('vendorName', e.target.value)}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
-                                            >
-                                                <option value="">Select Vendor</option>
-                                                {vendorList.map((vendor) => (
-                                                    <option key={vendor.id} value={vendor.vendor_name}>
-                                                        {vendor.vendor_name}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Branch</label>
-                                            <select
-                                                value={createPOForm.branch}
-                                                onChange={(e) => handleCreatePOFormChange('branch', e.target.value)}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
-                                            >
-                                                <option value="">Select Branch</option>
-                                                {availableBranches.map((branch: any) => (
-                                                    <option key={branch.id} value={branch.reference_name || branch.id}>
-                                                        {branch.reference_name || 'Main Branch'}
-                                                    </option>
-                                                ))}
-                                            </select>
-
-                                        </div>
-
-                                    <div className="col-span-2">
+                                    <div className="col-span-1 md:col-span-2">
                                         <label className="block text-sm font-medium text-gray-700 mb-2">Address Line 2</label>
                                         <input
                                             type="text"
@@ -4133,7 +3965,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         />
                                     </div>
 
-                                    <div className="col-span-2">
+                                    <div className="col-span-1 md:col-span-2">
                                         <label className="block text-sm font-medium text-gray-700 mb-2">Address Line 3</label>
                                         <input
                                             type="text"
@@ -4332,131 +4164,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                     </div>
                                 </div>
 
-                                {/* Totals Section */}
-                                <div className="grid grid-cols-3 gap-6 bg-gray-50 p-4 rounded-[4px]">
-                                    <div>
-                                        <div className="flex justify-between items-center mb-4">
-                                            <h4 className="text-lg font-semibold text-gray-900">Items</h4>
-                                            <button
-                                                onClick={handleAddPOItem}
-                                                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-teal-600 hover:bg-teal-700"
-                                            >
-                                                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                                </svg>
-                                                Add Item
-                                            </button>
-                                        </div>
 
-                                        <div className="overflow-x-auto">
-                                            <table className="min-w-full divide-y divide-gray-200 border border-gray-200">
-                                                <thead className="bg-gray-50">
-                                                    <tr>
-                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Code</th>
-                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Name</th>
-                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Supplier Item Code</th>
-                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
-                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Negotiated Rate</th>
-                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Final Rate</th>
-                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Taxable Value</th>
-                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">GST</th>
-                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice Value</th>
-                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="bg-white divide-y divide-gray-200">
-                                                    {poItems.map((item, index) => (
-                                                        <tr key={item.id}>
-                                                            <td className="px-3 py-2">
-                                                                <input
-                                                                    type="text"
-                                                                    value={item.itemCode}
-                                                                    onChange={(e) => handlePOItemChange(item.id, 'itemCode', e.target.value)}
-                                                                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                                                />
-                                                            </td>
-                                                            <td className="px-3 py-2">
-                                                                <input
-                                                                    type="text"
-                                                                    value={item.itemName}
-                                                                    onChange={(e) => handlePOItemChange(item.id, 'itemName', e.target.value)}
-                                                                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                                                />
-                                                            </td>
-                                                            <td className="px-3 py-2">
-                                                                <input
-                                                                    type="text"
-                                                                    value={item.supplierItemCode}
-                                                                    onChange={(e) => handlePOItemChange(item.id, 'supplierItemCode', e.target.value)}
-                                                                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                                                />
-                                                            </td>
-                                                            <td className="px-3 py-2">
-                                                                <input
-                                                                    type="text"
-                                                                    value={item.quantity}
-                                                                    onChange={(e) => handlePOItemChange(item.id, 'quantity', e.target.value)}
-                                                                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                                                />
-                                                            </td>
-                                                            <td className="px-3 py-2">
-                                                                <input
-                                                                    type="text"
-                                                                    value={item.negotiatedRate}
-                                                                    onChange={(e) => handlePOItemChange(item.id, 'negotiatedRate', e.target.value)}
-                                                                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                                                />
-                                                            </td>
-                                                            <td className="px-3 py-2">
-                                                                <input
-                                                                    type="text"
-                                                                    value={item.finalRate}
-                                                                    onChange={(e) => handlePOItemChange(item.id, 'finalRate', e.target.value)}
-                                                                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                                                />
-                                                            </td>
-                                                            <td className="px-3 py-2">
-                                                                <input
-                                                                    type="text"
-                                                                    value={item.taxableValue}
-                                                                    onChange={(e) => handlePOItemChange(item.id, 'taxableValue', e.target.value)}
-                                                                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                                                />
-                                                            </td>
-                                                            <td className="px-3 py-2">
-                                                                <input
-                                                                    type="text"
-                                                                    value={item.gst}
-                                                                    onChange={(e) => handlePOItemChange(item.id, 'gst', e.target.value)}
-                                                                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                                                />
-                                                            </td>
-                                                            <td className="px-3 py-2">
-                                                                <input
-                                                                    type="text"
-                                                                    value={item.netValue}
-                                                                    onChange={(e) => handlePOItemChange(item.id, 'netValue', e.target.value)}
-                                                                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                                                />
-                                                            </td>
-                                                            <td className="px-3 py-2">
-                                                                <button
-                                                                    onClick={() => handleRemovePOItem(item.id)}
-                                                                    className="text-red-600 hover:text-red-900"
-                                                                    disabled={poItems.length === 1}
-                                                                >
-                                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                                    </svg>
-                                                                </button>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                </div>
 
                                 {/* Action Buttons */}
                                 <div className="flex justify-end space-x-4 pt-6 border-t">
@@ -4476,10 +4184,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                             </div>
                         </div>
                     </div>
-                )}
+                )
+            }
 
-                {/* View PO Details Modal */}
-                {showViewPOModal && selectedPO && (
+            {/* View PO Details Modal */}
+            {
+                showViewPOModal && selectedPO && (
                     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
                         <div className="relative top-10 mx-auto p-8 border w-11/12 max-w-5xl shadow-none border border-slate-200 rounded-[4px] bg-white mb-20">
                             <div className="flex justify-between items-center mb-6">
@@ -4518,194 +4228,195 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                     </div>
                                 </div>
 
-                                    {/* Additional Fields */}
-                                    <div className="grid grid-cols-2 gap-6">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Receive by</label>
-                                            <input
-                                                type="date"
-                                                value={createPOForm.receiveBy}
-                                                onChange={(e) => handleCreatePOFormChange('receiveBy', e.target.value)}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
-                                            />
-
-                                        </div>
-
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Receive at</label>
-                                            <select
-                                                value={createPOForm.receiveAt}
-                                                onChange={(e) => handleCreatePOFormChange('receiveAt', e.target.value)}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
-                                            >
-                                                <option value="">Select Location</option>
-                                                <option value="warehouse1">Warehouse 1</option>
-                                                <option value="warehouse2">Warehouse 2</option>
-                                                <option value="store1">Store 1</option>
-                                            </select>
-
-                                        </div>
-                                        <div className="col-span-2">
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-                                            {isEditingPO ? (
-                                                <textarea
-                                                    value={selectedPO.address}
-                                                    onChange={(e) => setSelectedPO({ ...selectedPO, address: e.target.value })}
-                                                    rows={3}
-                                                    className="w-full px-3 py-2 border border-blue-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                />
-                                            ) : (
-                                                <p className="text-gray-900">{selectedPO.address}</p>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Items Section - Placeholder */}
-                                <div>
-                                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Items</h4>
-                                    <div className="bg-gray-50 p-4 rounded-[4px]">
-                                        <p className="text-gray-600 text-center py-4">
-                                            Item details will be displayed here when connected to backend
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {/* Totals Section - Placeholder */}
-                                <div className="grid grid-cols-3 gap-6 bg-gray-50 p-4 rounded-[4px] border-t-2 border-gray-300">
+                                {/* Additional Fields */}
+                                <div className="grid grid-cols-2 gap-6">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Total Taxable Value</label>
-                                        <p className="text-lg font-semibold text-gray-900">₹ 0.00</p>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Total Tax</label>
-                                        <p className="text-lg font-semibold text-gray-900">₹ 0.00</p>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Total Value</label>
-                                        <p className="text-lg font-bold text-indigo-900">₹ 0.00</p>
-                                    </div>
-                                </div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">Receive by</label>
+                                        <input
+                                            type="date"
+                                            value={createPOForm.receiveBy}
+                                            onChange={(e) => handleCreatePOFormChange('receiveBy', e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                        />
 
-                                {/* Additional Information - Placeholder */}
-                                <div>
-                                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Additional Information</h4>
-                                    <div className="grid grid-cols-2 gap-6 bg-gray-50 p-4 rounded-[4px]">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Receive By</label>
-                                            {isEditingPO ? (
-                                                <input
-                                                    type="date"
-                                                    value={selectedPO.receiveBy || ''}
-                                                    onChange={(e) => setSelectedPO({ ...selectedPO, receiveBy: e.target.value })}
-                                                    className="w-full px-3 py-2 border border-blue-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                />
-                                            ) : (
-                                                <p className="text-gray-900">{selectedPO.receiveBy || '-'}</p>
-                                            )}
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Receive At</label>
-                                            {isEditingPO ? (
-                                                <input
-                                                    type="text"
-                                                    value={selectedPO.receiveAt || ''}
-                                                    onChange={(e) => setSelectedPO({ ...selectedPO, receiveAt: e.target.value })}
-                                                    className="w-full px-3 py-2 border border-blue-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                    placeholder="Enter location"
-                                                />
-                                            ) : (
-                                                <p className="text-gray-900">{selectedPO.receiveAt || '-'}</p>
-                                            )}
-                                        </div>
-                                        <div className="col-span-2">
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Terms</label>
-                                            {isEditingPO ? (
-                                                <textarea
-                                                    value={selectedPO.deliveryTerms || ''}
-                                                    onChange={(e) => setSelectedPO({ ...selectedPO, deliveryTerms: e.target.value })}
-                                                    rows={2}
-                                                    className="w-full px-3 py-2 border border-blue-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                    placeholder="Enter delivery terms"
-                                                />
-                                            ) : (
-                                                <p className="text-gray-900">{selectedPO.deliveryTerms || '-'}</p>
-                                            )}
-                                        </div>
                                     </div>
-                                </div>
 
-                                {/* Action Buttons */}
-                                <div className="flex justify-between pt-6 border-t">
-                                    <div className="flex space-x-4">
-                                        {/* Show Edit button only for Pending Approval status when not editing */}
-                                        {!isEditingPO && selectedPO.status === 'Pending Approval' && (
-                                            <button
-                                                onClick={handleEditPODetails}
-                                                className="px-6 py-2 border border-indigo-600 text-indigo-600 rounded-[4px] hover:bg-indigo-50/50"
-                                            >
-                                                Edit
-                                            </button>
-                                        )}
-                                        {/* Show Cancel and Save when editing */}
-                                        {isEditingPO && (
-                                            <>
-                                                <button
-                                                    onClick={handleCancelEditPO}
-                                                    className="px-6 py-2 border border-slate-200 rounded-[4px] text-gray-700 hover:bg-gray-50"
-                                                >
-                                                    Cancel
-                                                </button>
-                                                <button
-                                                    onClick={handleSavePODetails}
-                                                    className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] hover:bg-indigo-700"
-                                                >
-                                                    Save
-                                                </button>
-                                            </>
-                                        )}
-                                        {/* Show Cancel button only for Approved status when not editing */}
-                                        {!isEditingPO && selectedPO.status === 'Approved' && (
-                                            <button
-                                                onClick={handleCancelPOClick}
-                                                className="px-6 py-2 border border-red-500 text-red-600 rounded-[4px] hover:bg-red-50"
-                                            >
-                                                Cancel PO
-                                            </button>
-                                        )}
-                                    </div>
-                                    <div className="flex space-x-4">
-                                        <button
-                                            onClick={() => setShowViewPOModal(false)}
-                                            className="px-6 py-2 border border-slate-200 rounded-[4px] text-gray-700 hover:bg-gray-50"
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">Receive at</label>
+                                        <select
+                                            value={createPOForm.receiveAt}
+                                            onChange={(e) => handleCreatePOFormChange('receiveAt', e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                                         >
-                                            Close
-                                        </button>
-                                        {!isEditingPO && selectedPO.status === 'Pending Approval' && (
-                                            <button
-                                                onClick={handleApprovePO}
-                                                className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] hover:bg-indigo-700"
-                                            >
-                                                Approve PO
-                                            </button>
-                                        )}
-                                        {!isEditingPO && selectedPO.status === 'Approved' && (
-                                            <button
-                                                onClick={handleMailPO}
-                                                className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] hover:bg-indigo-700"
-                                            >
-                                                Mail PO
-                                            </button>
+                                            <option value="">Select Location</option>
+                                            <option value="warehouse1">Warehouse 1</option>
+                                            <option value="warehouse2">Warehouse 2</option>
+                                            <option value="store1">Store 1</option>
+                                        </select>
+
+                                    </div>
+                                    <div className="col-span-2">
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                                        {isEditingPO ? (
+                                            <textarea
+                                                value={selectedPO.address}
+                                                onChange={(e) => setSelectedPO({ ...selectedPO, address: e.target.value })}
+                                                rows={3}
+                                                className="w-full px-3 py-2 border border-blue-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                            />
+                                        ) : (
+                                            <p className="text-gray-900">{selectedPO.address}</p>
                                         )}
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Items Section - Placeholder */}
+                            <div>
+                                <h4 className="text-lg font-semibold text-gray-900 mb-4">Items</h4>
+                                <div className="bg-gray-50 p-4 rounded-[4px]">
+                                    <p className="text-gray-600 text-center py-4">
+                                        Item details will be displayed here when connected to backend
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Totals Section - Placeholder */}
+                            <div className="grid grid-cols-3 gap-6 bg-gray-50 p-4 rounded-[4px] border-t-2 border-gray-300">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Total Taxable Value</label>
+                                    <p className="text-lg font-semibold text-gray-900">₹ 0.00</p>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Total Tax</label>
+                                    <p className="text-lg font-semibold text-gray-900">₹ 0.00</p>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Total Value</label>
+                                    <p className="text-lg font-bold text-indigo-900">₹ 0.00</p>
+                                </div>
+                            </div>
+
+                            {/* Additional Information - Placeholder */}
+                            <div>
+                                <h4 className="text-lg font-semibold text-gray-900 mb-4">Additional Information</h4>
+                                <div className="grid grid-cols-2 gap-6 bg-gray-50 p-4 rounded-[4px]">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Receive By</label>
+                                        {isEditingPO ? (
+                                            <input
+                                                type="date"
+                                                value={selectedPO.receiveBy || ''}
+                                                onChange={(e) => setSelectedPO({ ...selectedPO, receiveBy: e.target.value })}
+                                                className="w-full px-3 py-2 border border-blue-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                            />
+                                        ) : (
+                                            <p className="text-gray-900">{selectedPO.receiveBy || '-'}</p>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Receive At</label>
+                                        {isEditingPO ? (
+                                            <input
+                                                type="text"
+                                                value={selectedPO.receiveAt || ''}
+                                                onChange={(e) => setSelectedPO({ ...selectedPO, receiveAt: e.target.value })}
+                                                className="w-full px-3 py-2 border border-blue-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                placeholder="Enter location"
+                                            />
+                                        ) : (
+                                            <p className="text-gray-900">{selectedPO.receiveAt || '-'}</p>
+                                        )}
+                                    </div>
+                                    <div className="col-span-2">
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Terms</label>
+                                        {isEditingPO ? (
+                                            <textarea
+                                                value={selectedPO.deliveryTerms || ''}
+                                                onChange={(e) => setSelectedPO({ ...selectedPO, deliveryTerms: e.target.value })}
+                                                rows={2}
+                                                className="w-full px-3 py-2 border border-blue-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                placeholder="Enter delivery terms"
+                                            />
+                                        ) : (
+                                            <p className="text-gray-900">{selectedPO.deliveryTerms || '-'}</p>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex justify-between pt-6 border-t">
+                                <div className="flex space-x-4">
+                                    {/* Show Edit button only for Pending Approval status when not editing */}
+                                    {!isEditingPO && selectedPO.status === 'Pending Approval' && (
+                                        <button
+                                            onClick={handleEditPODetails}
+                                            className="px-6 py-2 border border-indigo-600 text-indigo-600 rounded-[4px] hover:bg-indigo-50/50"
+                                        >
+                                            Edit
+                                        </button>
+                                    )}
+                                    {/* Show Cancel and Save when editing */}
+                                    {isEditingPO && (
+                                        <>
+                                            <button
+                                                onClick={handleCancelEditPO}
+                                                className="px-6 py-2 border border-slate-200 rounded-[4px] text-gray-700 hover:bg-gray-50"
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                onClick={handleSavePODetails}
+                                                className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] hover:bg-indigo-700"
+                                            >
+                                                Save
+                                            </button>
+                                        </>
+                                    )}
+                                    {/* Show Cancel button only for Approved status when not editing */}
+                                    {!isEditingPO && selectedPO.status === 'Approved' && (
+                                        <button
+                                            onClick={handleCancelPOClick}
+                                            className="px-6 py-2 border border-red-500 text-red-600 rounded-[4px] hover:bg-red-50"
+                                        >
+                                            Cancel PO
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="flex space-x-4">
+                                    <button
+                                        onClick={() => setShowViewPOModal(false)}
+                                        className="px-6 py-2 border border-slate-200 rounded-[4px] text-gray-700 hover:bg-gray-50"
+                                    >
+                                        Close
+                                    </button>
+                                    {!isEditingPO && selectedPO.status === 'Pending Approval' && (
+                                        <button
+                                            onClick={handleApprovePO}
+                                            className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] hover:bg-indigo-700"
+                                        >
+                                            Approve PO
+                                        </button>
+                                    )}
+                                    {!isEditingPO && selectedPO.status === 'Approved' && (
+                                        <button
+                                            onClick={handleMailPO}
+                                            className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] hover:bg-indigo-700"
+                                        >
+                                            Mail PO
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     </div>
-                )}
+                )
+            }
 
-                {/* Cancel PO Reason Modal */}
-                {showCancelPOModal && selectedPO && (
+            {/* Cancel PO Reason Modal */}
+            {
+                showCancelPOModal && selectedPO && (
                     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
                         <div className="relative top-20 mx-auto p-8 border w-full max-w-md shadow-none border border-slate-200 rounded-[4px] bg-white">
                             <div className="mb-6">
@@ -4747,11 +4458,13 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                             </div>
                         </div>
                     </div>
-                )}
+                )
+            }
 
 
-                {/* Post Payment Modal */}
-                {showPostPaymentModal && selectedBillForPayment && (
+            {/* Post Payment Modal */}
+            {
+                showPostPaymentModal && selectedBillForPayment && (
                     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
                         <div className="relative top-20 mx-auto p-8 border w-full max-w-md shadow-none border border-slate-200 rounded-[4px] bg-white">
                             <div className="mb-6">
@@ -4842,10 +4555,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                             </div>
                         </div>
                     </div>
-                )}
+                )
+            }
 
-                {/* Toast Notification */}
-                {toast.show && (
+            {/* Toast Notification */}
+            {
+                toast.show && (
                     <div className="fixed top-4 right-4 z-[9999] animate-slide-in-right">
                         <div className={`flex items-start gap-3 px-6 py-4 rounded-[4px] shadow-none border border-slate-200 border-l-4 min-w-[320px] max-w-md backdrop-blur-sm ${toast.type === 'success' ? 'bg-slate-50/50 border-indigo-500 text-slate-700' :
                             toast.type === 'error' ? 'bg-red-50 border-red-500 text-red-800' :
@@ -4894,12 +4609,11 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                             </button>
                         </div>
                     </div>
-                )}
-            </div>
-        </div>
+                )
+            }
+        </div >
     );
 };
-
 export default VendorPortalPage;
 
 

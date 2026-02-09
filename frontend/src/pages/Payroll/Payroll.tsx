@@ -81,36 +81,34 @@ const PayrollPage: React.FC = () => {
     };
 
     return (
-        <div className="flex-1 min-h-screen">
+        <div>
             {/* Header */}
-            <div className="px-8 py-6">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-3xl font-bold text-gray-900">Payroll Management</h1>
-                        <p className="text-sm text-gray-600 mt-1">Manage employees, process pay runs, and handle statutory compliance.</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={() => setShowProcessPayRunModal(true)}
-                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] text-sm font-medium flex items-center gap-2 transition-colors"
-                        >
-                            <Icon name="plus" className="w-4 h-4" />
-                            Process Pay Run
-                        </button>
-                    </div>
+            <div className="flex items-center justify-between mb-6">
+                <div>
+                    <h2 className="text-2xl font-bold text-gray-800">Payroll Management</h2>
+                    <p className="text-sm text-gray-600 mt-1">Manage employees, process pay runs, and handle statutory compliance.</p>
+                </div>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => setShowProcessPayRunModal(true)}
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] text-sm font-medium flex items-center gap-2 transition-colors shadow-none border border-slate-200-none border border-slate-200"
+                    >
+                        <Icon name="plus" className="w-4 h-4" />
+                        Process Pay Run
+                    </button>
                 </div>
             </div>
 
             {/* Tab Navigation */}
-            <div className="px-8">
-                <div className="flex gap-8 border-b border-gray-200 pb-1">
+            <div className="mb-6">
+                <div className="flex space-x-8 border-b border-gray-200">
                     {tabs.map((tab) => (
                         <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
-                            className={`py-2 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === tab
+                            className={`whitespace-nowrap py-2 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === tab
                                 ? 'border-indigo-600 text-indigo-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-700'
+                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                 }`}
                         >
                             {tab}
@@ -120,7 +118,7 @@ const PayrollPage: React.FC = () => {
             </div>
 
             {/* Main Content */}
-            <div className="px-8 py-6">
+            <div>
                 {activeTab === 'EMPLOYEES' && <EmployeesContent employees={employees} onRefresh={fetchData} />}
                 {activeTab === 'PAY RUNS' && <PayRunsContent payRuns={payRuns} onRefresh={fetchData} />}
                 {activeTab === 'SALARY TEMPLATES' && <SalaryTemplatesContent />}
