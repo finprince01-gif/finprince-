@@ -7,6 +7,7 @@ from .database import (
     CustomerMaster,
     CustomerMasterCategory,
     CustomerMastersSalesQuotation,
+    CustomerMastersSalesOrder,
     CustomerMasterCustomer,
     CustomerTransaction,
     CustomerSalesQuotation,
@@ -57,6 +58,19 @@ class CustomerMastersSalesQuotationSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = CustomerMastersSalesQuotation
+        fields = [
+            'id', 'tenant_id', 'series_name', 'customer_category',
+            'prefix', 'suffix', 'required_digits', 'current_number', 'auto_year',
+            'is_active', 'is_deleted', 'created_at', 'updated_at', 'created_by'
+        ]
+        read_only_fields = ['id', 'tenant_id', 'created_by', 'created_at', 'updated_at']
+
+
+class CustomerMastersSalesOrderSerializer(serializers.ModelSerializer):
+    """Serializer for Customer Masters Sales Order Series"""
+    
+    class Meta:
+        model = CustomerMastersSalesOrder
         fields = [
             'id', 'tenant_id', 'series_name', 'customer_category',
             'prefix', 'suffix', 'required_digits', 'current_number', 'auto_year',

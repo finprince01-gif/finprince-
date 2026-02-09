@@ -8,6 +8,7 @@ from .api import (
     CustomerMasterViewSet,
     CustomerCategoryViewSet,
     CustomerMastersSalesQuotationViewSet,
+    CustomerMastersSalesOrderViewSet,
     CustomerMasterCustomerViewSet,
     CustomerTransactionViewSet,
     CustomerSalesQuotationViewSet,
@@ -23,6 +24,7 @@ router = DefaultRouter()
 router.register(r'customers', CustomerMasterViewSet, basename='customer')
 router.register(r'categories', CustomerCategoryViewSet, basename='customer-category')
 router.register(r'sales-quotation-series', CustomerMastersSalesQuotationViewSet, basename='sales-quotation-series')
+router.register(r'sales-order-series', CustomerMastersSalesOrderViewSet, basename='sales-order-series')
 router.register(r'customer-master', CustomerMasterCustomerViewSet, basename='customer-master')
 router.register(r'transactions', CustomerTransactionViewSet, basename='customer-transaction')
 router.register(r'quotations', CustomerSalesQuotationViewSet, basename='sales-quotation')
