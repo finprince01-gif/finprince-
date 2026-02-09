@@ -1,46 +1,147 @@
 import React from 'react';
 
-type IconName = 'dashboard' | 'masters' | 'inventory' | 'vouchers' | 'reports' | 'plus' | 'trash' | 'upload' | 'close' | 'warning' | 'settings' | 'logout' | 'sparkles' | 'arrow-up-right' | 'arrow-down-left' | 'users' | 'wallet' | 'download' | 'check-circle' | 'x-circle' | 'spinner' | 'wand-sparkles' | 'bot';
+type IconName = 'dashboard' | 'masters' | 'inventory' | 'vouchers' | 'reports' | 'plus' | 'trash' | 'upload' | 'close' | 'warning' | 'settings' | 'logout' | 'sparkles' | 'arrow-up-right' | 'arrow-down-left' | 'users' | 'wallet' | 'download' | 'check-circle' | 'x-circle' | 'spinner' | 'wand-sparkles' | 'bot' | 'vendor-portal' | 'customer-portal' | 'payroll' | 'service' | 'gst' | 'ledger' | 'search' | 'clock' | 'inbox' | 'x' | 'exclamation-triangle';
 
 interface IconProps {
   name: IconName;
   className?: string;
 }
 
-// FIX: Changed JSX.Element to React.ReactElement to resolve "Cannot find namespace 'JSX'" error.
-const ICONS: Record<IconName, React.ReactElement> = {
-  dashboard: <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v16.5h16.5M3.75 3h16.5M3.75 3v16.5m16.5-16.5v16.5m-16.5-16.5h16.5m-16.5 0h.008v.008H3.75V3zm0 16.5h.008v.008H3.75v-.008zm16.5 0h.008v.008h-.008v-.008zm0-16.5h.008v.008h-.008V3z" />,
-  masters: <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />,
-  inventory: <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4" />,
-  vouchers: <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 3.75V16.5L12 14.25 7.5 16.5V3.75m9 0H12m4.5 0H21m-1.5 0H12m0 0H7.5m0 0H3m4.5 0V12m6.5.75l-4.5-4.5" />,
-  reports: <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z" />,
-  plus: <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />,
-  trash: <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.134-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.067-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />,
-  upload: <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />,
-  close: <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />,
-  warning: <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />,
-  settings: <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-1.008 1.11-1.226.55-.218 1.19-.243 1.76.012a2.25 2.25 0 011.08 1.838l.003.045.01.21.004.05.003.042a2.25 2.25 0 01-1.63 2.59.38.38 0 00-.32 0 2.25 2.25 0 01-2.59-1.63l-.042-.003-.05-.004-.21-.01-.045-.003a2.25 2.25 0 01-1.838-1.08c-.255-.57-.23-1.21.012-1.76.218-.55.684-1.017 1.226-1.11.09-.036.18-.06.27-.082zm.315 11.235a2.25 2.25 0 01-1.08-1.838l-.003-.045-.01-.21-.004-.05-.003-.042a2.25 2.25 0 011.63-2.59.38.38 0 00.32 0 2.25 2.25 0 012.59 1.63l.042.003.05.004.21.01.045.003a2.25 2.25 0 011.838 1.08.75.75 0 001.213-.715 3.75 3.75 0 00-3.063-3.063.38.38 0 00-.32 0 3.75 3.75 0 00-3.063 3.063.75.75 0 00.715 1.213 2.25 2.25 0 011.08 1.838l.003.045.01.21.004.05.003.042a2.25 2.25 0 01-1.63 2.59.38.38 0 00-.32 0 2.25 2.25 0 01-2.59-1.63l-.042-.003-.05-.004-.21-.01-.045-.003a2.25 2.25 0 01-1.838-1.08.75.75 0 00-1.213.715 3.75 3.75 0 003.063 3.063.38.38 0 00.32 0 3.75 3.75 0 003.063-3.063.75.75 0 00-.715-1.213z" />,
-  logout: <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />,
-  sparkles: <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.898 20.572L16.5 21.75l-.398-1.178a3.375 3.375 0 00-2.923-2.923L12 17.25l1.178-.398a3.375 3.375 0 002.923-2.923L16.5 12.75l.398 1.178a3.375 3.375 0 002.923 2.923L21 17.25l-1.178.398a3.375 3.375 0 00-2.923 2.923z" />,
-  'arrow-up-right': <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />,
-  'arrow-down-left': <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 4.5l-15 15m0 0h11.25m-11.25 0V8.25" />,
-  users: <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-4.67c.625.93.998 2.043.998 3.228z" />,
-  wallet: <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9m18 0V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v3" />,
-  download: <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />,
-  'check-circle': <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />,
-  'x-circle': <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />,
-  'spinner': <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001a.75.75 0 01.487.879l-1.026 3.076a.75.75 0 01-.879.487l-3.076-1.026a.75.75 0 01-.487-.879zM19.023 9.348a8.966 8.966 0 00-4.663-4.663m-4.663 0a8.966 8.966 0 00-4.663 4.663m0 0a8.966 8.966 0 004.663 4.663m4.663 0a8.966 8.966 0 004.663-4.663" />,
-  'wand-sparkles': <path strokeLinecap="round" strokeLinejoin="round" d="M9.53 16.122a3 3 0 00-3.022 3.022c.133.57.465.998.924 1.332a3 3 0 004.142-1.332 3 3 0 00-1.332-4.142 3 3 0 00-1.71-.522zm-3.022 3.022a3 3 0 003.022-3.022m-3.022 3.022a3 3 0 01-3.022-3.022m3.022 3.022l-.522 1.71m3.022-3.022l1.71.522m0 0l1.71-.522m-1.71.522a3 3 0 01-3.022 3.022m3.022-3.022a3 3 0 013.022 3.022m0 0l.522-1.71m-3.022 3.022l-.522-1.71m-1.71.522l-1.71-.522m0 0l-1.71.522M6.47 10.97a3 3 0 010 4.242 3 3 0 01-4.242 0 3 3 0 010-4.242 3 3 0 014.242 0z" />,
-  bot: <path strokeLinecap="round" strokeLinejoin="round" d="M12 2a2 2 0 0 1 2 2v2h2a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2V4a2 2 0 0 1 2-2zm0 0v4M9 12h.01M15 12h.01M10 16h4" />,
-};
+const Icon: React.FC<IconProps> = ({ name, className = 'w-5 h-5' }) => {
+  const icons: Record<IconName, React.ReactElement> = {
+    // SIDEBAR ICONS - Enhanced Professional Detail Style
+    dashboard: (
+      <>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 7H3M17 10V3M21 17h-7M7 14v7" opacity={0.5} />
+      </>
+    ),
 
-const Icon: React.FC<IconProps> = ({ name, className = 'w-6 h-6' }) => {
+    ledger: (
+      <>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 8h2m-2 4h2" opacity={0.5} />
+      </>
+    ),
+
+    masters: (
+      <>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 7V4a1 1 0 011-1h14a1 1 0 011 1v3M4 7l2 14h12l2-14M4 7h16" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h4" opacity={0.5} />
+      </>
+    ),
+
+    inventory: (
+      <>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4v10l8 4 8-4V7z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 21v-10M12 11l8-4M12 11l-8-4" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 4.5l-4 2-4-2" opacity={0.5} />
+      </>
+    ),
+
+    vouchers: (
+      <>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14 3v4a1 1 0 001 1h4" />
+      </>
+    ),
+
+    'vendor-portal': (
+      <>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 21h18M3 10h18M5 10V7a2 2 0 012-2h10a2 2 0 012 2v3m-14 0v11m14-11v11M9 21v-4a2 2 0 012-2h2a2 2 0 012 2v4" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 13h2m6 0h2" opacity={0.5} />
+      </>
+    ),
+
+    'customer-portal': (
+      <>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" />
+        <circle cx="9" cy="7" r="4" strokeWidth={1.5} />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 8l2 2-2 2" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 10h-6" opacity={0.5} />
+      </>
+    ),
+
+    payroll: (
+      <>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m0 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H7a2 2 0 00-2 2v6a2 2 0 002 2zm3-5a2 2 0 11-4 0 2 2 0 014 0z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 12h.01m2.99 0h.01" opacity={0.5} />
+      </>
+    ),
+
+    service: (
+      <>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.77 3.77z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 12l-3 3" opacity={0.5} />
+      </>
+    ),
+
+    gst: (
+      <>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 7h6m-6 4h6m-6 4h6M4 4h16a1 1 0 011 1v14a1 1 0 01-1 1H4a1 1 0 01-1-1V5a1 1 0 011-1z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 5v14M9 5v14" opacity={0.3} />
+      </>
+    ),
+
+    reports: (
+      <>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21H3V3" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16V10M11 16V7M15 16V12M19 16V5" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3l18 18" opacity={0.1} />
+      </>
+    ),
+
+    users: (
+      <>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+        <circle cx="9" cy="7" r="4" strokeWidth={1.5} />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75" />
+      </>
+    ),
+
+    settings: (
+      <>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+        <circle cx="12" cy="12" r="3" strokeWidth={1.5} />
+      </>
+    ),
+
+    logout: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />,
+
+    // Utility icons
+    plus: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.5v15m7.5-7.5h-15" />,
+    trash: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />,
+    upload: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />,
+    download: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />,
+    close: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />,
+    x: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />,
+    warning: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />,
+    'exclamation-triangle': <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />,
+    sparkles: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3l.663 1.327L7 5l-1.337.673L5 7l-.663-1.327L3 5l1.337-.673L5 3zM12 7l1 2 2 1-2 1-1 2-1-2-2-1 2-1 1-2zM19 13l1.327 2.653L23 17l-2.673 1.347L19 21l-1.327-2.653L15 17l2.673-1.347L19 13z" />,
+    'wand-sparkles': <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 4l-2 2h3v12l-3 2h2l3-2V6h3l-2-2m-11 5l3 3m0 0l3-3m-3 3V3m-4 15l1 2 2 1-2 1-1 2-1-2-2-1 2-1 1-2z" />,
+    'arrow-up-right': <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 17L17 7m0 0H8m9 0v9" />,
+    'arrow-down-left': <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 7L7 17m0 0h9m-9 0V8" />,
+    wallet: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />,
+    'check-circle': <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />,
+    'x-circle': <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />,
+    spinner: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />,
+    bot: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />,
+    search: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />,
+    clock: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />,
+    inbox: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0a2 2 0 01-2 2H6a2 2 0 01-2-2m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />,
+  };
+
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-      {ICONS[name]}
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      className={className}
+    >
+      {icons[name]}
     </svg>
   );
 };
 
 export default Icon;
-

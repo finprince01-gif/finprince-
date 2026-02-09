@@ -564,7 +564,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                             className={`
                                 pb-3 text-sm font-medium transition-colors duration-200 relative
                                 ${activeTab === tab.id
-                                    ? 'text-teal-600 border-b-2 border-teal-600'
+                                    ? 'text-indigo-600 border-b-2 border-indigo-600'
                                     : 'text-gray-600 hover:text-gray-800'
                                 }
                             `}
@@ -589,7 +589,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                     type="date"
                                     value={date}
                                     onChange={(e) => setDate(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                     required
                                 />
                             </div>
@@ -602,7 +602,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                     type="text"
                                     value={salesInvoiceNo}
                                     onChange={(e) => setSalesInvoiceNo(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                     placeholder="Enter invoice number"
                                     required
                                 />
@@ -616,7 +616,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                     type="text"
                                     value={voucherName}
                                     onChange={(e) => setVoucherName(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                     placeholder="Enter voucher name"
                                 />
                             </div>
@@ -629,7 +629,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                     type="text"
                                     value={customerName}
                                     onChange={(e) => setCustomerName(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                     placeholder="Search or enter customer name"
                                     required
                                 />
@@ -643,7 +643,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                     type="text"
                                     value={gstin}
                                     onChange={(e) => setGstin(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                     placeholder="Enter GSTIN"
                                 />
                             </div>
@@ -663,7 +663,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                     <button
                                         type="button"
                                         onClick={() => document.getElementById('supporting-doc')?.click()}
-                                        className="w-full h-[42px] bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+                                        className="w-full h-[42px] bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors flex items-center justify-center gap-2"
                                     >
                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
@@ -671,7 +671,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         <span className="text-sm">Upload Document</span>
                                     </button>
                                     {supportingDocument && (
-                                        <p className="absolute -bottom-6 left-0 text-xs text-teal-600">✓ {supportingDocument.name}</p>
+                                        <p className="absolute -bottom-6 left-0 text-xs text-indigo-600">✓ {supportingDocument.name}</p>
                                     )}
                                 </div>
                             </div>
@@ -683,7 +683,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                 <button
                                     type="button"
                                     onClick={() => setIsIssueSlipModalOpen(true)}
-                                    className="w-full px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-md transition-colors font-medium"
+                                    className="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors font-medium"
                                 >
                                     Create Outward Slip
                                 </button>
@@ -697,7 +697,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                     type="text"
                                     value={outwardSlipNo}
                                     onChange={(e) => setOutwardSlipNo(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                     placeholder="Enter slip no"
                                 />
                             </div>
@@ -713,7 +713,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         type="text"
                                         value={billToAddress1}
                                         onChange={(e) => setBillToAddress1(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                         placeholder="Address Line 1"
                                     />
                                 </div>
@@ -722,7 +722,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         type="text"
                                         value={billToAddress2}
                                         onChange={(e) => setBillToAddress2(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                         placeholder="Address Line 2"
                                     />
                                 </div>
@@ -731,14 +731,14 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         type="text"
                                         value={billToCity}
                                         onChange={(e) => setBillToCity(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                         placeholder="City"
                                     />
                                     <input
                                         type="text"
                                         value={billToPincode}
                                         onChange={(e) => setBillToPincode(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                         placeholder="Pincode"
                                     />
                                 </div>
@@ -747,14 +747,14 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         type="text"
                                         value={billToState}
                                         onChange={(e) => setBillToState(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                         placeholder="State"
                                     />
                                     <input
                                         type="text"
                                         value={billToCountry}
                                         onChange={(e) => setBillToCountry(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                         placeholder="Country"
                                     />
                                 </div>
@@ -765,7 +765,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         type="text"
                                         value={contact}
                                         onChange={(e) => setContact(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                         placeholder="Enter contact number"
                                     />
                                 </div>
@@ -779,7 +779,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         type="text"
                                         value={shipToAddress1}
                                         onChange={(e) => setShipToAddress1(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                         placeholder="Address Line 1"
                                     />
                                 </div>
@@ -788,7 +788,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         type="text"
                                         value={shipToAddress2}
                                         onChange={(e) => setShipToAddress2(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                         placeholder="Address Line 2"
                                     />
                                 </div>
@@ -797,14 +797,14 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         type="text"
                                         value={shipToCity}
                                         onChange={(e) => setShipToCity(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                         placeholder="City"
                                     />
                                     <input
                                         type="text"
                                         value={shipToPincode}
                                         onChange={(e) => setShipToPincode(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                         placeholder="Pincode"
                                     />
                                 </div>
@@ -813,14 +813,14 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         type="text"
                                         value={shipToState}
                                         onChange={(e) => setShipToState(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                         placeholder="State"
                                     />
                                     <input
                                         type="text"
                                         value={shipToCountry}
                                         onChange={(e) => setShipToCountry(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                         placeholder="Country"
                                     />
                                 </div>
@@ -840,7 +840,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                     <select
                                         value={placeOfSupply}
                                         onChange={(e) => setPlaceOfSupply(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                         required
                                     >
                                         <option value="">Select State</option>
@@ -860,7 +860,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                     <select
                                         value={invoiceType}
                                         onChange={(e) => setInvoiceType(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                     >
                                         {GST_INVOICE_TYPES.map(type => (
                                             <option key={type.value} value={type.value}>
@@ -880,7 +880,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         value={ecommerceGstin}
                                         onChange={(e) => setEcommerceGstin(e.target.value.toUpperCase())}
                                         maxLength={15}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                         placeholder="15-digit GSTIN"
                                     />
                                 </div>
@@ -900,7 +900,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                 value="N"
                                                 checked={reverseCharge === 'N'}
                                                 onChange={(e) => setReverseCharge(e.target.value)}
-                                                className="w-4 h-4 text-teal-600 border-gray-300 focus:ring-teal-500"
+                                                className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
                                             />
                                             <span className="text-sm text-gray-700">No</span>
                                         </label>
@@ -911,7 +911,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                 value="Y"
                                                 checked={reverseCharge === 'Y'}
                                                 onChange={(e) => setReverseCharge(e.target.value)}
-                                                className="w-4 h-4 text-teal-600 border-gray-300 focus:ring-teal-500"
+                                                className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
                                             />
                                             <span className="text-sm text-gray-700">Yes</span>
                                         </label>
@@ -927,7 +927,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         <select
                                             value={gstExportType}
                                             onChange={(e) => setGstExportType(e.target.value)}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                         >
                                             {EXPORT_TYPES.map(type => (
                                                 <option key={type.value} value={type.value}>
@@ -949,7 +949,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                             value={portCode}
                                             onChange={(e) => setPortCode(e.target.value.toUpperCase())}
                                             maxLength={6}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                             placeholder="e.g., INBLR1"
                                         />
                                     </div>
@@ -967,7 +967,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                             type="text"
                                             value={shippingBillNumber}
                                             onChange={(e) => setShippingBillNumber(e.target.value)}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                             placeholder="Enter shipping bill number"
                                         />
                                     </div>
@@ -979,7 +979,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                             type="date"
                                             value={shippingBillDate}
                                             onChange={(e) => setShippingBillDate(e.target.value)}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                         />
                                     </div>
                                 </div>
@@ -996,7 +996,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                     <button
                                         type="button"
                                         onClick={() => setStateType('within')}
-                                        className={`w-full px-4 py-2 border rounded-md transition-colors ${stateType === 'within'
+                                        className={`w-full px-4 py-2 border rounded-[4px] transition-colors ${stateType === 'within'
                                             ? 'bg-white border-gray-400 text-gray-800 font-medium'
                                             : 'bg-white border-gray-300 text-gray-600 hover:border-gray-400'
                                             }`}
@@ -1009,7 +1009,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                     <button
                                         type="button"
                                         onClick={() => setStateType('other')}
-                                        className={`w-full px-4 py-2 border rounded-md transition-colors ${stateType === 'other'
+                                        className={`w-full px-4 py-2 border rounded-[4px] transition-colors ${stateType === 'other'
                                             ? 'bg-white border-gray-400 text-gray-800 font-medium'
                                             : 'bg-white border-gray-300 text-gray-600 hover:border-gray-400'
                                             }`}
@@ -1022,7 +1022,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                     <button
                                         type="button"
                                         onClick={() => setStateType('export')}
-                                        className={`w-full px-4 py-2 border rounded-md transition-colors ${stateType === 'export'
+                                        className={`w-full px-4 py-2 border rounded-[4px] transition-colors ${stateType === 'export'
                                             ? 'bg-yellow-100 border-yellow-400 text-gray-800 font-medium'
                                             : 'bg-white border-gray-300 text-gray-600 hover:border-gray-400'
                                             }`}
@@ -1035,7 +1035,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                     <button
                                         type="button"
                                         onClick={() => setActiveTab(stateType === 'export' ? 'item_tax_foreign' : 'item_tax')}
-                                        className="w-full px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-md transition-colors flex items-center justify-center gap-2 font-medium"
+                                        className="w-full px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors flex items-center justify-center gap-2 font-medium"
                                     >
                                         NEXT
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1055,7 +1055,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                             value="EXWP"
                                             checked={exportType === 'EXWP'}
                                             onChange={(e) => setExportType(e.target.value)}
-                                            className="w-4 h-4 text-teal-600 border-gray-300 focus:ring-teal-500"
+                                            className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
                                         />
                                         <span className="text-sm font-medium text-gray-700">EXWP (With Payment)</span>
                                     </label>
@@ -1066,7 +1066,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                             value="EXWOP"
                                             checked={exportType === 'EXWOP'}
                                             onChange={(e) => setExportType(e.target.value)}
-                                            className="w-4 h-4 text-teal-600 border-gray-300 focus:ring-teal-500"
+                                            className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
                                         />
                                         <span className="text-sm font-medium text-gray-700">EXWOP (Without Payment)</span>
                                     </label>
@@ -1091,7 +1091,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         <select
                                             value={salesOrderNo}
                                             onChange={(e) => setSalesOrderNo(e.target.value)}
-                                            className="px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 min-w-[200px]"
+                                            className="px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 min-w-[200px]"
                                         >
                                             <option value="">Select Sales Order</option>
                                             <option value="SO-001">SO-001</option>
@@ -1102,13 +1102,13 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                 </div>
                             </div>
 
-                            <div className="flex items-center gap-2 bg-white px-4 py-2 border border-blue-200 rounded-lg shadow-sm">
+                            <div className="flex items-center gap-2 bg-white px-4 py-2 border border-blue-200 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200">
                                 <span className="text-sm font-medium text-gray-700">1 Foreign Currency =</span>
                                 <input
                                     type="text"
                                     value={exchangeRate}
                                     onChange={(e) => setExchangeRate(e.target.value)}
-                                    className="w-24 border-b-2 border-gray-300 focus:border-teal-500 focus:outline-none px-2 py-1 text-center font-medium text-teal-600"
+                                    className="w-24 border-b-2 border-gray-300 focus:border-indigo-500 focus:outline-none px-2 py-1 text-center font-medium text-indigo-600"
                                     placeholder="Rate"
                                 />
                                 <span className="text-sm font-medium text-gray-700">INR</span>
@@ -1116,9 +1116,9 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                         </div>
 
                         {/* Foreign Currency Table */}
-                        <div className="overflow-x-auto border border-gray-200 rounded-lg shadow-sm">
+                        <div className="overflow-x-auto border border-gray-200 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200">
                             <table className="w-full">
-                                <thead className="bg-teal-500 text-white">
+                                <thead className="bg-indigo-50/500 text-white">
                                     <tr>
                                         <th className="px-3 py-3 text-center w-12 border-r border-blue-400">
 
@@ -1136,7 +1136,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                             <td className="px-3 py-2 text-center border-r border-gray-200">
                                                 <input
                                                     type="checkbox"
-                                                    className="w-4 h-4 text-teal-600 rounded focus:ring-teal-500"
+                                                    className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                                                 />
                                             </td>
                                             <td className="px-3 py-2 border-r border-gray-200">
@@ -1144,7 +1144,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="text"
                                                     value={row.description}
                                                     onChange={(e) => handleItemRowChange(row.id, 'description', e.target.value)}
-                                                    className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-teal-500 rounded text-sm bg-transparent"
+                                                    className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm bg-transparent"
                                                     placeholder="Item description"
                                                 />
                                             </td>
@@ -1153,7 +1153,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="text"
                                                     value={row.qty}
                                                     onChange={(e) => handleItemRowChange(row.id, 'qty', e.target.value)}
-                                                    className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-teal-500 rounded text-sm text-center bg-transparent"
+                                                    className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent"
                                                     placeholder="0"
                                                 />
                                             </td>
@@ -1162,7 +1162,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="text"
                                                     value={row.uom}
                                                     onChange={(e) => handleItemRowChange(row.id, 'uom', e.target.value)}
-                                                    className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-teal-500 rounded text-sm text-center bg-transparent"
+                                                    className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent"
                                                     placeholder="UQC"
                                                 />
                                             </td>
@@ -1171,7 +1171,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="number"
                                                     value={row.itemRate}
                                                     onChange={(e) => handleItemRowChange(row.id, 'itemRate', e.target.value)}
-                                                    className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-teal-500 rounded text-sm text-center bg-transparent"
+                                                    className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent"
                                                     placeholder="0.00"
                                                 />
                                             </td>
@@ -1195,7 +1195,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                             <button
                                 type="button"
                                 onClick={handleAddItemRow}
-                                className="px-4 py-2 text-teal-600 hover:text-teal-800 font-medium flex items-center gap-2 transition-colors"
+                                className="px-4 py-2 text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-2 transition-colors"
                             >
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -1207,7 +1207,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                 <button
                                     type="button"
                                     onClick={handleDeleteSelectedItems}
-                                    className="px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-md transition-colors font-medium flex items-center gap-2"
+                                    className="px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-[4px] transition-colors font-medium flex items-center gap-2"
                                 >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -1218,7 +1218,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                 <button
                                     type="button"
                                     onClick={() => setActiveTab('item_tax_inr')}
-                                    className="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-md transition-colors flex items-center gap-2 font-medium shadow-sm"
+                                    className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors flex items-center gap-2 font-medium shadow-none border border-slate-200-none border border-slate-200"
                                 >
                                     NEXT
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1240,7 +1240,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                             <select
                                 value={salesOrderNo}
                                 onChange={(e) => setSalesOrderNo(e.target.value)}
-                                className="px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                className="px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                             >
                                 <option value="">Select Sales Order</option>
                                 <option value="SO-001">SO-001</option>
@@ -1250,9 +1250,9 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                         </div>
 
                         {/* Items Table */}
-                        <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                        <div className="overflow-x-auto border border-gray-200 rounded-[4px]">
                             <table className="w-full">
-                                <thead className="bg-teal-500 text-white">
+                                <thead className="bg-indigo-50/500 text-white">
                                     <tr>
                                         <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">S. No.</th>
                                         <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">Item Code</th>
@@ -1276,7 +1276,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                 <td className="px-2 py-2 text-center text-sm border-r border-gray-200">
                                                     <input
                                                         type="checkbox"
-                                                        className="w-4 h-4 text-teal-600 rounded focus:ring-teal-500"
+                                                        className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                                                     />
                                                     <span className="ml-2">{index + 1}</span>
                                                 </td>
@@ -1285,7 +1285,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                         type="text"
                                                         value={row.itemCode}
                                                         onChange={(e) => handleItemRowChange(row.id, 'itemCode', e.target.value)}
-                                                        className="w-full px-2 py-1 border-0 focus:ring-1 focus:ring-teal-500 rounded text-sm"
+                                                        className="w-full px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm"
                                                         placeholder="Item code"
                                                     />
                                                 </td>
@@ -1294,7 +1294,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                         type="text"
                                                         value={row.itemName}
                                                         onChange={(e) => handleItemRowChange(row.id, 'itemName', e.target.value)}
-                                                        className="w-full px-2 py-1 border-0 focus:ring-1 focus:ring-teal-500 rounded text-sm"
+                                                        className="w-full px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm"
                                                         placeholder="Item name"
                                                     />
                                                 </td>
@@ -1303,7 +1303,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                         type="text"
                                                         value={row.hsnSac}
                                                         onChange={(e) => handleItemRowChange(row.id, 'hsnSac', e.target.value)}
-                                                        className="w-full px-2 py-1 border-0 focus:ring-1 focus:ring-teal-500 rounded text-sm"
+                                                        className="w-full px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm"
                                                         placeholder="HSN/SAC"
                                                     />
                                                 </td>
@@ -1312,7 +1312,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                         type="number"
                                                         value={row.qty}
                                                         onChange={(e) => handleItemRowChange(row.id, 'qty', e.target.value)}
-                                                        className="w-20 px-2 py-1 border-0 focus:ring-1 focus:ring-teal-500 rounded text-sm"
+                                                        className="w-20 px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm"
                                                         placeholder="Qty"
                                                     />
                                                 </td>
@@ -1321,7 +1321,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                         type="text"
                                                         value={row.uom}
                                                         onChange={(e) => handleItemRowChange(row.id, 'uom', e.target.value)}
-                                                        className="w-20 px-2 py-1 border-0 focus:ring-1 focus:ring-teal-500 rounded text-sm"
+                                                        className="w-20 px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm"
                                                         placeholder="UOM"
                                                     />
                                                 </td>
@@ -1330,7 +1330,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                         type="number"
                                                         value={row.itemRate}
                                                         onChange={(e) => handleItemRowChange(row.id, 'itemRate', e.target.value)}
-                                                        className="w-24 px-2 py-1 border-0 focus:ring-1 focus:ring-teal-500 rounded text-sm"
+                                                        className="w-24 px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm"
                                                         placeholder="Rate"
                                                     />
                                                 </td>
@@ -1347,7 +1347,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                         type="number"
                                                         value={row.igst}
                                                         onChange={(e) => handleItemRowChange(row.id, 'igst', e.target.value)}
-                                                        className="w-20 px-2 py-1 border-0 focus:ring-1 focus:ring-teal-500 rounded text-sm"
+                                                        className="w-20 px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm"
                                                         placeholder="IGST"
                                                     />
                                                 </td>
@@ -1356,7 +1356,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                         type="number"
                                                         value={row.cgst}
                                                         onChange={(e) => handleItemRowChange(row.id, 'cgst', e.target.value)}
-                                                        className="w-20 px-2 py-1 border-0 focus:ring-1 focus:ring-teal-500 rounded text-sm"
+                                                        className="w-20 px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm"
                                                         placeholder="CGST"
                                                     />
                                                 </td>
@@ -1365,7 +1365,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                         type="number"
                                                         value={row.cess}
                                                         onChange={(e) => handleItemRowChange(row.id, 'cess', e.target.value)}
-                                                        className="w-20 px-2 py-1 border-0 focus:ring-1 focus:ring-teal-500 rounded text-sm"
+                                                        className="w-20 px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm"
                                                         placeholder="CESS"
                                                     />
                                                 </td>
@@ -1399,7 +1399,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                             type="text"
                                                             value={row.salesLedger}
                                                             onChange={(e) => handleItemRowChange(row.id, 'salesLedger', e.target.value)}
-                                                            className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-teal-500"
+                                                            className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500"
                                                             placeholder="Select sales ledger"
                                                         />
                                                     </div>
@@ -1411,7 +1411,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                             type="text"
                                                             value={row.description}
                                                             onChange={(e) => handleItemRowChange(row.id, 'description', e.target.value)}
-                                                            className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-teal-500"
+                                                            className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500"
                                                             placeholder="Enter description"
                                                         />
                                                     </div>
@@ -1474,7 +1474,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                             <button
                                 type="button"
                                 onClick={handleAddItemRow}
-                                className="px-4 py-2 text-teal-600 hover:text-teal-800 font-medium flex items-center gap-2"
+                                className="px-4 py-2 text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-2"
                             >
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -1487,7 +1487,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                 <button
                                     type="button"
                                     onClick={() => setActiveTab('payment')}
-                                    className="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-md transition-colors flex items-center gap-2 font-medium"
+                                    className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors flex items-center gap-2 font-medium"
                                 >
                                     NEXT
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1502,7 +1502,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                 {activeTab === 'payment' && (
                     <div className="space-y-6">
                         {/* Tax Summary Table */}
-                        <div className="border border-gray-300 rounded-lg overflow-hidden">
+                        <div className="border border-gray-300 rounded-[4px] overflow-hidden">
                             <table className="w-full">
                                 <thead className="bg-gray-100">
                                     <tr>
@@ -1581,7 +1581,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         type="text"
                                         value={calculateTotals().invoiceValue.toFixed(2)}
                                         readOnly
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-50 text-right"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right"
                                     />
                                 </div>
 
@@ -1593,7 +1593,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         type="text"
                                         value={paymentTds}
                                         onChange={(e) => setPaymentTds(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 text-right"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-right"
                                         placeholder="0.00"
                                     />
                                 </div>
@@ -1606,7 +1606,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         type="text"
                                         value={paymentAdvance}
                                         readOnly
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-50 text-right"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right"
                                     />
                                 </div>
 
@@ -1618,7 +1618,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         type="text"
                                         value={paymentPayable}
                                         readOnly
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-50 text-right font-bold"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-bold"
                                     />
                                 </div>
 
@@ -1629,7 +1629,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                     <textarea
                                         value={paymentPostingNote}
                                         onChange={(e) => setPaymentPostingNote(e.target.value)}
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 resize-none"
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 resize-none"
                                         rows={6}
                                         placeholder="Enter posting notes..."
                                     />
@@ -1637,7 +1637,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                             </div>
 
                             {/* Middle Column - Advance References */}
-                            <div className="border border-gray-300 rounded-lg p-4 bg-blue-50">
+                            <div className="border border-gray-300 rounded-[4px] p-4 bg-blue-50">
                                 <div className="space-y-3">
                                     <div className="grid grid-cols-4 gap-2 text-xs font-semibold text-gray-700">
                                         <div className="text-center">Date</div>
@@ -1676,7 +1676,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     <input
                                                         type="checkbox"
                                                         checked={ref.appliedNow}
-                                                        className="w-4 h-4 text-teal-600 rounded focus:ring-teal-500"
+                                                        className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                                                     />
                                                 </div>
                                             </div>
@@ -1686,18 +1686,18 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                             </div>
 
                             {/* Right Column - Edit Master */}
-                            <div className="border border-gray-200 rounded-lg p-6 bg-gray-50">
+                            <div className="border border-gray-200 rounded-[4px] p-6 bg-gray-50">
                                 <div className="space-y-4">
                                     <div className="flex items-center justify-between pb-4 border-b border-gray-200">
                                         <button
                                             type="button"
-                                            className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm font-medium shadow-sm"
+                                            className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-[4px] hover:bg-gray-50 transition-colors text-sm font-medium shadow-none border border-slate-200-none border border-slate-200"
                                         >
                                             Terms & Conditions
                                         </button>
                                         <button
                                             type="button"
-                                            className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-md transition-colors text-sm font-medium shadow-sm"
+                                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors text-sm font-medium shadow-none border border-slate-200-none border border-slate-200"
                                         >
                                             Edit Masters
                                         </button>
@@ -1708,7 +1708,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         <textarea
                                             value={termsConditions}
                                             onChange={(e) => setTermsConditions(e.target.value)}
-                                            className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 text-gray-800 resize-none bg-white"
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 resize-none bg-white"
                                             rows={8}
                                             placeholder="Enter terms and conditions..."
                                         />
@@ -1722,7 +1722,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                             <button
                                 type="button"
                                 onClick={() => setActiveTab('dispatch')}
-                                className="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-md transition-colors flex items-center gap-2 font-medium"
+                                className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors flex items-center gap-2 font-medium"
                             >
                                 NEXT
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1743,7 +1743,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                     setSkipDispatch(true);
                                     setActiveTab('einvoice');
                                 }}
-                                className="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-md transition-colors font-medium"
+                                className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors font-medium"
                             >
                                 Skip
                             </button>
@@ -1761,7 +1761,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                     <textarea
                                         value={dispatchFrom}
                                         onChange={(e) => setDispatchFrom(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 resize-none"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 resize-none"
                                         rows={3}
                                     />
                                 </div>
@@ -1774,7 +1774,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                     <select
                                         value={modeOfTransport}
                                         onChange={(e) => setModeOfTransport(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 bg-white"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                                     >
                                         <option value="Road">Road</option>
                                         <option value="Air">Air</option>
@@ -1793,7 +1793,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         type="date"
                                         value={dispatchDate}
                                         onChange={(e) => setDispatchDate(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                     />
                                 </div>
 
@@ -1806,7 +1806,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         type="time"
                                         value={dispatchTime}
                                         onChange={(e) => setDispatchTime(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                     />
                                 </div>
 
@@ -1825,14 +1825,14 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                     <button
                                         type="button"
                                         onClick={() => document.getElementById('dispatch-doc')?.click()}
-                                        className="w-full h-40 border-2 border-dashed border-gray-300 hover:border-teal-500 bg-gray-50 hover:bg-teal-50 text-gray-600 rounded-lg transition-colors flex flex-col items-center justify-center gap-2"
+                                        className="w-full h-40 border-2 border-dashed border-gray-300 hover:border-indigo-500 bg-gray-50 hover:bg-indigo-50/50 text-gray-600 rounded-[4px] transition-colors flex flex-col items-center justify-center gap-2"
                                     >
                                         <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                                         </svg>
                                         <span className="text-sm font-medium">UPLOAD DOCUMENT</span>
                                         {dispatchDocument && (
-                                            <span className="text-xs mt-2 text-teal-600 font-medium">✓ {dispatchDocument.name}</span>
+                                            <span className="text-xs mt-2 text-indigo-600 font-medium">✓ {dispatchDocument.name}</span>
                                         )}
                                     </button>
                                 </div>
@@ -1857,7 +1857,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                 setLrGrConsignment('');
                                             }
                                         }}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 bg-white"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                                     >
                                         <option value="">Select</option>
                                         <option value="Self">Self</option>
@@ -1878,7 +1878,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         value={transporterId}
                                         onChange={(e) => setTransporterId(e.target.value)}
                                         disabled={deliveryType === 'Courier'}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                                         placeholder="Editable with numerics and alphabet"
                                     />
                                 </div>
@@ -1893,7 +1893,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         value={transporterName}
                                         onChange={(e) => setTransporterName(e.target.value)}
                                         disabled={deliveryType === 'Courier'}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                                         placeholder="Editable with numerics and alphabet"
                                     />
                                 </div>
@@ -1908,7 +1908,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         value={vehicleNo}
                                         onChange={(e) => setVehicleNo(e.target.value)}
                                         disabled={deliveryType === 'Courier'}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                                         placeholder="Editable with numerics and alphabet"
                                     />
                                 </div>
@@ -1923,7 +1923,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         value={lrGrConsignment}
                                         onChange={(e) => setLrGrConsignment(e.target.value)}
                                         disabled={deliveryType === 'Courier'}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                                         placeholder="Editable with numerics and alphabet"
                                     />
                                 </div>
@@ -1946,7 +1946,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="text"
                                                     value={uptoPortShippingBillNo}
                                                     onChange={(e) => setUptoPortShippingBillNo(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                 />
                                             </div>
 
@@ -1958,7 +1958,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="text"
                                                     value={uptoPortShipPortCode}
                                                     onChange={(e) => setUptoPortShipPortCode(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                 />
                                             </div>
                                         </div>
@@ -1972,7 +1972,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="date"
                                                     value={uptoPortShippingBillDate}
                                                     onChange={(e) => setUptoPortShippingBillDate(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                 />
                                             </div>
 
@@ -1984,7 +1984,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="text"
                                                     value={uptoPortOrigin}
                                                     onChange={(e) => setUptoPortOrigin(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                     placeholder="City"
                                                 />
                                             </div>
@@ -2005,7 +2005,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="text"
                                                     value={beyondPortShippingBillNo}
                                                     onChange={(e) => setBeyondPortShippingBillNo(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                 />
                                             </div>
 
@@ -2017,7 +2017,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="text"
                                                     value={beyondPortShipPortCode}
                                                     onChange={(e) => setBeyondPortShipPortCode(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                 />
                                             </div>
 
@@ -2029,7 +2029,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="text"
                                                     value={beyondPortPortOfLoading}
                                                     onChange={(e) => setBeyondPortPortOfLoading(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                 />
                                             </div>
 
@@ -2041,7 +2041,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="text"
                                                     value={beyondPortFinalDestination}
                                                     onChange={(e) => setBeyondPortFinalDestination(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                     placeholder="City"
                                                 />
                                             </div>
@@ -2054,7 +2054,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="text"
                                                     value={beyondPortOriginCountry}
                                                     onChange={(e) => setBeyondPortOriginCountry(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                     placeholder="Country"
                                                 />
                                             </div>
@@ -2069,7 +2069,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="date"
                                                     value={beyondPortShippingBillDate}
                                                     onChange={(e) => setBeyondPortShippingBillDate(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                 />
                                             </div>
 
@@ -2081,7 +2081,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="text"
                                                     value={beyondPortVesselFlightNo}
                                                     onChange={(e) => setBeyondPortVesselFlightNo(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                 />
                                             </div>
 
@@ -2093,7 +2093,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="text"
                                                     value={beyondPortPortOfDischarge}
                                                     onChange={(e) => setBeyondPortPortOfDischarge(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                 />
                                             </div>
 
@@ -2105,7 +2105,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="text"
                                                     value={beyondPortDestCountry}
                                                     onChange={(e) => setBeyondPortDestCountry(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                     placeholder="Country"
                                                 />
                                             </div>
@@ -2131,7 +2131,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="text"
                                                     value={railUptoPortDeliveryType}
                                                     onChange={(e) => setRailUptoPortDeliveryType(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                     placeholder="Self/Third Party"
                                                 />
                                             </div>
@@ -2144,7 +2144,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="text"
                                                     value={railUptoPortTransporterName}
                                                     onChange={(e) => setRailUptoPortTransporterName(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                 />
                                             </div>
                                         </div>
@@ -2158,7 +2158,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="text"
                                                     value={railUptoPortTransporterId}
                                                     onChange={(e) => setRailUptoPortTransporterId(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                 />
                                             </div>
                                         </div>
@@ -2178,7 +2178,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="text"
                                                     value={railBeyondPortRailwayReceiptNo}
                                                     onChange={(e) => setRailBeyondPortRailwayReceiptNo(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                 />
                                             </div>
 
@@ -2190,7 +2190,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="text"
                                                     value={railBeyondPortOrigin}
                                                     onChange={(e) => setRailBeyondPortOrigin(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                     placeholder="City"
                                                 />
                                             </div>
@@ -2203,7 +2203,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="text"
                                                     value={railBeyondPortRailNo}
                                                     onChange={(e) => setRailBeyondPortRailNo(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                 />
                                             </div>
 
@@ -2215,7 +2215,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="text"
                                                     value={railBeyondPortStationOfLoading}
                                                     onChange={(e) => setRailBeyondPortStationOfLoading(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                 />
                                             </div>
 
@@ -2227,7 +2227,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="text"
                                                     value={railBeyondPortFinalDestination}
                                                     onChange={(e) => setRailBeyondPortFinalDestination(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                     placeholder="City"
                                                 />
                                             </div>
@@ -2242,7 +2242,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="date"
                                                     value={railBeyondPortRailwayReceiptDate}
                                                     onChange={(e) => setRailBeyondPortRailwayReceiptDate(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                 />
                                             </div>
 
@@ -2254,7 +2254,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="text"
                                                     value={railBeyondPortOriginCountry}
                                                     onChange={(e) => setRailBeyondPortOriginCountry(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                     placeholder="Country"
                                                 />
                                             </div>
@@ -2267,7 +2267,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="text"
                                                     value={railBeyondPortStationOfDischarge}
                                                     onChange={(e) => setRailBeyondPortStationOfDischarge(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                 />
                                             </div>
 
@@ -2279,7 +2279,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="text"
                                                     value={railBeyondPortDestCountry}
                                                     onChange={(e) => setRailBeyondPortDestCountry(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                     placeholder="Country"
                                                 />
                                             </div>
@@ -2294,7 +2294,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                             <button
                                 type="button"
                                 onClick={() => setActiveTab('einvoice')}
-                                className="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-md transition-colors flex items-center gap-2 font-medium"
+                                className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors flex items-center gap-2 font-medium"
                             >
                                 NEXT
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2336,7 +2336,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                 type="text"
                                                 value={entry.available}
                                                 onChange={(e) => handleEwayEntryChange(entry.id, 'available', e.target.value)}
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                 placeholder="Yes/No"
                                             />
                                         </div>
@@ -2349,7 +2349,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                 type="text"
                                                 value={entry.ewayBillNo}
                                                 onChange={(e) => handleEwayEntryChange(entry.id, 'ewayBillNo', e.target.value)}
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                             />
                                         </div>
 
@@ -2361,7 +2361,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                 type="date"
                                                 value={entry.date}
                                                 onChange={(e) => handleEwayEntryChange(entry.id, 'date', e.target.value)}
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                             />
                                         </div>
                                     </div>
@@ -2376,7 +2376,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                 type="text"
                                                 value={entry.validityPeriod}
                                                 onChange={(e) => handleEwayEntryChange(entry.id, 'validityPeriod', e.target.value)}
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                             />
                                         </div>
 
@@ -2388,7 +2388,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                 type="text"
                                                 value={entry.distance}
                                                 onChange={(e) => handleEwayEntryChange(entry.id, 'distance', e.target.value)}
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                             />
                                         </div>
                                     </div>
@@ -2407,7 +2407,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                 type="date"
                                                 value={entry.extensionDate}
                                                 onChange={(e) => handleEwayEntryChange(entry.id, 'extensionDate', e.target.value)}
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                             />
                                         </div>
 
@@ -2419,7 +2419,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                 type="text"
                                                 value={entry.extendedEwbNo}
                                                 onChange={(e) => handleEwayEntryChange(entry.id, 'extendedEwbNo', e.target.value)}
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                             />
                                         </div>
 
@@ -2431,7 +2431,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                 type="text"
                                                 value={entry.extensionReason}
                                                 onChange={(e) => handleEwayEntryChange(entry.id, 'extensionReason', e.target.value)}
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                             />
                                         </div>
 
@@ -2443,7 +2443,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                 type="text"
                                                 value={entry.fromPlace}
                                                 onChange={(e) => handleEwayEntryChange(entry.id, 'fromPlace', e.target.value)}
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                             />
                                         </div>
                                     </div>
@@ -2458,7 +2458,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                 type="text"
                                                 value={entry.remainingDistance}
                                                 onChange={(e) => handleEwayEntryChange(entry.id, 'remainingDistance', e.target.value)}
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                             />
                                         </div>
 
@@ -2470,7 +2470,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                 type="text"
                                                 value={entry.newValidity}
                                                 onChange={(e) => handleEwayEntryChange(entry.id, 'newValidity', e.target.value)}
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                             />
                                         </div>
 
@@ -2482,7 +2482,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                 type="text"
                                                 value={entry.updatedVehicleNo}
                                                 onChange={(e) => handleEwayEntryChange(entry.id, 'updatedVehicleNo', e.target.value)}
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                             />
                                         </div>
                                     </div>
@@ -2494,7 +2494,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                             <button
                                 type="button"
                                 onClick={handleAddEwayEntry}
-                                className="px-4 py-2 bg-blue-50 text-teal-600 hover:bg-blue-100 rounded-md font-medium flex items-center gap-2 border border-blue-200"
+                                className="px-4 py-2 bg-blue-50 text-indigo-600 hover:bg-blue-100 rounded-[4px] font-medium flex items-center gap-2 border border-blue-200"
                             >
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -2516,7 +2516,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         type="text"
                                         value={irn}
                                         onChange={(e) => setIrn(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                     />
                                 </div>
 
@@ -2528,7 +2528,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         type="text"
                                         value={ackNo}
                                         onChange={(e) => setAckNo(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                     />
                                 </div>
                             </div>
@@ -2539,14 +2539,14 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                             <button
                                 type="button"
                                 onClick={handlePost}
-                                className="px-8 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-md transition-colors font-medium"
+                                className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors font-medium"
                             >
                                 Post & Close
                             </button>
                             <button
                                 type="button"
                                 onClick={handlePost}
-                                className="px-8 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-md transition-colors font-medium"
+                                className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors font-medium"
                             >
                                 Post & Print/Email
                             </button>
@@ -2577,4 +2577,5 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
 };
 
 export default SalesVoucher;
+
 

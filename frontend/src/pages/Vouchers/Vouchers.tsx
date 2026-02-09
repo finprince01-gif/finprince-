@@ -81,12 +81,12 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({ value, onChange, op
       </div>
 
       {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 max-h-60 overflow-y-auto">
           {filteredOptions.length > 0 ? (
             filteredOptions.map((opt, i) => (
               <div
                 key={i}
-                className="px-4 py-2 text-sm hover:bg-teal-50 cursor-pointer"
+                className="px-4 py-2 text-sm hover:bg-indigo-50/50 cursor-pointer"
                 onClick={() => {
                   onChange(opt);
                   setIsOpen(false);
@@ -1300,7 +1300,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               key={tab.id}
               onClick={() => setPurchaseActiveTab(tab.id as any)}
               className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${purchaseActiveTab === tab.id
-                ? 'border-teal-600 text-teal-600'
+                ? 'border-indigo-600 text-indigo-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
             >
@@ -1310,7 +1310,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         </div>
 
         {/* Tab Content */}
-        <div className="p-4 bg-white rounded-lg border border-gray-200 min-h-[200px]">
+        <div className="p-4 bg-white rounded-[4px] border border-gray-200 min-h-[200px]">
           {purchaseActiveTab === 'supplier' && (
             <div className="space-y-6">
               {/* Row 1: Date, Supplier Invoice No, Purchase Voucher No */}
@@ -1323,7 +1323,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     type="date"
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                     required
                   />
                 </div>
@@ -1335,7 +1335,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     type="text"
                     value={invoiceNo}
                     onChange={(e) => setInvoiceNo(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                     placeholder="From Document"
                     required
                   />
@@ -1348,7 +1348,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     type="text"
                     value={voucherNumber}
                     readOnly
-                    className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-md text-gray-500"
+                    className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-[4px] text-gray-500"
                   />
                 </div>
               </div>
@@ -1363,7 +1363,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     type="text"
                     value={party}
                     onChange={(e) => setParty(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                     placeholder="Select Vendor"
                     list="party-list"
                   />
@@ -1381,7 +1381,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     type="text"
                     value={gstin}
                     onChange={(e) => setGstin(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                     placeholder="Enter GSTIN"
                   />
                 </div>
@@ -1402,7 +1402,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <button
                       type="button"
                       onClick={() => document.getElementById('purchase-supporting-doc')?.click()}
-                      className="w-full h-[42px] bg-teal-500 hover:bg-teal-600 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+                      className="w-full h-[42px] bg-indigo-50/500 hover:bg-indigo-600 text-white rounded-[4px] transition-colors flex items-center justify-center gap-2"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
@@ -1410,7 +1410,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       <span className="text-sm">Upload Document</span>
                     </button>
                     {purchaseSupportingDocument && (
-                      <p className="mt-2 text-xs text-teal-600 font-medium truncate">✓ {purchaseSupportingDocument.name}</p>
+                      <p className="mt-2 text-xs text-indigo-600 font-medium truncate">✓ {purchaseSupportingDocument.name}</p>
                     )}
                   </div>
                 </div>
@@ -1421,7 +1421,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 <div className="flex gap-4 items-end">
                   <button
                     onClick={() => setIsCreateGRNModalOpen(true)}
-                    className="px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700 text-sm font-medium h-[42px]"
+                    className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm font-medium h-[42px]"
                   >
                     Create GRN
                   </button>
@@ -1430,7 +1430,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       type="text"
                       value={grnRefNo}
                       onChange={(e) => setGrnRefNo(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                       placeholder="GRN Reference"
                     />
                   </div>
@@ -1454,7 +1454,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     value={billFrom}
                     onChange={(e) => setBillFrom(e.target.value)}
                     rows={4}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 resize-none"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 resize-none"
                     placeholder="Auto-populate from Vendor"
                   />
                 </div>
@@ -1463,7 +1463,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     value={shipFrom}
                     onChange={(e) => setShipFrom(e.target.value)}
                     rows={4}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 resize-none"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 resize-none"
                     placeholder="Auto-populate from Vendor"
                   />
                 </div>
@@ -1480,7 +1480,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         setPurchaseInputType('Intrastate');
                         setIsInterState(false);
                       }}
-                      className={`flex-1 px-4 py-2 border rounded-md transition-colors ${purchaseInputType === 'Intrastate'
+                      className={`flex-1 px-4 py-2 border rounded-[4px] transition-colors ${purchaseInputType === 'Intrastate'
                         ? 'bg-white border-gray-400 text-gray-800 font-medium'
                         : 'bg-white border-gray-300 text-gray-600 hover:border-gray-400'
                         }`}
@@ -1493,7 +1493,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         setPurchaseInputType('Interstate');
                         setIsInterState(true);
                       }}
-                      className={`flex-1 px-4 py-2 border rounded-md transition-colors ${purchaseInputType === 'Interstate'
+                      className={`flex-1 px-4 py-2 border rounded-[4px] transition-colors ${purchaseInputType === 'Interstate'
                         ? 'bg-white border-gray-400 text-gray-800 font-medium'
                         : 'bg-white border-gray-300 text-gray-600 hover:border-gray-400'
                         }`}
@@ -1506,7 +1506,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         setPurchaseInputType('Import');
                         setIsInterState(true);
                       }}
-                      className={`flex-1 px-4 py-2 border rounded-md transition-colors ${purchaseInputType === 'Import'
+                      className={`flex-1 px-4 py-2 border rounded-[4px] transition-colors ${purchaseInputType === 'Import'
                         ? 'bg-white border-gray-400 text-gray-800 font-medium'
                         : 'bg-white border-gray-300 text-gray-600 hover:border-gray-400'
                         }`}
@@ -1523,7 +1523,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <button
                       type="button"
                       onClick={() => setInvoiceInForeignCurrency('Yes')}
-                      className={`px-8 py-2 border rounded-md transition-colors ${invoiceInForeignCurrency === 'Yes'
+                      className={`px-8 py-2 border rounded-[4px] transition-colors ${invoiceInForeignCurrency === 'Yes'
                         ? 'bg-white border-gray-400 text-gray-800 font-medium'
                         : 'bg-white border-gray-300 text-gray-600 hover:border-gray-400'
                         }`}
@@ -1533,7 +1533,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <button
                       type="button"
                       onClick={() => setInvoiceInForeignCurrency('No')}
-                      className={`px-8 py-2 border rounded-md transition-colors ${invoiceInForeignCurrency === 'No'
+                      className={`px-8 py-2 border rounded-[4px] transition-colors ${invoiceInForeignCurrency === 'No'
                         ? 'bg-white border-gray-400 text-gray-800 font-medium'
                         : 'bg-white border-gray-300 text-gray-600 hover:border-gray-400'
                         }`}
@@ -1561,7 +1561,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       <select
                         value={purchaseOrderNo}
                         onChange={(e) => setPurchaseOrderNo(e.target.value)}
-                        className="px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 min-w-[200px]"
+                        className="px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 min-w-[200px]"
                       >
                         <option value="">Select Purchase Order</option>
                         <option value="PO-001">PO-001</option>
@@ -1571,13 +1571,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 bg-white px-4 py-2 border border-teal-200 rounded-lg shadow-sm">
+                <div className="flex items-center gap-2 bg-white px-4 py-2 border border-slate-200 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200">
                   <span className="text-sm font-medium text-gray-700">1 Foreign Currency =</span>
                   <input
                     type="text"
                     value={exchangeRate}
                     onChange={(e) => setExchangeRate(e.target.value)}
-                    className="w-24 border-b-2 border-gray-300 focus:border-teal-500 focus:outline-none px-2 py-1 text-center font-medium text-teal-600"
+                    className="w-24 border-b-2 border-gray-300 focus:border-indigo-500 focus:outline-none px-2 py-1 text-center font-medium text-indigo-600"
                     placeholder="Rate"
                   />
                   <span className="text-sm font-medium text-gray-700">INR</span>
@@ -1585,16 +1585,16 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               </div>
 
               {/* Foreign Currency Table */}
-              <div className="overflow-x-auto border border-gray-200 rounded-lg shadow-sm">
+              <div className="overflow-x-auto border border-gray-200 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200">
                 <table className="w-full">
-                  <thead className="bg-teal-600 text-white">
+                  <thead className="bg-indigo-600 text-white">
                     <tr>
-                      <th className="px-3 py-3 text-center w-12 border-r border-teal-500"></th>
-                      <th className="px-3 py-3 text-sm font-semibold text-center border-r border-teal-500">Description</th>
-                      <th className="px-3 py-3 text-sm font-semibold text-center w-32 border-r border-teal-500">Quantity</th>
-                      <th className="px-3 py-3 text-sm font-semibold text-center w-32 border-r border-teal-500">UQC</th>
-                      <th className="px-3 py-3 text-sm font-semibold text-center w-40 border-r border-teal-500">Rate</th>
-                      <th className="px-3 py-3 text-sm font-semibold text-center w-40 border-r border-teal-500">Amount</th>
+                      <th className="px-3 py-3 text-center w-12 border-r border-indigo-500"></th>
+                      <th className="px-3 py-3 text-sm font-semibold text-center border-r border-indigo-500">Description</th>
+                      <th className="px-3 py-3 text-sm font-semibold text-center w-32 border-r border-indigo-500">Quantity</th>
+                      <th className="px-3 py-3 text-sm font-semibold text-center w-32 border-r border-indigo-500">UQC</th>
+                      <th className="px-3 py-3 text-sm font-semibold text-center w-40 border-r border-indigo-500">Rate</th>
+                      <th className="px-3 py-3 text-sm font-semibold text-center w-40 border-r border-indigo-500">Amount</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -1605,7 +1605,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             type="checkbox"
                             checked={selectedPurchaseItems.includes(row.id)}
                             onChange={() => handleTogglePurchaseItemSelection(row.id)}
-                            className="w-4 h-4 text-teal-600 rounded focus:ring-teal-500"
+                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                           />
                         </td>
                         <td className="px-3 py-2 border-r border-gray-200">
@@ -1613,7 +1613,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             type="text"
                             value={row.description}
                             onChange={(e) => handlePurchaseItemChange(index, 'description', e.target.value)}
-                            className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-teal-500 rounded text-sm bg-transparent"
+                            className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm bg-transparent"
                             placeholder="Item description"
                           />
                         </td>
@@ -1622,7 +1622,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             type="text"
                             value={row.qty}
                             onChange={(e) => handlePurchaseItemChange(index, 'qty', e.target.value)}
-                            className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-teal-500 rounded text-sm text-center bg-transparent"
+                            className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent"
                             placeholder="0"
                           />
                         </td>
@@ -1631,7 +1631,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             type="text"
                             value={row.uom}
                             onChange={(e) => handlePurchaseItemChange(index, 'uom', e.target.value)}
-                            className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-teal-500 rounded text-sm text-center bg-transparent"
+                            className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent"
                             placeholder="UQC"
                           />
                         </td>
@@ -1640,7 +1640,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             type="text"
                             value={row.rate}
                             onChange={(e) => handlePurchaseItemChange(index, 'rate', e.target.value)}
-                            className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-teal-500 rounded text-sm text-center bg-transparent"
+                            className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent"
                             placeholder="0.00"
                           />
                         </td>
@@ -1663,7 +1663,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 <button
                   type="button"
                   onClick={handleAddPurchaseItem}
-                  className="px-4 py-2 text-teal-600 hover:text-teal-800 font-medium flex items-center gap-2 transition-colors"
+                  className="px-4 py-2 text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-2 transition-colors"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -1676,7 +1676,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     type="button"
                     onClick={handleDeleteSelectedItems}
                     disabled={selectedPurchaseItems.length === 0}
-                    className={`px-4 py-2 rounded-md transition-colors font-medium flex items-center gap-2 ${selectedPurchaseItems.length === 0 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}
+                    className={`px-4 py-2 rounded-[4px] transition-colors font-medium flex items-center gap-2 ${selectedPurchaseItems.length === 0 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -1702,7 +1702,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <select
                     value={purchaseOrderNo}
                     onChange={(e) => setPurchaseOrderNo(e.target.value)}
-                    className="px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 w-64"
+                    className="px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 w-64"
                   >
                     <option value="">Select Purchase Order</option>
                     <option value="PO-001">PO-001</option>
@@ -1726,28 +1726,28 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 </div>
 
                 {/* Items Table */}
-                <div className="overflow-x-auto border border-gray-200 rounded-lg shadow-sm">
+                <div className="overflow-x-auto border border-gray-200 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200">
                   <table className="w-full">
-                    <thead className="bg-teal-600 text-white">
+                    <thead className="bg-indigo-600 text-white">
                       <tr>
-                        <th className="px-3 py-3 text-xs font-semibold text-center border-r border-teal-500">S. No.</th>
-                        <th className="px-3 py-3 text-xs font-semibold text-center border-r border-teal-500">Item Code</th>
-                        <th className="px-3 py-3 text-xs font-semibold text-center border-r border-teal-500">Item Name</th>
-                        <th className="px-3 py-3 text-xs font-semibold text-center border-r border-teal-500">HSN/SAC</th>
-                        <th className="px-3 py-3 text-xs font-semibold text-center border-r border-teal-500">Qty</th>
-                        <th className="px-3 py-3 text-xs font-semibold text-center border-r border-teal-500">UQC</th>
-                        <th className="px-3 py-3 text-xs font-semibold text-center border-r border-teal-500">Item Rate</th>
-                        <th className="px-3 py-3 text-xs font-semibold text-center border-r border-teal-500">Taxable Value</th>
+                        <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">S. No.</th>
+                        <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">Item Code</th>
+                        <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">Item Name</th>
+                        <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">HSN/SAC</th>
+                        <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">Qty</th>
+                        <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">UQC</th>
+                        <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">Item Rate</th>
+                        <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">Taxable Value</th>
                         {isInterState ? (
-                          <th className="px-3 py-3 text-xs font-semibold text-center border-r border-teal-500">IGST</th>
+                          <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">IGST</th>
                         ) : (
                           <>
-                            <th className="px-3 py-3 text-xs font-semibold text-center border-r border-teal-500">CGST</th>
-                            <th className="px-3 py-3 text-xs font-semibold text-center border-r border-teal-500">SGST</th>
+                            <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">CGST</th>
+                            <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">SGST</th>
                           </>
                         )}
-                        <th className="px-3 py-3 text-xs font-semibold text-center border-r border-teal-500">CESS</th>
-                        <th className="px-3 py-3 text-xs font-semibold text-center border-r border-teal-500">Invoice Value</th>
+                        <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">CESS</th>
+                        <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">Invoice Value</th>
                         <th className="px-3 py-3 text-xs font-semibold text-center">Delete</th>
                       </tr>
                     </thead>
@@ -1756,7 +1756,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         <tr key={row.id} className="border-b border-gray-200 hover:bg-gray-50">
                           <td className="px-2 py-2 text-center text-sm border-r border-gray-200">
                             <div className="flex items-center justify-center gap-2">
-                              <input type="checkbox" className="w-4 h-4 rounded text-teal-600" />
+                              <input type="checkbox" className="w-4 h-4 rounded text-indigo-600" />
                               {index + 1}
                             </div>
                           </td>
@@ -1876,12 +1876,12 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         </tr>
                       ))}
                       {/* Add Item Button Row */}
-                      <tr className="border-b border-gray-200 bg-teal-50/10">
+                      <tr className="border-b border-gray-200 bg-indigo-50/50/10">
                         <td colSpan={12} className="px-4 py-2">
                           <button
                             type="button"
                             onClick={handleAddPurchaseItem}
-                            className="text-teal-600 hover:text-teal-800 text-sm font-medium flex items-center gap-1"
+                            className="text-indigo-600 hover:text-indigo-800 text-sm font-medium flex items-center gap-1"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
                             Add Item
@@ -1893,13 +1893,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 </div>
 
                 {/* Bottom Fields: Purchase Ledger & Description */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-[4px] border border-gray-200">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Purchase Ledger</label>
                     <select
                       value={purchaseLedger}
                       onChange={(e) => setPurchaseLedger(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                     >
                       <option value="">Select Ledger</option>
                       <option value="Local Purchases">Local Purchases</option>
@@ -1912,7 +1912,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       value={purchaseDescription}
                       onChange={(e) => setPurchaseDescription(e.target.value)}
                       rows={1}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                       placeholder="Enter remarks..."
                     />
                   </div>
@@ -1927,7 +1927,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             purchaseActiveTab === 'due' && (
               <div className="space-y-6">
                 {/* Tax Summary Table */}
-                <div className="border border-gray-300 rounded-lg overflow-hidden">
+                <div className="border border-gray-300 rounded-[4px] overflow-hidden">
                   <table className="w-full">
                     <thead className="bg-gray-100">
                       <tr>
@@ -1973,7 +1973,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         type="text"
                         readOnly
                         value={(purchaseItems.reduce((sum, item) => sum + (Number(item.invoiceValue) || 0), 0)).toFixed(2)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-50 text-right font-semibold"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-semibold"
                       />
                     </div>
                     <div>
@@ -1982,7 +1982,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         type="text"
                         value={purchaseTdsGst}
                         onChange={(e) => setPurchaseTdsGst(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 text-right"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-right"
                         placeholder="0.00"
                       />
                     </div>
@@ -1992,7 +1992,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         type="text"
                         value={purchaseTdsIt}
                         onChange={(e) => setPurchaseTdsIt(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 text-right"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-right"
                         placeholder="0.00"
                       />
                     </div>
@@ -2002,7 +2002,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         type="text"
                         value={purchaseAdvancePaid}
                         onChange={(e) => setPurchaseAdvancePaid(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 text-right"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-right"
                         placeholder="0.00"
                       />
                     </div>
@@ -2012,7 +2012,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         type="text"
                         readOnly
                         value={((purchaseItems.reduce((sum, item) => sum + (Number(item.invoiceValue) || 0), 0)) - (Number(purchaseTdsGst) || 0) - (Number(purchaseTdsIt) || 0) - (Number(purchaseAdvancePaid) || 0)).toFixed(2)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-50 text-right font-bold text-lg"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-bold text-lg"
                       />
                     </div>
                     <div>
@@ -2020,14 +2020,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       <textarea
                         value={purchasePostingNote}
                         onChange={(e) => setPurchasePostingNote(e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 resize-none h-24"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 resize-none h-24"
                         placeholder="Enter posting notes..."
                       />
                     </div>
                   </div>
 
                   {/* Middle Column: Advance Reference Grid */}
-                  <div className="border border-gray-300 rounded-lg p-4 bg-teal-50">
+                  <div className="border border-gray-300 rounded-[4px] p-4 bg-indigo-50/50">
                     <div className="space-y-3">
                       <div className="grid grid-cols-4 gap-2 text-xs font-semibold text-gray-700">
                         <div className="text-center">Date</div>
@@ -2043,17 +2043,17 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   </div>
 
                   {/* Right Column: Terms & Conditions */}
-                  <div className="border border-gray-200 rounded-lg p-6 bg-white">
+                  <div className="border border-gray-200 rounded-[4px] p-6 bg-white">
                     <div className="flex items-center justify-between mb-6">
                       <button
                         type="button"
-                        className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md shadow-sm text-sm font-medium hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500"
+                        className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                       >
                         Terms & Conditions
                       </button>
                       <button
                         type="button"
-                        className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-md shadow-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500"
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                       >
                         Edit Masters
                       </button>
@@ -2064,7 +2064,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       <textarea
                         value={purchaseTerms}
                         onChange={(e) => setPurchaseTerms(e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 text-gray-600 placeholder-gray-400 resize-none h-64"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-gray-600 placeholder-gray-400 resize-none h-64"
                         placeholder="Enter terms and conditions..."
                       />
                     </div>
@@ -2080,7 +2080,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             purchaseActiveTab === 'transit' && (
               <div className="space-y-6">
                 {/* Main Two-Column Layout (Matching SalesVoucher structure) */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-6 rounded-lg border border-gray-200">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-6 rounded-[4px] border border-gray-200">
 
                   {/* Left Column */}
                   <div className="space-y-4">
@@ -2092,7 +2092,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       <textarea
                         value={purchaseTransitReceivedIn}
                         onChange={(e) => setPurchaseTransitReceivedIn(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 resize-none"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 resize-none"
                         rows={3}
                       />
                     </div>
@@ -2105,7 +2105,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       <select
                         value={purchaseTransitMode}
                         onChange={(e) => setPurchaseTransitMode(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 bg-white"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                       >
                         <option value="Road">Road</option>
                         <option value="Air">Air</option>
@@ -2123,7 +2123,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         type="date"
                         value={purchaseTransitReceiptDate}
                         onChange={(e) => setPurchaseTransitReceiptDate(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                       />
                     </div>
 
@@ -2136,7 +2136,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         type="time"
                         value={purchaseTransitReceiptTime}
                         onChange={(e) => setPurchaseTransitReceiptTime(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                       />
                     </div>
 
@@ -2155,14 +2155,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       <button
                         type="button"
                         onClick={() => document.getElementById('transit-doc')?.click()}
-                        className="w-full h-40 border-2 border-dashed border-gray-300 hover:border-teal-500 bg-white hover:bg-teal-50 text-gray-600 rounded-lg transition-colors flex flex-col items-center justify-center gap-2"
+                        className="w-full h-40 border-2 border-dashed border-gray-300 hover:border-indigo-500 bg-white hover:bg-indigo-50/50 text-gray-600 rounded-[4px] transition-colors flex flex-col items-center justify-center gap-2"
                       >
                         <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                         </svg>
                         <span className="text-sm font-medium">UPLOAD DOCUMENT</span>
                         {purchaseTransitDocument && (
-                          <span className="text-xs mt-2 text-teal-600 font-medium">✓ {purchaseTransitDocument.name}</span>
+                          <span className="text-xs mt-2 text-indigo-600 font-medium">✓ {purchaseTransitDocument.name}</span>
                         )}
                       </button>
                     </div>
@@ -2186,7 +2186,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             setPurchaseTransitLrGrConsignment('');
                           }
                         }}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 bg-white"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                       >
                         <option value="Self">Self</option>
                         <option value="Third Party">Third Party</option>
@@ -2206,7 +2206,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         value={purchaseTransitTransporterId}
                         onChange={(e) => setPurchaseTransitTransporterId(e.target.value)}
                         disabled={purchaseTransitDeliveryType === 'Courier'}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                         placeholder="Editable with numerics and alphabet"
                       />
                     </div>
@@ -2221,7 +2221,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         value={purchaseTransitTransporterName}
                         onChange={(e) => setPurchaseTransitTransporterName(e.target.value)}
                         disabled={purchaseTransitDeliveryType === 'Courier'}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                         placeholder="Editable with numerics and alphabet"
                       />
                     </div>
@@ -2236,7 +2236,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         value={purchaseTransitVehicleNo}
                         onChange={(e) => setPurchaseTransitVehicleNo(e.target.value)}
                         disabled={purchaseTransitDeliveryType === 'Courier'}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                         placeholder="Editable with numerics and alphabet"
                       />
                     </div>
@@ -2251,7 +2251,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         value={purchaseTransitLrGrConsignment}
                         onChange={(e) => setPurchaseTransitLrGrConsignment(e.target.value)}
                         disabled={purchaseTransitDeliveryType === 'Courier'}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                         placeholder="Editable with numerics and alphabet"
                       />
                     </div>
@@ -2264,7 +2264,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     {/* Upto PORT (Consolidated for Air/Sea) */}
                     <div>
                       <h3 className="text-lg font-semibold text-gray-800 mb-4">UPTO PORT</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-6 rounded-lg border border-gray-200">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-6 rounded-[4px] border border-gray-200">
                         <div className="space-y-4">
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Bill of Lading No.</label>
@@ -2272,7 +2272,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               type="text"
                               value={purchaseTransitUptoPortBolNo}
                               onChange={(e) => setPurchaseTransitUptoPortBolNo(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                             />
                           </div>
                           <div>
@@ -2281,7 +2281,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               type="text"
                               value={purchaseTransitUptoPortShippingBillNo}
                               onChange={(e) => setPurchaseTransitUptoPortShippingBillNo(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                             />
                           </div>
                           <div>
@@ -2290,7 +2290,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               type="date"
                               value={purchaseTransitUptoPortShippingBillDate}
                               onChange={(e) => setPurchaseTransitUptoPortShippingBillDate(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                             />
                           </div>
                           <div>
@@ -2299,7 +2299,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               type="text"
                               value={purchaseTransitUptoPortShipPortCode}
                               onChange={(e) => setPurchaseTransitUptoPortShipPortCode(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                             />
                           </div>
                           <div>
@@ -2308,14 +2308,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               type="text"
                               value={purchaseTransitUptoPortOriginCity}
                               onChange={(e) => setPurchaseTransitUptoPortOriginCity(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 mb-2"
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2"
                               placeholder="City"
                             />
                             <input
                               type="text"
                               value={purchaseTransitUptoPortOriginCountry}
                               onChange={(e) => setPurchaseTransitUptoPortOriginCountry(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                               placeholder="Country"
                             />
                           </div>
@@ -2327,7 +2327,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               type="date"
                               value={purchaseTransitUptoPortBolDate}
                               onChange={(e) => setPurchaseTransitUptoPortBolDate(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                             />
                           </div>
                           <div>
@@ -2336,7 +2336,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               type="text"
                               value={purchaseTransitUptoPortVesselFlightNo}
                               onChange={(e) => setPurchaseTransitUptoPortVesselFlightNo(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                             />
                           </div>
                           <div>
@@ -2345,7 +2345,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               type="text"
                               value={purchaseTransitUptoPortPortOfLoading}
                               onChange={(e) => setPurchaseTransitUptoPortPortOfLoading(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                             />
                           </div>
                           <div>
@@ -2354,7 +2354,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               type="text"
                               value={purchaseTransitUptoPortPortOfDischarge}
                               onChange={(e) => setPurchaseTransitUptoPortPortOfDischarge(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                             />
                           </div>
                           <div>
@@ -2363,14 +2363,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               type="text"
                               value={purchaseTransitUptoPortFinalDestCity}
                               onChange={(e) => setPurchaseTransitUptoPortFinalDestCity(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 mb-2"
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2"
                               placeholder="City"
                             />
                             <input
                               type="text"
                               value={purchaseTransitUptoPortFinalDestCountry}
                               onChange={(e) => setPurchaseTransitUptoPortFinalDestCountry(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                               placeholder="Country"
                             />
                           </div>
@@ -2386,7 +2386,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     {/* Upto PORT (Consolidated for Rail) */}
                     <div>
                       <h3 className="text-lg font-semibold text-gray-800 mb-4">UPTO PORT</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-6 rounded-lg border border-gray-200">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-6 rounded-[4px] border border-gray-200">
                         <div className="space-y-4">
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Bill of Lading No.</label>
@@ -2394,7 +2394,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               type="text"
                               value={purchaseTransitUptoPortBolNo}
                               onChange={(e) => setPurchaseTransitUptoPortBolNo(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                             />
                           </div>
                           <div>
@@ -2403,7 +2403,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               type="text"
                               value={purchaseTransitUptoPortRrNo}
                               onChange={(e) => setPurchaseTransitUptoPortRrNo(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                             />
                           </div>
                           <div>
@@ -2412,7 +2412,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               type="date"
                               value={purchaseTransitUptoPortRrDate}
                               onChange={(e) => setPurchaseTransitUptoPortRrDate(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                             />
                           </div>
                           <div>
@@ -2421,14 +2421,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               type="text"
                               value={purchaseTransitUptoPortOriginCity}
                               onChange={(e) => setPurchaseTransitUptoPortOriginCity(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 mb-2"
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2"
                               placeholder="City"
                             />
                             <input
                               type="text"
                               value={purchaseTransitUptoPortOriginCountry}
                               onChange={(e) => setPurchaseTransitUptoPortOriginCountry(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                               placeholder="Country"
                             />
                           </div>
@@ -2440,7 +2440,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               type="date"
                               value={purchaseTransitUptoPortBolDate}
                               onChange={(e) => setPurchaseTransitUptoPortBolDate(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                             />
                           </div>
                           <div>
@@ -2449,7 +2449,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               type="text"
                               value={purchaseTransitUptoPortFnrNo}
                               onChange={(e) => setPurchaseTransitUptoPortFnrNo(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                             />
                           </div>
                           <div>
@@ -2458,7 +2458,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               type="text"
                               value={purchaseTransitUptoPortStationLoading}
                               onChange={(e) => setPurchaseTransitUptoPortStationLoading(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                             />
                           </div>
                           <div>
@@ -2467,7 +2467,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               type="text"
                               value={purchaseTransitUptoPortStationDischarge}
                               onChange={(e) => setPurchaseTransitUptoPortStationDischarge(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                             />
                           </div>
                           <div>
@@ -2476,14 +2476,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               type="text"
                               value={purchaseTransitUptoPortFinalDestCity}
                               onChange={(e) => setPurchaseTransitUptoPortFinalDestCity(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 mb-2"
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2"
                               placeholder="City"
                             />
                             <input
                               type="text"
                               value={purchaseTransitUptoPortFinalDestCountry}
                               onChange={(e) => setPurchaseTransitUptoPortFinalDestCountry(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                               placeholder="Country"
                             />
                           </div>
@@ -2512,9 +2512,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           <div><label className="form-label">Invoice No.</label><input type="text" value={invoiceNo} onChange={e => setInvoiceNo(e.target.value)} className="form-input" /></div>
           <div><label className="form-label">Party</label><SearchableSelect value={party} onChange={setParty} options={partyLedgers.map(l => l.name)} placeholder="Select Party" /></div>
         </div>
-        <div className="mb-4 p-2 bg-slate-100 rounded-md text-center">
+        <div className="mb-4 p-2 bg-slate-100 rounded-[4px] text-center">
           <p className="text-sm font-semibold text-gray-700">
-            Transaction Type: <span className="text-teal-600">{isInterState ? 'Inter-State (IGST)' : 'Intra-State (CGST & SGST)'}</span>
+            Transaction Type: <span className="text-indigo-600">{isInterState ? 'Inter-State (IGST)' : 'Intra-State (CGST & SGST)'}</span>
           </p>
         </div>
         <div className="overflow-x-auto">
@@ -2542,10 +2542,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           </table>
           <datalist id="stock-items-datalist">{stockItems.map(i => <option key={i.name} value={i.name} />)}</datalist>
         </div>
-        <button onClick={handleAddItemRow} className="mt-2 text-sm text-teal-600 hover:text-teal-800 font-medium flex items-center"><Icon name="plus" className="w-4 h-4 mr-1" /> Add Row</button>
+        <button onClick={handleAddItemRow} className="mt-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium flex items-center"><Icon name="plus" className="w-4 h-4 mr-1" /> Add Row</button>
         <div className="mt-6 space-y-4">
           <div className="flex justify-between items-start">
-            <div className="relative"><label className="form-label">Narration</label><textarea value={narration} onChange={e => setNarration(e.target.value)} className="form-input w-80 pr-10" rows={3}></textarea><button onClick={handleGenerateNarration} disabled={isNarrationLoading} className="absolute top-7 right-2 text-teal-500 hover:text-teal-700 disabled:text-gray-300" title="Generate Narration with AI">{isNarrationLoading ? <Icon name="spinner" className="w-5 h-5 animate-spin" /> : <Icon name="wand-sparkles" className="w-5 h-5" />}</button></div>
+            <div className="relative"><label className="form-label">Narration</label><textarea value={narration} onChange={e => setNarration(e.target.value)} className="form-input w-80 pr-10" rows={3}></textarea><button onClick={handleGenerateNarration} disabled={isNarrationLoading} className="absolute top-7 right-2 text-indigo-500 hover:text-slate-700 disabled:text-gray-300" title="Generate Narration with AI">{isNarrationLoading ? <Icon name="spinner" className="w-5 h-5 animate-spin" /> : <Icon name="wand-sparkles" className="w-5 h-5" />}</button></div>
             <div className="w-full max-w-sm space-y-2">
               <div className="flex justify-between items-center"><span className="text-sm text-gray-600">Total Taxable Amount</span><span className="font-semibold text-gray-800">{totalTaxableAmount.toFixed(2)}</span></div>
               {!isInterState && <>
@@ -2634,18 +2634,18 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         <div className="flex justify-center gap-2">
           <button
             onClick={() => setReceiptMode('single')}
-            className={`px-6 py-2 text-sm font-medium rounded-lg transition-colors ${receiptMode === 'single'
-              ? 'bg-teal-600 text-white'
-              : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-teal-500'
+            className={`px-6 py-2 text-sm font-medium rounded-[4px] transition-colors ${receiptMode === 'single'
+              ? 'bg-indigo-600 text-white'
+              : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-indigo-500'
               }`}
           >
             Receipt Voucher - Single
           </button>
           <button
             onClick={() => setReceiptMode('bulk')}
-            className={`px-6 py-2 text-sm font-medium rounded-lg transition-colors ${receiptMode === 'bulk'
-              ? 'bg-teal-600 text-white'
-              : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-teal-500'
+            className={`px-6 py-2 text-sm font-medium rounded-[4px] transition-colors ${receiptMode === 'bulk'
+              ? 'bg-indigo-600 text-white'
+              : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-indigo-500'
               }`}
           >
             Receipt Voucher - Bulk
@@ -2663,7 +2663,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   type="date"
                   value={date}
                   onChange={e => setDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
               <div>
@@ -2671,7 +2671,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 <select
                   value={selectedReceiptConfig}
                   onChange={(e) => setSelectedReceiptConfig(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="">Select</option>
                   {receiptVoucherConfigs.map((config) => (
@@ -2687,7 +2687,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   type="text"
                   value={autoGeneratedVoucherNumber}
                   readOnly
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
                 />
               </div>
             </div>
@@ -2731,8 +2731,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <button
                     type="button"
                     onClick={() => setShowAdvance(!showAdvance)}
-                    className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${showAdvance
-                      ? 'bg-teal-600 text-white hover:bg-teal-700'
+                    className={`px-4 py-2 text-sm font-medium rounded-[4px] transition-colors ${showAdvance
+                      ? 'bg-indigo-600 text-white hover:bg-indigo-700'
                       : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
                       }`}
                   >
@@ -2745,7 +2745,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             {/* Conditional: Advance Section OR Transaction List */}
             {showAdvance ? (
               /* Advance Receipt Section */
-              <div className="border-2 border-gray-200 rounded-lg p-6 space-y-4">
+              <div className="border-2 border-gray-200 rounded-[4px] p-6 space-y-4">
                 <h4 className="text-sm font-semibold text-gray-700 mb-4">Advance Receipt</h4>
                 <div className="grid grid-cols-2 gap-6">
                   <div>
@@ -2755,7 +2755,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       value={advanceRefNo}
                       onChange={e => setAdvanceRefNo(e.target.value)}
                       placeholder="Enter reference number"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
                   <div>
@@ -2764,14 +2764,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       type="number"
                       value={advanceAmount}
                       onChange={e => setAdvanceAmount(parseFloat(e.target.value) || 0)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
                 </div>
               </div>
             ) : (
               /* Transaction List Section */
-              <div className="border-2 border-gray-200 rounded-lg p-6">
+              <div className="border-2 border-gray-200 rounded-[4px] p-6">
                 <h4 className="text-sm font-semibold text-gray-700 mb-4">Pending Transactions</h4>
                 <div className="overflow-x-auto">
                   <table className="w-full">
@@ -2796,7 +2796,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             <button
                               type="button"
                               onClick={() => handleReceiveClick(transaction.id)}
-                              className="px-3 py-1 text-xs font-medium bg-teal-100 text-teal-700 border border-teal-300 rounded hover:bg-teal-200 transition-colors"
+                              className="px-3 py-1 text-xs font-medium bg-indigo-100 text-slate-700 border border-indigo-300 rounded hover:bg-indigo-200 transition-colors"
                             >
                               Receive
                             </button>
@@ -2807,7 +2807,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               value={transaction.receipt || ''}
                               onChange={e => handleReceiptChange(transaction.id, parseFloat(e.target.value) || 0)}
                               placeholder="0"
-                              className="w-24 px-2 py-1 text-right border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
+                              className="w-24 px-2 py-1 text-right border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                             />
                           </td>
                         </tr>
@@ -2824,7 +2824,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       type="number"
                       value={totalReceipt}
                       readOnly
-                      className="w-32 px-3 py-2 text-right border border-gray-300 rounded-md bg-gray-50 text-gray-700 font-semibold"
+                      className="w-32 px-3 py-2 text-right border border-gray-300 rounded-[4px] bg-gray-50 text-gray-700 font-semibold"
                     />
                   </div>
                 </div>
@@ -2836,14 +2836,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               <button
                 type="button"
                 onClick={handleCancelReceipt}
-                className="px-6 py-2 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                className="px-6 py-2 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-[4px] hover:bg-gray-50 transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handlePostReceipt}
-                className="px-6 py-2 text-sm font-medium text-white bg-teal-600 rounded-lg hover:bg-teal-700 transition-colors"
+                className="px-6 py-2 text-sm font-medium text-white bg-indigo-600 rounded-[4px] hover:bg-indigo-700 transition-colors"
               >
                 Post Receipt
               </button>
@@ -2864,7 +2864,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     type="date"
                     value={date}
                     onChange={e => setDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
                 <div>
@@ -2873,7 +2873,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     type="text"
                     value={autoGeneratedVoucherNumber}
                     readOnly
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
                   />
                 </div>
               </div>
@@ -2885,7 +2885,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <select
                     value={account}
                     onChange={e => setAccount(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
                     <option value="">Select</option>
                     {accountLedgers.map(ledger => (
@@ -2899,7 +2899,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     type="number"
                     value={runningBalance}
                     readOnly
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500 text-right"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500 text-right"
                   />
                 </div>
               </div>
@@ -2917,7 +2917,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           const newRows = bulkRows.map(r => r.id === row.id ? { ...r, party: e.target.value } : r);
                           setBulkRows(newRows);
                         }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                       >
                         <option value="">Customer Name</option>
                         {partyLedgers.map(ledger => (
@@ -2929,7 +2929,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <button
                     type="button"
                     onClick={() => setBulkRows([...bulkRows, { id: Date.now().toString(), party: '', refNo: '', amount: 0 }])}
-                    className="mt-2 text-teal-600 hover:text-teal-700 text-3xl font-bold"
+                    className="mt-2 text-indigo-600 hover:text-slate-700 text-3xl font-bold"
                   >
                     +
                   </button>
@@ -2948,7 +2948,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           setBulkRows(newRows);
                         }}
                         placeholder="Receive now/Advance total"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                       />
                     ))}
                   </div>
@@ -2957,20 +2957,20 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
               {/* Total Receipt */}
               <div className="flex justify-center">
-                <button className="px-8 py-2 bg-teal-600 text-white rounded-md font-medium">
+                <button className="px-8 py-2 bg-indigo-600 text-white rounded-[4px] font-medium">
                   Total Receipt
                 </button>
               </div>
 
               {/* Posting Note */}
-              <div className="bg-teal-50 border-2 border-teal-200 rounded-lg p-4">
+              <div className="bg-indigo-50/50 border-2 border-slate-200 rounded-[4px] p-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Posting Note</label>
                 <textarea
                   value={postingNote}
                   onChange={e => setPostingNote(e.target.value)}
                   placeholder="Enter posting note..."
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none text-sm"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none text-sm"
                 />
               </div>
 
@@ -2978,13 +2978,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               <div className="flex justify-center gap-4">
                 <button
                   onClick={handleCancelReceipt}
-                  className="px-6 py-2 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50"
+                  className="px-6 py-2 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-[4px] hover:bg-gray-50"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handlePostReceipt}
-                  className="px-6 py-2 text-sm font-medium text-white bg-teal-600 rounded-lg hover:bg-teal-700"
+                  className="px-6 py-2 text-sm font-medium text-white bg-indigo-600 rounded-[4px] hover:bg-indigo-700"
                 >
                   Post
                 </button>
@@ -2992,7 +2992,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             </div>
 
             {/* Right Panel - Transaction List */}
-            <div className="bg-teal-500 rounded-lg p-6">
+            <div className="bg-indigo-50/500 rounded-[4px] p-6">
               <div className="text-center mb-4">
                 <h4 className="text-white font-semibold text-sm">
                   {party || 'Customer Name'} (Whose data is displayed below)
@@ -3000,7 +3000,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               </div>
 
               {!showAdvance ? (
-                <div className="bg-white rounded-lg p-4 min-h-[400px]">
+                <div className="bg-white rounded-[4px] p-4 min-h-[400px]">
                   {receiptTransactions.length > 0 ? (
                     <table className="w-full text-sm">
                       <thead className="border-b-2 border-gray-300">
@@ -3043,7 +3043,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   )}
                 </div>
               ) : (
-                <div className="bg-white rounded-lg p-6 min-h-[400px]">
+                <div className="bg-white rounded-[4px] p-6 min-h-[400px]">
                   <h5 className="text-sm font-semibold text-gray-700 mb-4 text-center">Advance Receipt</h5>
                   <div className="space-y-4">
                     <div className="flex items-center gap-3">
@@ -3074,8 +3074,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               <div className="mt-4 text-center">
                 <button
                   onClick={() => setShowAdvance(!showAdvance)}
-                  className={`px-8 py-2 text-sm font-medium rounded-lg ${showAdvance
-                    ? 'bg-teal-600 text-white'
+                  className={`px-8 py-2 text-sm font-medium rounded-[4px] ${showAdvance
+                    ? 'bg-indigo-600 text-white'
                     : 'bg-white text-gray-700 border-2 border-gray-300'
                     }`}
                 >
@@ -3187,18 +3187,18 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           <div className="flex justify-center gap-2 mb-6">
             <button
               onClick={() => setPaymentMode('single')}
-              className={`px-6 py-2 text-sm font-medium rounded-lg transition-colors ${paymentMode === 'single'
-                ? 'bg-teal-600 text-white'
-                : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-teal-500'
+              className={`px-6 py-2 text-sm font-medium rounded-[4px] transition-colors ${paymentMode === 'single'
+                ? 'bg-indigo-600 text-white'
+                : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-indigo-500'
                 }`}
             >
               {type} Voucher - Single
             </button>
             <button
               onClick={() => setPaymentMode('bulk')}
-              className={`px-6 py-2 text-sm font-medium rounded-lg transition-colors ${paymentMode === 'bulk'
-                ? 'bg-teal-600 text-white'
-                : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-teal-500'
+              className={`px-6 py-2 text-sm font-medium rounded-[4px] transition-colors ${paymentMode === 'bulk'
+                ? 'bg-indigo-600 text-white'
+                : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-indigo-500'
                 }`}
             >
               {type} Voucher - Bulk
@@ -3218,7 +3218,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     type="date"
                     value={date}
                     onChange={e => setDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
                 <div>
@@ -3227,7 +3227,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     type="text"
                     value={voucherNumber}
                     readOnly
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
                   />
                 </div>
                 <div>
@@ -3236,7 +3236,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     type="number"
                     value={balance}
                     readOnly
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
                   />
                 </div>
               </div>
@@ -3256,7 +3256,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <select
                       value={selectedReceiptConfig}
                       onChange={(e) => setSelectedReceiptConfig(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     >
                       <option value="">Select</option>
                       {receiptVoucherConfigs.map((config) => (
@@ -3272,7 +3272,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       type="text"
                       value="Auto-generated"
                       readOnly
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
                     />
                   </div>
                   <div></div>
@@ -3304,8 +3304,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <button
                       type="button"
                       onClick={() => setShowAdvance(!showAdvance)}
-                      className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${showAdvance
-                        ? 'bg-teal-600 text-white hover:bg-teal-700'
+                      className={`px-4 py-2 text-sm font-medium rounded-[4px] transition-colors ${showAdvance
+                        ? 'bg-indigo-600 text-white hover:bg-indigo-700'
                         : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
                         }`}
                     >
@@ -3318,7 +3318,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               {/* Details Box - Conditional based on showAdvance */}
               {showAdvance ? (
                 /* Advance Section */
-                <div className="border-2 border-gray-200 rounded-lg p-6 space-y-4">
+                <div className="border-2 border-gray-200 rounded-[4px] p-6 space-y-4">
                   <div className="grid grid-cols-2 gap-6">
                     {/* Top Row */}
                     <div>
@@ -3328,7 +3328,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         value={advanceRefNo}
                         onChange={e => setAdvanceRefNo(e.target.value)}
                         placeholder="Enter advance reference"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
                     </div>
                     <div>
@@ -3337,7 +3337,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         type="number"
                         value={advanceAmount}
                         onChange={e => setAdvanceAmount(parseFloat(e.target.value) || 0)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
                     </div>
                   </div>
@@ -3351,7 +3351,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         onChange={e => setPostingNote(e.target.value)}
                         placeholder="Enter posting note..."
                         rows={4}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
                       />
                     </div>
                     <div>
@@ -3360,14 +3360,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         type="number"
                         value={runningBalance}
                         readOnly
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
                       />
                     </div>
                   </div>
                 </div>
               ) : (
                 /* Regular Details Box */
-                <div className="border-2 border-gray-200 rounded-lg p-6 space-y-4">
+                <div className="border-2 border-gray-200 rounded-[4px] p-6 space-y-4">
                   <div className="grid grid-cols-2 gap-6">
                     {/* Left Column */}
                     <div className="space-y-4">
@@ -3378,7 +3378,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           value={supplierInvNo}
                           onChange={e => setSupplierInvNo(e.target.value)}
                           placeholder="Enter reference number"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         />
                       </div>
 
@@ -3389,7 +3389,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           onChange={e => setPostingNote(e.target.value)}
                           placeholder="Enter posting note..."
                           rows={4}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
                         />
                       </div>
                     </div>
@@ -3402,7 +3402,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           type="number"
                           value={simpleAmount}
                           onChange={e => setSimpleAmount(parseFloat(e.target.value) || 0)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         />
                         <div className="flex items-center gap-4 mt-2">
                           <label className="flex items-center">
@@ -3412,7 +3412,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               value="full"
                               checked={paymentType === 'full'}
                               onChange={() => setPaymentType('full')}
-                              className="w-4 h-4 text-teal-600 focus:ring-teal-500"
+                              className="w-4 h-4 text-indigo-600 focus:ring-indigo-500"
                             />
                             <span className="ml-2 text-sm text-gray-700">{labelFull}</span>
                           </label>
@@ -3423,7 +3423,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               value="partial"
                               checked={paymentType === 'partial'}
                               onChange={() => setPaymentType('partial')}
-                              className="w-4 h-4 text-teal-600 focus:ring-teal-500"
+                              className="w-4 h-4 text-indigo-600 focus:ring-indigo-500"
                             />
                             <span className="ml-2 text-sm text-gray-700">{labelPartial}</span>
                           </label>
@@ -3436,7 +3436,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           type="number"
                           value={runningBalance}
                           readOnly
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
                         />
                       </div>
                     </div>
@@ -3455,7 +3455,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     type="text"
                     value={voucherNumber}
                     readOnly
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
                   />
                 </div>
                 <div>
@@ -3473,7 +3473,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     type="number"
                     value={balance}
                     readOnly
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
                   />
                 </div>
               </div>
@@ -3492,12 +3492,12 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               {/* Conditional rendering based on advance mode */}
               {showBulkAdvance ? (
                 /* Bulk Advance Table */
-                <div className="border-2 border-gray-200 rounded-lg p-6">
+                <div className="border-2 border-gray-200 rounded-[4px] p-6">
                   <div className="flex justify-end mb-4">
                     <button
                       type="button"
                       onClick={() => setShowBulkAdvance(false)}
-                      className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-200 text-sm font-medium"
+                      className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-[4px] hover:bg-gray-200 text-sm font-medium"
                     >
                       ← Back
                     </button>
@@ -3522,7 +3522,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               type="date"
                               value={date}
                               onChange={e => setDate(e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                             />
                           </td>
                           <td className="px-4 py-3">
@@ -3537,7 +3537,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             <input
                               type="text"
                               placeholder="Receipt note"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                             />
                           </td>
                           <td className="px-4 py-3">
@@ -3546,7 +3546,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               value={advanceRefNo}
                               onChange={e => setAdvanceRefNo(e.target.value)}
                               placeholder="Ref #"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                             />
                           </td>
                           <td className="px-4 py-3">
@@ -3554,7 +3554,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               type="number"
                               value={advanceAmount}
                               onChange={e => setAdvanceAmount(parseFloat(e.target.value) || 0)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                             />
                           </td>
                           <td className="px-4 py-3">
@@ -3573,7 +3573,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <div className="flex justify-start mt-4">
                     <button
                       type="button"
-                      className="text-teal-600 hover:text-teal-700 text-sm font-medium flex items-center gap-1"
+                      className="text-indigo-600 hover:text-slate-700 text-sm font-medium flex items-center gap-1"
                     >
                       <span>+</span> Add Row
                     </button>
@@ -3587,7 +3587,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         onChange={e => setPostingNote(e.target.value)}
                         placeholder="Enter posting note..."
                         rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
                       />
                     </div>
                     <div>
@@ -3596,7 +3596,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         type="number"
                         value={simpleAmount}
                         readOnly
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
                       />
                     </div>
                     <div>
@@ -3605,7 +3605,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         type="number"
                         value={runningBalance}
                         readOnly
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
                       />
                     </div>
                   </div>
@@ -3614,12 +3614,12 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 /* Normal Bulk Table Column Layout */
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* Left Column - Details */}
-                  <div className="border-2 border-gray-200 rounded-lg p-4">
+                  <div className="border-2 border-gray-200 rounded-[4px] p-4">
                     <div className="flex justify-between items-center mb-4">
                       <h4 className="text-sm font-semibold text-gray-700">Details</h4>
                       <button
                         type="button"
-                        className="text-teal-600 hover:text-teal-700 text-sm font-medium flex items-center gap-1"
+                        className="text-indigo-600 hover:text-slate-700 text-sm font-medium flex items-center gap-1"
                       >
                         <span>+</span> Add Row
                       </button>
@@ -3642,7 +3642,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                 type="date"
                                 value={date}
                                 onChange={e => setDate(e.target.value)}
-                                className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                               />
                             </td>
                             <td className="px-2 py-2">
@@ -3657,14 +3657,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               <input
                                 type="text"
                                 placeholder="Ref #"
-                                className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                               />
                             </td>
                             <td className="px-2 py-2">
                               <input
                                 type="text"
                                 placeholder="Note"
-                                className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                               />
                             </td>
                           </tr>
@@ -3680,7 +3680,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           onChange={e => setPostingNote(e.target.value)}
                           placeholder="Enter posting note..."
                           rows={3}
-                          className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-teal-500 resize-none"
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
                         />
                       </div>
                       <div>
@@ -3703,12 +3703,12 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   </div>
 
                   {/* Right Column - Advance Section */}
-                  <div className="border-2 border-gray-200 rounded-lg p-4">
+                  <div className="border-2 border-gray-200 rounded-[4px] p-4">
                     <div className="flex justify-end mb-4">
                       <button
                         type="button"
                         onClick={() => setShowBulkAdvance(true)}
-                        className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-200 text-sm font-medium"
+                        className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-[4px] hover:bg-gray-200 text-sm font-medium"
                       >
                         Advance
                       </button>
@@ -3732,35 +3732,35 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                 type="date"
                                 value={date}
                                 onChange={e => setDate(e.target.value)}
-                                className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                               />
                             </td>
                             <td className="px-2 py-2">
                               <input
                                 type="text"
                                 placeholder="Ref #"
-                                className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                               />
                             </td>
                             <td className="px-2 py-2">
                               <input
                                 type="number"
                                 defaultValue={0}
-                                className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                               />
                             </td>
                             <td className="px-2 py-2 text-center">
                               <input
                                 type="checkbox"
                                 defaultChecked
-                                className="w-4 h-4 text-teal-600 focus:ring-teal-500 rounded"
+                                className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 rounded"
                               />
                             </td>
                             <td className="px-2 py-2 text-center">
                               <input
                                 type="checkbox"
                                 defaultChecked={false}
-                                className="w-4 h-4 text-teal-600 focus:ring-teal-500 rounded"
+                                className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 rounded"
                               />
                             </td>
                           </tr>
@@ -3793,7 +3793,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 type="date"
                 value={date}
                 onChange={e => setDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
             <div>
@@ -3802,13 +3802,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 type="text"
                 value={voucherNumber}
                 readOnly
-                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
               />
             </div>
           </div>
 
           {/* Main Form Container */}
-          <div className="border-2 border-gray-200 rounded-lg p-6 max-w-6xl">
+          <div className="border-2 border-gray-200 rounded-[4px] p-6 max-w-6xl">
             {/* Paid from */}
             <div className="grid grid-cols-[160px_1fr_auto_120px] gap-4 items-center mb-4">
               <label className="text-sm font-medium text-gray-700">Transfer From</label>
@@ -3857,7 +3857,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 type="number"
                 value={simpleAmount}
                 onChange={e => setSimpleAmount(parseFloat(e.target.value) || 0)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
           </div>
@@ -3868,7 +3868,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             <textarea
               value={narration}
               onChange={e => setNarration(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+              className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
               rows={4}
               placeholder="Enter posting note..."
             />
@@ -3888,7 +3888,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         </>}
         {type !== 'Contra' && <div><label className="form-label">Party</label><SearchableSelect value={party} onChange={setParty} options={partyLedgers.map(l => l.name)} placeholder="Select Party" /></div>}
         <div><label className="form-label">Amount</label><input type="number" value={simpleAmount} onChange={e => setSimpleAmount(parseFloat(e.target.value))} className="form-input" /></div>
-        <div className="relative"><label className="form-label">Narration</label><textarea value={narration} onChange={e => setNarration(e.target.value)} className="form-input w-full pr-10" rows={3}></textarea><button onClick={handleGenerateNarration} disabled={isNarrationLoading} className="absolute top-7 right-2 text-teal-500 hover:text-teal-700 disabled:text-gray-300" title="Generate Narration with AI">{isNarrationLoading ? <Icon name="spinner" className="w-5 h-5 animate-spin" /> : <Icon name="wand-sparkles" className="w-5 h-5" />}</button></div>
+        <div className="relative"><label className="form-label">Narration</label><textarea value={narration} onChange={e => setNarration(e.target.value)} className="form-input w-full pr-10" rows={3}></textarea><button onClick={handleGenerateNarration} disabled={isNarrationLoading} className="absolute top-7 right-2 text-indigo-500 hover:text-slate-700 disabled:text-gray-300" title="Generate Narration with AI">{isNarrationLoading ? <Icon name="spinner" className="w-5 h-5 animate-spin" /> : <Icon name="wand-sparkles" className="w-5 h-5" />}</button></div>
       </div>
     );
   };
@@ -4126,7 +4126,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             type="date"
             value={date}
             onChange={e => setDate(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
         <div>
@@ -4137,7 +4137,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             type="text"
             value={voucherNumber}
             readOnly
-            className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
           />
         </div>
       </div>
@@ -4145,7 +4145,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       {/* Expense Rows */}
       <div className="space-y-6">
         {expenseRows.map((row, index) => (
-          <div key={row.id} className="border-2 border-gray-200 rounded-lg p-6 bg-white shadow-sm">
+          <div key={row.id} className="border-2 border-gray-200 rounded-[4px] p-6 bg-white shadow-none border border-slate-200-none border border-slate-200">
             {/* Row Header */}
             <div className="flex justify-between items-center mb-4">
               <h4 className="text-sm font-semibold text-gray-700">Expense Entry #{index + 1}</h4>
@@ -4194,7 +4194,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   type="text"
                   value={row.billRefNo}
                   onChange={e => handleExpenseRowChange(row.id, 'billRefNo', e.target.value)}
-                  className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 ${!row.billRefNo ? 'border-red-300' : 'border-gray-300'}`}
+                  className={`w-full px-3 py-2 border rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${!row.billRefNo ? 'border-red-300' : 'border-gray-300'}`}
                   placeholder="Invoice #"
                 />
               </div>
@@ -4206,7 +4206,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   type="text"
                   value={row.entryNote}
                   onChange={e => handleExpenseRowChange(row.id, 'entryNote', e.target.value)}
-                  className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 ${!row.entryNote ? 'border-red-300' : 'border-gray-300'}`}
+                  className={`w-full px-3 py-2 border rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${!row.entryNote ? 'border-red-300' : 'border-gray-300'}`}
                   placeholder="Note"
                 />
               </div>
@@ -4218,7 +4218,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   type="number"
                   value={row.totalAmount || ''}
                   onChange={e => handleExpenseRowChange(row.id, 'totalAmount', parseFloat(e.target.value) || 0)}
-                  className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 ${row.totalAmount <= 0 ? 'border-red-300' : 'border-gray-300'}`}
+                  className={`w-full px-3 py-2 border rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${row.totalAmount <= 0 ? 'border-red-300' : 'border-gray-300'}`}
                   placeholder="0.00"
                 />
               </div>
@@ -4228,7 +4228,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             {!row.showTax && (
               <button
                 onClick={() => handleToggleTax(row.id)}
-                className="inline-flex items-center px-4 py-2 text-sm font-medium text-teal-700 bg-teal-50 border border-teal-300 rounded-md hover:bg-teal-100"
+                className="inline-flex items-center px-4 py-2 text-sm font-medium text-slate-700 bg-indigo-50/50 border border-indigo-300 rounded-[4px] hover:bg-indigo-100"
               >
                 <Icon name="plus" className="w-4 h-4 mr-2" />
                 Add Tax
@@ -4237,12 +4237,12 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
             {/* GST Section */}
             {row.showTax && (
-              <div className="mt-4 p-4 bg-teal-50 border border-teal-200 rounded-md">
+              <div className="mt-4 p-4 bg-indigo-50/50 border border-slate-200 rounded-[4px]">
                 <div className="flex justify-between items-center mb-3">
                   <h5 className="text-xs font-semibold text-gray-700">GST Details</h5>
                   <button
                     onClick={() => handleToggleTax(row.id)}
-                    className="text-xs text-teal-600 hover:text-teal-800"
+                    className="text-xs text-indigo-600 hover:text-indigo-800"
                   >
                     Hide
                   </button>
@@ -4256,7 +4256,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <select
                       value={row.gstRate}
                       onChange={e => handleExpenseRowChange(row.id, 'gstRate', parseFloat(e.target.value))}
-                      className="w-full px-2 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      className="w-full px-2 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     >
                       {gstRateOptions.map(rate => (
                         <option key={rate} value={rate}>{rate}%</option>
@@ -4271,7 +4271,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       type="number"
                       value={row.taxableValue || ''}
                       onChange={e => handleExpenseRowChange(row.id, 'taxableValue', parseFloat(e.target.value) || 0)}
-                      className="w-full px-2 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      className="w-full px-2 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       placeholder="0.00"
                     />
                   </div>
@@ -4281,7 +4281,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       type="number"
                       value={row.igst || ''}
                       onChange={e => handleExpenseRowChange(row.id, 'igst', parseFloat(e.target.value) || 0)}
-                      className="w-full px-2 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-gray-50"
+                      className="w-full px-2 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-50"
                       placeholder="0.00"
                     />
                   </div>
@@ -4292,7 +4292,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       value={row.cgst || ''}
                       onChange={e => handleExpenseRowChange(row.id, 'cgst', parseFloat(e.target.value) || 0)}
                       disabled={row.igst > 0}
-                      className={`w-full px-2 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 ${row.igst > 0 ? 'bg-gray-100 cursor-not-allowed' : 'bg-gray-50'}`}
+                      className={`w-full px-2 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${row.igst > 0 ? 'bg-gray-100 cursor-not-allowed' : 'bg-gray-50'}`}
                       placeholder="0.00"
                     />
                   </div>
@@ -4303,7 +4303,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       value={row.sgst || ''}
                       onChange={e => handleExpenseRowChange(row.id, 'sgst', parseFloat(e.target.value) || 0)}
                       disabled={row.igst > 0}
-                      className={`w-full px-2 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 ${row.igst > 0 ? 'bg-gray-100 cursor-not-allowed' : 'bg-gray-50'}`}
+                      className={`w-full px-2 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${row.igst > 0 ? 'bg-gray-100 cursor-not-allowed' : 'bg-gray-50'}`}
                       placeholder="0.00"
                     />
                   </div>
@@ -4313,7 +4313,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       type="number"
                       value={row.cess || ''}
                       onChange={e => handleExpenseRowChange(row.id, 'cess', parseFloat(e.target.value) || 0)}
-                      className="w-full px-2 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      className="w-full px-2 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       placeholder="0.00"
                     />
                   </div>
@@ -4327,14 +4327,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       {/* More Expenses Button */}
       <button
         onClick={handleAddExpenseRow}
-        className="mt-4 inline-flex items-center px-4 py-2 text-sm font-medium text-teal-700 bg-teal-50 border border-teal-300 rounded-md hover:bg-teal-100"
+        className="mt-4 inline-flex items-center px-4 py-2 text-sm font-medium text-slate-700 bg-indigo-50/50 border border-indigo-300 rounded-[4px] hover:bg-indigo-100"
       >
         <Icon name="plus" className="w-4 h-4 mr-2" />
         More Expenses
       </button>
 
       {/* File Upload Section */}
-      <div className="mt-6 p-4 border-2 border-dashed border-gray-300 rounded-lg">
+      <div className="mt-6 p-4 border-2 border-dashed border-gray-300 rounded-[4px]">
         <div className="flex items-center justify-between">
           <div>
             <h5 className="text-sm font-medium text-gray-700 mb-1">Upload Supporting Documents</h5>
@@ -4342,7 +4342,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           </div>
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center px-4 py-2 text-sm font-medium text-teal-700 bg-teal-50 border border-teal-300 rounded-md hover:bg-teal-100"
+            className="inline-flex items-center px-4 py-2 text-sm font-medium text-slate-700 bg-indigo-50/50 border border-indigo-300 rounded-[4px] hover:bg-indigo-100"
           >
             <Icon name="upload" className="w-4 h-4 mr-2" />
             Upload
@@ -4385,7 +4385,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         <textarea
           value={narration}
           onChange={e => setNarration(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+          className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
           rows={3}
           placeholder="Enter posting note..."
         />
@@ -4395,13 +4395,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       <div className="mt-8 pt-4 border-t flex justify-end space-x-3">
         <button
           onClick={resetForm}
-          className="inline-flex items-center justify-center px-6 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+          className="inline-flex items-center justify-center px-6 py-2 border border-gray-300 text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
         >
           Cancel
         </button>
         <button
           onClick={handleSaveExpenseVoucher}
-          className="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500"
+          className="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
         >
           Post & Close
         </button>
@@ -4419,7 +4419,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             type="date"
             value={date}
             onChange={e => setDate(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
         <div>
@@ -4428,13 +4428,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             type="text"
             value={voucherNumber}
             readOnly
-            className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
           />
         </div>
       </div>
 
       {/* Journal Entries Table */}
-      <div className="border-2 border-gray-200 rounded-lg p-6">
+      <div className="border-2 border-gray-200 rounded-[4px] p-6">
         <table className="min-w-full">
           <thead className="bg-gray-50">
             <tr>
@@ -4514,7 +4514,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
         <button
           onClick={handleAddEntryRow}
-          className="mt-4 text-sm text-teal-600 hover:text-teal-800 font-medium flex items-center"
+          className="mt-4 text-sm text-indigo-600 hover:text-indigo-800 font-medium flex items-center"
         >
           <Icon name="plus" className="w-4 h-4 mr-1" /> Add Row
         </button>
@@ -4526,7 +4526,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         <textarea
           value={narration}
           onChange={e => setNarration(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+          className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
           rows={3}
           placeholder="Enter posting note..."
         />
@@ -4538,43 +4538,52 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   );
 
   return (
-    <div>
-      <h2 className="text-2xl font-bold text-gray-800 mb-6">Voucher Entry</h2>
-
-      <div className="flex justify-between items-center border-b border-gray-200 mb-6">
-        <nav className="-mb-px flex space-x-8 overflow-x-auto" aria-label="Tabs">
-          {availableVoucherTypes.map(type => (
-            <button
-              key={type.id}
-              onClick={() => { setVoucherType(type.id); resetForm(); }}
-              className={`
-                whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors
-                ${voucherType === type.id
-                  ? 'border-teal-500 text-teal-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
-              `}
-            >
-              {type.label.toUpperCase()}
-            </button>
-          ))}
-        </nav>
-        <button
-          onClick={() => setIsInvoiceScannerOpen(true)}
-          className="ml-4 inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 my-2"
-          title="Upload and scan invoices"
-        >
-          <Icon name="upload" className="w-4 h-4 mr-2" />
-          Upload Invoices
-        </button>
+    <div className="space-y-8">
+      {/* Page Header */}
+      <div className="flex items-end justify-between border-b border-slate-200 pb-6">
+        <div>
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Transaction Entry</p>
+          <h2 className="text-[20px] font-bold text-slate-900">
+            Voucher Entry
+          </h2>
+        </div>
       </div>
 
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+      {/* Main Tabs */}
+      <div className="flex space-x-6 overflow-x-auto border-b border-slate-200 no-scrollbar">
+        {availableVoucherTypes.map(type => (
+          <button
+            key={type.id}
+            onClick={() => { setVoucherType(type.id); resetForm(); }}
+            className={`
+              whitespace-nowrap pb-4 text-[13px] font-bold uppercase tracking-wider transition-all relative
+              ${voucherType === type.id
+                ? 'text-indigo-600'
+                : 'text-slate-400 hover:text-slate-600'}
+            `}
+          >
+            {type.label}
+            {voucherType === type.id && (
+              <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-600" />
+            )}
+          </button>
+        ))}
+      </div>
+
+      <div className="erp-card p-6">
         <div className="flex justify-between items-center border-b pb-4 mb-6">
           <h3 className="text-lg font-semibold text-gray-900">{voucherType} Voucher</h3>
           <div className="flex items-center space-x-2">
             <button
+              onClick={() => setIsInvoiceScannerOpen(true)}
+              className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              <Icon name="upload" className="w-4 h-4 mr-2" />
+              Upload Invoices
+            </button>
+            <button
               onClick={() => setIsMassUploadOpen(true)}
-              className="inline-flex items-center justify-center px-4 py-2 border border-purple-200 text-sm font-medium rounded-md shadow-sm text-purple-700 bg-white hover:bg-purple-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+              className="inline-flex items-center justify-center px-4 py-2 border border-purple-200 text-sm font-medium rounded shadow-sm text-purple-700 bg-white hover:bg-purple-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
             >
               <Icon name="upload" className="w-4 h-4 mr-2" />
               Mass Upload
@@ -4582,13 +4591,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             <div className="relative" ref={importMenuRef}>
               <button
                 onClick={() => setIsImportMenuOpen(prev => !prev)}
-                className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500"
+                className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 <Icon name="upload" className="w-5 h-5 mr-2" />
                 Import Vouchers
               </button>
               {isImportMenuOpen && (
-                <div className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
+                <div className="origin-top-right absolute right-0 mt-2 w-56 rounded shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
                   <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
                     <a href="#" onClick={(e) => { e.preventDefault(); setIsInvoiceScannerOpen(true); setIsImportMenuOpen(false); }} className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Upload Invoices (Scan)</a>
                     <a href="#" onClick={(e) => { e.preventDefault(); setIsMassUploadOpen(true); setIsImportMenuOpen(false); }} className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 font-medium text-purple-600" role="menuitem">Bulk Upload (AI)</a>
@@ -4610,8 +4619,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         </div>
         <style>{`
           .form-label { display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.25rem; }
-          .form-input { display: block; width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); outline: none; transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out; }
-          .form-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 1px #3b82f6; }
+          .form-input { display: block; width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem; box-shadow-none border border-slate-200: 0 1px 2px 0 rgb(0 0 0 / 0.05); outline: none; transition: border-color 0.15s ease-in-out, box-shadow-none border border-slate-200 0.15s ease-in-out; }
+          .form-input:focus { border-color: #3b82f6; box-shadow-none border border-slate-200: 0 0 0 1px #3b82f6; }
           .table-input { 
             width: 100%; 
             border: 1px solid transparent; 
@@ -4625,7 +4634,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
            .table-input:focus { 
             background-color: white;
             border-color: #3b82f6;
-            box-shadow: 0 0 0 1px #3b82f6;
+            box-shadow-none border border-slate-200: 0 0 0 1px #3b82f6;
           }
           .table-input[readOnly] {
             background-color: #f9fafb;
@@ -4643,13 +4652,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         {voucherType === 'Journal' && renderJournalForm()}
         {voucherType === 'Expenses' && renderExpensesForm()}
         {voucherType === 'Credit Note' && (
-          <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
+          <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed border-gray-300 rounded-[4px] bg-gray-50">
             <h3 className="text-xl font-medium text-gray-900 mb-2">Credit Note Voucher</h3>
             <p className="text-gray-500">Credit Note entry form is under development.</p>
           </div>
         )}
         {voucherType === 'Debit Note' && (
-          <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
+          <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed border-gray-300 rounded-[4px] bg-gray-50">
             <h3 className="text-xl font-medium text-gray-900 mb-2">Debit Note Voucher</h3>
             <p className="text-gray-500">Debit Note entry form is under development.</p>
           </div>
@@ -4658,7 +4667,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         {/* Hide page-level buttons for Receipt and Payment since they have their own buttons */}
         {voucherType !== 'Receipt' && voucherType !== 'Payment' && voucherType !== 'Expenses' && voucherType !== 'Sales' && (
           <div className="mt-8 pt-4 border-t flex justify-end space-x-3">
-            <button onClick={resetForm} className="inline-flex items-center justify-center px-6 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+            <button onClick={resetForm} className="inline-flex items-center justify-center px-6 py-2 border border-gray-300 text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
               Cancel
             </button>
 
@@ -4674,16 +4683,16 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   else if (purchaseActiveTab === 'supply') setPurchaseActiveTab('due');
                   else if (purchaseActiveTab === 'due') setPurchaseActiveTab('transit');
                 }}
-                className="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500"
+                className="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 Next
               </button>
             ) : (
               <>
-                <button onClick={handleSaveVoucher} className="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500">
+                <button onClick={handleSaveVoucher} className="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                   Post & Close
                 </button>
-                <button onClick={handleSaveVoucher} className="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500">
+                <button onClick={handleSaveVoucher} className="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                   Post & Print/Email
                 </button>
               </>
@@ -4719,7 +4728,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       {/* Recent / Imported Vouchers - show below the form so imports are visible immediately */}
       {
         vouchers && vouchers.length > 0 && (
-          <div className="mt-8 bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+          <div className="mt-8 bg-white p-6 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-slate-200">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Vouchers</h3>
             <div className="overflow-x-auto">
               <table className="min-w-full">
@@ -4811,4 +4820,5 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 };
 
 export default VouchersPage;
+
 

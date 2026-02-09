@@ -41,7 +41,7 @@ const FilterBar: React.FC<FilterBarProps> = ({
     };
 
     return (
-        <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-200 mb-6">
+        <div className="bg-white p-4 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-slate-200 mb-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Date From */}
                 <div>
@@ -148,7 +148,7 @@ const FilterBar: React.FC<FilterBarProps> = ({
                 </button>
                 <button
                     onClick={onReset}
-                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 text-sm font-medium"
+                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-[4px] hover:bg-gray-50 text-sm font-medium"
                 >
                     Reset
                 </button>
@@ -158,3 +158,4 @@ const FilterBar: React.FC<FilterBarProps> = ({
 };
 
 export default FilterBar;
+

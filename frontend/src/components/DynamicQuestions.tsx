@@ -266,7 +266,7 @@ export const DynamicQuestions: React.FC<DynamicQuestionsProps> = ({
         .form-control:focus {
           outline: none;
           border-color: #80bdff;
-          box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+          box-shadow-none border border-slate-200: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
         }
 
         .radio-group {
@@ -315,4 +315,5 @@ export const DynamicQuestions: React.FC<DynamicQuestionsProps> = ({
 };
 
 export default DynamicQuestions;
+
 

@@ -269,7 +269,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
         <div className="min-h-screen bg-gray-50">
             {/* Main Content */}
             <div className="px-8 py-6">
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+                <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200 p-8">
                     {/* Page Title */}
                     <h2 className="text-2xl font-bold text-gray-900 mb-6">Create Sales Order</h2>
 
@@ -284,7 +284,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                 <select
                                     value={soSeries}
                                     onChange={(e) => setSOSeries(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                                 >
                                     <option value="">Select series</option>
                                     <option value="SO-2024">SO-2024</option>
@@ -295,7 +295,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                             </div>
                             <div className="flex items-end">
                                 <button
-                                    className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition-colors"
+                                    className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-[4px] hover:bg-indigo-700 transition-colors"
                                     onClick={() => alert('Import Customer PO functionality')}
                                 >
                                     Import Customer PO
@@ -309,7 +309,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                     type="text"
                                     value={soNumber}
                                     readOnly
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-600"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-600"
                                 />
                                 <p className="text-xs text-gray-500 mt-1">Auto-generated based on series</p>
                             </div>
@@ -321,7 +321,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                     type="date"
                                     value={date}
                                     onChange={(e) => setDate(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                 />
                                 <p className="text-xs text-gray-500 mt-1">Default: Today, editable</p>
                             </div>
@@ -333,7 +333,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                     type="text"
                                     value={customerPONumber}
                                     onChange={(e) => setCustomerPONumber(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                     placeholder="Can be fetched from imported PO"
                                 />
                             </div>
@@ -344,7 +344,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                 <select
                                     value={customerName}
                                     onChange={(e) => setCustomerName(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                                 >
                                     <option value="">Select customer</option>
                                     <option value="customer1">Acme Corporation</option>
@@ -358,7 +358,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                 <select
                                     value={branch}
                                     onChange={(e) => setBranch(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                                 >
                                     <option value="">Select branch</option>
                                     <option value="main">Main Branch</option>
@@ -373,7 +373,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                     rows={3}
                                     value={address}
                                     onChange={(e) => setAddress(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 resize-none"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 resize-none"
                                     placeholder="Auto-filled from customer master"
                                 />
                                 <p className="text-xs text-gray-500 mt-1">Fetched from customer master</p>
@@ -386,7 +386,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                     type="email"
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                     placeholder="Auto-filled, editable"
                                 />
                             </div>
@@ -398,7 +398,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                     type="tel"
                                     value={contactNumber}
                                     onChange={(e) => setContactNumber(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                     placeholder="Auto-filled"
                                 />
                             </div>
@@ -416,7 +416,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                 <select
                                     value={quotationType}
                                     onChange={(e) => setQuotationType(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                                 >
                                     <option value="">Select type</option>
                                     <option value="quotation">Sales Quotation</option>
@@ -453,7 +453,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                     {/* Section 3: Item Details Table */}
                     <div className="mb-8">
                         <h3 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-200">Item Details</h3>
-                        <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                        <div className="overflow-x-auto border border-gray-200 rounded-[4px]">
                             <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
                                     <tr>
@@ -553,7 +553,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                         {/* Add Row Button */}
                         <button
                             onClick={handleAddItem}
-                            className="mt-4 flex items-center gap-2 text-teal-600 hover:text-indigo-700 text-sm font-medium"
+                            className="mt-4 flex items-center gap-2 text-indigo-600 hover:text-indigo-700 text-sm font-medium"
                         >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -564,7 +564,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
 
                     {/* Section 4: Totals Summary */}
                     <div className="mb-8 flex justify-end">
-                        <div className="w-full md:w-1/2 lg:w-1/3 bg-gray-50 border border-gray-200 rounded-lg p-6">
+                        <div className="w-full md:w-1/2 lg:w-1/3 bg-gray-50 border border-gray-200 rounded-[4px] p-6">
                             <h3 className="text-md font-semibold text-gray-900 mb-4">Totals Summary</h3>
                             <div className="space-y-3">
                                 <div className="flex justify-between">
@@ -577,7 +577,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                 </div>
                                 <div className="flex justify-between pt-3 border-t border-gray-300">
                                     <span className="text-sm font-semibold text-gray-900">Net Value Total:</span>
-                                    <span className="text-lg font-bold text-teal-600">₹{netValueTotal.toFixed(2)}</span>
+                                    <span className="text-lg font-bold text-indigo-600">₹{netValueTotal.toFixed(2)}</span>
                                 </div>
                             </div>
                         </div>
@@ -594,7 +594,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                 <select
                                     value={deliverAt}
                                     onChange={(e) => setDeliverAt(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                                 >
                                     <option value="">Select delivery address</option>
                                     <option value="addr1">Main Office - 123 Business St</option>
@@ -610,7 +610,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                     type="date"
                                     value={deliveryDate}
                                     onChange={(e) => setDeliveryDate(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                 />
                             </div>
                         </div>
@@ -628,7 +628,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                     type="text"
                                     value={creditPeriod}
                                     onChange={(e) => setCreditPeriod(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                     placeholder="Auto-filled from customer master, editable"
                                 />
                                 <p className="text-xs text-gray-500 mt-1">From customer master</p>
@@ -647,7 +647,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                     type="text"
                                     value={salespersonInCharge}
                                     onChange={(e) => setSalespersonInCharge(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                     placeholder=""
                                 />
                                 <p className="text-xs text-gray-500 mt-1">Employee / Third Party Agent</p>
@@ -664,7 +664,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                         if (e.target.value === 'emp001') setEmployeeName('John Doe');
                                         else if (e.target.value === 'emp002') setEmployeeName('Jane Smith');
                                     }}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                                 >
                                     <option value="">Select employee/agent</option>
                                     <option value="emp001">EMP-001</option>
@@ -681,7 +681,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                     type="text"
                                     value={employeeName}
                                     readOnly
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-600"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-600"
                                     placeholder="Auto-filled when ID is selected"
                                 />
                             </div>
@@ -692,13 +692,13 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                     <div className="flex justify-end gap-4 pt-6 border-t border-gray-200">
                         <button
                             onClick={onCancel}
-                            className="px-6 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                            className="px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                         >
                             Cancel
                         </button>
                         <button
                             onClick={handleSave}
-                            className="px-6 py-2 bg-teal-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
+                            className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] text-sm font-medium hover:bg-indigo-700 transition-colors"
                         >
                             Save
                         </button>
@@ -710,4 +710,5 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
 };
 
 export default CreateSalesOrder;
+
 

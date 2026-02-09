@@ -160,6 +160,9 @@ const App: React.FC = () => {
 
   // Current page - which section of the app is being displayed
   const [currentPage, setCurrentPage] = useState<Page>('Dashboard');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
   // Data loading state - prevents rendering before data is loaded
   const [isDataLoaded, setIsDataLoaded] = useState(false);
@@ -1054,7 +1057,7 @@ const App: React.FC = () => {
 
     // Plan-based feature restrictions (only for premium features now)
     switch (currentPage) {
-      case 'Dashboard': return <DashboardPage companyName={companyDetails.name} vouchers={vouchers} ledgers={ledgers} isAdmin={localStorage.getItem('tenantId') === null || localStorage.getItem('tenantId') === 'null'} />;
+      case 'Dashboard': return <DashboardPage onNavigate={handleNavigate} companyName={companyDetails.name} vouchers={vouchers} ledgers={ledgers} isAdmin={localStorage.getItem('tenantId') === null || localStorage.getItem('tenantId') === 'null'} />;
       case 'Masters': return <MastersPage
         ledgers={ledgers}
         ledgerGroups={ledgerGroups}
@@ -1106,16 +1109,49 @@ const App: React.FC = () => {
     return <LoginPage onLogin={handleLogin} onSwitchToSignup={() => setView("signup")} onBack={() => window.location.href = (import.meta as any).env.VITE_LANDING_URL || 'http://localhost:3000'} />;
   }
   return (
-    <div className="flex h-screen bg-slate-100">
-      <Sidebar
-        currentPage={currentPage}
-        onNavigate={handleNavigate}
-        onLogout={handleLogout}
-        companyName={companyDetails.name}
-        userPlan={userPlan}
-      />
-      <main className="flex-1 ml-64 p-8 overflow-y-auto">
-        {renderPage()}
+    <div className="flex h-screen bg-white font-sans overflow-hidden">
+      {isSidebarOpen && (
+        <Sidebar
+          currentPage={currentPage}
+          onNavigate={handleNavigate}
+          onLogout={handleLogout}
+          companyName={companyDetails.name}
+          userPlan={userPlan}
+        />
+      )}
+      <main className={`flex-1 ${isSidebarOpen ? 'ml-[240px]' : 'ml-0'} h-full overflow-y-auto bg-slate-50 transition-all duration-300`}>
+        <div className="p-6">
+          <div className="max-w-[1600px] mx-auto">
+            {/* Sticky Header with Toggle Button */}
+            <div className="sticky top-0 z-30 bg-slate-50/80 backdrop-blur-md -mx-6 px-6 py-4 mb-6 border-b border-slate-200/50 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={toggleSidebar}
+                  className="p-2 hover:bg-white rounded-lg transition-all shadow-sm border border-slate-200 bg-white active:scale-95 group"
+                  title={isSidebarOpen ? "Hide Sidebar" : "Show Sidebar"}
+                >
+                  <div className="flex flex-col gap-1 w-5">
+                    <span className={`h-0.5 bg-indigo-600 rounded-full transition-all ${isSidebarOpen ? 'w-5' : 'w-5'}`}></span>
+                    <span className={`h-0.5 bg-indigo-600 rounded-full transition-all ${isSidebarOpen ? 'w-5' : 'w-3'}`}></span>
+                    <span className={`h-0.5 bg-indigo-600 rounded-full transition-all ${isSidebarOpen ? 'w-5' : 'w-4'}`}></span>
+                  </div>
+                </button>
+                <div className="flex flex-col">
+                  <h2 className="text-[14px] font-bold text-slate-800 uppercase tracking-wider leading-none">
+                    {currentPage}
+                  </h2>
+                  <span className="text-[10px] text-slate-400 font-medium uppercase tracking-widest mt-1">
+                    {companyDetails.name || 'Ai Accounting'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+              </div>
+            </div>
+            {renderPage()}
+          </div>
+        </div>
       </main>
       <Modal isOpen={isLoading} title="AI Processing" type="loading">
         <p>Extracting invoice data with Gemini AI. This may take a moment...</p>
@@ -1146,7 +1182,7 @@ const App: React.FC = () => {
       {/* Floating AI Agent Button */}
       <button
         onClick={() => setIsAgentOpen(true)}
-        className="fixed bottom-2 right-2 w-28 h-28 hover:scale-110 transition-transform duration-300 z-50 flex items-center justify-center group filter drop-shadow-xl"
+        className="fixed bottom-2 right-2 w-28 h-28 hover:scale-110 transition-transform duration-300 z-50 flex items-center justify-center group filter drop-shadow-none border border-slate-200-none border border-slate-200"
         title="Chat with Kiki Agent"
       >
         <img src="/src/assets/fox-logo-transparent.png" alt="AI Agent" className="w-full h-full object-contain" />
@@ -1165,3 +1201,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+

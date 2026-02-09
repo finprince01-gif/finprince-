@@ -366,8 +366,8 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
             return (
                 <div key={nodePath} style={{ marginLeft: `${level * 20}px` }}>
                     <div
-                        className={`flex items-center py-1.5 px-2 cursor-pointer hover:bg-gray-100 rounded transition-colors ${isSelected ? 'bg-teal-100 text-teal-700 font-medium border-l-2 border-teal-500' : ''
-                            } ${node.isCustom ? 'text-teal-600' : ''}`}
+                        className={`flex items-center py-1.5 px-2 cursor-pointer hover:bg-gray-100 rounded transition-colors ${isSelected ? 'bg-indigo-100 text-slate-700 font-medium border-l-2 border-indigo-500' : ''
+                            } ${node.isCustom ? 'text-indigo-600' : ''}`}
                         onClick={() => {
                             selectNodeForPreview(node);
                             // Reset inputs when selection changes
@@ -385,7 +385,7 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                                 {isExpanded ? '−' : '+'}
                             </span>
                         ) : (
-                            <span className={`mr-1 text-xs ${node.isCustom ? 'text-teal-500' : 'text-gray-400'}`}>
+                            <span className={`mr-1 text-xs ${node.isCustom ? 'text-indigo-500' : 'text-gray-400'}`}>
                                 {node.isCustom ? '★' : '•'}
                             </span>
                         )}
@@ -484,7 +484,7 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
     const isLedgerTypeFixed = !!selectedNode?.fullPath.ledger_type;
 
     return (
-        <div className="bg-white rounded-lg border border-gray-200 space-y-4">
+        <div className="bg-white rounded-[4px] border border-gray-200 space-y-4">
             <div className="p-4 border-b border-gray-200">
                 <h4 className="font-semibold text-gray-800 flex items-center gap-2">
                     <Icon name="wand-sparkles" size={18} />
@@ -498,7 +498,7 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                         Select Ledger Type
                     </label>
-                    <div className="border border-gray-300 rounded-md p-3 max-h-[32rem] overflow-y-auto bg-gray-50">
+                    <div className="border border-gray-300 rounded-[4px] p-3 max-h-[32rem] overflow-y-auto bg-gray-50">
                         {treeData.length > 0 ? (
                             renderTree(treeData)
                         ) : (
@@ -508,13 +508,13 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                     <p className="text-xs text-gray-500 mt-2">
                         <strong>Single click</strong> to select any level. <strong>Double click</strong> to expand/collapse categories.
                         <br />
-                        <span className="text-teal-600">★ Blue items</span> are your custom ledgers. Click them to create nested ledgers!
+                        <span className="text-indigo-600">★ Blue items</span> are your custom ledgers. Click them to create nested ledgers!
                     </p>
                 </div>
 
                 {/* Right Column: Preview & Form */}
                 <div>
-                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <div className="bg-gray-50 border border-gray-200 rounded-[4px] p-4">
                         <h5 className="text-sm font-semibold text-gray-700 mb-4">Ledger Preview</h5>
 
                         {/* Hierarchy Details Grid */}
@@ -559,7 +559,7 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                                     value={isSubGroup2Fixed ? selectedNode?.fullPath.sub_group_2! : subGroup2Input}
                                     onChange={(e) => !isSubGroup2Fixed && setSubGroup2Input(e.target.value)}
                                     disabled={!selectedNode || isSubGroup2Fixed}
-                                    className={`w-full p-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 ${!selectedNode || isSubGroup2Fixed
+                                    className={`w-full p-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${!selectedNode || isSubGroup2Fixed
                                         ? 'bg-gray-100 text-gray-600 border-gray-200'
                                         : 'bg-white border-gray-300'
                                         }`}
@@ -577,7 +577,7 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                                     value={isSubGroup3Fixed ? selectedNode?.fullPath.sub_group_3! : subGroup3Input}
                                     onChange={(e) => !isSubGroup3Fixed && setSubGroup3Input(e.target.value)}
                                     disabled={!selectedNode || isSubGroup3Fixed}
-                                    className={`w-full p-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 ${!selectedNode || isSubGroup3Fixed
+                                    className={`w-full p-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${!selectedNode || isSubGroup3Fixed
                                         ? 'bg-gray-100 text-gray-600 border-gray-200'
                                         : 'bg-white border-gray-300'
                                         }`}
@@ -595,7 +595,7 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                                     value={isLedgerTypeFixed ? selectedNode?.fullPath.ledger_type! : ledgerTypeInput}
                                     onChange={(e) => !isLedgerTypeFixed && setLedgerTypeInput(e.target.value)}
                                     disabled={!selectedNode || isLedgerTypeFixed}
-                                    className={`w-full p-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 ${!selectedNode || isLedgerTypeFixed
+                                    className={`w-full p-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${!selectedNode || isLedgerTypeFixed
                                         ? 'bg-gray-100 text-gray-600 border-gray-200'
                                         : 'bg-white border-gray-300'
                                         }`}
@@ -617,7 +617,7 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                             <button
                                 type="button"
                                 onClick={handleSubmit}
-                                className="w-full bg-teal-600 text-white px-6 py-3 rounded-md font-medium hover:bg-teal-700 transition-colors"
+                                className="w-full bg-indigo-600 text-white px-6 py-3 rounded-[4px] font-medium hover:bg-indigo-700 transition-colors"
                             >
                                 Create Ledger
                             </button>
@@ -629,3 +629,4 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
         </div>
     );
 };
+

@@ -183,14 +183,14 @@ export default function GSTR1Page() {
     return (
         <div className="space-y-6">
             {/* Period Selector */}
-            <div className="bg-white rounded-lg shadow p-6">
+            <div className="bg-white rounded-[4px] shadow-none border border-slate-200 p-6">
                 <div className="flex items-center gap-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Financial Year</label>
                         <select
                             value={period.year}
                             onChange={(e) => setPeriod({ ...period, year: e.target.value })}
-                            className="px-4 py-2 border border-gray-300 rounded-md"
+                            className="px-4 py-2 border border-gray-300 rounded-[4px]"
                         >
                             {(() => {
                                 const years = [];
@@ -216,7 +216,7 @@ export default function GSTR1Page() {
                         <select
                             value={period.month}
                             onChange={(e) => setPeriod({ ...period, month: e.target.value })}
-                            className="px-4 py-2 border border-gray-300 rounded-md"
+                            className="px-4 py-2 border border-gray-300 rounded-[4px]"
                         >
                             <option>January</option>
                             <option>February</option>
@@ -234,21 +234,21 @@ export default function GSTR1Page() {
                     </div>
                     <button
                         onClick={fetchData}
-                        className="mt-7 px-6 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 flex items-center gap-2"
+                        className="mt-7 px-6 py-2 bg-indigo-600 text-white rounded-[4px] hover:bg-indigo-700 flex items-center gap-2"
                         disabled={isLoading}
                     >
                         {isLoading ? 'Generating...' : 'Generate Return'}
                     </button>
                     <button
                         onClick={handleDownloadExcel}
-                        className="mt-7 px-6 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 flex items-center gap-2"
+                        className="mt-7 px-6 py-2 bg-indigo-600 text-white rounded-[4px] hover:bg-indigo-700 flex items-center gap-2"
                         disabled={isLoading}
                     >
                         Download Excel
                     </button>
                     <button
                         onClick={handleDownloadJson}
-                        className="mt-7 px-6 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 flex items-center gap-2"
+                        className="mt-7 px-6 py-2 bg-yellow-600 text-white rounded-[4px] hover:bg-yellow-700 flex items-center gap-2"
                         disabled={isLoading}
                     >
                         Download JSON
@@ -257,7 +257,7 @@ export default function GSTR1Page() {
             </div>
 
             {/* Sub Tabs */}
-            <div className="bg-white rounded-lg shadow">
+            <div className="bg-white rounded-[4px] shadow-none border border-slate-200">
                 <div className="border-b border-gray-200 px-6">
                     <div className="flex gap-8 overflow-x-auto">
                         {subTabs.map((tab) => (
@@ -265,7 +265,7 @@ export default function GSTR1Page() {
                                 key={tab}
                                 onClick={() => setActiveSubTab(tab)}
                                 className={`py-4 px-1 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeSubTab === tab
-                                    ? 'border-teal-600 text-teal-700'
+                                    ? 'border-indigo-600 text-slate-700'
                                     : 'border-transparent text-gray-500 hover:text-gray-700'
                                     }`}
                             >
@@ -280,7 +280,7 @@ export default function GSTR1Page() {
                     {/* Loading State */}
                     {isLoading && (
                         <div className="flex justify-center py-8">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
+                            <div className="animate-spin rounded-[4px] h-8 w-8 border-b-2 border-indigo-600"></div>
                         </div>
                     )}
 
@@ -1315,4 +1315,5 @@ export default function GSTR1Page() {
         </div>
     );
 }
+
 

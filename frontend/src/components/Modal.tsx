@@ -63,24 +63,24 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, type, children })
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 relative">
+      <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 w-full max-w-md p-6 relative">
         <div className="flex items-start space-x-4">
           {type === 'loading' && (
-            <div className="w-12 h-12 flex items-center justify-center bg-teal-100 rounded-full">
-              <svg className="animate-spin h-6 w-6 text-teal-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <div className="w-12 h-12 flex items-center justify-center bg-indigo-100 rounded-[4px]">
+              <svg className="animate-spin h-6 w-6 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
             </div>
           )}
           {type === 'error' && (
-            <div className="w-12 h-12 flex items-center justify-center bg-red-100 rounded-full">
+            <div className="w-12 h-12 flex items-center justify-center bg-red-100 rounded-[4px]">
               <Icon name="warning" className="h-6 w-6 text-red-600" />
             </div>
           )}
           {type === 'success' && (
-            <div className="w-12 h-12 flex items-center justify-center bg-green-100 rounded-full">
-              <Icon name="check-circle" className="h-6 w-6 text-teal-600" />
+            <div className="w-12 h-12 flex items-center justify-center bg-green-100 rounded-[4px]">
+              <Icon name="check-circle" className="h-6 w-6 text-indigo-600" />
             </div>
           )}
           <div>
@@ -101,3 +101,4 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, type, children })
 };
 
 export default Modal;
+

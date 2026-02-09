@@ -277,18 +277,18 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
             <div className="flex justify-center gap-2">
                 <button
                     onClick={() => setActiveTab('single')}
-                    className={`px-6 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'single'
-                        ? 'bg-teal-600 text-white'
-                        : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-teal-500'
+                    className={`px-6 py-2 text-sm font-medium rounded-[4px] transition-colors ${activeTab === 'single'
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-indigo-500'
                         }`}
                 >
                     Payment Voucher - Single
                 </button>
                 <button
                     onClick={() => setActiveTab('bulk')}
-                    className={`px-6 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'bulk'
-                        ? 'bg-teal-600 text-white'
-                        : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-teal-500'
+                    className={`px-6 py-2 text-sm font-medium rounded-[4px] transition-colors ${activeTab === 'bulk'
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-indigo-500'
                         }`}
                 >
                     Payment Voucher - Bulk
@@ -306,7 +306,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                                 type="date"
                                 value={date}
                                 onChange={(e) => setDate(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             />
                         </div>
                         <div>
@@ -314,7 +314,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                             <select
                                 value={selectedPaymentConfig}
                                 onChange={(e) => setSelectedPaymentConfig(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             >
                                 <option value="">Select</option>
                                 {paymentVoucherConfigs.map((config) => (
@@ -330,7 +330,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                                 type="text"
                                 value={voucherNumber}
                                 readOnly
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
                             />
                         </div>
                     </div>
@@ -343,13 +343,13 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                                 <select
                                     value={payFrom}
                                     onChange={(e) => setPayFrom(e.target.value)}
-                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 >
                                     <option value="">Select Pay From</option>
                                     <option value="cash">Cash</option>
                                     <option value="bank">Bank Account</option>
                                 </select>
-                                <div className="px-4 py-2 bg-gray-50 border border-gray-300 rounded-md text-sm font-medium text-gray-700 min-w-[80px] text-center">
+                                <div className="px-4 py-2 bg-gray-50 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 min-w-[80px] text-center">
                                     {payFromBalance}
                                 </div>
                             </div>
@@ -360,16 +360,16 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                                 <select
                                     value={payTo}
                                     onChange={(e) => setPayTo(e.target.value)}
-                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 >
                                     <option value="">Select Pay To</option>
                                     <option value="vendor1">Vendor 1</option>
                                     <option value="vendor2">Vendor 2</option>
                                 </select>
-                                <div className="px-4 py-2 bg-gray-50 border border-gray-300 rounded-md text-sm font-medium text-gray-700 min-w-[80px] text-center">
+                                <div className="px-4 py-2 bg-gray-50 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 min-w-[80px] text-center">
                                     {payToBalance}
                                 </div>
-                                <button className="px-4 py-2 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-md text-sm font-medium text-gray-700">
+                                <button className="px-4 py-2 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700">
                                     Advance
                                 </button>
                             </div>
@@ -380,7 +380,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                     <div>
                         <h3 className="text-sm font-semibold text-gray-800 mb-4">Pending Transactions</h3>
                         {payTo ? (
-                            <div className="border-2 border-gray-200 rounded-lg overflow-hidden">
+                            <div className="border-2 border-gray-200 rounded-[4px] overflow-hidden">
                                 <table className="w-full">
                                     <thead className="bg-gray-50 border-b-2 border-gray-200">
                                         <tr>
@@ -407,7 +407,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                                                 <td className="px-6 py-4 text-center">
                                                     <button
                                                         onClick={() => handlePay(index)}
-                                                        className="px-4 py-1.5 bg-teal-500 hover:bg-teal-600 text-white text-xs font-medium rounded"
+                                                        className="px-4 py-1.5 bg-indigo-50/500 hover:bg-indigo-600 text-white text-xs font-medium rounded"
                                                     >
                                                         Pay
                                                     </button>
@@ -418,10 +418,10 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                                                         value={txn.payment || ''}
                                                         onChange={(e) => handlePaymentChange(index, parseFloat(e.target.value) || 0)}
                                                         placeholder="0"
-                                                        className="w-24 px-3 py-1.5 text-right border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
+                                                        className="w-24 px-3 py-1.5 text-right border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                                                     />
                                                 </td>
-                                                <td className="px-6 py-4 text-sm text-gray-700 text-right font-medium text-teal-600">
+                                                <td className="px-6 py-4 text-sm text-gray-700 text-right font-medium text-indigo-600">
                                                     ₹{Math.max(0, txn.payment - txn.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                 </td>
                                             </tr>
@@ -430,13 +430,13 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                                 </table>
                                 <div className="border-t-2 border-gray-200 bg-white px-6 py-4 flex justify-end items-center gap-4">
                                     <span className="text-sm font-semibold text-gray-700">Total Payment</span>
-                                    <div className="px-4 py-2 bg-gray-50 border border-gray-300 rounded-md text-sm font-bold text-gray-900 min-w-[120px] text-right">
+                                    <div className="px-4 py-2 bg-gray-50 border border-gray-300 rounded-[4px] text-sm font-bold text-gray-900 min-w-[120px] text-right">
                                         {totalPayment}
                                     </div>
                                 </div>
                             </div>
                         ) : (
-                            <div className="text-center py-16 text-gray-500 border-2 border-gray-200 rounded-lg bg-gray-50">
+                            <div className="text-center py-16 text-gray-500 border-2 border-gray-200 rounded-[4px] bg-gray-50">
                                 <p className="text-sm">Please select a "Pay To" account to view pending transactions.</p>
                             </div>
                         )}
@@ -446,13 +446,13 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                     <div className="flex justify-center gap-4">
                         <button
                             onClick={handleCancel}
-                            className="px-8 py-2 bg-white hover:bg-gray-50 border-2 border-gray-300 rounded-lg text-gray-700 font-medium text-sm"
+                            className="px-8 py-2 bg-white hover:bg-gray-50 border-2 border-gray-300 rounded-[4px] text-gray-700 font-medium text-sm"
                         >
                             Cancel
                         </button>
                         <button
                             onClick={handlePostPayment}
-                            className="px-8 py-2 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg text-sm"
+                            className="px-8 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-[4px] text-sm"
                         >
                             Post Payment
                         </button>
@@ -473,7 +473,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                                     type="date"
                                     value={date}
                                     onChange={e => setDate(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                             </div>
                             <div>
@@ -482,7 +482,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                                     type="text"
                                     value={voucherNumber}
                                     readOnly
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
                                 />
                             </div>
                         </div>
@@ -494,7 +494,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                                 <select
                                     value={payFrom}
                                     onChange={e => setPayFrom(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 >
                                     <option value="">Select</option>
                                     <option value="cash">Cash</option>
@@ -507,7 +507,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                                     type="number"
                                     value={runningBalance}
                                     readOnly
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500 text-right"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500 text-right"
                                 />
                             </div>
                         </div>
@@ -522,7 +522,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                                             key={row.id}
                                             value={row.payTo}
                                             onChange={e => handlePaymentRowChange(row.id, 'payTo', e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                                         >
                                             <option value="">Vendor Name</option>
                                             <option value="vendor1">Vendor 1</option>
@@ -533,7 +533,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                                 <button
                                     type="button"
                                     onClick={handleAddPaymentRow}
-                                    className="mt-2 text-teal-600 hover:text-teal-700 text-3xl font-bold"
+                                    className="mt-2 text-indigo-600 hover:text-slate-700 text-3xl font-bold"
                                 >
                                     +
                                 </button>
@@ -549,7 +549,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                                             value={row.amount || ''}
                                             onChange={e => handlePaymentRowChange(row.id, 'amount', parseFloat(e.target.value) || 0)}
                                             placeholder="Pay now/Advance total"
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                                         />
                                     ))}
                                 </div>
@@ -558,20 +558,20 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
 
                         {/* Total Payment */}
                         <div className="flex justify-center">
-                            <button className="px-8 py-2 bg-teal-600 text-white rounded-md font-medium">
+                            <button className="px-8 py-2 bg-indigo-600 text-white rounded-[4px] font-medium">
                                 Total Payment
                             </button>
                         </div>
 
                         {/* Posting Note */}
-                        <div className="bg-teal-50 border-2 border-teal-200 rounded-lg p-4">
+                        <div className="bg-indigo-50/50 border-2 border-slate-200 rounded-[4px] p-4">
                             <label className="block text-sm font-medium text-gray-700 mb-2">Posting Note</label>
                             <textarea
                                 value={postingNote}
                                 onChange={e => setPostingNote(e.target.value)}
                                 placeholder="Enter posting note..."
                                 rows={3}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none text-sm"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none text-sm"
                             />
                         </div>
 
@@ -579,13 +579,13 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                         <div className="flex justify-center gap-4">
                             <button
                                 onClick={handleCancel}
-                                className="px-6 py-2 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50"
+                                className="px-6 py-2 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-[4px] hover:bg-gray-50"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={handlePostPayment}
-                                className="px-6 py-2 text-sm font-medium text-white bg-teal-600 rounded-lg hover:bg-teal-700"
+                                className="px-6 py-2 text-sm font-medium text-white bg-indigo-600 rounded-[4px] hover:bg-indigo-700"
                             >
                                 Post
                             </button>
@@ -593,7 +593,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                     </div>
 
                     {/* Right Panel - Transaction List */}
-                    <div className="bg-teal-500 rounded-lg p-6">
+                    <div className="bg-indigo-50/500 rounded-[4px] p-6">
                         <div className="text-center mb-4">
                             <h4 className="text-white font-semibold text-sm">
                                 {selectedVendor || 'Vendor Name'} (Whose data is displayed below)
@@ -601,7 +601,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                         </div>
 
                         {!showAdvanceSection ? (
-                            <div className="bg-white rounded-lg p-4 min-h-[400px]">
+                            <div className="bg-white rounded-[4px] p-4 min-h-[400px]">
                                 {bulkTransactions.length > 0 ? (
                                     <table className="w-full text-sm">
                                         <thead className="border-b-2 border-gray-300">
@@ -641,7 +641,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                                                             className="w-full px-2 py-1 border border-gray-300 rounded text-center"
                                                         />
                                                     </td>
-                                                    <td className="py-3 px-2 text-right text-teal-600 font-medium">
+                                                    <td className="py-3 px-2 text-right text-indigo-600 font-medium">
                                                         {(Math.max(0, transaction.payNow - transaction.amount)).toFixed(2)}
                                                     </td>
                                                 </tr>
@@ -657,7 +657,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                                 )}
                             </div>
                         ) : (
-                            <div className="bg-white rounded-lg p-6 min-h-[400px]">
+                            <div className="bg-white rounded-[4px] p-6 min-h-[400px]">
                                 <h5 className="text-sm font-semibold text-gray-700 mb-4 text-center">Advance Payment</h5>
                                 <div className="space-y-4">
                                     <div className="flex items-center gap-3">
@@ -688,8 +688,8 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                         <div className="mt-4 text-center">
                             <button
                                 onClick={() => setShowAdvanceSection(!showAdvanceSection)}
-                                className={`px-8 py-2 text-sm font-medium rounded-lg ${showAdvanceSection
-                                    ? 'bg-teal-600 text-white'
+                                className={`px-8 py-2 text-sm font-medium rounded-[4px] ${showAdvanceSection
+                                    ? 'bg-indigo-600 text-white'
                                     : 'bg-white text-gray-700 border-2 border-gray-300'
                                     }`}
                             >
@@ -704,4 +704,5 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
 };
 
 export default PaymentVoucherSingle;
+
 

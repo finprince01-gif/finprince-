@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { usePermissions } from '../../hooks/usePermissions';
 import type { Ledger, Voucher, StockItem, SalesPurchaseVoucher, LedgerGroupMaster } from '../../types';
@@ -57,7 +58,7 @@ const LedgerSelector: React.FC<LedgerSelectorProps> = ({
     <select
       value={selectedValue}
       onChange={(e) => onChange(e.target.value)}
-      className="block w-full pl-4 pr-10 py-3 text-base border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors"
+      className="block w-full pl-4 pr-10 py-3 text-base border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
     >
       <option value="">All Ledgers</option>
       <optgroup label="Groups">
@@ -245,107 +246,174 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
     const grossProfit = totalSales - totalPurchases;
     const profitMargin = totalSales > 0 ? ((grossProfit / totalSales) * 100).toFixed(1) : '0';
 
+
     // Sales related queries
     if (lowerQuery.includes('sales') || lowerQuery.includes('revenue')) {
-      // Calculate detailed metrics for each customer
-      const customerDetails: {
-        [key: string]: {
-          total: number;
-          count: number;
-          taxableAmount: number;
-          cgst: number;
-          sgst: number;
-          igst: number;
-          dates: Date[];
-        }
-      } = {};
+      // Check if user wants individual/detailed/separate transactions
+      const wantsDetailed = lowerQuery.includes('individual') ||
+        lowerQuery.includes('detailed') ||
+        lowerQuery.includes('separate') ||
+        lowerQuery.includes('all') ||
+        lowerQuery.includes('each') ||
+        lowerQuery.includes('list') ||
+        lowerQuery.includes('transaction');
 
-      salesVouchers.forEach(v => {
-        if (!customerDetails[v.party]) {
-          customerDetails[v.party] = {
-            total: 0,
-            count: 0,
-            taxableAmount: 0,
-            cgst: 0,
-            sgst: 0,
-            igst: 0,
-            dates: []
-          };
-        }
-        customerDetails[v.party].total += Number(v.total) || 0;
-        customerDetails[v.party].count += 1;
-        customerDetails[v.party].taxableAmount += Number(v.totalTaxableAmount) || 0;
-        customerDetails[v.party].cgst += Number(v.totalCgst) || 0;
-        customerDetails[v.party].sgst += Number(v.totalSgst) || 0;
-        customerDetails[v.party].igst += Number(v.totalIgst) || 0;
-        customerDetails[v.party].dates.push(new Date(v.date));
-      });
-
-      const chartData = Object.entries(customerDetails)
-        .map(([name, details], idx) => ({ name, value: details.total, color: CHART_COLORS[idx % CHART_COLORS.length] }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 6);
-
-      const tableData = chartData.map((item, idx) => {
-        const details = customerDetails[item.name];
-        const avgValue = details.count > 0 ? details.total / details.count : 0;
-        const totalTax = details.cgst + details.sgst + details.igst;
-        const sortedDates = details.dates.sort((a, b) => a.getTime() - b.getTime());
-        const firstDate = sortedDates[0];
-        const lastDate = sortedDates[sortedDates.length - 1];
-
-        return {
+      if (wantsDetailed) {
+        // Show individual transaction details
+        const tableData = salesVouchers.map((v, idx) => ({
           '#': String(idx + 1),
-          'Customer': item.name,
-          'Total Sales (₹)': `₹${item.value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-          'Transactions': String(details.count),
-          'Avg Transaction (₹)': `₹${avgValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-          'Taxable Amount (₹)': `₹${details.taxableAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-          'Total Tax (₹)': `₹${totalTax.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-          'CGST (₹)': `₹${details.cgst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-          'SGST (₹)': `₹${details.sgst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-          'IGST (₹)': `₹${details.igst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-          'First Transaction': firstDate.toLocaleDateString('en-IN'),
-          'Last Transaction': lastDate.toLocaleDateString('en-IN'),
-          'Share (%)': totalSales > 0 ? `${((item.value / totalSales) * 100).toFixed(1)}%` : '0%'
+          'Date': new Date(v.date).toLocaleDateString('en-IN'),
+          'Invoice No': v.invoiceNo || '-',
+          'Customer': v.party,
+          'Taxable Amount (₹)': `₹${(Number(v.totalTaxableAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          'CGST (₹)': `₹${(Number(v.totalCgst) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          'SGST (₹)': `₹${(Number(v.totalSgst) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          'IGST (₹)': `₹${(Number(v.totalIgst) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          'Total Amount (₹)': `₹${(Number(v.total) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        }));
+
+        const chartData = salesVouchers
+          .slice(0, 10)
+          .map((v, idx) => ({
+            name: `${new Date(v.date).toLocaleDateString('en-IN')} - ${v.party.substring(0, 15)}`,
+            value: Number(v.total) || 0,
+            color: CHART_COLORS[idx % CHART_COLORS.length]
+          }));
+
+        reportData = {
+          title: 'Individual Sales Transactions',
+          summary: `Complete list of all ${salesVouchers.length} individual sales transactions`,
+          tableData,
+          chartData,
+          chartType: 'bar',
+          kpiMetrics: [
+            {
+              label: 'Total Transactions',
+              value: salesVouchers.length.toString(),
+              icon: 'receipt',
+              change: 'Individual Records',
+              changeType: 'neutral'
+            },
+            {
+              label: 'Total Revenue',
+              value: `₹${totalSales.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+              icon: 'sales',
+              change: 'Sum of All',
+              changeType: 'positive'
+            },
+            {
+              label: 'Avg Transaction',
+              value: `₹${(salesVouchers.length > 0 ? totalSales / salesVouchers.length : 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+              icon: 'payment'
+            },
+            {
+              label: 'Date Range',
+              value: salesVouchers.length > 0 ? `${new Date(Math.min(...salesVouchers.map(v => new Date(v.date).getTime()))).toLocaleDateString('en-IN')} - ${new Date(Math.max(...salesVouchers.map(v => new Date(v.date).getTime()))).toLocaleDateString('en-IN')}` : '-',
+              icon: 'profit'
+            }
+          ]
         };
-      });
-
-      const avgOrderValue = salesVouchers.length > 0 ? totalSales / salesVouchers.length : 0;
-
-      reportData = {
-        title: 'Sales Analytics Dashboard',
-        summary: `Comprehensive analysis of ${salesVouchers.length} sales transactions`,
-        tableData,
-        chartData,
-        chartType: 'bar',
-        kpiMetrics: [
-          {
-            label: 'Total Revenue',
-            value: `₹${totalSales.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-            icon: 'sales',
-            change: '+12.5%',
-            changeType: 'positive'
-          },
-          {
-            label: 'Transactions',
-            value: salesVouchers.length.toString(),
-            icon: 'receipt',
-            change: '+8',
-            changeType: 'positive'
-          },
-          {
-            label: 'Avg Order Value',
-            value: `₹${avgOrderValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-            icon: 'payment'
-          },
-          {
-            label: 'Top Customers',
-            value: Object.keys(customerDetails).length.toString(),
-            icon: 'profit'
+      } else {
+        // Calculate detailed metrics for each customer (aggregated view)
+        const customerDetails: {
+          [key: string]: {
+            total: number;
+            count: number;
+            taxableAmount: number;
+            cgst: number;
+            sgst: number;
+            igst: number;
+            dates: Date[];
           }
-        ]
-      };
+        } = {};
+
+        salesVouchers.forEach(v => {
+          if (!customerDetails[v.party]) {
+            customerDetails[v.party] = {
+              total: 0,
+              count: 0,
+              taxableAmount: 0,
+              cgst: 0,
+              sgst: 0,
+              igst: 0,
+              dates: []
+            };
+          }
+          customerDetails[v.party].total += Number(v.total) || 0;
+          customerDetails[v.party].count += 1;
+          customerDetails[v.party].taxableAmount += Number(v.totalTaxableAmount) || 0;
+          customerDetails[v.party].cgst += Number(v.totalCgst) || 0;
+          customerDetails[v.party].sgst += Number(v.totalSgst) || 0;
+          customerDetails[v.party].igst += Number(v.totalIgst) || 0;
+          customerDetails[v.party].dates.push(new Date(v.date));
+        });
+
+        const chartData = Object.entries(customerDetails)
+          .map(([name, details], idx) => ({ name, value: details.total, color: CHART_COLORS[idx % CHART_COLORS.length] }))
+          .sort((a, b) => b.value - a.value)
+          .slice(0, 6);
+
+        const tableData = chartData.map((item, idx) => {
+          const details = customerDetails[item.name];
+          const avgValue = details.count > 0 ? details.total / details.count : 0;
+          const totalTax = details.cgst + details.sgst + details.igst;
+          const sortedDates = details.dates.sort((a, b) => a.getTime() - b.getTime());
+          const firstDate = sortedDates[0];
+          const lastDate = sortedDates[sortedDates.length - 1];
+
+          return {
+            '#': String(idx + 1),
+            'Customer': item.name,
+            'Total Sales (₹)': `₹${item.value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            'Transactions': String(details.count),
+            'Avg Transaction (₹)': `₹${avgValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            'Taxable Amount (₹)': `₹${details.taxableAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            'Total Tax (₹)': `₹${totalTax.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            'CGST (₹)': `₹${details.cgst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            'SGST (₹)': `₹${details.sgst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            'IGST (₹)': `₹${details.igst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            'First Transaction': firstDate.toLocaleDateString('en-IN'),
+            'Last Transaction': lastDate.toLocaleDateString('en-IN'),
+            'Share (%)': totalSales > 0 ? `${((item.value / totalSales) * 100).toFixed(1)}%` : '0%'
+          };
+        });
+
+        const avgOrderValue = salesVouchers.length > 0 ? totalSales / salesVouchers.length : 0;
+
+        reportData = {
+          title: 'Sales Analytics Dashboard',
+          summary: `Comprehensive analysis of ${salesVouchers.length} sales transactions`,
+          tableData,
+          chartData,
+          chartType: 'bar',
+          kpiMetrics: [
+            {
+              label: 'Total Revenue',
+              value: `₹${totalSales.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+              icon: 'sales',
+              change: '+12.5%',
+              changeType: 'positive'
+            },
+            {
+              label: 'Transactions',
+              value: salesVouchers.length.toString(),
+              icon: 'receipt',
+              change: '+8',
+              changeType: 'positive'
+            },
+            {
+              label: 'Avg Order Value',
+              value: `₹${avgOrderValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+              icon: 'payment'
+            },
+            {
+              label: 'Top Customers',
+              value: Object.keys(customerDetails).length.toString(),
+              icon: 'profit'
+            }
+          ]
+        };
+      }
     }
     // Purchase/Expense related queries
     else if (lowerQuery.includes('purchase') || lowerQuery.includes('expense') || lowerQuery.includes('spending') || lowerQuery.includes('vendor')) {
@@ -647,8 +715,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
         <head>
           <title>${report.title}</title>
           <style>
-            body { font-family: Arial, sans-serif; padding: 20px; }
-            h1 { color: #f97316; }
+            body { font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; padding: 20px; }
+            h1 { color: #6366F1; }
             p { color: #666; }
           </style>
         </head>
@@ -1375,118 +1443,76 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
 
 
   return (
-    <div className="bg-gray-50 min-h-screen p-6">
+    <div className="space-y-8">
       {/* PRINT STYLES */}
       <style>{`
         @media print {
-          /* Hide sidebar, buttons, filters, and other UI Chrome */
-          aside, 
-          button, 
-          input, 
-          select, 
-          label, 
-          .mb-8.flex.p-1.bg-gray-200, /* Tabs container */
-          .mb-6.flex.p-6.bg-gray-50, /* Filter sections */
-          nav,
-          .fixed,
-          h2.text-3xl.font-bold.mb-8 /* Page Main Title */
-          {
+          aside, button, input, select, label, .mb-8.flex, .mb-6.flex, nav, .fixed, h2 {
             display: none !important;
           }
-
-          /* Reset Container Styles for Print */
           body, #root, .min-h-screen, .bg-gray-50, .p-6, .p-8 {
             background-color: white !important;
             margin: 0 !important;
             padding: 0 !important;
-            width: 100% !important;
-            height: auto !important;
-            overflow: visible !important;
           }
-
-          /* Ensure Table Logic */
-          .bg-white.rounded-xl.shadow-sm.border {
-            border: none !important;
-            box-shadow: none !important;
-            padding: 0 !important;
-            margin: 0 !important;
-          }
-
-          /* Force Table Visibility */
           table {
             width: 100% !important;
             border-collapse: collapse !important;
             border: 1px solid #ddd !important;
-            font-size: 10pt;
           }
-          
           th, td {
             border: 1px solid #ddd !important;
             padding: 4px 8px !important;
-            text-align: left;
           }
-
-          th {
-            background-color: #f3f4f6 !important;
-            -webkit-print-color-adjust: exact;
-            color: #1f2937 !important;
-            font-weight: bold;
-          }
-
-          /* Custom Print Header */
           .print-header {
             display: block !important;
             text-align: center;
             margin-bottom: 20px;
           }
-          
-          .print-header h1 {
-            font-size: 18pt;
-            font-weight: bold;
-            color: #ea580c; /* teal-600 */
-            margin-bottom: 5px;
-          }
-          
-          .print-header p {
-            font-size: 10pt;
-            color: #6b7280;
-          }
         }
-
-        /* Hide Print Header on Screen */
-        .print-header {
-          display: none;
-        }
+        .print-header { display: none; }
       `}</style>
+
+      {/* Page Header */}
+      <div className="flex items-end justify-between border-b border-slate-200 pb-6">
+        <div>
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Financial Statements</p>
+          <h2 className="text-[20px] font-bold text-slate-900">
+            Reports & Analysis
+          </h2>
+        </div>
+      </div>
 
       <div className="print-header">
         <h1>{allReports.find(r => r.id === reportType)?.label}</h1>
         <p>Generated on {new Date().toLocaleDateString()}</p>
       </div>
 
-      <h2 className="text-3xl font-bold text-gray-900 mb-8">Reports</h2>
-
-      <div className="mb-8 border-b border-gray-200">
-        <nav className="flex space-x-8" aria-label="Report Tabs">
-          {availableReports.map(({ id, label }, idx) => (
-            <button
-              key={`report-tab-${id}-${idx}`}
-              onClick={() => setReportType(id as ReportType)}
-              className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${reportType === id
-                ? 'border-teal-500 text-teal-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-            >
-              {label}
-            </button>
-          ))}
-        </nav>
+      {/* Main Tabs */}
+      <div className="flex space-x-8 border-b border-slate-200 overflow-x-auto no-scrollbar">
+        {availableReports.map(({ id, label }, idx) => (
+          <button
+            key={`report-tab-${id}-${idx}`}
+            onClick={() => setReportType(id as ReportType)}
+            className={`
+              whitespace-nowrap pb-4 text-[13px] font-bold uppercase tracking-wider transition-all relative
+              ${reportType === id
+                ? 'text-indigo-600'
+                : 'text-slate-400 hover:text-slate-600'}
+            `}
+          >
+            {label}
+            {reportType === id && (
+              <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-600" />
+            )}
+          </button>
+        ))}
       </div>
 
-      <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200">
+      <div className="bg-white p-8 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200">
         {reportType === 'DayBook' && (
           <>
-            <div className="mb-6 flex flex-wrap items-end gap-4 p-6 bg-gray-50 rounded-xl border border-gray-200">
+            <div className="mb-6 flex flex-wrap items-end gap-4 p-6 bg-gray-50 rounded-[4px] border border-gray-200">
               <div className="min-w-[200px]">
                 <label htmlFor="startDate" className="block text-sm font-semibold text-gray-700 mb-2">Start Date</label>
                 <input
@@ -1494,7 +1520,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
                   id="startDate"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors"
+                  className="block w-full px-4 py-3 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
                 />
               </div>
               <div className="min-w-[200px]">
@@ -1504,13 +1530,13 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
                   id="endDate"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors"
+                  className="block w-full px-4 py-3 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
                 />
               </div>
               {(startDate || endDate) && (
                 <button
                   onClick={() => { setStartDate(''); setEndDate(''); }}
-                  className="px-6 py-3 border border-gray-300 text-sm font-semibold rounded-lg text-gray-700 bg-white hover:bg-gray-50 shadow-sm transition-colors"
+                  className="px-6 py-3 border border-gray-300 text-sm font-semibold rounded-[4px] text-gray-700 bg-white hover:bg-gray-50 shadow-none border border-slate-200-none border border-slate-200 transition-colors"
                 >
                   Clear
                 </button>
@@ -1520,7 +1546,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
             <div className="flex justify-end mb-4">
               <button
                 onClick={() => window.print()}
-                className="px-6 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 shadow-sm transition-colors"
+                className="px-6 py-2 bg-red-600 text-white text-sm font-semibold rounded-[4px] hover:bg-red-700 shadow-none border border-slate-200-none border border-slate-200 transition-colors"
                 title="Create PDF"
               >
                 Create PDF
@@ -1530,7 +1556,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
         )}
         {reportType === 'LedgerReport' && (
           <>
-            <div className="mb-6 flex flex-wrap items-end gap-4 p-6 bg-gray-50 rounded-xl border border-gray-200">
+            <div className="mb-6 flex flex-wrap items-end gap-4 p-6 bg-gray-50 rounded-[4px] border border-gray-200">
               <div className="min-w-[250px]">
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Select Ledger/Group</label>
                 <LedgerSelector
@@ -1547,7 +1573,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
                   id="ledgerStartDate"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors"
+                  className="block w-full px-4 py-3 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
                 />
               </div>
               <div className="min-w-[200px]">
@@ -1557,13 +1583,13 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
                   id="ledgerEndDate"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors"
+                  className="block w-full px-4 py-3 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
                 />
               </div>
               {(startDate || endDate) && (
                 <button
                   onClick={() => { setStartDate(''); setEndDate(''); }}
-                  className="px-6 py-3 border border-gray-300 text-sm font-semibold rounded-lg text-gray-700 bg-white hover:bg-gray-50 shadow-sm transition-colors"
+                  className="px-6 py-3 border border-gray-300 text-sm font-semibold rounded-[4px] text-gray-700 bg-white hover:bg-gray-50 shadow-none border border-slate-200-none border border-slate-200 transition-colors"
                 >
                   Clear
                 </button>
@@ -1573,7 +1599,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
             <div className="flex justify-end mb-4">
               <button
                 onClick={() => window.print()}
-                className="px-6 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 shadow-sm transition-colors"
+                className="px-6 py-2 bg-red-600 text-white text-sm font-semibold rounded-[4px] hover:bg-red-700 shadow-none border border-slate-200-none border border-slate-200 transition-colors"
                 title="Create PDF"
               >
                 Create PDF
@@ -1583,7 +1609,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
         )}
         {reportType === 'TrialBalance' && (
           <>
-            <div className="mb-6 flex flex-wrap items-end gap-4 p-6 bg-gray-50 rounded-xl border border-gray-200">
+            <div className="mb-6 flex flex-wrap items-end gap-4 p-6 bg-gray-50 rounded-[4px] border border-gray-200">
               <div className="min-w-[200px]">
                 <label htmlFor="trialStartDate" className="block text-sm font-semibold text-gray-700 mb-2">Start Date</label>
                 <input
@@ -1591,7 +1617,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
                   id="trialStartDate"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors"
+                  className="block w-full px-4 py-3 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
                 />
               </div>
               <div className="min-w-[200px]">
@@ -1601,7 +1627,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
                   id="trialEndDate"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors"
+                  className="block w-full px-4 py-3 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
                 />
               </div>
             </div>
@@ -1609,7 +1635,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
             <div className="flex justify-end mb-4">
               <button
                 onClick={() => window.print()}
-                className="px-6 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 shadow-sm transition-colors"
+                className="px-6 py-2 bg-red-600 text-white text-sm font-semibold rounded-[4px] hover:bg-red-700 shadow-none border border-slate-200-none border border-slate-200 transition-colors"
                 title="Create PDF"
               >
                 Create PDF
@@ -1619,14 +1645,14 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
         )}
         {reportType === 'BalanceSheet' && (
           <>
-            <div className="mb-6 flex flex-wrap items-end gap-4 p-6 bg-gray-50 rounded-xl border border-gray-200">
+            <div className="mb-6 flex flex-wrap items-end gap-4 p-6 bg-gray-50 rounded-[4px] border border-gray-200">
               <div className="min-w-[200px]">
                 <label className="block text-sm font-semibold text-gray-700 mb-2">As of Date</label>
                 <input
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors"
+                  className="block w-full px-4 py-3 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
                 />
               </div>
             </div>
@@ -1634,14 +1660,14 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
             <div className="flex justify-end mb-4">
               <button
                 onClick={() => window.print()}
-                className="px-6 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 shadow-sm transition-colors"
+                className="px-6 py-2 bg-red-600 text-white text-sm font-semibold rounded-[4px] hover:bg-red-700 shadow-none border border-slate-200-none border border-slate-200 transition-colors"
                 title="Create PDF"
               >
                 Create PDF
               </button>
             </div>
 
-            <div className="bg-white border rounded-lg overflow-hidden">
+            <div className="bg-white border rounded-[4px] overflow-hidden">
               <div className="p-4 bg-gray-50 border-b font-bold text-center">Balance Sheet</div>
               <div className="p-8 text-center text-gray-500">
                 Feature coming soon
@@ -1651,7 +1677,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
         )}
         {reportType === 'StockSummary' && (
           <>
-            <div className="mb-6 flex flex-wrap items-end gap-4 p-6 bg-gray-50 rounded-xl border border-gray-200">
+            <div className="mb-6 flex flex-wrap items-end gap-4 p-6 bg-gray-50 rounded-[4px] border border-gray-200">
               <div className="min-w-[200px]">
                 <label htmlFor="stockStartDate" className="block text-sm font-semibold text-gray-700 mb-2">Start Date</label>
                 <input
@@ -1659,7 +1685,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
                   id="stockStartDate"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors"
+                  className="block w-full px-4 py-3 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
                 />
               </div>
               <div className="min-w-[200px]">
@@ -1669,7 +1695,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
                   id="stockEndDate"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors"
+                  className="block w-full px-4 py-3 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
                 />
               </div>
             </div>
@@ -1677,7 +1703,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
             <div className="flex justify-end mb-4">
               <button
                 onClick={() => window.print()}
-                className="px-6 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 shadow-sm transition-colors"
+                className="px-6 py-2 bg-red-600 text-white text-sm font-semibold rounded-[4px] hover:bg-red-700 shadow-none border border-slate-200-none border border-slate-200 transition-colors"
                 title="Create PDF"
               >
                 Create PDF
@@ -1688,13 +1714,13 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
         {reportType === 'GSTReports' && (
           <>
             {/* Filter Section Row */}
-            <div className="mb-6 flex flex-wrap items-end gap-4 p-6 bg-gray-50 rounded-xl border border-gray-200">
+            <div className="mb-6 flex flex-wrap items-end gap-4 p-6 bg-gray-50 rounded-[4px] border border-gray-200">
               <div className="min-w-[200px]">
                 <label className="block text-sm font-semibold text-gray-700 mb-2">GST Return</label>
                 <select
                   value={gstForm}
                   onChange={(e) => setGstForm(e.target.value as GSTForm)}
-                  className="block w-full pl-4 pr-10 py-3 text-base border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors bg-white"
+                  className="block w-full pl-4 pr-10 py-3 text-base border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors bg-white"
                 >
                   <option value="GSTR-1">GSTR-1</option>
                   <option value="GSTR-2">GSTR-2</option>
@@ -1720,7 +1746,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
                   id="gstStartDate"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors"
+                  className="block w-full px-4 py-3 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
                 />
               </div>
               <div className="min-w-[200px]">
@@ -1730,7 +1756,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
                   id="gstEndDate"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors"
+                  className="block w-full px-4 py-3 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
                 />
               </div>
             </div>
@@ -1738,7 +1764,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
             <div className="flex justify-end mb-4">
               <button
                 onClick={() => window.print()}
-                className="px-6 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 shadow-sm transition-colors"
+                className="px-6 py-2 bg-red-600 text-white text-sm font-semibold rounded-[4px] hover:bg-red-700 shadow-none border border-slate-200-none border border-slate-200 transition-colors"
                 title="Create PDF"
               >
                 Create PDF
@@ -1757,7 +1783,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
             <h2 className="text-xl font-semibold text-gray-800 mb-4">AI Report</h2>
 
             {/* Simple Input Interface */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+            <div className="bg-white rounded-[4px] border border-gray-200 shadow-none border border-slate-200-none border border-slate-200 p-6">
               <div className="flex items-center gap-3">
                 <input
                   type="text"
@@ -1766,16 +1792,16 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
                   onKeyDown={handleAiKeyPress}
                   placeholder="What would you like to know? (e.g., 'Show sales report', 'GST summary', 'Expense analysis')"
                   disabled={aiLoading}
-                  className="flex-1 px-5 py-4 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors disabled:bg-gray-100 text-base"
+                  className="flex-1 px-5 py-4 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors disabled:bg-gray-100 text-base"
                 />
                 <button
                   onClick={handleAiSend}
                   disabled={aiLoading || !aiInput.trim()}
-                  className="px-8 py-4 bg-teal-600 text-white font-semibold rounded-xl hover:bg-teal-700 transition-colors shadow-sm flex items-center gap-2 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                  className="px-8 py-4 bg-indigo-600 text-white font-semibold rounded-[4px] hover:bg-indigo-700 transition-colors shadow-none border border-slate-200-none border border-slate-200 flex items-center gap-2 disabled:bg-gray-300 disabled:cursor-not-allowed"
                 >
                   {aiLoading ? (
                     <>
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-[4px] animate-spin"></div>
                       Processing...
                     </>
                   ) : (
@@ -1794,7 +1820,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
             {currentReport && (
               <div className="space-y-5">
                 {/* Clean Professional Header */}
-                <div className="bg-[#0d9488] rounded-lg p-5 shadow-sm">
+                <div className="bg-[#0d9488] rounded-[4px] p-5 shadow-none border border-slate-200-none border border-slate-200">
                   <div className="flex items-center justify-between flex-wrap gap-4">
                     <div>
                       <h4 className="text-xl font-semibold text-white">{currentReport.title}</h4>
@@ -1815,11 +1841,11 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
 
                 {/* View Toggle Buttons */}
                 <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+                  <div className="flex items-center gap-2 bg-gray-100 rounded-[4px] p-1">
                     <button
                       onClick={() => setReportView('table')}
-                      className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${reportView === 'table'
-                        ? 'bg-white text-[#0d9488] shadow-sm'
+                      className={`px-4 py-2 rounded-[4px] text-sm font-medium transition-colors ${reportView === 'table'
+                        ? 'bg-white text-[#0d9488] shadow-none border border-slate-200-none border border-slate-200'
                         : 'text-gray-600 hover:text-gray-900'
                         }`}
                     >
@@ -1832,8 +1858,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
                     </button>
                     <button
                       onClick={() => setReportView('chart')}
-                      className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${reportView === 'chart'
-                        ? 'bg-white text-[#0d9488] shadow-sm'
+                      className={`px-4 py-2 rounded-[4px] text-sm font-medium transition-colors ${reportView === 'chart'
+                        ? 'bg-white text-[#0d9488] shadow-none border border-slate-200-none border border-slate-200'
                         : 'text-gray-600 hover:text-gray-900'
                         }`}
                     >
@@ -1850,7 +1876,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
                 {/* Conditional View Rendering */}
                 {reportView === 'table' ? (
                   /* Table View */
-                  <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="bg-white border border-gray-200 rounded-[4px] overflow-hidden">
                     <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
                       <h5 className="text-sm font-semibold text-gray-700">Data Table</h5>
                     </div>
@@ -1865,7 +1891,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
                   </div>
                 ) : (
                   /* Chart View */
-                  <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="bg-white border border-gray-200 rounded-[4px] overflow-hidden">
                     <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
                       <h5 className="text-sm font-semibold text-gray-700">Chart</h5>
                     </div>
@@ -1900,4 +1926,5 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
 };
 
 export default ReportsPage;
+
 

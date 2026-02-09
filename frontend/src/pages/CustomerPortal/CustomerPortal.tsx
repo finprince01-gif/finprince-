@@ -99,33 +99,36 @@ const CustomerPortalPage: React.FC = () => {
     };
 
     return (
-        <div className="flex-1 bg-sky-50 min-h-screen">
-            {/* Header */}
-            <div className="px-8 py-6">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-3xl font-bold text-gray-900">Customer Portal</h1>
-                        <p className="text-sm text-gray-600 mt-1">Manage customers, categories, and sales transactions</p>
-                    </div>
+        <div className="space-y-8">
+            {/* Page Header */}
+            <div className="flex items-end justify-between border-b border-slate-200 pb-6">
+                <div>
+                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Sales Management</p>
+                    <h2 className="text-[20px] font-bold text-slate-900">
+                        Customer Portal
+                    </h2>
                 </div>
             </div>
 
             {/* Main Tabs */}
-            <div className="px-8">
-                <div className="flex gap-8 border-b border-gray-200 pb-1">
-                    {availableTabs.map((tab) => (
-                        <button
-                            key={tab}
-                            onClick={() => setActiveTab(tab as MainTab)}
-                            className={`py-2 px-1 text-sm font-medium transition-colors border-b-2 ${activeTab === tab
-                                ? 'border-teal-600 text-teal-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-700'
-                                }`}
-                        >
-                            {tab.toUpperCase()}
-                        </button>
-                    ))}
-                </div>
+            <div className="flex space-x-8 border-b border-slate-200">
+                {availableTabs.map((tab) => (
+                    <button
+                        key={tab}
+                        onClick={() => setActiveTab(tab as MainTab)}
+                        className={`
+                            whitespace-nowrap pb-4 text-[13px] font-bold uppercase tracking-wider transition-all relative
+                            ${activeTab === tab
+                                ? 'text-indigo-600'
+                                : 'text-slate-400 hover:text-slate-600'}
+                        `}
+                    >
+                        {tab}
+                        {activeTab === tab && (
+                            <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-600" />
+                        )}
+                    </button>
+                ))}
             </div>
 
             {/* Content Area */}
@@ -140,7 +143,7 @@ const CustomerPortalPage: React.FC = () => {
                                         key={subTab}
                                         onClick={() => setActiveMasterSubTab(subTab as MasterSubTab)}
                                         className={`pb-3 text-sm font-medium transition-colors whitespace-nowrap border-b-2 ${activeMasterSubTab === subTab
-                                            ? 'border-teal-500 text-teal-600'
+                                            ? 'border-indigo-500 text-indigo-600'
                                             : 'border-transparent text-gray-500 hover:text-gray-700'
                                             }`}
                                     >
@@ -151,7 +154,7 @@ const CustomerPortalPage: React.FC = () => {
                         </div>
 
                         {/* Masters Content */}
-                        <div className="bg-white rounded-lg shadow-sm border border-gray-200 min-h-[500px]">
+                        <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200 min-h-[500px]">
                             {activeMasterSubTab === 'Category' && <CategoryContent />}
                             {activeMasterSubTab === 'Customer' && <CustomerContent />}
                             {activeMasterSubTab === 'Sales Quotation & Order' && <SalesOrderContent />}
@@ -170,7 +173,7 @@ const CustomerPortalPage: React.FC = () => {
                                         key={subTab}
                                         onClick={() => setActiveTransactionSubTab(subTab as TransactionSubTab)}
                                         className={`pb-3 text-sm font-medium transition-colors whitespace-nowrap border-b-2 ${activeTransactionSubTab === subTab
-                                            ? 'border-teal-500 text-teal-600'
+                                            ? 'border-indigo-500 text-indigo-600'
                                             : 'border-transparent text-gray-500 hover:text-gray-700'
                                             }`}
                                     >
@@ -181,7 +184,7 @@ const CustomerPortalPage: React.FC = () => {
                         </div>
 
                         {/* Transactions Content */}
-                        <div className="bg-white rounded-lg shadow-sm p-8 text-center min-h-[500px]">
+                        <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 p-8 text-center min-h-[500px]">
                             {activeTransactionSubTab === 'Sales Quotation' && (
                                 showCreateQuotation ? (
                                     <CreateSalesQuotation
@@ -209,7 +212,7 @@ const CustomerPortalPage: React.FC = () => {
                                         <div className="flex justify-between items-center mb-6">
                                             <h3 className="text-lg font-medium text-gray-900">Sales Order</h3>
                                             <button
-                                                className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition-colors"
+                                                className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-[4px] hover:bg-indigo-700 transition-colors"
                                                 onClick={() => setShowCreateOrder(true)}
                                             >
                                                 Create Sales Order
@@ -224,7 +227,7 @@ const CustomerPortalPage: React.FC = () => {
                                                         key={tab}
                                                         onClick={() => setActiveSalesOrderSubTab(tab as SalesOrderSubTab)}
                                                         className={`py-3 px-1 text-sm font-medium border-b-2 transition-colors ${activeSalesOrderSubTab === tab
-                                                            ? 'border-teal-500 text-teal-600'
+                                                            ? 'border-indigo-500 text-indigo-600'
                                                             : 'border-transparent text-gray-500 hover:text-gray-700'
                                                             }`}
                                                     >
@@ -236,7 +239,7 @@ const CustomerPortalPage: React.FC = () => {
 
                                         {/* Pending & Cancelled Tab */}
                                         {activeSalesOrderSubTab === 'Pending & Cancelled' && (
-                                            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                                            <div className="bg-white border border-gray-200 rounded-[4px] overflow-hidden">
                                                 <div className="overflow-x-auto">
                                                     <table className="min-w-full divide-y divide-gray-200">
                                                         <thead className="bg-gray-50">
@@ -283,13 +286,13 @@ const CustomerPortalPage: React.FC = () => {
                                                                     ₹45,000.00
                                                                 </td>
                                                                 <td className="px-6 py-4 whitespace-nowrap">
-                                                                    <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                                                                    <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] bg-yellow-100 text-yellow-800">
                                                                         Pending
                                                                     </span>
                                                                 </td>
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-3">
-                                                                    <button className="text-teal-600 hover:text-indigo-900">View</button>
-                                                                    <button className="text-teal-600 hover:text-teal-900">Edit</button>
+                                                                    <button className="text-indigo-600 hover:text-indigo-900">View</button>
+                                                                    <button className="text-indigo-600 hover:text-teal-900">Edit</button>
                                                                     <button className="text-red-600 hover:text-red-900">Cancel</button>
                                                                 </td>
                                                             </tr>
@@ -311,12 +314,12 @@ const CustomerPortalPage: React.FC = () => {
                                                                     ₹32,500.00
                                                                 </td>
                                                                 <td className="px-6 py-4 whitespace-nowrap">
-                                                                    <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                                                                    <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] bg-red-100 text-red-800">
                                                                         Cancelled
                                                                     </span>
                                                                 </td>
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-3">
-                                                                    <button className="text-teal-600 hover:text-indigo-900">View</button>
+                                                                    <button className="text-indigo-600 hover:text-indigo-900">View</button>
                                                                     <button className="text-gray-400 cursor-not-allowed" disabled>Edit</button>
                                                                     <button className="text-gray-400 cursor-not-allowed" disabled>Cancel</button>
                                                                 </td>
@@ -337,7 +340,7 @@ const CustomerPortalPage: React.FC = () => {
 
                                         {/* Executed Tab */}
                                         {activeSalesOrderSubTab === 'Executed' && (
-                                            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                                            <div className="bg-white border border-gray-200 rounded-[4px] overflow-hidden">
                                                 <div className="overflow-x-auto">
                                                     <table className="min-w-full divide-y divide-gray-200">
                                                         <thead className="bg-gray-50">
@@ -381,7 +384,7 @@ const CustomerPortalPage: React.FC = () => {
                                                                     ₹78,500.00
                                                                 </td>
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                                                    <button className="text-teal-600 hover:text-indigo-900">View</button>
+                                                                    <button className="text-indigo-600 hover:text-indigo-900">View</button>
                                                                 </td>
                                                             </tr>
                                                             {/* Empty State */}
@@ -410,9 +413,8 @@ const CustomerPortalPage: React.FC = () => {
                     </div>
                 )}
 
-
             </div>
-        </div >
+        </div>
     );
 };
 
@@ -1149,7 +1151,7 @@ const CustomerContent: React.FC = () => {
                     <>
                         <button
                             onClick={() => setView('list')}
-                            className="flex items-center gap-2 text-sm text-gray-600 hover:text-teal-600 mb-4 transition-colors"
+                            className="flex items-center gap-2 text-sm text-gray-600 hover:text-indigo-600 mb-4 transition-colors"
                         >
                             <ChevronLeft className="w-4 h-4" />
                             Back to Customer List
@@ -1178,7 +1180,7 @@ const CustomerContent: React.FC = () => {
                                             setActiveTab(tab.name);
                                         }
                                     }}
-                                    className="p-6 border border-gray-200 bg-white rounded-lg text-left transition-all hover:border-indigo-300 hover:shadow-sm"
+                                    className="p-6 border border-gray-200 bg-white rounded-[4px] text-left transition-all hover:border-indigo-300 hover:shadow-none border border-slate-200-none border border-slate-200"
                                 >
                                     <h4 className="text-base font-semibold mb-1 text-gray-900">
                                         {tab.name}
@@ -1196,7 +1198,7 @@ const CustomerContent: React.FC = () => {
                         <div className="mb-6">
                             <button
                                 onClick={() => setActiveTab('')}
-                                className="flex items-center gap-2 text-sm text-gray-600 hover:text-teal-600 mb-4 transition-colors"
+                                className="flex items-center gap-2 text-sm text-gray-600 hover:text-indigo-600 mb-4 transition-colors"
                             >
                                 <ChevronLeft className="w-4 h-4" />
                                 Back to overview
@@ -1219,7 +1221,7 @@ const CustomerContent: React.FC = () => {
                                     type="text"
                                     value={customerFormData.customer_name}
                                     onChange={(e) => handleCustomerFieldChange('customer_name', e.target.value)}
-                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                                 />
                             </div>
                             <div>
@@ -1227,7 +1229,7 @@ const CustomerContent: React.FC = () => {
                                 <select
                                     value={customerFormData.customer_category}
                                     onChange={(e) => handleCustomerFieldChange('customer_category', e.target.value)}
-                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-gray-600 bg-white">
+                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-gray-600 bg-white">
                                     <option value="">Select Category</option>
                                     {categories.map((cat) => (
                                         <option key={cat.id} value={cat.id}>
@@ -1244,7 +1246,7 @@ const CustomerContent: React.FC = () => {
                                     type="text"
                                     value={customerFormData.customer_code}
                                     readOnly
-                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-md bg-gray-50 text-gray-600"
+                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-600"
                                 />
                             </div>
                             <div>
@@ -1253,7 +1255,7 @@ const CustomerContent: React.FC = () => {
                                     type="text"
                                     value={customerFormData.pan_number}
                                     onChange={(e) => handleCustomerFieldChange('pan_number', e.target.value)}
-                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                                 />
                             </div>
 
@@ -1264,7 +1266,7 @@ const CustomerContent: React.FC = () => {
                                     type="text"
                                     value={customerFormData.contact_person}
                                     onChange={(e) => handleCustomerFieldChange('contact_person', e.target.value)}
-                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                                 />
                             </div>
                             <div>
@@ -1273,7 +1275,7 @@ const CustomerContent: React.FC = () => {
                                     type="email"
                                     value={customerFormData.email_address}
                                     onChange={(e) => handleCustomerFieldChange('email_address', e.target.value)}
-                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                                 />
                             </div>
 
@@ -1284,13 +1286,13 @@ const CustomerContent: React.FC = () => {
                                     type="text"
                                     value={customerFormData.contact_number}
                                     onChange={(e) => handleCustomerFieldChange('contact_number', e.target.value)}
-                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                                 />
                             </div>
                             <div className="md:col-span-1"></div> {/* Spacer */}
 
                             {/* Radio Groups */}
-                            <div className="md:col-span-2 border border-gray-200 rounded-md p-6 bg-gray-50/50">
+                            <div className="md:col-span-2 border border-gray-200 rounded-[4px] p-6 bg-gray-50/50">
                                 <label className="block text-sm font-semibold text-gray-700 mb-3">Is this customer also a vendor?</label>
                                 <div className="flex gap-6 mb-4">
                                     <label className="flex items-center gap-2 cursor-pointer">
@@ -1299,7 +1301,7 @@ const CustomerContent: React.FC = () => {
                                             name="isVendor"
                                             checked={isVendor}
                                             onChange={() => handleVendorRadioChange(true)}
-                                            className="text-teal-600 focus:ring-indigo-500 w-4 h-4"
+                                            className="text-indigo-600 focus:ring-indigo-500 w-4 h-4"
                                         />
                                         <span className="text-sm text-gray-700">Yes</span>
                                     </label>
@@ -1309,7 +1311,7 @@ const CustomerContent: React.FC = () => {
                                             name="isVendor"
                                             checked={!isVendor}
                                             onChange={() => handleVendorRadioChange(false)}
-                                            className="text-teal-600 focus:ring-indigo-500 w-4 h-4"
+                                            className="text-indigo-600 focus:ring-indigo-500 w-4 h-4"
                                         />
                                         <span className="text-sm text-gray-700">No</span>
                                     </label>
@@ -1319,8 +1321,8 @@ const CustomerContent: React.FC = () => {
                                 {isVendor && (
                                     <div className="pl-4 border-l-2 border-indigo-200 space-y-4">
                                         {vendorSearchStatus === 'searching' && (
-                                            <div className="flex items-center text-teal-600 text-sm">
-                                                <svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-teal-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <div className="flex items-center text-indigo-600 text-sm">
+                                                <svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                                 </svg>
@@ -1331,18 +1333,18 @@ const CustomerContent: React.FC = () => {
                                         {vendorSearchStatus === 'found' && (
                                             <div className="space-y-3 animate-fadeIn">
                                                 <p className="text-sm font-semibold text-gray-800">
-                                                    <span className="text-teal-600">✓</span> Vendor found matching PAN/Name.
+                                                    <span className="text-indigo-600">✓</span> Vendor found matching PAN/Name.
                                                 </p>
 
                                                 <div className="flex items-center gap-4">
                                                     <label className="text-sm text-gray-700">Link the customer to this vendor?</label>
                                                     <div className="flex gap-4">
                                                         <label className="flex items-center gap-1 cursor-pointer">
-                                                            <input type="radio" name="linkVendor" checked={linkVendor === true} onChange={() => setLinkVendor(true)} className="text-teal-600 w-4 h-4" />
+                                                            <input type="radio" name="linkVendor" checked={linkVendor === true} onChange={() => setLinkVendor(true)} className="text-indigo-600 w-4 h-4" />
                                                             <span className="text-sm">Yes</span>
                                                         </label>
                                                         <label className="flex items-center gap-1 cursor-pointer">
-                                                            <input type="radio" name="linkVendor" checked={linkVendor === false} onChange={() => setLinkVendor(false)} className="text-teal-600 w-4 h-4" />
+                                                            <input type="radio" name="linkVendor" checked={linkVendor === false} onChange={() => setLinkVendor(false)} className="text-indigo-600 w-4 h-4" />
                                                             <span className="text-sm">No</span>
                                                         </label>
                                                     </div>
@@ -1365,11 +1367,11 @@ const CustomerContent: React.FC = () => {
                                                     <label className="text-sm text-gray-700">Create a Vendor?</label>
                                                     <div className="flex gap-4">
                                                         <label className="flex items-center gap-1 cursor-pointer">
-                                                            <input type="radio" name="createVendor" checked={createVendor === true} onChange={() => setCreateVendor(true)} className="text-teal-600 w-4 h-4" />
+                                                            <input type="radio" name="createVendor" checked={createVendor === true} onChange={() => setCreateVendor(true)} className="text-indigo-600 w-4 h-4" />
                                                             <span className="text-sm">Yes</span>
                                                         </label>
                                                         <label className="flex items-center gap-1 cursor-pointer">
-                                                            <input type="radio" name="createVendor" checked={createVendor === false} onChange={() => setCreateVendor(false)} className="text-teal-600 w-4 h-4" />
+                                                            <input type="radio" name="createVendor" checked={createVendor === false} onChange={() => setCreateVendor(false)} className="text-indigo-600 w-4 h-4" />
                                                             <span className="text-sm">No</span>
                                                         </label>
                                                     </div>
@@ -1384,11 +1386,11 @@ const CustomerContent: React.FC = () => {
                                 <label className="block text-sm font-semibold text-gray-700 mb-3">TDS Applicable under GST?</label>
                                 <div className="flex gap-6">
                                     <label className="flex items-center gap-2 cursor-pointer">
-                                        <input type="radio" name="tds" className="text-teal-600 focus:ring-indigo-500 w-4 h-4" />
+                                        <input type="radio" name="tds" className="text-indigo-600 focus:ring-indigo-500 w-4 h-4" />
                                         <span className="text-sm text-gray-700">Yes</span>
                                     </label>
                                     <label className="flex items-center gap-2 cursor-pointer">
-                                        <input type="radio" name="tds" defaultChecked className="text-teal-600 focus:ring-indigo-500 w-4 h-4" />
+                                        <input type="radio" name="tds" defaultChecked className="text-indigo-600 focus:ring-indigo-500 w-4 h-4" />
                                         <span className="text-sm text-gray-700">No</span>
                                     </label>
                                 </div>
@@ -1400,16 +1402,16 @@ const CustomerContent: React.FC = () => {
                         <div className="flex justify-between items-center gap-4 mt-12 border-t border-gray-200 pt-6">
                             <button
                                 onClick={handleBackButton}
-                                className="flex items-center gap-2 px-6 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                                className="flex items-center gap-2 px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                             >
                                 <ChevronLeft className="w-4 h-4" />
                                 Back
                             </button>
                             <div className="flex gap-4">
-                                <button onClick={() => setView('list')} className="px-6 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
+                                <button onClick={() => setView('list')} className="px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
                                 <button
                                     onClick={() => setActiveTab('GST Details')}
-                                    className="px-6 py-2 bg-teal-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
+                                    className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] text-sm font-medium hover:bg-indigo-700 transition-colors"
                                 >
                                     Next
                                 </button>
@@ -1422,12 +1424,12 @@ const CustomerContent: React.FC = () => {
                 {activeTab === 'GST Details' && (
                     <div className="max-w-4xl mx-auto">
                         <div className="flex justify-center mb-10 pt-4">
-                            <label className="flex items-center gap-3 cursor-pointer p-2 px-4 rounded-md hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-200">
+                            <label className="flex items-center gap-3 cursor-pointer p-2 px-4 rounded-[4px] hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-200">
                                 <input
                                     type="checkbox"
                                     checked={isUnregistered}
                                     onChange={(e) => setIsUnregistered(e.target.checked)}
-                                    className="w-4 h-4 text-teal-600 rounded focus:ring-indigo-500"
+                                    className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                                 />
                                 <span className="text-sm font-semibold text-gray-700">Customer is Unregistered</span>
                             </label>
@@ -1444,7 +1446,7 @@ const CustomerContent: React.FC = () => {
                                             type="text"
                                             value="NA"
                                             disabled
-                                            className="w-full px-4 py-2 border border-gray-200 rounded-md bg-gray-100 text-gray-500 cursor-not-allowed"
+                                            className="w-full px-4 py-2 border border-gray-200 rounded-[4px] bg-gray-100 text-gray-500 cursor-not-allowed"
                                         />
                                         <span className="absolute right-0 -top-6 text-xs text-indigo-500 font-medium italic">No GSTIN available</span>
                                     </div>
@@ -1455,9 +1457,9 @@ const CustomerContent: React.FC = () => {
                                                 type="text"
                                                 value="Unregistered"
                                                 readOnly
-                                                className="w-full px-4 py-2 border border-green-200 rounded-md bg-green-50 text-teal-700 font-medium ring-1 ring-green-200"
+                                                className="w-full px-4 py-2 border border-green-200 rounded-[4px] bg-green-50 text-slate-700 font-medium ring-1 ring-green-200"
                                             />
-                                            <span className="absolute right-3 top-2.5 text-xs text-teal-600">Auto-set</span>
+                                            <span className="absolute right-3 top-2.5 text-xs text-indigo-600">Auto-set</span>
                                         </div>
                                     </div>
                                 </div>
@@ -1466,16 +1468,16 @@ const CustomerContent: React.FC = () => {
                                 <div>
                                     <div className="flex items-center gap-6 mb-6">
                                         <label className="text-sm font-semibold text-gray-700">Add Multiple Branches</label>
-                                        <div className="flex bg-gray-100 p-1 rounded-md">
+                                        <div className="flex bg-gray-100 p-1 rounded-[4px]">
                                             <button
                                                 onClick={() => setAddMultipleBranches(true)}
-                                                className={`px-4 py-1 text-xs font-medium rounded ${addMultipleBranches ? 'bg-teal-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                                className={`px-4 py-1 text-xs font-medium rounded ${addMultipleBranches ? 'bg-indigo-600 text-white shadow-none border border-slate-200-none border border-slate-200' : 'text-gray-500 hover:text-gray-700'}`}
                                             >
                                                 Yes
                                             </button>
                                             <button
                                                 onClick={() => setAddMultipleBranches(false)}
-                                                className={`px-4 py-1 text-xs font-medium rounded ${!addMultipleBranches ? 'bg-white text-gray-800 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700'}`}
+                                                className={`px-4 py-1 text-xs font-medium rounded ${!addMultipleBranches ? 'bg-white text-gray-800 shadow-none border border-slate-200-none border border-slate-200 ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700'}`}
                                             >
                                                 No
                                             </button>
@@ -1488,7 +1490,7 @@ const CustomerContent: React.FC = () => {
                                             <label className="block text-sm font-semibold text-gray-700 mb-2">Address <span className="text-red-500">*</span></label>
                                             <textarea
                                                 rows={3}
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 resize-none"
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 resize-none"
                                                 placeholder="Enter Full Address"
                                                 value={unregisteredBranches[0].address}
                                                 onChange={(e) => handleManualBranchChange(1, 'address', e.target.value)}
@@ -1500,7 +1502,7 @@ const CustomerContent: React.FC = () => {
                                             {unregisteredBranches.map((branch, index) => {
                                                 const isExpanded = expandedBranches.includes(branch.id);
                                                 return (
-                                                    <div key={branch.id} className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm">
+                                                    <div key={branch.id} className="border border-gray-200 rounded-[4px] overflow-hidden bg-white shadow-none border border-slate-200-none border border-slate-200">
                                                         <div
                                                             className="flex items-center justify-between px-6 py-4 bg-gray-50 cursor-pointer hover:bg-gray-100"
                                                             onClick={() => toggleBranchExpand(branch.id)}
@@ -1522,7 +1524,7 @@ const CustomerContent: React.FC = () => {
                                                                     <label className="block text-xs font-medium text-gray-500 mb-1">Reference Name</label>
                                                                     <input
                                                                         type="text"
-                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                                                         value={branch.referenceName}
                                                                         onChange={(e) => handleManualBranchChange(branch.id, 'referenceName', e.target.value)}
                                                                         placeholder="e.g. Warehouse, Main Office"
@@ -1532,7 +1534,7 @@ const CustomerContent: React.FC = () => {
                                                                     <label className="block text-xs font-medium text-gray-500 mb-1">Address</label>
                                                                     <textarea
                                                                         rows={2}
-                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm resize-none"
+                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm resize-none"
                                                                         value={branch.address}
                                                                         onChange={(e) => handleManualBranchChange(branch.id, 'address', e.target.value)}
                                                                     />
@@ -1541,7 +1543,7 @@ const CustomerContent: React.FC = () => {
                                                                     <label className="block text-xs font-medium text-gray-500 mb-1">Contact Person</label>
                                                                     <input
                                                                         type="text"
-                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                                                         value={branch.contactPerson}
                                                                         onChange={(e) => handleManualBranchChange(branch.id, 'contactPerson', e.target.value)}
                                                                     />
@@ -1550,7 +1552,7 @@ const CustomerContent: React.FC = () => {
                                                                     <label className="block text-xs font-medium text-gray-500 mb-1">Contact Number</label>
                                                                     <input
                                                                         type="text"
-                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                                                         value={branch.contactNumber}
                                                                         onChange={(e) => handleManualBranchChange(branch.id, 'contactNumber', e.target.value)}
                                                                     />
@@ -1559,7 +1561,7 @@ const CustomerContent: React.FC = () => {
                                                                     <label className="block text-xs font-medium text-gray-500 mb-1">Email Address</label>
                                                                     <input
                                                                         type="email"
-                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                                                         value={branch.email}
                                                                         onChange={(e) => handleManualBranchChange(branch.id, 'email', e.target.value)}
                                                                     />
@@ -1571,7 +1573,7 @@ const CustomerContent: React.FC = () => {
                                             })}
                                             <button
                                                 onClick={handleAddManualBranch}
-                                                className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 font-medium hover:border-indigo-500 hover:text-teal-600 transition-colors flex items-center justify-center gap-2"
+                                                className="w-full py-2 border-2 border-dashed border-gray-300 rounded-[4px] text-gray-500 font-medium hover:border-indigo-500 hover:text-indigo-600 transition-colors flex items-center justify-center gap-2"
                                             >
                                                 <span>+</span> Add Another Branch
                                             </button>
@@ -1589,7 +1591,7 @@ const CustomerContent: React.FC = () => {
 
                                             <input
                                                 type="text"
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                 placeholder={selectedGSTINs.length > 0 ? `${selectedGSTINs.length} selected... Type to add more` : "Enter or Select GSTIN"}
                                                 value={gstInput}
                                                 onChange={(e) => setGstInput(e.target.value)}
@@ -1598,7 +1600,7 @@ const CustomerContent: React.FC = () => {
                                             />
                                             {/* Dropdown Simulation */}
                                             {showGstDropdown && (
-                                                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-10 max-h-48 overflow-y-auto">
+                                                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 z-10 max-h-48 overflow-y-auto">
                                                     {mockGSTINs.map(gst => (
                                                         <div
                                                             key={gst}
@@ -1612,7 +1614,7 @@ const CustomerContent: React.FC = () => {
                                                                 type="checkbox"
                                                                 checked={selectedGSTINs.includes(gst)}
                                                                 readOnly
-                                                                className="w-4 h-4 text-teal-600 rounded"
+                                                                className="w-4 h-4 text-indigo-600 rounded"
                                                             />
                                                             <span className="text-gray-700">{gst}</span>
                                                         </div>
@@ -1623,7 +1625,7 @@ const CustomerContent: React.FC = () => {
                                         <div className="flex flex-col gap-1">
                                             <button
                                                 onClick={handleFetchBranchDetails}
-                                                className="px-6 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-600 hover:bg-gray-50 whitespace-nowrap"
+                                                className="px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-600 hover:bg-gray-50 whitespace-nowrap"
                                             >
                                                 Fetch branch details
                                             </button>
@@ -1640,7 +1642,7 @@ const CustomerContent: React.FC = () => {
                                             const isExpanded = expandedBranches.includes(index + 1);
 
                                             return (
-                                                <div key={gstin} className="border border-indigo-100 rounded-lg overflow-hidden bg-white shadow-sm">
+                                                <div key={gstin} className="border border-indigo-100 rounded-[4px] overflow-hidden bg-white shadow-none border border-slate-200-none border border-slate-200">
                                                     {/* Header */}
                                                     <div
                                                         className="flex items-center justify-between px-6 py-4 bg-indigo-50/50 cursor-pointer hover:bg-indigo-50"
@@ -1666,7 +1668,7 @@ const CustomerContent: React.FC = () => {
                                                                 <label className="block text-xs font-medium text-gray-500 mb-1">Address (Fetched / Editable)</label>
                                                                 <textarea
                                                                     rows={3}
-                                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm resize-none"
+                                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm resize-none"
                                                                     value={branch.address}
                                                                     onChange={(e) => handleRegisteredBranchChange(gstin, 'address', e.target.value)}
                                                                 />
@@ -1678,7 +1680,7 @@ const CustomerContent: React.FC = () => {
                                                                     type="text"
                                                                     value={branch.defaultRef}
                                                                     onChange={(e) => handleRegisteredBranchChange(gstin, 'defaultRef', e.target.value)}
-                                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                                                 />
                                                             </div>
 
@@ -1689,7 +1691,7 @@ const CustomerContent: React.FC = () => {
                                                                         type="text"
                                                                         value={branch.contactPerson || ''}
                                                                         onChange={(e) => handleRegisteredBranchChange(gstin, 'contactPerson', e.target.value)}
-                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                                                     />
                                                                 </div>
                                                                 <div>
@@ -1698,7 +1700,7 @@ const CustomerContent: React.FC = () => {
                                                                         type="text"
                                                                         value={branch.contactNumber || ''}
                                                                         onChange={(e) => handleRegisteredBranchChange(gstin, 'contactNumber', e.target.value)}
-                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                                                     />
                                                                 </div>
                                                             </div>
@@ -1709,7 +1711,7 @@ const CustomerContent: React.FC = () => {
                                                                     type="email"
                                                                     value={branch.email || ''}
                                                                     onChange={(e) => handleRegisteredBranchChange(gstin, 'email', e.target.value)}
-                                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                                                 />
                                                             </div>
                                                         </div>
@@ -1726,16 +1728,16 @@ const CustomerContent: React.FC = () => {
                         <div className="flex justify-center items-center gap-6 mt-16 border-t border-gray-100 pt-8">
                             <button
                                 onClick={handleBackButton}
-                                className="flex items-center gap-2 px-8 py-2.5 border border-gray-300 rounded-md text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
+                                className="flex items-center gap-2 px-8 py-2.5 border border-gray-300 rounded-[4px] text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors shadow-none border border-slate-200-none border border-slate-200"
                             >
                                 <ChevronLeft className="w-4 h-4" />
                                 Back
                             </button>
                             <div className="flex gap-4">
-                                <button onClick={() => setView('list')} className="px-6 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
+                                <button onClick={() => setView('list')} className="px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
                                 <button
                                     onClick={() => setActiveTab('Products/Services')}
-                                    className="px-6 py-2 bg-teal-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
+                                    className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] text-sm font-medium hover:bg-indigo-700 transition-colors"
                                 >
                                     Next
                                 </button>
@@ -1747,7 +1749,7 @@ const CustomerContent: React.FC = () => {
                 {/* Products/Services Content */}
                 {activeTab === 'Products/Services' && (
                     <div className="max-w-6xl mx-auto">
-                        <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden mb-6">
+                        <div className="bg-white border border-gray-200 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 overflow-hidden mb-6">
                             {/* Table Header */}
                             <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-700 uppercase tracking-wider">
                                 <div className="col-span-1">No</div>
@@ -1767,7 +1769,7 @@ const CustomerContent: React.FC = () => {
                                         <div className="col-span-1 text-sm text-gray-500 font-medium">{index + 1}</div>
                                         <div className="col-span-2">
                                             <select
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
                                                 value={row.itemCode}
                                                 onChange={(e) => handleProductRowChange(row.id, 'itemCode', e.target.value)}
                                             >
@@ -1781,7 +1783,7 @@ const CustomerContent: React.FC = () => {
                                             <input
                                                 type="text"
                                                 readOnly
-                                                className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-100 text-gray-500 text-sm cursor-not-allowed"
+                                                className="w-full px-3 py-2 border border-gray-200 rounded-[4px] bg-gray-100 text-gray-500 text-sm cursor-not-allowed"
                                                 placeholder="Auto-fetched"
                                                 value={row.itemName}
                                             />
@@ -1789,7 +1791,7 @@ const CustomerContent: React.FC = () => {
                                         <div className="col-span-1">
                                             <input
                                                 type="text"
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                                 placeholder="UOM"
                                                 value={(row as any).uom || ''}
                                                 onChange={(e) => handleProductRowChange(row.id, 'uom', e.target.value)}
@@ -1798,7 +1800,7 @@ const CustomerContent: React.FC = () => {
                                         <div className="col-span-2">
                                             <input
                                                 type="text"
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                                 placeholder="Optional"
                                                 value={row.custItemCode}
                                                 onChange={(e) => handleProductRowChange(row.id, 'custItemCode', e.target.value)}
@@ -1807,7 +1809,7 @@ const CustomerContent: React.FC = () => {
                                         <div className="col-span-2">
                                             <input
                                                 type="text"
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                                 placeholder="Optional"
                                                 value={row.custItemName}
                                                 onChange={(e) => handleProductRowChange(row.id, 'custItemName', e.target.value)}
@@ -1816,7 +1818,7 @@ const CustomerContent: React.FC = () => {
                                         <div className="col-span-1">
                                             <input
                                                 type="text"
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                                 placeholder="UOM"
                                                 value={(row as any).custUom || ''}
                                                 onChange={(e) => handleProductRowChange(row.id, 'custUom', e.target.value)}
@@ -1826,7 +1828,7 @@ const CustomerContent: React.FC = () => {
                                             <button
                                                 onClick={() => handleRemoveProductRow(row.id)}
                                                 disabled={productRows.length === 1}
-                                                className={`p-2 rounded-full hover:bg-red-50 transition-colors ${productRows.length === 1 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-red-500 cursor-pointer'}`}
+                                                className={`p-2 rounded-[4px] hover:bg-red-50 transition-colors ${productRows.length === 1 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-red-500 cursor-pointer'}`}
                                             >
                                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                                     <polyline points="3 6 5 6 21 6"></polyline>
@@ -1843,7 +1845,7 @@ const CustomerContent: React.FC = () => {
                         <div className="mb-12">
                             <button
                                 onClick={handleAddProductRow}
-                                className="w-10 h-10 flex items-center justify-center rounded-full bg-indigo-50 text-teal-600 hover:bg-indigo-100 transition-colors shadow-sm border border-indigo-200"
+                                className="w-10 h-10 flex items-center justify-center rounded-[4px] bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors shadow-none border border-slate-200-none border border-slate-200 border border-indigo-200"
                             >
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -1856,16 +1858,16 @@ const CustomerContent: React.FC = () => {
                         <div className="flex justify-between items-center gap-4 border-t border-gray-200 pt-6">
                             <button
                                 onClick={handleBackButton}
-                                className="flex items-center gap-2 px-6 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                                className="flex items-center gap-2 px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                             >
                                 <ChevronLeft className="w-4 h-4" />
                                 Back
                             </button>
                             <div className="flex gap-4">
-                                <button onClick={() => setView('list')} className="px-6 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
+                                <button onClick={() => setView('list')} className="px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
                                 <button
                                     onClick={() => setActiveTab('TDS & Other Statutory Details')}
-                                    className="px-6 py-2 bg-teal-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
+                                    className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] text-sm font-medium hover:bg-indigo-700 transition-colors"
                                 >
                                     Next
                                 </button>
@@ -1887,12 +1889,12 @@ const CustomerContent: React.FC = () => {
                                     <div className="relative flex items-center">
                                         <input
                                             type="text"
-                                            className="w-full pl-4 pr-12 py-2.5 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400"
+                                            className="w-full pl-4 pr-12 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400"
                                             placeholder="UDYAM-XX-00-000000"
                                             value={statutoryDetails.msmeNo}
                                             onChange={(e) => setStatutoryDetails({ ...statutoryDetails, msmeNo: e.target.value })}
                                         />
-                                        <button className="absolute right-2 p-1.5 text-gray-400 hover:text-teal-600 rounded-md hover:bg-gray-100 transition-colors">
+                                        <button className="absolute right-2 p-1.5 text-gray-400 hover:text-indigo-600 rounded-[4px] hover:bg-gray-100 transition-colors">
                                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                                         </button>
                                     </div>
@@ -1902,12 +1904,12 @@ const CustomerContent: React.FC = () => {
                                     <div className="relative flex items-center">
                                         <input
                                             type="text"
-                                            className="w-full pl-4 pr-12 py-2.5 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400"
+                                            className="w-full pl-4 pr-12 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400"
                                             placeholder="14-digit License Number"
                                             value={statutoryDetails.fssaiNo}
                                             onChange={(e) => setStatutoryDetails({ ...statutoryDetails, fssaiNo: e.target.value })}
                                         />
-                                        <button className="absolute right-2 p-1.5 text-gray-400 hover:text-teal-600 rounded-md hover:bg-gray-100 transition-colors">
+                                        <button className="absolute right-2 p-1.5 text-gray-400 hover:text-indigo-600 rounded-[4px] hover:bg-gray-100 transition-colors">
                                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                                         </button>
                                     </div>
@@ -1924,12 +1926,12 @@ const CustomerContent: React.FC = () => {
                                     <div className="relative flex items-center">
                                         <input
                                             type="text"
-                                            className="w-full pl-4 pr-12 py-2.5 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400"
+                                            className="w-full pl-4 pr-12 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400"
                                             placeholder="10-DIGIT IEC CODE"
                                             value={statutoryDetails.iecCode}
                                             onChange={(e) => setStatutoryDetails({ ...statutoryDetails, iecCode: e.target.value })}
                                         />
-                                        <button className="absolute right-2 p-1.5 text-gray-400 hover:text-teal-600 rounded-md hover:bg-gray-100 transition-colors">
+                                        <button className="absolute right-2 p-1.5 text-gray-400 hover:text-indigo-600 rounded-[4px] hover:bg-gray-100 transition-colors">
                                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                                         </button>
                                     </div>
@@ -1938,7 +1940,7 @@ const CustomerContent: React.FC = () => {
                                     <div className="md:col-span-1">
                                         <label className="block text-sm font-semibold text-gray-700 mb-2">EOU Status</label>
                                         <select
-                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
+                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
                                             value={statutoryDetails.eouStatus}
                                             onChange={(e) => setStatutoryDetails({ ...statutoryDetails, eouStatus: e.target.value })}
                                         >
@@ -1954,13 +1956,13 @@ const CustomerContent: React.FC = () => {
                                         <div className="flex gap-8 pl-1">
                                             <div className="flex items-center gap-3">
                                                 <span className="text-sm text-gray-500">Letter of Permission</span>
-                                                <button className="p-1.5 border border-gray-200 rounded-md text-gray-400 hover:text-teal-600 hover:border-indigo-200 hover:bg-gray-50 transition-colors">
+                                                <button className="p-1.5 border border-gray-200 rounded-[4px] text-gray-400 hover:text-indigo-600 hover:border-indigo-200 hover:bg-gray-50 transition-colors">
                                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                                                 </button>
                                             </div>
                                             <div className="flex items-center gap-3">
                                                 <span className="text-sm text-gray-500">Green Card</span>
-                                                <button className="p-1.5 border border-gray-200 rounded-md text-gray-400 hover:text-teal-600 hover:border-indigo-200 hover:bg-gray-50 transition-colors">
+                                                <button className="p-1.5 border border-gray-200 rounded-[4px] text-gray-400 hover:text-indigo-600 hover:border-indigo-200 hover:bg-gray-50 transition-colors">
                                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                                                 </button>
                                             </div>
@@ -1975,7 +1977,7 @@ const CustomerContent: React.FC = () => {
                             <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wide mb-6">Tax Configuration</h4>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                 {/* TCS Card */}
-                                <div className="border border-gray-200 rounded-lg p-6 bg-gray-50/30">
+                                <div className="border border-gray-200 rounded-[4px] p-6 bg-gray-50/30">
                                     <div className="flex justify-between items-start mb-4">
                                         <h5 className="font-semibold text-gray-800">TCS Configuration</h5>
                                         <span className="text-gray-400" title="Information">
@@ -1987,7 +1989,7 @@ const CustomerContent: React.FC = () => {
                                             <label className="block text-xs font-medium text-gray-500 mb-1">Applicable Section</label>
                                             <div className="flex items-center gap-2">
                                                 <select
-                                                    className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
+                                                    className="flex-1 px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
                                                     value={statutoryDetails.tcsSection}
                                                     onChange={(e) => {
                                                         setStatutoryDetails({ ...statutoryDetails, tcsSection: e.target.value });
@@ -2016,7 +2018,7 @@ const CustomerContent: React.FC = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => setShowTcsInfo(!showTcsInfo)}
-                                                        className="p-2 text-teal-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-md transition-colors"
+                                                        className="p-2 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-[4px] transition-colors"
                                                         title={showTcsInfo ? "Hide Description" : "Show Description"}
                                                     >
                                                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -2030,9 +2032,9 @@ const CustomerContent: React.FC = () => {
 
                                             {/* Description Display */}
                                             {showTcsInfo && selectedTcsInfo && (
-                                                <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-md">
+                                                <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-[4px]">
                                                     <div className="flex items-start gap-2">
-                                                        <svg className="w-5 h-5 text-teal-600 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                        <svg className="w-5 h-5 text-indigo-600 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                                             <circle cx="12" cy="12" r="10"></circle>
                                                             <line x1="12" y1="16" x2="12" y2="12"></line>
                                                             <line x1="12" y1="8" x2="12.01" y2="8"></line>
@@ -2048,7 +2050,7 @@ const CustomerContent: React.FC = () => {
                                         <label className="flex items-center gap-2 cursor-pointer">
                                             <input
                                                 type="checkbox"
-                                                className="w-4 h-4 text-teal-600 rounded focus:ring-indigo-500"
+                                                className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                                                 checked={statutoryDetails.tcsEnabled}
                                                 onChange={(e) => setStatutoryDetails({ ...statutoryDetails, tcsEnabled: e.target.checked })}
                                             />
@@ -2058,7 +2060,7 @@ const CustomerContent: React.FC = () => {
                                 </div>
 
                                 {/* TDS Card */}
-                                <div className="border border-gray-200 rounded-lg p-6 bg-gray-50/30">
+                                <div className="border border-gray-200 rounded-[4px] p-6 bg-gray-50/30">
                                     <div className="flex justify-between items-start mb-4">
                                         <h5 className="font-semibold text-gray-800">TDS Configuration</h5>
                                         <span className="text-gray-400" title="Information">
@@ -2070,7 +2072,7 @@ const CustomerContent: React.FC = () => {
                                             <label className="block text-xs font-medium text-gray-500 mb-1">Receivable Section</label>
                                             <div className="flex items-center gap-2">
                                                 <select
-                                                    className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
+                                                    className="flex-1 px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
                                                     value={statutoryDetails.tdsSection}
                                                     onChange={(e) => {
                                                         setStatutoryDetails({ ...statutoryDetails, tdsSection: e.target.value });
@@ -2099,7 +2101,7 @@ const CustomerContent: React.FC = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => setShowTdsInfo(!showTdsInfo)}
-                                                        className="p-2 text-teal-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-md transition-colors"
+                                                        className="p-2 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-[4px] transition-colors"
                                                         title={showTdsInfo ? "Hide Description" : "Show Description"}
                                                     >
                                                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -2113,9 +2115,9 @@ const CustomerContent: React.FC = () => {
 
                                             {/* Description Display */}
                                             {showTdsInfo && selectedTdsInfo && (
-                                                <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-md">
+                                                <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-[4px]">
                                                     <div className="flex items-start gap-2">
-                                                        <svg className="w-5 h-5 text-teal-600 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                        <svg className="w-5 h-5 text-indigo-600 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                                             <circle cx="12" cy="12" r="10"></circle>
                                                             <line x1="12" y1="16" x2="12" y2="12"></line>
                                                             <line x1="12" y1="8" x2="12.01" y2="8"></line>
@@ -2131,7 +2133,7 @@ const CustomerContent: React.FC = () => {
                                         <label className="flex items-center gap-2 cursor-pointer">
                                             <input
                                                 type="checkbox"
-                                                className="w-4 h-4 text-teal-600 rounded focus:ring-indigo-500"
+                                                className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                                                 checked={statutoryDetails.tdsEnabled}
                                                 onChange={(e) => setStatutoryDetails({ ...statutoryDetails, tdsEnabled: e.target.checked })}
                                             />
@@ -2146,16 +2148,16 @@ const CustomerContent: React.FC = () => {
                         <div className="flex justify-between items-center gap-4 border-t border-gray-200 pt-6">
                             <button
                                 onClick={handleBackButton}
-                                className="flex items-center gap-2 px-6 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                                className="flex items-center gap-2 px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                             >
                                 <ChevronLeft className="w-4 h-4" />
                                 Back
                             </button>
                             <div className="flex gap-4">
-                                <button onClick={() => setView('list')} className="px-6 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
+                                <button onClick={() => setView('list')} className="px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
                                 <button
                                     onClick={() => setActiveTab('Banking Info')}
-                                    className="px-6 py-2 bg-teal-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
+                                    className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] text-sm font-medium hover:bg-indigo-700 transition-colors"
                                 >
                                     Next
                                 </button>
@@ -2169,7 +2171,7 @@ const CustomerContent: React.FC = () => {
                 {activeTab === 'Banking Info' && (
                     <div className="max-w-6xl mx-auto space-y-8">
                         {/* Info Banner */}
-                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start gap-3">
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-[4px] p-4 flex items-start gap-3">
                             <span className="text-yellow-500 mt-0.5">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
                             </span>
@@ -2181,11 +2183,11 @@ const CustomerContent: React.FC = () => {
                         {/* Bank Accounts Section */}
                         {bankAccounts.length === 0 ? (
                             // Empty State
-                            <div className="border-2 border-dashed border-gray-200 rounded-xl p-12 flex flex-col items-center justify-center text-center">
+                            <div className="border-2 border-dashed border-gray-200 rounded-[4px] p-12 flex flex-col items-center justify-center text-center">
                                 <p className="text-gray-500 mb-6">No bank accounts added yet</p>
                                 <button
                                     onClick={handleAddBank}
-                                    className="px-6 py-2.5 bg-teal-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm"
+                                    className="px-6 py-2.5 bg-indigo-600 text-white rounded-[4px] text-sm font-medium hover:bg-indigo-700 transition-colors shadow-none border border-slate-200-none border border-slate-200"
                                 >
                                     + Add Bank Account
                                 </button>
@@ -2194,7 +2196,7 @@ const CustomerContent: React.FC = () => {
                             // Detailed Card List
                             <div className="space-y-6">
                                 {bankAccounts.map((account, index) => (
-                                    <div key={account.id} className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm hover:shadow-md transition-shadow">
+                                    <div key={account.id} className="border border-gray-200 rounded-[4px] p-6 bg-white shadow-none border border-slate-200-none border border-slate-200 hover:shadow-none border border-slate-200-none border border-slate-200 transition-shadow-none border border-slate-200">
                                         <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-2">
                                             <h4 className="font-semibold text-gray-800">Bank Account {index + 1}</h4>
                                             <button
@@ -2214,7 +2216,7 @@ const CustomerContent: React.FC = () => {
                                                     <input
                                                         type="text"
                                                         placeholder="Enter account number"
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                                         value={account.accountNumber}
                                                         onChange={(e) => handleBankChange(account.id, 'accountNumber', e.target.value)}
                                                     />
@@ -2224,7 +2226,7 @@ const CustomerContent: React.FC = () => {
                                                     <input
                                                         type="text"
                                                         placeholder="ABCD0123456"
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                                         value={account.ifscCode}
                                                         onChange={(e) => handleBankChange(account.id, 'ifscCode', e.target.value)}
                                                     />
@@ -2234,7 +2236,7 @@ const CustomerContent: React.FC = () => {
                                                     <input
                                                         type="text"
                                                         placeholder="ENTER SWIFT CODE"
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                                         value={account.swiftCode}
                                                         onChange={(e) => handleBankChange(account.id, 'swiftCode', e.target.value)}
                                                     />
@@ -2248,7 +2250,7 @@ const CustomerContent: React.FC = () => {
                                                     <input
                                                         type="text"
                                                         placeholder="Enter bank name"
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                                         value={account.bankName}
                                                         onChange={(e) => handleBankChange(account.id, 'bankName', e.target.value)}
                                                     />
@@ -2258,7 +2260,7 @@ const CustomerContent: React.FC = () => {
                                                     <input
                                                         type="text"
                                                         placeholder="Enter branch name"
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                                                         value={account.branchName}
                                                         onChange={(e) => handleBankChange(account.id, 'branchName', e.target.value)}
                                                     />
@@ -2275,7 +2277,7 @@ const CustomerContent: React.FC = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => setOpenBranchDropdown(openBranchDropdown === account.id ? null : account.id)}
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md bg-white text-sm text-left hover:border-indigo-400 transition-colors flex items-center justify-between"
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-white text-sm text-left hover:border-indigo-400 transition-colors flex items-center justify-between"
                                                     >
                                                         <span className="text-gray-700">
                                                             {(account.associatedBranches || []).length > 0
@@ -2294,13 +2296,13 @@ const CustomerContent: React.FC = () => {
 
                                                     {/* Dropdown Menu */}
                                                     {openBranchDropdown === account.id && (
-                                                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg">
+                                                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200">
                                                             <div className="p-2 space-y-1">
                                                                 {['Bangalore HO', 'City Branch', 'Mumbai Branch'].map((branch) => (
                                                                     <label key={branch} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-2 py-1.5 rounded">
                                                                         <input
                                                                             type="checkbox"
-                                                                            className="w-4 h-4 text-teal-600 rounded focus:ring-indigo-500"
+                                                                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                                                                             checked={(account.associatedBranches || []).includes(branch)}
                                                                             onChange={(e) => {
                                                                                 const currentBranches = account.associatedBranches || [];
@@ -2319,7 +2321,7 @@ const CustomerContent: React.FC = () => {
                                                 </div>
                                                 {/* Display Field */}
                                                 <div>
-                                                    <div className="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-50 text-sm text-gray-700 min-h-[38px]">
+                                                    <div className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-sm text-gray-700 min-h-[38px]">
                                                         {(account.associatedBranches || []).length > 0 ? (
                                                             <div className="space-y-1">
                                                                 {(account.associatedBranches || []).map((branch, idx) => (
@@ -2356,7 +2358,7 @@ const CustomerContent: React.FC = () => {
                                 <div>
                                     <button
                                         onClick={handleAddBank}
-                                        className="px-4 py-2 border border-indigo-200 text-teal-600 rounded-md text-sm font-medium hover:bg-indigo-50 transition-colors flex items-center gap-2"
+                                        className="px-4 py-2 border border-indigo-200 text-indigo-600 rounded-[4px] text-sm font-medium hover:bg-indigo-50 transition-colors flex items-center gap-2"
                                     >
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                                         Add Another Bank
@@ -2369,16 +2371,16 @@ const CustomerContent: React.FC = () => {
                         <div className="flex justify-between items-center gap-4 border-t border-gray-200 pt-6">
                             <button
                                 onClick={handleBackButton}
-                                className="flex items-center gap-2 px-6 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                                className="flex items-center gap-2 px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                             >
                                 <ChevronLeft className="w-4 h-4" />
                                 Back
                             </button>
                             <div className="flex gap-4">
-                                <button onClick={() => setView('list')} className="px-6 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
+                                <button onClick={() => setView('list')} className="px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
                                 <button
                                     onClick={() => setActiveTab('Terms & Conditions')}
-                                    className="px-6 py-2 bg-teal-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
+                                    className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] text-sm font-medium hover:bg-indigo-700 transition-colors"
                                 >
                                     Next
                                 </button>
@@ -2395,7 +2397,7 @@ const CustomerContent: React.FC = () => {
                             <label className="block text-sm font-semibold text-gray-700 mb-2">Credit Period</label>
                             <input
                                 type="text"
-                                className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400"
+                                className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400"
                                 placeholder="e.g., 30 Days"
                                 value={termsDetails.creditPeriod}
                                 onChange={(e) => setTermsDetails({ ...termsDetails, creditPeriod: e.target.value })}
@@ -2406,7 +2408,7 @@ const CustomerContent: React.FC = () => {
                             <label className="block text-sm font-semibold text-gray-700 mb-2">Credit Terms</label>
                             <textarea
                                 rows={3}
-                                className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400"
+                                className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400"
                                 placeholder="Enter credit terms details"
                                 value={termsDetails.creditTerms}
                                 onChange={(e) => setTermsDetails({ ...termsDetails, creditTerms: e.target.value })}
@@ -2417,7 +2419,7 @@ const CustomerContent: React.FC = () => {
                             <label className="block text-sm font-semibold text-gray-700 mb-2">Penalty Terms</label>
                             <textarea
                                 rows={3}
-                                className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400"
+                                className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400"
                                 placeholder="Enter penalty terms"
                                 value={termsDetails.penaltyTerms}
                                 onChange={(e) => setTermsDetails({ ...termsDetails, penaltyTerms: e.target.value })}
@@ -2428,7 +2430,7 @@ const CustomerContent: React.FC = () => {
                             <label className="block text-sm font-semibold text-gray-700 mb-2">Delivery Terms</label>
                             <textarea
                                 rows={3}
-                                className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400"
+                                className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400"
                                 placeholder="Enter delivery terms"
                                 value={termsDetails.deliveryTerms}
                                 onChange={(e) => setTermsDetails({ ...termsDetails, deliveryTerms: e.target.value })}
@@ -2439,7 +2441,7 @@ const CustomerContent: React.FC = () => {
                             <label className="block text-sm font-semibold text-gray-700 mb-2">Warranty / Guarantee Details</label>
                             <textarea
                                 rows={3}
-                                className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400"
+                                className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400"
                                 placeholder="Enter warranty or guarantee details"
                                 value={termsDetails.warrantyDetails}
                                 onChange={(e) => setTermsDetails({ ...termsDetails, warrantyDetails: e.target.value })}
@@ -2450,7 +2452,7 @@ const CustomerContent: React.FC = () => {
                             <label className="block text-sm font-semibold text-gray-700 mb-2">Force Majeure</label>
                             <textarea
                                 rows={3}
-                                className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400"
+                                className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400"
                                 placeholder="Enter force majeure terms"
                                 value={termsDetails.forceMajeure}
                                 onChange={(e) => setTermsDetails({ ...termsDetails, forceMajeure: e.target.value })}
@@ -2461,7 +2463,7 @@ const CustomerContent: React.FC = () => {
                             <label className="block text-sm font-semibold text-gray-700 mb-2">Dispute and Redressal Terms</label>
                             <textarea
                                 rows={3}
-                                className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400"
+                                className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400"
                                 placeholder="Enter dispute and redressal terms"
                                 value={termsDetails.disputeTerms}
                                 onChange={(e) => setTermsDetails({ ...termsDetails, disputeTerms: e.target.value })}
@@ -2472,13 +2474,13 @@ const CustomerContent: React.FC = () => {
                         <div className="flex justify-between items-center gap-4 border-t border-gray-200 pt-6 mt-8">
                             <button
                                 onClick={handleBackButton}
-                                className="flex items-center gap-2 px-6 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                                className="flex items-center gap-2 px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                             >
                                 <ChevronLeft className="w-4 h-4" />
                                 Back
                             </button>
                             <div className="flex gap-4">
-                                <button onClick={() => setView('list')} className="px-6 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
+                                <button onClick={() => setView('list')} className="px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
                                 <button
                                     onClick={async () => {
                                         const success = await handleSaveCustomer({ exit: true });
@@ -2486,7 +2488,7 @@ const CustomerContent: React.FC = () => {
                                             // View change is handled inside handleSaveCustomer when exit: true
                                         }
                                     }}
-                                    className="px-6 py-2 bg-teal-600 text-white rounded-md text-sm font-medium hover:bg-teal-700 transition-colors flex items-center gap-2"
+                                    className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] text-sm font-medium hover:bg-indigo-700 transition-colors flex items-center gap-2"
                                 >
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                         <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
@@ -2526,7 +2528,7 @@ const CustomerContent: React.FC = () => {
                         });
                         setView('create');
                     }}
-                    className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition-colors flex items-center gap-2"
+                    className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-[4px] hover:bg-indigo-700 transition-colors flex items-center gap-2"
                 >
                     <span>+</span> Create New Customer
                 </button>
@@ -2538,14 +2540,14 @@ const CustomerContent: React.FC = () => {
                     <input
                         type="text"
                         placeholder="Search by customer name or code..."
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
                 <div className="md:col-span-2">
                     <select
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm text-gray-700"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm text-gray-700"
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}
                     >
@@ -2556,7 +2558,7 @@ const CustomerContent: React.FC = () => {
                 </div>
                 <div className="md:col-span-2">
                     <select
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm text-gray-700"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm text-gray-700"
                         value={categoryFilter}
                         onChange={(e) => setCategoryFilter(e.target.value)}
                     >
@@ -2571,7 +2573,7 @@ const CustomerContent: React.FC = () => {
             <p className="text-sm text-gray-500 mb-4">Showing {filteredCustomers.length} of {customers.length} customers</p>
 
             {/* Table */}
-            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <div className="bg-white border border-gray-200 rounded-[4px] overflow-hidden">
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
@@ -2595,7 +2597,7 @@ const CustomerContent: React.FC = () => {
                                     {customer.customer_name || customer.name}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-center">
-                                    <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${(customer.status || 'Live') === 'Live'
+                                    <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${(customer.status || 'Live') === 'Live'
                                         ? 'bg-green-100 text-green-800'
                                         : 'bg-gray-100 text-gray-600'
                                         }`}>
@@ -2853,13 +2855,13 @@ const SalesOrderContent: React.FC = () => {
         <div className="p-8">
             {/* Sub-tabs */}
             <div className="mb-8">
-                <div className="bg-gray-50 p-1 rounded-lg inline-flex">
+                <div className="bg-gray-50 p-1 rounded-[4px] inline-flex">
                     {['Sales Quotation', 'Sales Order'].map((tab) => (
                         <button
                             key={tab}
                             onClick={() => setSubTab(tab as any)}
-                            className={`px-6 py-2 rounded-md text-sm font-medium transition-all ${subTab === tab
-                                ? 'bg-white text-teal-600 shadow-sm'
+                            className={`px-6 py-2 rounded-[4px] text-sm font-medium transition-all ${subTab === tab
+                                ? 'bg-white text-indigo-600 shadow-none border border-slate-200-none border border-slate-200'
                                 : 'text-gray-500 hover:text-gray-700'
                                 }`}
                         >
@@ -2880,7 +2882,7 @@ const SalesOrderContent: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-2">Name of Series <span className="text-red-500">*</span></label>
                         <input
                             type="text"
-                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                             placeholder={`e.g. Retail ${subTab}`}
                             value={form.name}
                             onChange={(e) => handleChange('name', e.target.value)}
@@ -2903,7 +2905,7 @@ const SalesOrderContent: React.FC = () => {
                             <label className="block text-sm font-medium text-gray-700 mb-2">Prefix</label>
                             <input
                                 type="text"
-                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                 value={form.prefix}
                                 onChange={(e) => handleChange('prefix', e.target.value)}
                             />
@@ -2912,7 +2914,7 @@ const SalesOrderContent: React.FC = () => {
                             <label className="block text-sm font-medium text-gray-700 mb-2">Suffix</label>
                             <input
                                 type="text"
-                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                 value={form.suffix}
                                 onChange={(e) => handleChange('suffix', e.target.value)}
                             />
@@ -2924,7 +2926,7 @@ const SalesOrderContent: React.FC = () => {
                             <input
                                 id="autoYear"
                                 type="checkbox"
-                                className="h-4 w-4 text-teal-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                                 checked={form.autoYear}
                                 onChange={(e) => handleChange('autoYear', e.target.checked)}
                             />
@@ -2934,14 +2936,14 @@ const SalesOrderContent: React.FC = () => {
                             <label className="block text-sm font-medium text-gray-700 mb-2">Digits</label>
                             <input
                                 type="number"
-                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                 value={form.digits}
                                 onChange={(e) => handleChange('digits', Number(e.target.value))}
                             />
                         </div>
                     </div>
 
-                    <div className="bg-gray-100 rounded-md p-6 text-center">
+                    <div className="bg-gray-100 rounded-[4px] p-6 text-center">
                         <p className="text-xs uppercase text-gray-500 font-semibold mb-2">SAMPLE PREVIEW</p>
                         <p className="text-xl font-bold text-gray-800">{getPreview()}</p>
                     </div>
@@ -2968,7 +2970,7 @@ const SalesOrderContent: React.FC = () => {
                 {/* Right: Table */}
                 <div className="lg:col-span-8">
                     <h3 className="text-lg font-bold text-gray-900 mb-6">Existing {isSQ ? 'Sales Quotation' : 'Sales Order'} Series</h3>
-                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="border border-gray-200 rounded-[4px] overflow-hidden">
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">
                                 <tr>
@@ -3196,9 +3198,9 @@ const LongTermContractsContent: React.FC = () => {
 
     const getBadgeStyle = (type: string) => {
         switch (type) {
-            case 'Rate Contract': return 'bg-blue-100 text-teal-700 hover:bg-blue-200';
+            case 'Rate Contract': return 'bg-blue-100 text-slate-700 hover:bg-blue-200';
             case 'Service Contract': return 'bg-purple-100 text-purple-700 hover:bg-purple-200';
-            case 'AMC': return 'bg-green-100 text-teal-700 hover:bg-green-200';
+            case 'AMC': return 'bg-green-100 text-slate-700 hover:bg-green-200';
             default: return 'bg-gray-100 text-gray-700';
         }
     };
@@ -3206,7 +3208,7 @@ const LongTermContractsContent: React.FC = () => {
     if (view === 'create') {
         return (
             <div className="p-8">
-                <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
+                <div className="bg-white border border-gray-200 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200">
                     {/* Header */}
                     <div className="px-8 py-6 border-b border-gray-200">
                         <h3 className="text-lg font-bold text-gray-900">Add New Contract</h3>
@@ -3220,7 +3222,7 @@ const LongTermContractsContent: React.FC = () => {
                                     key={tab}
                                     onClick={() => setActiveTab(tab)}
                                     className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === tab
-                                        ? 'border-indigo-500 text-teal-600'
+                                        ? 'border-indigo-500 text-indigo-600'
                                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                         }`}
                                 >
@@ -3243,13 +3245,13 @@ const LongTermContractsContent: React.FC = () => {
                                                 type="text"
                                                 disabled
                                                 value={basicDetails.contractNumber}
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500 text-sm focus:ring-indigo-500 focus:border-indigo-500"
                                             />
                                         </div>
                                         <div>
                                             <label className="block text-xs font-semibold text-gray-700 mb-1">Contract Type <span className="text-red-500">*</span></label>
                                             <select
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
                                                 value={basicDetails.contractType}
                                                 onChange={(e) => setBasicDetails({ ...basicDetails, contractType: e.target.value })}
                                             >
@@ -3263,7 +3265,7 @@ const LongTermContractsContent: React.FC = () => {
                                             <label className="block text-xs font-semibold text-gray-700 mb-1">Contract Validity From <span className="text-red-500">*</span></label>
                                             <input
                                                 type="date"
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400"
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400"
                                                 value={basicDetails.validityFrom}
                                                 onChange={(e) => setBasicDetails({ ...basicDetails, validityFrom: e.target.value })}
                                             />
@@ -3275,7 +3277,7 @@ const LongTermContractsContent: React.FC = () => {
                                         <div>
                                             <label className="block text-xs font-semibold text-gray-700 mb-1">Customer Name <span className="text-red-500">*</span></label>
                                             <select
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
                                                 value={basicDetails.customerId}
                                                 onChange={async (e) => {
                                                     const selectedId = e.target.value;
@@ -3320,7 +3322,7 @@ const LongTermContractsContent: React.FC = () => {
                                         <div>
                                             <label className="block text-xs font-semibold text-gray-700 mb-1">Branch <span className="text-red-500">*</span></label>
                                             <select
-                                                className={`w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white ${(!basicDetails.customerId || branchLoading) ? 'bg-gray-50 cursor-not-allowed opacity-60' : ''}`}
+                                                className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white ${(!basicDetails.customerId || branchLoading) ? 'bg-gray-50 cursor-not-allowed opacity-60' : ''}`}
                                                 value={basicDetails.branchId}
                                                 disabled={!basicDetails.customerId || branchLoading}
                                                 onChange={(e) => setBasicDetails({ ...basicDetails, branchId: e.target.value })}
@@ -3341,7 +3343,7 @@ const LongTermContractsContent: React.FC = () => {
                                             <label className="block text-xs font-semibold text-gray-700 mb-1">Contract Validity To <span className="text-red-500">*</span></label>
                                             <input
                                                 type="date"
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400"
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400"
                                                 value={basicDetails.validityTo}
                                                 onChange={(e) => setBasicDetails({ ...basicDetails, validityTo: e.target.value })}
                                             />
@@ -3353,7 +3355,7 @@ const LongTermContractsContent: React.FC = () => {
                                 <div className="space-y-6">
                                     <div>
                                         <label className="block text-xs font-semibold text-gray-700 mb-1">Attach Long-term Contract</label>
-                                        <div className="border border-gray-300 rounded-md px-4 py-2 flex items-center gap-4 bg-white">
+                                        <div className="border border-gray-300 rounded-[4px] px-4 py-2 flex items-center gap-4 bg-white">
                                             <button className="px-3 py-1.5 border border-gray-300 rounded bg-gray-50 hover:bg-gray-100 text-xs font-medium text-gray-700 transition-colors flex items-center gap-2">
                                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                                                 Choose File
@@ -3366,7 +3368,7 @@ const LongTermContractsContent: React.FC = () => {
                                         <input
                                             type="checkbox"
                                             id="automate-billing"
-                                            className="w-4 h-4 text-teal-600 rounded focus:ring-indigo-500 border-gray-300"
+                                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300"
                                             checked={automateBilling}
                                             onChange={(e) => setAutomateBilling(e.target.checked)}
                                         />
@@ -3375,14 +3377,14 @@ const LongTermContractsContent: React.FC = () => {
 
                                     {/* Conditional Billing Configuration */}
                                     {automateBilling && (
-                                        <div className="border border-gray-300 rounded-lg p-6 bg-gray-50/50 mt-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                                        <div className="border border-gray-300 rounded-[4px] p-6 bg-gray-50/50 mt-4 animate-in fade-in slide-in-from-top-2 duration-300">
                                             <h4 className="text-sm font-bold text-gray-800 mb-4 border-b border-gray-200 pb-2">Billing Configuration</h4>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                 <div>
                                                     <label className="block text-xs font-semibold text-gray-700 mb-1">Bill Start Date <span className="text-red-500">*</span></label>
                                                     <input
                                                         type="date"
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
                                                         value={billingConfig.billStartDate}
                                                         onChange={(e) => setBillingConfig({ ...billingConfig, billStartDate: e.target.value })}
                                                     />
@@ -3390,7 +3392,7 @@ const LongTermContractsContent: React.FC = () => {
                                                 <div>
                                                     <label className="block text-xs font-semibold text-gray-700 mb-1">Billing Frequency <span className="text-red-500">*</span></label>
                                                     <select
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
                                                         value={billingConfig.billingFrequency}
                                                         onChange={(e) => setBillingConfig({ ...billingConfig, billingFrequency: e.target.value })}
                                                     >
@@ -3404,7 +3406,7 @@ const LongTermContractsContent: React.FC = () => {
                                                 <div>
                                                     <label className="block text-xs font-semibold text-gray-700 mb-1">Voucher Name <span className="text-red-500">*</span></label>
                                                     <select
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
                                                         value={billingConfig.voucherName}
                                                         onChange={(e) => setBillingConfig({ ...billingConfig, voucherName: e.target.value })}
                                                     >
@@ -3421,7 +3423,7 @@ const LongTermContractsContent: React.FC = () => {
                                                             <span className="text-xs text-gray-500 mb-1 block">From</span>
                                                             <input
                                                                 type="date"
-                                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
+                                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
                                                                 value={billingConfig.billPeriodFrom}
                                                                 onChange={(e) => setBillingConfig({ ...billingConfig, billPeriodFrom: e.target.value })}
                                                             />
@@ -3431,7 +3433,7 @@ const LongTermContractsContent: React.FC = () => {
                                                             <span className="text-xs text-gray-500 mb-1 block">To</span>
                                                             <input
                                                                 type="date"
-                                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
+                                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
                                                                 value={billingConfig.billPeriodTo}
                                                                 onChange={(e) => setBillingConfig({ ...billingConfig, billPeriodTo: e.target.value })}
                                                             />
@@ -3448,7 +3450,7 @@ const LongTermContractsContent: React.FC = () => {
                         {activeTab === 'Products / Services' && (
                             <div className="space-y-4">
                                 <h4 className="text-sm font-bold text-gray-800 uppercase tracking-wider mb-2">PRODUCTS / SERVICES</h4>
-                                <div className="border border-gray-200 rounded-lg overflow-x-auto">
+                                <div className="border border-gray-200 rounded-[4px] overflow-x-auto">
                                     <table className="min-w-full divide-y divide-gray-200">
                                         <thead className="bg-gray-50">
                                             <tr>
@@ -3475,7 +3477,7 @@ const LongTermContractsContent: React.FC = () => {
                                                     <td className="px-4 py-3 whitespace-nowrap">
                                                         <div className="relative">
                                                             <select
-                                                                className="block w-full pl-3 pr-8 py-1.5 text-sm border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md"
+                                                                className="block w-full pl-3 pr-8 py-1.5 text-sm border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-[4px]"
                                                                 value={product.itemCode}
                                                                 onChange={(e) => handleProductChange(product.id, 'itemCode', e.target.value)}
                                                             >
@@ -3488,7 +3490,7 @@ const LongTermContractsContent: React.FC = () => {
                                                     <td className="px-4 py-3 whitespace-nowrap">
                                                         <input
                                                             type="text"
-                                                            className="block w-full px-3 py-1.5 text-sm border-gray-300 rounded-md bg-gray-50 text-gray-500 focus:ring-indigo-500 focus:border-indigo-500"
+                                                            className="block w-full px-3 py-1.5 text-sm border-gray-300 rounded-[4px] bg-gray-50 text-gray-500 focus:ring-indigo-500 focus:border-indigo-500"
                                                             value={product.itemName}
                                                             readOnly
                                                         />
@@ -3496,7 +3498,7 @@ const LongTermContractsContent: React.FC = () => {
                                                     <td className="px-4 py-3 whitespace-nowrap">
                                                         <input
                                                             type="text"
-                                                            className="block w-full px-3 py-1.5 text-sm border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                                            className="block w-full px-3 py-1.5 text-sm border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                             placeholder="Customer item name"
                                                             value={product.customerItemName}
                                                             onChange={(e) => handleProductChange(product.id, 'customerItemName', e.target.value)}
@@ -3505,7 +3507,7 @@ const LongTermContractsContent: React.FC = () => {
                                                     <td className="px-2 py-3 whitespace-nowrap">
                                                         <input
                                                             type="number"
-                                                            className="block w-full px-2 py-1.5 text-sm border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-center"
+                                                            className="block w-full px-2 py-1.5 text-sm border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-center"
                                                             value={product.qtyMin}
                                                             onChange={(e) => handleProductChange(product.id, 'qtyMin', e.target.value)}
                                                         />
@@ -3513,7 +3515,7 @@ const LongTermContractsContent: React.FC = () => {
                                                     <td className="px-2 py-3 whitespace-nowrap">
                                                         <input
                                                             type="number"
-                                                            className="block w-full px-2 py-1.5 text-sm border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-center"
+                                                            className="block w-full px-2 py-1.5 text-sm border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-center"
                                                             value={product.qtyMax}
                                                             onChange={(e) => handleProductChange(product.id, 'qtyMax', e.target.value)}
                                                         />
@@ -3521,7 +3523,7 @@ const LongTermContractsContent: React.FC = () => {
                                                     <td className="px-2 py-3 whitespace-nowrap">
                                                         <input
                                                             type="number"
-                                                            className="block w-full px-2 py-1.5 text-sm border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-center"
+                                                            className="block w-full px-2 py-1.5 text-sm border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-center"
                                                             value={product.priceMin}
                                                             onChange={(e) => handleProductChange(product.id, 'priceMin', e.target.value)}
                                                         />
@@ -3529,7 +3531,7 @@ const LongTermContractsContent: React.FC = () => {
                                                     <td className="px-2 py-3 whitespace-nowrap">
                                                         <input
                                                             type="number"
-                                                            className="block w-full px-2 py-1.5 text-sm border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-center"
+                                                            className="block w-full px-2 py-1.5 text-sm border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-center"
                                                             value={product.priceMax}
                                                             onChange={(e) => handleProductChange(product.id, 'priceMax', e.target.value)}
                                                         />
@@ -3537,7 +3539,7 @@ const LongTermContractsContent: React.FC = () => {
                                                     <td className="px-4 py-3 whitespace-nowrap">
                                                         <input
                                                             type="text"
-                                                            className="block w-full px-3 py-1.5 text-sm border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                                            className="block w-full px-3 py-1.5 text-sm border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                             placeholder="e.g., ±5%"
                                                             value={product.deviation}
                                                             onChange={(e) => handleProductChange(product.id, 'deviation', e.target.value)}
@@ -3559,7 +3561,7 @@ const LongTermContractsContent: React.FC = () => {
                                 </div>
                                 <button
                                     onClick={handleAddProduct}
-                                    className="text-teal-600 hover:text-indigo-800 text-sm font-medium flex items-center gap-1"
+                                    className="text-indigo-600 hover:text-indigo-800 text-sm font-medium flex items-center gap-1"
                                 >
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                                     Add New Product
@@ -3573,7 +3575,7 @@ const LongTermContractsContent: React.FC = () => {
                                     <label className="block text-xs font-semibold text-gray-700 mb-1">Payment Terms</label>
                                     <textarea
                                         rows={4}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400 resize-none"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400 resize-none"
                                         placeholder="Enter payment terms"
                                         value={terms.paymentTerms}
                                         onChange={(e) => setTerms({ ...terms, paymentTerms: e.target.value })}
@@ -3583,7 +3585,7 @@ const LongTermContractsContent: React.FC = () => {
                                     <label className="block text-xs font-semibold text-gray-700 mb-1">Penalty Terms</label>
                                     <textarea
                                         rows={4}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400 resize-none"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400 resize-none"
                                         placeholder="Enter penalty terms"
                                         value={terms.penaltyTerms}
                                         onChange={(e) => setTerms({ ...terms, penaltyTerms: e.target.value })}
@@ -3593,7 +3595,7 @@ const LongTermContractsContent: React.FC = () => {
                                     <label className="block text-xs font-semibold text-gray-700 mb-1">Force Majeure</label>
                                     <textarea
                                         rows={4}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400 resize-none"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400 resize-none"
                                         placeholder="Enter force majeure details"
                                         value={terms.forceMajeure}
                                         onChange={(e) => setTerms({ ...terms, forceMajeure: e.target.value })}
@@ -3603,7 +3605,7 @@ const LongTermContractsContent: React.FC = () => {
                                     <label className="block text-xs font-semibold text-gray-700 mb-1">Termination Clause</label>
                                     <textarea
                                         rows={4}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400 resize-none"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400 resize-none"
                                         placeholder="Enter termination clause"
                                         value={terms.terminationClause}
                                         onChange={(e) => setTerms({ ...terms, terminationClause: e.target.value })}
@@ -3613,7 +3615,7 @@ const LongTermContractsContent: React.FC = () => {
                                     <label className="block text-xs font-semibold text-gray-700 mb-1">Dispute & Redressal Terms</label>
                                     <textarea
                                         rows={4}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400 resize-none"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400 resize-none"
                                         placeholder="Enter dispute resolution terms"
                                         value={terms.disputeTerms}
                                         onChange={(e) => setTerms({ ...terms, disputeTerms: e.target.value })}
@@ -3623,7 +3625,7 @@ const LongTermContractsContent: React.FC = () => {
                                     <label className="block text-xs font-semibold text-gray-700 mb-1">Others</label>
                                     <textarea
                                         rows={4}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400 resize-none"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400 resize-none"
                                         placeholder="Any other terms"
                                         value={terms.others}
                                         onChange={(e) => setTerms({ ...terms, others: e.target.value })}
@@ -3642,7 +3644,7 @@ const LongTermContractsContent: React.FC = () => {
                         <div className="flex justify-between border-t border-gray-200 mt-8 pt-6">
                             <button
                                 onClick={() => setView('list')}
-                                className="px-6 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                                className="px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                             >
                                 Cancel
                             </button>
@@ -3653,7 +3655,7 @@ const LongTermContractsContent: React.FC = () => {
                                             if (activeTab === 'Terms & Conditions') setActiveTab('Products / Services');
                                             else if (activeTab === 'Products / Services') setActiveTab('Basic Details');
                                         }}
-                                        className="px-6 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                                        className="px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                                     >
                                         Back
                                     </button>
@@ -3667,7 +3669,7 @@ const LongTermContractsContent: React.FC = () => {
                                         }
                                     }}
                                     disabled={loading}
-                                    className={`px-8 py-2 text-white rounded-md text-sm font-medium transition-colors ${activeTab === 'Terms & Conditions' ? 'bg-teal-600 hover:bg-teal-700 disabled:bg-gray-400' : 'bg-teal-600 hover:bg-indigo-700'
+                                    className={`px-8 py-2 text-white rounded-[4px] text-sm font-medium transition-colors ${activeTab === 'Terms & Conditions' ? 'bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400' : 'bg-indigo-600 hover:bg-indigo-700'
                                         }`}
                                 >
                                     {loading ? 'Saving...' : (activeTab === 'Terms & Conditions' ? 'Save' : 'Next')}
@@ -3690,7 +3692,7 @@ const LongTermContractsContent: React.FC = () => {
                 </div>
                 <button
                     onClick={() => setView('create')}
-                    className="px-5 py-2.5 bg-teal-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition-colors shadow-sm flex items-center gap-2"
+                    className="px-5 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-[4px] hover:bg-indigo-700 transition-colors shadow-none border border-slate-200-none border border-slate-200 flex items-center gap-2"
                 >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                     Add New Contract
@@ -3698,7 +3700,7 @@ const LongTermContractsContent: React.FC = () => {
             </div>
 
             {/* Contracts Table */}
-            <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+            <div className="bg-white border border-gray-200 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 overflow-hidden">
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
@@ -3715,7 +3717,7 @@ const LongTermContractsContent: React.FC = () => {
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">{contract.contract_number}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{contract.customer_name}</td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                    <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full cursor-default ${getBadgeStyle(contract.contract_type)}`}>
+                                    <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] cursor-default ${getBadgeStyle(contract.contract_type)}`}>
                                         {contract.contract_type}
                                     </span>
                                 </td>
@@ -3724,7 +3726,7 @@ const LongTermContractsContent: React.FC = () => {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                                     <div className="flex items-center justify-center gap-3 opacity-60 group-hover:opacity-100 transition-opacity">
-                                        <button className="text-gray-500 hover:text-teal-600 transition-colors" title="View/Edit Details">
+                                        <button className="text-gray-500 hover:text-indigo-600 transition-colors" title="View/Edit Details">
                                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                                         </button>
                                     </div>
@@ -3864,7 +3866,7 @@ const ReceiptContent: React.FC = () => {
             </div>
 
             {/* Receipt Listing Table */}
-            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <div className="bg-white border border-gray-200 rounded-[4px] overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
@@ -3904,7 +3906,7 @@ const ReceiptContent: React.FC = () => {
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                         <button
                                             onClick={() => handlePostClick(receipt)}
-                                            className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition-colors"
+                                            className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-[4px] hover:bg-indigo-700 transition-colors"
                                         >
                                             Post
                                         </button>
@@ -3926,7 +3928,7 @@ const ReceiptContent: React.FC = () => {
             {/* Post Receipt Modal */}
             {showPostModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-lg shadow-xl max-w-md w-full animate-fade-in">
+                    <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 max-w-md w-full animate-fade-in">
                         {/* Modal Header */}
                         <div className="px-6 py-4 border-b border-gray-200">
                             <h2 className="text-xl font-semibold text-gray-900">Post Receipt</h2>
@@ -3944,7 +3946,7 @@ const ReceiptContent: React.FC = () => {
                                         type="date"
                                         value={postFormData.dateOfReceipt}
                                         onChange={(e) => handleFormChange('dateOfReceipt', e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                         required
                                     />
                                 </div>
@@ -3957,7 +3959,7 @@ const ReceiptContent: React.FC = () => {
                                     <select
                                         value={postFormData.methodOfReceipt}
                                         onChange={(e) => handleFormChange('methodOfReceipt', e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                         required
                                     >
                                         <option value="">Select method</option>
@@ -3976,7 +3978,7 @@ const ReceiptContent: React.FC = () => {
                                             <select
                                                 value={postFormData.bankAccount}
                                                 onChange={(e) => handleFormChange('bankAccount', e.target.value)}
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                 required
                                             >
                                                 <option value="">Select bank account</option>
@@ -4000,7 +4002,7 @@ const ReceiptContent: React.FC = () => {
                                                 type="text"
                                                 value={postFormData.bankReferenceNo}
                                                 onChange={(e) => handleFormChange('bankReferenceNo', e.target.value)}
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                 placeholder="Enter bank reference number"
                                                 required
                                             />
@@ -4014,13 +4016,13 @@ const ReceiptContent: React.FC = () => {
                                 <button
                                     type="button"
                                     onClick={handleCloseModal}
-                                    className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-50 transition-colors"
+                                    className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-[4px] hover:bg-gray-50 transition-colors"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
-                                    className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition-colors"
+                                    className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-[4px] hover:bg-indigo-700 transition-colors"
                                 >
                                     Submit
                                 </button>
@@ -4139,7 +4141,7 @@ const EditNetOffPage: React.FC<EditNetOffPageProps> = ({
         <div className="fixed inset-0 z-50 bg-gray-100 flex flex-col overflow-auto">
             <div className="max-w-6xl mx-auto w-full p-8 space-y-8">
                 {/* Top Summary Bar */}
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-8 py-6 flex justify-between items-center">
+                <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200 px-8 py-6 flex justify-between items-center">
                     <div className="text-gray-600 font-medium">Add amounts for net-off</div>
                     <div className="flex items-center gap-12">
                         <div className="text-right">
@@ -4153,8 +4155,8 @@ const EditNetOffPage: React.FC<EditNetOffPageProps> = ({
                         <button
                             onClick={() => onNext(salesNetOff, paymentNetOff, purchaseNetOff, receiptNetOff)}
                             disabled={!isNextEnabled}
-                            className={`ml-6 px-6 py-2.5 text-sm font-semibold rounded-md shadow-sm transition-colors ${isNextEnabled
-                                ? 'bg-teal-600 text-white hover:bg-teal-700'
+                            className={`ml-6 px-6 py-2.5 text-sm font-semibold rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 transition-colors ${isNextEnabled
+                                ? 'bg-indigo-600 text-white hover:bg-indigo-700'
                                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                 }`}
                         >
@@ -4164,7 +4166,7 @@ const EditNetOffPage: React.FC<EditNetOffPageProps> = ({
                 </div>
 
                 {/* Section 1: Sales Vouchers (Debit) */}
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200 overflow-hidden">
                     <div className="bg-white px-6 py-4 border-b border-gray-200">
                         <h3 className="text-center text-lg font-medium text-gray-900">Sales Vouchers (Debit)</h3>
                     </div>
@@ -4186,7 +4188,7 @@ const EditNetOffPage: React.FC<EditNetOffPageProps> = ({
                                     <td className="px-6 py-4 text-right">
                                         <input
                                             type="number"
-                                            className="w-32 text-right px-3 py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none"
+                                            className="w-32 text-right px-3 py-1.5 border border-gray-300 rounded-[4px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                                             value={salesNetOff[v.id] ?? v.amount}
                                             onChange={(e) => handleAmountChange(v.id, e.target.value, v.amount, setSalesNetOff, salesNetOff)}
                                         />
@@ -4198,7 +4200,7 @@ const EditNetOffPage: React.FC<EditNetOffPageProps> = ({
                 </div>
 
                 {/* Section 2: Payments (Debit) */}
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200 overflow-hidden">
                     <div className="bg-white px-6 py-4 border-b border-gray-200">
                         <h3 className="text-center text-lg font-medium text-gray-900">Payments (Debit)</h3>
                     </div>
@@ -4220,7 +4222,7 @@ const EditNetOffPage: React.FC<EditNetOffPageProps> = ({
                                     <td className="px-6 py-4 text-right">
                                         <input
                                             type="number"
-                                            className="w-32 text-right px-3 py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none"
+                                            className="w-32 text-right px-3 py-1.5 border border-gray-300 rounded-[4px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                                             value={paymentNetOff[v.id] ?? v.amount}
                                             onChange={(e) => handleAmountChange(v.id, e.target.value, v.amount, setPaymentNetOff, paymentNetOff)}
                                         />
@@ -4232,7 +4234,7 @@ const EditNetOffPage: React.FC<EditNetOffPageProps> = ({
                 </div>
 
                 {/* Section 3: Purchase Vouchers (Credit) */}
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200 overflow-hidden">
                     <div className="bg-white px-6 py-4 border-b border-gray-200">
                         <h3 className="text-center text-lg font-medium text-gray-900">Purchase Vouchers (Credit)</h3>
                     </div>
@@ -4254,7 +4256,7 @@ const EditNetOffPage: React.FC<EditNetOffPageProps> = ({
                                     <td className="px-6 py-4 text-right">
                                         <input
                                             type="number"
-                                            className="w-32 text-right px-3 py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none"
+                                            className="w-32 text-right px-3 py-1.5 border border-gray-300 rounded-[4px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                                             value={purchaseNetOff[v.id] ?? v.amount}
                                             onChange={(e) => handleAmountChange(v.id, e.target.value, v.amount, setPurchaseNetOff, purchaseNetOff)}
                                         />
@@ -4266,7 +4268,7 @@ const EditNetOffPage: React.FC<EditNetOffPageProps> = ({
                 </div>
 
                 {/* Section 4: Receipts (Credit) */}
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200 overflow-hidden">
                     <div className="bg-white px-6 py-4 border-b border-gray-200">
                         <h3 className="text-center text-lg font-medium text-gray-900">Receipts (Credit)</h3>
                     </div>
@@ -4288,7 +4290,7 @@ const EditNetOffPage: React.FC<EditNetOffPageProps> = ({
                                     <td className="px-6 py-4 text-right">
                                         <input
                                             type="number"
-                                            className="w-32 text-right px-3 py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none"
+                                            className="w-32 text-right px-3 py-1.5 border border-gray-300 rounded-[4px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                                             value={receiptNetOff[v.id] ?? v.amount}
                                             onChange={(e) => handleAmountChange(v.id, e.target.value, v.amount, setReceiptNetOff, receiptNetOff)}
                                         />
@@ -4302,7 +4304,7 @@ const EditNetOffPage: React.FC<EditNetOffPageProps> = ({
                 <div className="flex justify-end pb-8">
                     <button
                         onClick={onCancel}
-                        className="px-6 py-2.5 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                        className="px-6 py-2.5 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                     >
                         Cancel
                     </button>
@@ -4528,14 +4530,14 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                                         type="date"
                                         value={netOffDate}
                                         onChange={(e) => setNetOffDate(e.target.value)}
-                                        className="text-sm px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                        className="text-sm px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
                                     />
                                     <Calendar className="w-4 h-4 text-gray-400" />
                                 </div>
                             </div>
                             <div>
                                 <div className="text-xs text-gray-500 mb-1">Running Balance:</div>
-                                <div className="text-lg font-semibold text-teal-600">₹{runningBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                                <div className="text-lg font-semibold text-indigo-600">₹{runningBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
                             </div>
                         </div>
                     </div>
@@ -4546,7 +4548,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                     <div className="flex gap-6">
                         <button
                             className={`py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'Invoices under Dispute'
-                                ? 'border-teal-600 text-teal-600'
+                                ? 'border-indigo-600 text-indigo-600'
                                 : 'border-transparent text-gray-500 hover:text-gray-700'
                                 }`}
                             onClick={() => setActiveTab('Invoices under Dispute')}
@@ -4555,7 +4557,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                         </button>
                         <button
                             className={`py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'Net-off'
-                                ? 'border-teal-600 text-teal-600'
+                                ? 'border-indigo-600 text-indigo-600'
                                 : 'border-transparent text-gray-500 hover:text-gray-700'
                                 }`}
                             onClick={() => setActiveTab('Net-off')}
@@ -4570,7 +4572,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                     {activeTab === 'Invoices under Dispute' ? (
                         <div className="grid grid-cols-2 gap-6 h-full">
                             {/* Purchase Vouchers Card */}
-                            <div className="border border-gray-200 rounded-lg overflow-hidden flex flex-col bg-white">
+                            <div className="border border-gray-200 rounded-[4px] overflow-hidden flex flex-col bg-white">
                                 <div className="bg-white px-4 py-3 border-b border-gray-200">
                                     <h3 className="text-sm font-medium text-gray-700">Purchase Vouchers</h3>
                                 </div>
@@ -4612,7 +4614,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                             </div>
 
                             {/* Sales Vouchers Card */}
-                            <div className="border border-gray-200 rounded-lg overflow-hidden flex flex-col bg-white">
+                            <div className="border border-gray-200 rounded-[4px] overflow-hidden flex flex-col bg-white">
                                 <div className="bg-white px-4 py-3 border-b border-gray-200">
                                     <h3 className="text-sm font-medium text-gray-700">Sales Vouchers</h3>
                                 </div>
@@ -4658,9 +4660,9 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                         <div className="max-w-5xl space-y-6">
                             {/* Amount Netted Off - Top Right */}
                             <div className="flex justify-end">
-                                <div className="border border-gray-300 rounded-lg px-6 py-4">
+                                <div className="border border-gray-300 rounded-[4px] px-6 py-4">
                                     <div className="text-sm text-gray-600 mb-1">Amount Netted Off</div>
-                                    <div className="text-2xl font-bold text-teal-600">
+                                    <div className="text-2xl font-bold text-indigo-600">
                                         ₹{(() => {
                                             // Check if manual net-off amounts exist
                                             const isManual = Object.keys(salesNetOffAmounts).length > 0;
@@ -4687,7 +4689,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                             </div>
 
                             {/* List of Pending Invoices Section */}
-                            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                            <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200 p-6">
                                 <h2 className="text-lg font-semibold text-gray-900 mb-4">List of Pending Invoices</h2>
 
                                 {/* Imbalance Warning Banner */}
@@ -4706,7 +4708,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
 
                                     if (diff > 0.01) {
                                         return (
-                                            <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-md p-4 flex items-start gap-3">
+                                            <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-[4px] p-4 flex items-start gap-3">
                                                 <div className="text-yellow-600 mt-0.5">⚠️</div>
                                                 <div className="text-sm text-yellow-800">
                                                     <span className="font-semibold">Note:</span> There is an imbalance of <span className="font-bold">₹{diff.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span> between selected debit and credit amounts. The lower amount (<span className="font-bold">₹{Math.min(totalPur, totalSal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>) will be netted off.
@@ -4737,7 +4739,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                                                 .map((voucher) => (
                                                     <tr key={`p-${voucher.id}`} className="hover:bg-gray-50">
                                                         <td className="px-4 py-3">
-                                                            <span className="text-teal-600 font-medium">Purchase</span>
+                                                            <span className="text-indigo-600 font-medium">Purchase</span>
                                                         </td>
                                                         <td className="px-4 py-3 text-gray-700">{voucher.date}</td>
                                                         <td className="px-4 py-3 font-medium text-gray-900">{voucher.supplierInvNo}</td>
@@ -4746,7 +4748,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                                                         </td>
                                                         <td className="px-4 py-3 text-right text-gray-400">-</td>
                                                         <td className="px-4 py-3 text-center">
-                                                            <span className="inline-block px-3 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800">
+                                                            <span className="inline-block px-3 py-1 text-xs font-medium rounded-[4px] bg-yellow-100 text-yellow-800">
                                                                 Partially Paid
                                                             </span>
                                                         </td>
@@ -4759,7 +4761,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                                                 .map((voucher) => (
                                                     <tr key={`r-${voucher.id}`} className="hover:bg-gray-50">
                                                         <td className="px-4 py-3">
-                                                            <span className="text-teal-600 font-medium">Receipt</span>
+                                                            <span className="text-indigo-600 font-medium">Receipt</span>
                                                         </td>
                                                         <td className="px-4 py-3 text-gray-700">{voucher.date}</td>
                                                         <td className="px-4 py-3 font-medium text-gray-900">{voucher.voucherNo}</td>
@@ -4768,7 +4770,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                                                             ₹{receiptsNetOffAmounts[voucher.id].toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                         </td>
                                                         <td className="px-4 py-3 text-center">
-                                                            <span className="inline-block px-3 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                                                            <span className="inline-block px-3 py-1 text-xs font-medium rounded-[4px] bg-green-100 text-green-800">
                                                                 Received
                                                             </span>
                                                         </td>
@@ -4781,7 +4783,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                                                 .map((voucher) => (
                                                     <tr key={`s-${voucher.id}`} className="hover:bg-gray-50">
                                                         <td className="px-4 py-3">
-                                                            <span className="text-teal-600 font-medium">Sales</span>
+                                                            <span className="text-indigo-600 font-medium">Sales</span>
                                                         </td>
                                                         <td className="px-4 py-3 text-gray-700">{voucher.date}</td>
                                                         <td className="px-4 py-3 font-medium text-gray-900">{voucher.salesVchNo}</td>
@@ -4790,7 +4792,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                                                             ₹{(Object.keys(salesNetOffAmounts).length > 0 ? salesNetOffAmounts[voucher.id] : voucher.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                         </td>
                                                         <td className="px-4 py-3 text-center">
-                                                            <span className="inline-block px-3 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
+                                                            <span className="inline-block px-3 py-1 text-xs font-medium rounded-[4px] bg-gray-100 text-gray-800">
                                                                 Not Due
                                                             </span>
                                                         </td>
@@ -4803,7 +4805,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                                                 .map((voucher) => (
                                                     <tr key={`py-${voucher.id}`} className="hover:bg-gray-50">
                                                         <td className="px-4 py-3">
-                                                            <span className="text-teal-600 font-medium">Payment</span>
+                                                            <span className="text-indigo-600 font-medium">Payment</span>
                                                         </td>
                                                         <td className="px-4 py-3 text-gray-700">{voucher.date}</td>
                                                         <td className="px-4 py-3 font-medium text-gray-900">{voucher.voucherNo}</td>
@@ -4812,7 +4814,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                                                         </td>
                                                         <td className="px-4 py-3 text-right text-gray-400">-</td>
                                                         <td className="px-4 py-3 text-center">
-                                                            <span className="inline-block px-3 py-1 text-xs font-medium rounded-full bg-purple-100 text-purple-800">
+                                                            <span className="inline-block px-3 py-1 text-xs font-medium rounded-[4px] bg-purple-100 text-purple-800">
                                                                 Paid
                                                             </span>
                                                         </td>
@@ -4878,7 +4880,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                                             alert('Net-off saved successfully!');
                                             onClose();
                                         }}
-                                        className="px-5 py-2 text-sm font-medium text-white bg-teal-600 rounded hover:bg-teal-700 transition-colors"
+                                        className="px-5 py-2 text-sm font-medium text-white bg-indigo-600 rounded hover:bg-indigo-700 transition-colors"
                                     >
                                         Save & Close
                                     </button>
@@ -4901,7 +4903,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                             onClick={handleNext}
                             disabled={!isNextEnabled}
                             className={`px-5 py-2 text-sm font-medium rounded transition-colors ${isNextEnabled
-                                ? 'bg-teal-600 text-white hover:bg-teal-700'
+                                ? 'bg-indigo-600 text-white hover:bg-indigo-700'
                                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                 }`}
                         >
@@ -4968,7 +4970,7 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
         const totalCredit = mockMonthLedgerData.reduce((sum, item) => sum + item.credit, 0);
 
         return (
-            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+            <div className="bg-white border border-gray-200 rounded-[4px] overflow-hidden shadow-none border border-slate-200-none border border-slate-200">
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-[#F8F9FA]">
@@ -5033,9 +5035,9 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
         if (status === 'Paid') return 'bg-green-100 text-green-800';
         if (status === 'Unpaid') return 'bg-red-100 text-red-800';
         if (status === 'Partially Paid') return 'bg-yellow-100 text-yellow-800';
-        if (status === 'Approved') return 'bg-blue-100 text-teal-800';
+        if (status === 'Approved') return 'bg-blue-100 text-indigo-800';
         if (status === 'Not Due') return 'bg-gray-100 text-gray-800';
-        if (status === 'Due') return 'bg-teal-100 text-teal-800';
+        if (status === 'Due') return 'bg-indigo-100 text-indigo-800';
         if (status === 'Partially Received') return 'bg-yellow-100 text-yellow-800';
         if (status === 'Received') return 'bg-green-100 text-green-800';
         return 'bg-gray-100 text-gray-800';
@@ -5055,13 +5057,13 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
                 <div className="flex gap-3">
                     <button
                         onClick={() => setShowNetOffModal(true)}
-                        className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                        className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-[4px] hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                     >
                         Net Off
                     </button>
                     <button
                         onClick={() => setViewMode(viewMode === 'invoice-wise' ? 'month-wise' : 'invoice-wise')}
-                        className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 min-w-[140px]"
+                        className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-[4px] hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 min-w-[140px]"
                     >
                         {viewMode === 'invoice-wise' ? 'Month View' : 'Invoice-wise view'}
                     </button>
@@ -5073,7 +5075,7 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
                 <MonthLedgerView />
             ) : (
                 /* Invoice-wise Table */
-                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <div className="bg-white border border-gray-200 rounded-[4px] overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50 sticky top-0">
@@ -5083,7 +5085,7 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
                                             <span>Date</span>
                                             <div className="ml-2 relative group">
                                                 <Filter className="w-4 h-4 cursor-pointer text-gray-400 hover:text-gray-600" />
-                                                <div className="hidden group-hover:block absolute z-10 top-6 right-0 bg-white shadow-lg rounded-md p-3 w-48">
+                                                <div className="hidden group-hover:block absolute z-10 top-6 right-0 bg-white shadow-none border border-slate-200-none border border-slate-200 rounded-[4px] p-3 w-48">
                                                     <input type="date" value={dateFilter.start} onChange={(e) => setDateFilter({ ...dateFilter, start: e.target.value })} className="w-full px-2 py-1 text-xs border rounded mb-2" placeholder="Start" />
                                                     <input type="date" value={dateFilter.end} onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" placeholder="End" />
                                                 </div>
@@ -5095,7 +5097,7 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
                                             <span>Post From</span>
                                             <div className="ml-2 relative group">
                                                 <Filter className="w-4 h-4 cursor-pointer text-gray-400 hover:text-gray-600" />
-                                                <div className="hidden group-hover:block absolute z-10 top-6 right-0 bg-white shadow-lg rounded-md p-2 w-40">
+                                                <div className="hidden group-hover:block absolute z-10 top-6 right-0 bg-white shadow-none border border-slate-200-none border border-slate-200 rounded-[4px] p-2 w-40">
                                                     <select value={postFromFilter} onChange={(e) => setPostFromFilter(e.target.value as TransactionType | '')} className="w-full px-2 py-1 text-xs border rounded">
                                                         <option value="">All</option>
                                                         {postFromOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
@@ -5109,7 +5111,7 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
                                             <span>Ledger</span>
                                             <div className="ml-2 relative group">
                                                 <Filter className="w-4 h-4 cursor-pointer text-gray-400 hover:text-gray-600" />
-                                                <div className="hidden group-hover:block absolute z-10 top-6 right-0 bg-white shadow-lg rounded-md p-2 w-40">
+                                                <div className="hidden group-hover:block absolute z-10 top-6 right-0 bg-white shadow-none border border-slate-200-none border border-slate-200 rounded-[4px] p-2 w-40">
                                                     <input type="text" value={ledgerFilter} onChange={(e) => setLedgerFilter(e.target.value)} placeholder="Search..." className="w-full px-2 py-1 text-xs border rounded" />
                                                 </div>
                                             </div>
@@ -5120,7 +5122,7 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
                                             <span>Status</span>
                                             <div className="ml-2 relative group">
                                                 <Filter className="w-4 h-4 cursor-pointer text-gray-400 hover:text-gray-600" />
-                                                <div className="hidden group-hover:block absolute z-10 top-6 right-0 bg-white shadow-lg rounded-md p-2 w-40 max-h-60 overflow-y-auto">
+                                                <div className="hidden group-hover:block absolute z-10 top-6 right-0 bg-white shadow-none border border-slate-200-none border border-slate-200 rounded-[4px] p-2 w-40 max-h-60 overflow-y-auto">
                                                     <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as PurchaseStatus | SalesStatus | '')} className="w-full px-2 py-1 text-xs border rounded">
                                                         <option value="">All</option>
                                                         {statusOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
@@ -5134,7 +5136,7 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
                                             <span>Debit</span>
                                             <div className="ml-2 relative group">
                                                 <Filter className="w-4 h-4 cursor-pointer text-gray-400 hover:text-gray-600" />
-                                                <div className="hidden group-hover:block absolute z-10 top-6 right-0 bg-white shadow-lg rounded-md p-2 w-32">
+                                                <div className="hidden group-hover:block absolute z-10 top-6 right-0 bg-white shadow-none border border-slate-200-none border border-slate-200 rounded-[4px] p-2 w-32">
                                                     <label className="flex items-center text-xs"><input type="checkbox" checked={!!debitFilter} onChange={(e) => setDebitFilter(e.target.checked ? 'show' : '')} className="mr-1" />Show only</label>
                                                 </div>
                                             </div>
@@ -5145,7 +5147,7 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
                                             <span>Credit</span>
                                             <div className="ml-2 relative group">
                                                 <Filter className="w-4 h-4 cursor-pointer text-gray-400 hover:text-gray-600" />
-                                                <div className="hidden group-hover:block absolute z-10 top-6 right-0 bg-white shadow-lg rounded-md p-2 w-32">
+                                                <div className="hidden group-hover:block absolute z-10 top-6 right-0 bg-white shadow-none border border-slate-200-none border border-slate-200 rounded-[4px] p-2 w-32">
                                                     <label className="flex items-center text-xs"><input type="checkbox" checked={!!creditFilter} onChange={(e) => setCreditFilter(e.target.checked ? 'show' : '')} className="mr-1" />Show only</label>
                                                 </div>
                                             </div>
@@ -5161,7 +5163,7 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-100">{entry.postFrom}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 border-r border-gray-100">{entry.ledger}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm border-r border-gray-100">
-                                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeColor(entry.status)}`}>{entry.status}</span>
+                                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${getStatusBadgeColor(entry.status)}`}>{entry.status}</span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100 font-medium">{formatCurrency(entry.debit)}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100 font-medium">{formatCurrency(entry.credit)}</td>
@@ -5323,14 +5325,14 @@ const SalesContent: React.FC = () => {
             </div>
 
             {/* Category Tabs */}
-            <div className="mb-6 bg-gray-50 p-2 rounded-lg inline-block border border-gray-200">
+            <div className="mb-6 bg-gray-50 p-2 rounded-[4px] inline-block border border-gray-200">
                 <div className="flex space-x-2">
                     {categories.map((category) => (
                         <button
                             key={category}
                             onClick={() => setActiveCategory(category)}
-                            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeCategory === category
-                                ? 'bg-white text-indigo-700 shadow-sm'
+                            className={`px-4 py-2 rounded-[4px] text-sm font-medium transition-colors ${activeCategory === category
+                                ? 'bg-white text-indigo-700 shadow-none border border-slate-200-none border border-slate-200'
                                 : 'text-gray-600 hover:bg-white/50'
                                 }`}
                         >
@@ -5347,7 +5349,7 @@ const SalesContent: React.FC = () => {
             </div>
 
             {/* Aging Table */}
-            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <div className="bg-white border border-gray-200 rounded-[4px] overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
@@ -5418,14 +5420,14 @@ const SalesContent: React.FC = () => {
                                         <div className="flex items-center justify-center space-x-4">
                                             <button
                                                 onClick={() => handleViewCustomer(customer.customerId, customer.customerName)}
-                                                className="text-teal-600 hover:text-indigo-900 transition-colors"
+                                                className="text-indigo-600 hover:text-indigo-900 transition-colors"
                                                 title="View Customer Ledger"
                                             >
                                                 <Eye className="w-5 h-5" />
                                             </button>
                                             <button
                                                 onClick={() => handleSendMail(customer)}
-                                                className="text-teal-600 hover:text-teal-900 transition-colors"
+                                                className="text-indigo-600 hover:text-teal-900 transition-colors"
                                                 title="Send Reminder Email"
                                             >
                                                 <Mail className="w-5 h-5" />
@@ -5451,11 +5453,11 @@ const SalesContent: React.FC = () => {
             {/* Footer Notes */}
             <div className="mt-4 flex items-start space-x-4 text-xs text-gray-500">
                 <div className="flex items-center">
-                    <Eye className="w-4 h-4 mr-1 text-teal-600" />
+                    <Eye className="w-4 h-4 mr-1 text-indigo-600" />
                     <span>View icon → navigates to Customer Ledger filtered for selected customer</span>
                 </div>
                 <div className="flex items-center">
-                    <Mail className="w-4 h-4 mr-1 text-teal-600" />
+                    <Mail className="w-4 h-4 mr-1 text-indigo-600" />
                     <span>Mail icon → auto-drafts reminder email with due amounts and aging breakup</span>
                 </div>
             </div>
@@ -5464,4 +5466,5 @@ const SalesContent: React.FC = () => {
 };
 
 export default CustomerPortalPage;
+
 

@@ -768,7 +768,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
     <div className="w-full">
 
       {/* Create Ledger - RIGHT COLUMN */}
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-300">
+      <div className="bg-white p-6 rounded-[4px] erp-card">
         <form onSubmit={handleLedgerSubmit} className="space-y-4">
           {/* Progressive Ledger Selection Wizard */}
           <LedgerCreationWizard
@@ -807,7 +807,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="loanAccountNumber"
                   value={loanAccountNumber}
                   onChange={(e) => setLoanAccountNumber(e.target.value)}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 sm:text-sm"
+                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   placeholder="Enter alphanumeric account number"
                   required
                 />
@@ -822,7 +822,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="panGstin"
                   value={panGstin}
                   onChange={(e) => setPanGstin(e.target.value.toUpperCase())}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 sm:text-sm"
+                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   placeholder="Enter PAN or GSTIN"
                   required
                 />
@@ -835,7 +835,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="lenderName"
                   value={lenderName}
                   onChange={(e) => setLenderName(e.target.value)}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 sm:text-sm"
+                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   placeholder="Enter lender name"
                   required
                 />
@@ -850,7 +850,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="loanAmount"
                   value={loanAmount}
                   onChange={(e) => setLoanAmount(e.target.value)}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 sm:text-sm"
+                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   placeholder="Enter loan amount"
                   min="0"
                   step="0.01"
@@ -869,7 +869,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                       value="Fixed"
                       checked={interestType === 'Fixed'}
                       onChange={(e) => setInterestType(e.target.value)}
-                      className="w-4 h-4 text-teal-600 focus:ring-teal-500"
+                      className="w-4 h-4 text-indigo-600 focus:ring-indigo-500"
                       required
                     />
                     <label htmlFor="fixedInterest" className="ml-2 text-sm text-gray-700">Fixed</label>
@@ -882,7 +882,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                       value="Floating"
                       checked={interestType === 'Floating'}
                       onChange={(e) => setInterestType(e.target.value)}
-                      className="w-4 h-4 text-teal-600 focus:ring-teal-500"
+                      className="w-4 h-4 text-indigo-600 focus:ring-indigo-500"
                     />
                     <label htmlFor="floatingInterest" className="ml-2 text-sm text-gray-700">Floating</label>
                   </div>
@@ -898,7 +898,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="interestRate"
                   value={interestRate}
                   onChange={(e) => setInterestRate(e.target.value)}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 sm:text-sm"
+                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   placeholder="Enter interest rate"
                   min="0"
                   max="100"
@@ -914,7 +914,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="tenure"
                   value={tenure}
                   onChange={(e) => setTenure(e.target.value)}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 sm:text-sm"
+                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   placeholder="Enter tenure in months"
                   min="1"
                   required
@@ -936,7 +936,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="bankAccountNumber"
                   value={bankAccountNumber}
                   onChange={(e) => setBankAccountNumber(e.target.value)}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 sm:text-sm"
+                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   placeholder="Enter bank account number"
                   required
                 />
@@ -949,7 +949,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="gstinPan"
                   value={gstinPan}
                   onChange={(e) => setGstinPan(e.target.value.toUpperCase())}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 sm:text-sm"
+                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   placeholder="Enter GSTIN or PAN"
                 />
               </div>
@@ -960,7 +960,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="enableBankReconciliation"
                   checked={enableBankReconciliation}
                   onChange={(e) => setEnableBankReconciliation(e.target.checked)}
-                  className="w-4 h-4 text-teal-600 focus:ring-teal-500 border-gray-300 rounded"
+                  className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                   required
                 />
                 <label htmlFor="enableBankReconciliation" className="ml-2 text-sm font-medium text-gray-700">
@@ -975,7 +975,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="bankName"
                   value={bankName}
                   onChange={(e) => setBankName(e.target.value)}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 sm:text-sm"
+                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   placeholder="Enter bank name"
                 />
               </div>
@@ -989,7 +989,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="ifscCode"
                   value={ifscCode}
                   onChange={(e) => setIfscCode(e.target.value.toUpperCase())}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 sm:text-sm"
+                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   placeholder="Enter IFSC code"
                   required
                 />
@@ -1004,7 +1004,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="branch"
                   value={branch}
                   onChange={(e) => setBranch(e.target.value)}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 sm:text-sm"
+                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   placeholder="Enter branch name"
                   required
                 />
@@ -1018,7 +1018,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="bankingCurrency"
                   value={bankingCurrency}
                   onChange={(e) => setBankingCurrency(e.target.value)}
-                  className="block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 sm:text-sm rounded-md"
+                  className="block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-[4px]"
                   required
                 >
                   <option value="">Select currency</option>
@@ -1049,7 +1049,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                       value="Yes"
                       checked={referenceWiseTracking === 'Yes'}
                       onChange={(e) => setReferenceWiseTracking(e.target.value)}
-                      className="w-4 h-4 text-teal-600 focus:ring-teal-500"
+                      className="w-4 h-4 text-indigo-600 focus:ring-indigo-500"
                     />
                     <label htmlFor="refTrackingYes" className="ml-2 text-sm text-gray-700">Yes</label>
                   </div>
@@ -1061,7 +1061,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                       value="No"
                       checked={referenceWiseTracking === 'No'}
                       onChange={(e) => setReferenceWiseTracking(e.target.value)}
-                      className="w-4 h-4 text-teal-600 focus:ring-teal-500"
+                      className="w-4 h-4 text-indigo-600 focus:ring-indigo-500"
                     />
                     <label htmlFor="refTrackingNo" className="ml-2 text-sm text-gray-700">No</label>
                   </div>
@@ -1075,7 +1075,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="creditPeriod"
                   value={creditPeriod}
                   onChange={(e) => setCreditPeriod(e.target.value)}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 sm:text-sm"
+                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   placeholder="Enter credit period (in days)"
                   min="0"
                 />
@@ -1096,7 +1096,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="inventoryType"
                   value={inventoryType}
                   onChange={(e) => setInventoryType(e.target.value)}
-                  className="block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 sm:text-sm rounded-md"
+                  className="block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-[4px]"
                   required
                 >
                   <option value="">Select inventory type</option>
@@ -1117,7 +1117,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="inventoryValuationMethod"
                   value={inventoryValuationMethod}
                   onChange={(e) => setInventoryValuationMethod(e.target.value)}
-                  className="block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 sm:text-sm rounded-md"
+                  className="block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-[4px]"
                   required
                 >
                   <option value="">Select valuation method</option>
@@ -1148,7 +1148,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                       value="Yes"
                       checked={isDepreciationPerIncomeTax === 'Yes'}
                       onChange={(e) => setIsDepreciationPerIncomeTax(e.target.value)}
-                      className="w-4 h-4 text-teal-600 focus:ring-teal-500"
+                      className="w-4 h-4 text-indigo-600 focus:ring-indigo-500"
                       required
                     />
                     <label htmlFor="depreciationYes" className="ml-2 text-sm text-gray-700">Yes</label>
@@ -1161,7 +1161,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                       value="No"
                       checked={isDepreciationPerIncomeTax === 'No'}
                       onChange={(e) => setIsDepreciationPerIncomeTax(e.target.value)}
-                      className="w-4 h-4 text-teal-600 focus:ring-teal-500"
+                      className="w-4 h-4 text-indigo-600 focus:ring-indigo-500"
                     />
                     <label htmlFor="depreciationNo" className="ml-2 text-sm text-gray-700">No</label>
                   </div>
@@ -1178,7 +1178,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                     id="depreciationPercentage"
                     value={depreciationPercentage}
                     onChange={(e) => setDepreciationPercentage(e.target.value)}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 sm:text-sm"
+                    className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                     placeholder="Enter depreciation percentage"
                     min="0"
                     max="100"
@@ -1191,7 +1191,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
               <button
                 type="button"
                 onClick={() => alert('Update Fixed Assets Register functionality coming soon!')}
-                className="inline-flex items-center justify-center w-full px-4 py-2 border border-teal-600 text-sm font-medium rounded-md shadow-sm text-teal-600 bg-white hover:bg-teal-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500"
+                className="inline-flex items-center justify-center w-full px-4 py-2 border border-indigo-600 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-indigo-600 bg-white hover:bg-indigo-50/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 <Icon name="file-text" className="w-4 h-4 mr-2" />
                 Update Fixed Assets Register
@@ -1217,7 +1217,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                       value="Yes"
                       checked={isAmortizationPerIncomeTax === 'Yes'}
                       onChange={(e) => setIsAmortizationPerIncomeTax(e.target.value)}
-                      className="w-4 h-4 text-teal-600 focus:ring-teal-500"
+                      className="w-4 h-4 text-indigo-600 focus:ring-indigo-500"
                       required
                     />
                     <label htmlFor="amortizationYes" className="ml-2 text-sm text-gray-700">Yes</label>
@@ -1230,7 +1230,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                       value="No"
                       checked={isAmortizationPerIncomeTax === 'No'}
                       onChange={(e) => setIsAmortizationPerIncomeTax(e.target.value)}
-                      className="w-4 h-4 text-teal-600 focus:ring-teal-500"
+                      className="w-4 h-4 text-indigo-600 focus:ring-indigo-500"
                     />
                     <label htmlFor="amortizationNo" className="ml-2 text-sm text-gray-700">No</label>
                   </div>
@@ -1247,7 +1247,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                     id="amortizationPercentage"
                     value={amortizationPercentage}
                     onChange={(e) => setAmortizationPercentage(e.target.value)}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 sm:text-sm"
+                    className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                     placeholder="Enter amortization percentage"
                     min="0"
                     max="100"
@@ -1260,7 +1260,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
               <button
                 type="button"
                 onClick={() => alert('Update Fixed Assets Register functionality coming soon!')}
-                className="inline-flex items-center justify-center w-full px-4 py-2 border border-teal-600 text-sm font-medium rounded-md shadow-sm text-teal-600 bg-white hover:bg-teal-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500"
+                className="inline-flex items-center justify-center w-full px-4 py-2 border border-indigo-600 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-indigo-600 bg-white hover:bg-indigo-50/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 <Icon name="file-text" className="w-4 h-4 mr-2" />
                 Update Fixed Assets Register
@@ -1280,7 +1280,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="companyCIN"
                   value={companyCIN}
                   onChange={(e) => setCompanyCIN(e.target.value.toUpperCase())}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 sm:text-sm"
+                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   placeholder="Enter Company's CIN"
                 />
               </div>
@@ -1292,7 +1292,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="dividendRate"
                   value={dividendRate}
                   onChange={(e) => setDividendRate(e.target.value)}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 sm:text-sm"
+                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   placeholder="Enter dividend rate"
                   min="0"
                   max="100"
@@ -1316,7 +1316,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="debentureBondCIN"
                   value={debentureBondCIN}
                   onChange={(e) => setDebentureBondCIN(e.target.value.toUpperCase())}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 sm:text-sm"
+                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   placeholder="Enter Company's CIN"
                   required
                 />
@@ -1330,7 +1330,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="debentureBondInterestRate"
                   value={debentureBondInterestRate}
                   onChange={(e) => setDebentureBondInterestRate(e.target.value)}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 sm:text-sm"
+                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   placeholder="Enter interest rate"
                   min="0"
                   max="100"
@@ -1347,7 +1347,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="debentureBondMaturityDate"
                   value={debentureBondMaturityDate}
                   onChange={(e) => setDebentureBondMaturityDate(e.target.value)}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 sm:text-sm"
+                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   required
                 />
               </div>
@@ -1365,7 +1365,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="equityInstrumentsCIN"
                   value={equityInstrumentsCIN}
                   onChange={(e) => setEquityInstrumentsCIN(e.target.value.toUpperCase())}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 sm:text-sm"
+                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   placeholder="Enter Company's CIN"
                 />
               </div>
@@ -1380,7 +1380,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
               <button
                 type="button"
                 onClick={() => alert('Update Fixed Assets Register functionality coming soon!')}
-                className="inline-flex items-center justify-center w-full px-4 py-2 border border-teal-600 text-sm font-medium rounded-md shadow-sm text-teal-600 bg-white hover:bg-teal-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500"
+                className="inline-flex items-center justify-center w-full px-4 py-2 border border-indigo-600 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-indigo-600 bg-white hover:bg-indigo-50/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 <Icon name="file-text" className="w-4 h-4 mr-2" />
                 Update Fixed Assets Register
@@ -1396,7 +1396,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
 
   const renderLedgerGroups = () => (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-300">
+      <div className="bg-white p-6 rounded-[4px] erp-card">
         <h3 className="text-lg font-semibold text-gray-800 mb-4">Create Group</h3>
         <form onSubmit={handleGroupSubmit} className="space-y-4">
           <div>
@@ -1409,7 +1409,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
               placeholder="Enter group name"
-              className="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 sm:text-sm"
+              className="block w-full px-3 py-2 bg-white erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               required
             />
           </div>
@@ -1419,7 +1419,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
               id="groupUnder"
               value={groupUnder}
               onChange={(e) => setGroupUnder(e.target.value)}
-              className="block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 sm:text-sm rounded-md"
+              className="block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-[4px]"
               required
             >
               <option value="">Select Parent Group</option>
@@ -1435,7 +1435,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
           </div>
           <button
             type="submit"
-            className={`inline-flex items-center justify-center w-full px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${isEditModeGroup ? 'bg-teal-600 hover:bg-teal-700' : 'bg-teal-600 hover:bg-teal-700'} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500`}
+            className={`inline-flex items-center justify-center w-full px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white ${isEditModeGroup ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-indigo-600 hover:bg-indigo-700'} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
           >
             <Icon name={isEditModeGroup ? "save" : "plus"} className="w-4 h-4 mr-2" />
             {isEditModeGroup ? 'Update Group' : 'Create Group'}
@@ -1444,14 +1444,14 @@ const MastersPage: React.FC<MastersPageProps> = ({
             <button
               type="button"
               onClick={handleCancelEditGroup}
-              className="mt-2 inline-flex items-center justify-center w-full px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
+              className="mt-2 inline-flex items-center justify-center w-full px-4 py-2 border border-gray-300 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
             >
               Cancel Edit
             </button>
           )}
         </form>
       </div>
-      <div className="bg-white rounded-lg shadow-sm border border-gray-300">
+      <div className="bg-white rounded-[4px] erp-card">
         <div className="px-6 py-4 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-800 mb-3">Existing Groups</h3>
           <div className="relative">
@@ -1460,7 +1460,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
               placeholder="Search groups..."
               value={groupSearchQuery}
               onChange={(e) => setGroupSearchQuery(e.target.value)}
-              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-teal-500 focus:border-teal-500 sm:text-sm"
+              className="block w-full pl-10 pr-3 py-2 erp-input leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
             />
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <Icon name="search" className="h-5 w-5 text-gray-400" />
@@ -1496,7 +1496,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   <tr
                     key={group.id || group.name}
                     className={`transition-colors ${isSelected
-                      ? 'bg-teal-50 hover:bg-teal-100'
+                      ? 'bg-indigo-50/50 hover:bg-indigo-50'
                       : 'hover:bg-gray-50'
                       } `}
                   >
@@ -1510,7 +1510,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                           console.log('Selected group:', group);
                           setSelectedGroup(group);
                         }}
-                        className="w-4 h-4 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                        className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                         aria-label={`Select ${group.name} `}
                       />
                     </td>
@@ -1538,7 +1538,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                         <div className="inline-flex items-center gap-2">
                           <button
                             onClick={handleEditGroup}
-                            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-md text-white bg-teal-600 hover:bg-teal-700 shadow-sm hover:shadow-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500"
+                            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-[4px] text-white bg-indigo-600 hover:bg-indigo-700 shadow-none border border-slate-200 hover:shadow-none border border-slate-200 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                             style={{ lineHeight: '1' }}
                             aria-label="Edit selected group"
                           >
@@ -1547,7 +1547,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                           </button>
                           <button
                             onClick={handleDeleteGroup}
-                            className="inline-flex items-center justify-center w-10 h-10 rounded-md text-white bg-red-600 hover:bg-red-700 shadow-sm hover:shadow-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                            className="inline-flex items-center justify-center w-10 h-10 rounded-[4px] text-white bg-red-600 hover:bg-red-700 shadow-none border border-slate-200 hover:shadow-none border border-slate-200 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                             aria-label="Delete selected group"
                             title="Delete"
                           >
@@ -1625,7 +1625,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                 key={voucher.id}
                 onClick={() => handleVoucherClick(voucher.id)}
                 className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors uppercase ${isSelected
-                  ? 'border-teal-500 text-teal-600'
+                  ? 'border-indigo-500 text-indigo-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
               >
@@ -1637,7 +1637,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
 
         {/* Sales Voucher Form with Existing Vouchers Table */}
         {selectedVoucher === 'sales' && (
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+          <div className="erp-card p-6 border border-gray-200">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Left Column - Sales Voucher Configuration */}
               <div>
@@ -1645,7 +1645,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
 
                 {/* Error Message */}
                 {voucherFormError && (
-                  <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                  <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-[4px]">
                     <p className="text-sm text-red-600">{voucherFormError}</p>
                   </div>
                 )}
@@ -1660,7 +1660,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                       type="text"
                       value={voucherName}
                       onChange={(e) => setVoucherName(e.target.value)}
-                      className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                      className="w-full max-w-md px-4 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                       placeholder="Enter voucher name"
                       required
                     />
@@ -1674,7 +1674,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                       id="enableAutoNumbering"
                       checked={enableAutoNumbering}
                       onChange={(e) => setEnableAutoNumbering(e.target.checked)}
-                      className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+                      className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                     />
                     <label htmlFor="enableAutoNumbering" className="ml-2 text-sm font-medium text-gray-700">
                       Enable Automatic Numbering Series
@@ -1691,7 +1691,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                         type="text"
                         value={voucherPrefix}
                         onChange={(e) => setVoucherPrefix(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                        className="w-full px-4 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                         placeholder="e.g., INV-"
                         pattern="[a-zA-Z0-9/\-]*"
                         title="Only alphanumeric characters, slash (/), and hyphen (-) are allowed"
@@ -1707,7 +1707,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                         type="text"
                         value={voucherSuffix}
                         onChange={(e) => setVoucherSuffix(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                        className="w-full px-4 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                         placeholder="e.g., /24-25"
                         pattern="[a-zA-Z0-9/\-]*"
                         title="Only alphanumeric characters, slash (/), and hyphen (-) are allowed"
@@ -1727,7 +1727,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                         type="number"
                         value={voucherStartFrom}
                         onChange={(e) => setVoucherStartFrom(parseInt(e.target.value) || 1)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                        className="w-full px-4 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                         placeholder="1"
                         min="1"
                       />
@@ -1740,7 +1740,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                         type="number"
                         value={voucherRequiredDigits}
                         onChange={(e) => setVoucherRequiredDigits(parseInt(e.target.value) || 4)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                        className="w-full px-4 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                         placeholder="4"
                         min="1"
                       />
@@ -1753,7 +1753,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
 
 
                   {/* Voucher Preview */}
-                  <div className="mt-6 p-6 bg-gray-100 rounded-lg flex flex-col items-center justify-center">
+                  <div className="mt-6 p-6 bg-gray-100 rounded-[4px] flex flex-col items-center justify-center">
                     <span className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
                       SAMPLE PREVIEW
                     </span>
@@ -1770,14 +1770,14 @@ const MastersPage: React.FC<MastersPageProps> = ({
                       <button
                         type="button"
                         onClick={resetVoucherForm}
-                        className="px-8 py-3 bg-gray-500 text-white font-semibold rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors duration-200"
+                        className="px-8 py-3 bg-gray-500 text-white font-semibold rounded-[4px] hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors duration-200"
                       >
                         Cancel
                       </button>
                     )}
                     <button
                       type="submit"
-                      className="px-8 py-3 bg-teal-600 text-white font-semibold rounded-md hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-colors duration-200"
+                      className="px-8 py-3 bg-indigo-600 text-white font-semibold rounded-[4px] hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors duration-200"
                     >
                       {isEditModeVoucher ? 'Update' : 'Save'}
                     </button>
@@ -1819,7 +1819,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                             return (
                               <tr
                                 key={voucher.id}
-                                className={`transition-colors ${isSelected ? 'bg-teal-50 hover:bg-teal-100' : 'hover:bg-gray-50'}`}
+                                className={`transition-colors ${isSelected ? 'bg-indigo-50/50 hover:bg-indigo-50' : 'hover:bg-gray-50'}`}
                               >
                                 <td className="px-3 py-3 whitespace-nowrap">
                                   <input
@@ -1827,7 +1827,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                                     name="selectedVoucherConfig"
                                     checked={isSelected}
                                     onChange={() => setSelectedVoucherConfig(voucher)}
-                                    className="w-4 h-4 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                                    className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                                   />
                                 </td>
                                 <td className="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -1842,13 +1842,13 @@ const MastersPage: React.FC<MastersPageProps> = ({
                                     <div className="flex gap-2">
                                       <button
                                         onClick={handleEditVoucherConfig}
-                                        className="px-3 py-1.5 text-xs font-semibold rounded-md text-white bg-teal-600 hover:bg-teal-700 transition-colors"
+                                        className="px-3 py-1.5 text-xs font-semibold rounded-[4px] text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
                                       >
                                         Edit
                                       </button>
                                       <button
                                         onClick={handleDeleteVoucherConfig}
-                                        className="px-3 py-1.5 text-xs font-semibold rounded-md text-white bg-red-600 hover:bg-red-700 transition-colors"
+                                        className="px-3 py-1.5 text-xs font-semibold rounded-[4px] text-white bg-red-600 hover:bg-red-700 transition-colors"
                                       >
                                         Delete
                                       </button>
@@ -1872,7 +1872,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
 
         {/* Other Vouchers Form - For all vouchers except Sales */}
         {selectedVoucher !== 'sales' && (
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+          <div className="erp-card p-6 border border-gray-200">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Left Column - Voucher Configuration */}
               <div>
@@ -1889,7 +1889,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                       type="text"
                       value={voucherName}
                       onChange={(e) => setVoucherName(e.target.value)}
-                      className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                      className="w-full max-w-md px-4 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                       placeholder="Enter voucher name"
                       required
                     />
@@ -1903,7 +1903,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                       id="otherEnableAutoNumbering"
                       checked={enableAutoNumbering}
                       onChange={(e) => setEnableAutoNumbering(e.target.checked)}
-                      className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+                      className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                     />
                     <label htmlFor="otherEnableAutoNumbering" className="ml-2 text-sm font-medium text-gray-700">
                       Enable Automatic Numbering Series
@@ -1920,7 +1920,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                         type="text"
                         value={voucherPrefix}
                         onChange={(e) => setVoucherPrefix(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                        className="w-full px-4 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                         placeholder="e.g., CN-"
                         pattern="[a-zA-Z0-9/\-]*"
                         title="Only alphanumeric characters, slash (/), and hyphen (-) are allowed"
@@ -1936,7 +1936,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                         type="text"
                         value={voucherSuffix}
                         onChange={(e) => setVoucherSuffix(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                        className="w-full px-4 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                         placeholder="e.g., /24-25"
                         pattern="[a-zA-Z0-9/\-]*"
                         title="Only alphanumeric characters, slash (/), and hyphen (-) are allowed"
@@ -1956,7 +1956,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                         type="number"
                         value={voucherStartFrom}
                         onChange={(e) => setVoucherStartFrom(parseInt(e.target.value) || 1)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                        className="w-full px-4 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                         placeholder="1"
                         min="1"
                       />
@@ -1969,7 +1969,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                         type="number"
                         value={voucherRequiredDigits}
                         onChange={(e) => setVoucherRequiredDigits(parseInt(e.target.value) || 4)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                        className="w-full px-4 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                         placeholder="4"
                         min="1"
                       />
@@ -1982,7 +1982,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
 
 
                   {/* Voucher Preview */}
-                  <div className="mt-6 p-6 bg-gray-100 rounded-lg flex flex-col items-center justify-center">
+                  <div className="mt-6 p-6 bg-gray-100 rounded-[4px] flex flex-col items-center justify-center">
                     <span className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
                       SAMPLE PREVIEW
                     </span>
@@ -1999,14 +1999,14 @@ const MastersPage: React.FC<MastersPageProps> = ({
                       <button
                         type="button"
                         onClick={resetVoucherForm}
-                        className="px-8 py-3 bg-gray-500 text-white font-semibold rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors duration-200"
+                        className="px-8 py-3 bg-gray-500 text-white font-semibold rounded-[4px] hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors duration-200"
                       >
                         Cancel
                       </button>
                     )}
                     <button
                       type="submit"
-                      className="px-8 py-3 bg-teal-600 text-white font-semibold rounded-md hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-colors duration-200"
+                      className="px-8 py-3 bg-indigo-600 text-white font-semibold rounded-[4px] hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors duration-200"
                     >
                       {isEditModeVoucher ? 'Update' : 'Save'}
                     </button>
@@ -2048,7 +2048,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                             return (
                               <tr
                                 key={voucher.id}
-                                className={`transition-colors ${isSelected ? 'bg-teal-50 hover:bg-teal-100' : 'hover:bg-gray-50'}`}
+                                className={`transition-colors ${isSelected ? 'bg-indigo-50/50 hover:bg-indigo-50' : 'hover:bg-gray-50'}`}
                               >
                                 <td className="px-3 py-3 whitespace-nowrap">
                                   <input
@@ -2056,7 +2056,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                                     name="selectedVoucherConfig"
                                     checked={isSelected}
                                     onChange={() => setSelectedVoucherConfig(voucher)}
-                                    className="w-4 h-4 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                                    className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                                   />
                                 </td>
                                 <td className="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -2072,14 +2072,14 @@ const MastersPage: React.FC<MastersPageProps> = ({
                                       <button
                                         type="button"
                                         onClick={handleEditVoucherConfig}
-                                        className="px-3 py-1.5 text-xs font-semibold rounded-md text-white bg-teal-600 hover:bg-teal-700 transition-colors"
+                                        className="px-3 py-1.5 text-xs font-semibold rounded-[4px] text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
                                       >
                                         Edit
                                       </button>
                                       <button
                                         type="button"
                                         onClick={handleDeleteVoucherConfig}
-                                        className="px-3 py-1.5 text-xs font-semibold rounded-md text-white bg-red-600 hover:bg-red-700 transition-colors"
+                                        className="px-3 py-1.5 text-xs font-semibold rounded-[4px] text-white bg-red-600 hover:bg-red-700 transition-colors"
                                       >
                                         Delete
                                       </button>
@@ -2114,7 +2114,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`${activeTab === tab.id
-                ? 'border-teal-500 text-teal-600'
+                ? 'border-indigo-500 text-indigo-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 } whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm`}
             >
@@ -2130,4 +2130,5 @@ const MastersPage: React.FC<MastersPageProps> = ({
 };
 
 export default MastersPage;
+
 

@@ -346,33 +346,33 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
         <div className="min-h-screen bg-gray-50">
             {loading && (
                 <div className="fixed inset-0 bg-white/50 backdrop-blur-sm z-50 flex flex-col items-center justify-center gap-3">
-                    <div className="w-10 h-10 border-4 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
+                    <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-[4px] animate-spin"></div>
                     <p className="text-gray-600 font-medium italic">Loading quotation details...</p>
                 </div>
             )}
 
             {/* Main Content */}
             <div className="px-8 py-6">
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+                <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200 p-8">
                     {/* Page Title */}
                     <div className="flex items-center justify-between mb-6">
                         <h2 className="text-2xl font-bold text-gray-900">{editId ? 'Edit' : 'Create'} Sales Quotation</h2>
                         {editId && (
-                            <span className="px-3 py-1 bg-teal-100 text-teal-800 text-xs font-bold rounded-full uppercase tracking-wider">
+                            <span className="px-3 py-1 bg-indigo-100 text-indigo-800 text-xs font-bold rounded-[4px] uppercase tracking-wider">
                                 Edit Mode
                             </span>
                         )}
                     </div>
 
                     {/* Quotation Type Selector */}
-                    <div className="mb-8 bg-gray-50 p-2 rounded-lg inline-flex gap-2">
+                    <div className="mb-8 bg-gray-50 p-2 rounded-[4px] inline-flex gap-2">
                         {(['General Customer Quote', 'Specific Customer Quote'] as QuotationType[]).map((type) => (
                             <button
                                 key={type}
                                 onClick={() => !editId && setQuotationType(type)}
                                 disabled={!!editId && quotationType !== type}
-                                className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${quotationType === type
-                                    ? 'bg-white text-indigo-700 shadow-sm'
+                                className={`px-6 py-2 rounded-[4px] text-sm font-medium transition-colors ${quotationType === type
+                                    ? 'bg-white text-indigo-700 shadow-none border border-slate-200-none border border-slate-200'
                                     : !!editId ? 'text-gray-400 cursor-not-allowed' : 'text-gray-600 hover:bg-white/50'
                                     }`}
                             >
@@ -394,7 +394,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                                         type="text"
                                         value={quoteNumber}
                                         onChange={(e) => setQuoteNumber(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                         placeholder="Enter quote number"
                                     />
                                 </div>
@@ -406,7 +406,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                                         type="text"
                                         value={customerCategory}
                                         onChange={(e) => setCustomerCategory(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                         placeholder="Select or enter category"
                                     />
                                 </div>
@@ -424,7 +424,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                                             type="date"
                                             value={effectiveFrom}
                                             onChange={(e) => setEffectiveFrom(e.target.value)}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                         />
                                     </div>
                                     <div>
@@ -433,7 +433,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                                             type="date"
                                             value={effectiveTo}
                                             onChange={(e) => setEffectiveTo(e.target.value)}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                         />
                                     </div>
                                 </div>
@@ -442,7 +442,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                             {/* Item Table Section */}
                             <div className="mb-6">
                                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Items</h3>
-                                <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                                <div className="overflow-x-auto border border-gray-200 rounded-[4px]">
                                     <table className="min-w-full divide-y divide-gray-200">
                                         <thead className="bg-gray-50">
                                             <tr>
@@ -554,7 +554,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                                 {/* Add Row Button */}
                                 <button
                                     onClick={handleAddItem}
-                                    className="mt-4 flex items-center gap-2 text-teal-600 hover:text-indigo-700 text-sm font-medium"
+                                    className="mt-4 flex items-center gap-2 text-indigo-600 hover:text-indigo-700 text-sm font-medium"
                                 >
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -579,7 +579,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                                             type="text"
                                             value={specificQuoteNumber}
                                             onChange={(e) => setSpecificQuoteNumber(e.target.value)}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                             placeholder="Enter quote number"
                                         />
                                     </div>
@@ -591,7 +591,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                                             type="text"
                                             value={customerName}
                                             onChange={(e) => setCustomerName(e.target.value)}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                             placeholder="Enter customer name"
                                         />
                                     </div>
@@ -602,7 +602,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                                         <select
                                             value={branch}
                                             onChange={(e) => setBranch(e.target.value)}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                                         >
                                             <option value="">Select branch</option>
                                             <option value="main">Main Branch</option>
@@ -618,7 +618,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                                             rows={3}
                                             value={address}
                                             onChange={(e) => setAddress(e.target.value)}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 resize-none"
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 resize-none"
                                             placeholder="Enter address"
                                         />
                                     </div>
@@ -630,7 +630,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                                             type="email"
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                             placeholder="email@example.com"
                                         />
                                     </div>
@@ -642,7 +642,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                                             type="tel"
                                             value={contactNo}
                                             onChange={(e) => setContactNo(e.target.value)}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                             placeholder="Enter contact number"
                                         />
                                     </div>
@@ -661,7 +661,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                                             type="date"
                                             value={validityFrom}
                                             onChange={(e) => setValidityFrom(e.target.value)}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                         />
                                     </div>
                                     <div>
@@ -670,7 +670,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                                             type="date"
                                             value={validityTo}
                                             onChange={(e) => setValidityTo(e.target.value)}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                         />
                                     </div>
                                 </div>
@@ -679,7 +679,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                             {/* Item Lists Section */}
                             <div className="mb-8">
                                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Item Lists</h3>
-                                <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                                <div className="overflow-x-auto border border-gray-200 rounded-[4px]">
                                     <table className="min-w-full divide-y divide-gray-200">
                                         <thead className="bg-gray-50">
                                             <tr>
@@ -801,7 +801,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                                 {/* Add Row Button */}
                                 <button
                                     onClick={handleAddSpecificItem}
-                                    className="mt-4 flex items-center gap-2 text-teal-600 hover:text-indigo-700 text-sm font-medium"
+                                    className="mt-4 flex items-center gap-2 text-indigo-600 hover:text-indigo-700 text-sm font-medium"
                                 >
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -822,7 +822,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                                             type="date"
                                             value={tentativeDeliveryDate}
                                             onChange={(e) => setTentativeDeliveryDate(e.target.value)}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                         />
                                     </div>
                                     <div className="md:col-span-2">
@@ -833,7 +833,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                                             rows={3}
                                             value={paymentTerms}
                                             onChange={(e) => setPaymentTerms(e.target.value)}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 resize-none"
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 resize-none"
                                             placeholder="Enter payment terms"
                                         />
                                     </div>
@@ -846,13 +846,13 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                     <div className="flex justify-end gap-4 mt-8 pt-6 border-t border-gray-200">
                         <button
                             onClick={onCancel}
-                            className="px-6 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                            className="px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                         >
                             Cancel
                         </button>
                         <button
                             onClick={handleSave}
-                            className="px-6 py-2 bg-teal-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
+                            className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] text-sm font-medium hover:bg-indigo-700 transition-colors"
                         >
                             Save
                         </button>
@@ -864,4 +864,5 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
 };
 
 export default CreateSalesQuotation;
+
 

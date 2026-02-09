@@ -81,7 +81,7 @@ const PayrollPage: React.FC = () => {
     };
 
     return (
-        <div className="flex-1 bg-sky-50 min-h-screen">
+        <div className="flex-1 min-h-screen">
             {/* Header */}
             <div className="px-8 py-6">
                 <div className="flex items-center justify-between">
@@ -92,7 +92,7 @@ const PayrollPage: React.FC = () => {
                     <div className="flex items-center gap-3">
                         <button
                             onClick={() => setShowProcessPayRunModal(true)}
-                            className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-md text-sm font-medium flex items-center gap-2 transition-colors"
+                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] text-sm font-medium flex items-center gap-2 transition-colors"
                         >
                             <Icon name="plus" className="w-4 h-4" />
                             Process Pay Run
@@ -109,7 +109,7 @@ const PayrollPage: React.FC = () => {
                             key={tab}
                             onClick={() => setActiveTab(tab)}
                             className={`py-2 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === tab
-                                ? 'border-teal-600 text-teal-600'
+                                ? 'border-indigo-600 text-indigo-600'
                                 : 'border-transparent text-gray-500 hover:text-gray-700'
                                 }`}
                         >
@@ -180,25 +180,25 @@ const DashboardContent: React.FC = () => {
         <div className="space-y-6">
             {/* Metrics Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white rounded-lg shadow-sm p-5 border border-gray-100 hover:shadow-md transition-shadow">
+                <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 p-5 border border-gray-100 hover:shadow-none border border-slate-200-none border border-slate-200 transition-shadow-none border border-slate-200">
                     <div className="flex items-start justify-between">
                         <div>
                             <p className="text-xs text-gray-600 mb-2 font-medium">Total Employees</p>
                             <p className="text-2xl font-bold text-gray-900">{stats.totalEmployees}</p>
                         </div>
-                        <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-green-50 to-green-100 flex items-center justify-center">
-                            <Icon name="users" className="w-6 h-6 text-teal-600" />
+                        <div className="w-12 h-12 rounded-[4px] bg-gradient-to-br from-green-50 to-green-100 flex items-center justify-center">
+                            <Icon name="users" className="w-6 h-6 text-indigo-600" />
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-white rounded-lg shadow-sm p-5 border border-gray-100 hover:shadow-md transition-shadow">
+                <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 p-5 border border-gray-100 hover:shadow-none border border-slate-200-none border border-slate-200 transition-shadow-none border border-slate-200">
                     <div className="flex items-start justify-between">
                         <div>
                             <p className="text-xs text-gray-600 mb-2 font-medium">Monthly Payroll</p>
                             <p className="text-2xl font-bold text-gray-900">₹{stats.monthlyPayroll.toLocaleString()}</p>
                         </div>
-                        <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center">
+                        <div className="w-12 h-12 rounded-[4px] bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center">
                             <svg className="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
@@ -206,36 +206,36 @@ const DashboardContent: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="bg-white rounded-lg shadow-sm p-5 border border-gray-100 hover:shadow-md transition-shadow">
+                <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 p-5 border border-gray-100 hover:shadow-none border border-slate-200-none border border-slate-200 transition-shadow-none border border-slate-200">
                     <div className="flex items-start justify-between">
                         <div>
                             <p className="text-xs text-gray-600 mb-2 font-medium">Pending Pay Runs</p>
                             <p className="text-2xl font-bold text-gray-900">{stats.pendingPayRuns}</p>
                         </div>
-                        <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-yellow-50 to-yellow-100 flex items-center justify-center">
+                        <div className="w-12 h-12 rounded-[4px] bg-gradient-to-br from-yellow-50 to-yellow-100 flex items-center justify-center">
                             <Icon name="clock" className="w-6 h-6 text-yellow-600" />
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-white rounded-lg shadow-sm p-5 border border-gray-100 hover:shadow-md transition-shadow">
+                <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 p-5 border border-gray-100 hover:shadow-none border border-slate-200-none border border-slate-200 transition-shadow-none border border-slate-200">
                     <div className="flex items-start justify-between">
                         <div>
                             <p className="text-xs text-gray-600 mb-2 font-medium">Compliance Status</p>
-                            <p className="text-sm font-semibold text-teal-600 mt-2">{stats.complianceStatus}</p>
+                            <p className="text-sm font-semibold text-indigo-600 mt-2">{stats.complianceStatus}</p>
                         </div>
-                        <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-teal-50 to-teal-100 flex items-center justify-center">
-                            <Icon name="check-circle" className="w-6 h-6 text-teal-600" />
+                        <div className="w-12 h-12 rounded-[4px] bg-gradient-to-br from-indigo-50 to-indigo-100 flex items-center justify-center">
+                            <Icon name="check-circle" className="w-6 h-6 text-indigo-600" />
                         </div>
                     </div>
                 </div>
             </div>
 
             {/* Recent Activity */}
-            <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-100">
+            <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 p-6 border border-gray-100">
                 <h2 className="text-lg font-bold text-gray-900 mb-4">Recent Payroll Activity</h2>
                 <div className="flex flex-col items-center justify-center py-20">
-                    <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                    <div className="w-20 h-20 rounded-[4px] bg-gray-100 flex items-center justify-center mb-4">
                         <Icon name="inbox" className="w-10 h-10 text-gray-300" />
                     </div>
                     <p className="text-gray-400 text-sm">No payroll activity yet.</p>
@@ -257,7 +257,7 @@ const EmployeesContent: React.FC<{ employees: Employee[]; onRefresh: () => void 
 
     return (
         <>
-            <div className="bg-white rounded-lg shadow-sm border border-gray-100">
+            <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-100">
                 <div className="p-6 border-b border-gray-200">
                     <div className="flex items-center justify-between">
                         <h2 className="text-xl font-bold text-gray-900">Employee List</h2>
@@ -269,12 +269,12 @@ const EmployeesContent: React.FC<{ employees: Employee[]; onRefresh: () => void 
                                     placeholder="Search employees..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="pl-10 pr-4 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    className="pl-10 pr-4 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                             </div>
                             <button
                                 onClick={() => setShowAddModal(true)}
-                                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-md text-sm font-medium flex items-center gap-2"
+                                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] text-sm font-medium flex items-center gap-2"
                             >
                                 <Icon name="plus" className="w-4 h-4" />
                                 Add Employee
@@ -306,14 +306,14 @@ const EmployeesContent: React.FC<{ employees: Employee[]; onRefresh: () => void 
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{emp.designation || '-'}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">₹{emp.basic_salary.toLocaleString()}</td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${emp.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                            <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${emp.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                                                 }`}>
                                                 {emp.status}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-3">
-                                            <button className="text-teal-600 hover:text-indigo-900">View</button>
-                                            <button className="text-teal-600 hover:text-teal-900">Edit</button>
+                                            <button className="text-indigo-600 hover:text-indigo-900">View</button>
+                                            <button className="text-indigo-600 hover:text-teal-900">Edit</button>
                                         </td>
                                     </tr>
                                 ))
@@ -321,7 +321,7 @@ const EmployeesContent: React.FC<{ employees: Employee[]; onRefresh: () => void 
                                 <tr>
                                     <td colSpan={7} className="px-6 py-16 text-center">
                                         <div className="flex flex-col items-center justify-center">
-                                            <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+                                            <div className="w-16 h-16 rounded-[4px] bg-gray-100 flex items-center justify-center mb-3">
                                                 <Icon name="users" className="w-8 h-8 text-gray-300" />
                                             </div>
                                             <p className="text-gray-400 text-sm">No employees found.</p>
@@ -417,7 +417,7 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
                 <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white z-10">
                     <div>
                         <h2 className="text-xl font-bold text-gray-900">Add New Employee</h2>
@@ -442,7 +442,7 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
                                 key={tab.key}
                                 onClick={() => setActiveTab(tab.key as any)}
                                 className={`py-3 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === tab.key
-                                    ? 'border-teal-600 text-teal-700'
+                                    ? 'border-indigo-600 text-slate-700'
                                     : 'border-transparent text-gray-500 hover:text-gray-700'
                                     }`}
                             >
@@ -463,7 +463,7 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
                                     type="text"
                                     value={formData.employee_name}
                                     onChange={(e) => setFormData({ ...formData, employee_name: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                             </div>
                             <div>
@@ -472,7 +472,7 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
                                     type="text"
                                     value={formData.employee_code}
                                     onChange={(e) => setFormData({ ...formData, employee_code: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                             </div>
 
@@ -484,7 +484,7 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
                                     type="email"
                                     value={formData.email}
                                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                             </div>
                             <div>
@@ -493,7 +493,7 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
                                     type="tel"
                                     value={formData.phone}
                                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                             </div>
                             <div>
@@ -502,7 +502,7 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
                                     type="date"
                                     value={formData.date_of_birth}
                                     onChange={(e) => setFormData({ ...formData, date_of_birth: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                             </div>
                             <div>
@@ -510,7 +510,7 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
                                 <select
                                     value={formData.gender}
                                     onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 >
                                     <option value="">Select Gender</option>
                                     <option value="Male">Male</option>
@@ -524,7 +524,7 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
                                     value={formData.address}
                                     onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                                     rows={3}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                             </div>
                         </div>
@@ -538,7 +538,7 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
                                     type="text"
                                     value={formData.department}
                                     onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                             </div>
                             <div>
@@ -547,7 +547,7 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
                                     type="text"
                                     value={formData.designation}
                                     onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                             </div>
                             <div>
@@ -556,7 +556,7 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
                                     type="date"
                                     value={formData.date_of_joining}
                                     onChange={(e) => setFormData({ ...formData, date_of_joining: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                             </div>
                             <div>
@@ -564,7 +564,7 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
                                 <select
                                     value={formData.employment_type}
                                     onChange={(e) => setFormData({ ...formData, employment_type: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 >
                                     <option value="Full-Time">Full-Time</option>
                                     <option value="Part-Time">Part-Time</option>
@@ -583,7 +583,7 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
                                     type="number"
                                     value={formData.basic_salary}
                                     onChange={(e) => setFormData({ ...formData, basic_salary: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                             </div>
                             <div>
@@ -592,7 +592,7 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
                                     type="number"
                                     value={formData.hra}
                                     onChange={(e) => setFormData({ ...formData, hra: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                             </div>
                         </div>
@@ -606,7 +606,7 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
                                     type="text"
                                     value={formData.pan_number}
                                     onChange={(e) => setFormData({ ...formData, pan_number: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                             </div>
                             <div>
@@ -615,7 +615,7 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
                                     type="text"
                                     value={formData.uan_number}
                                     onChange={(e) => setFormData({ ...formData, uan_number: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                             </div>
                             <div>
@@ -624,7 +624,7 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
                                     type="text"
                                     value={formData.esi_number}
                                     onChange={(e) => setFormData({ ...formData, esi_number: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                             </div>
                         </div>
@@ -638,7 +638,7 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
                                     type="text"
                                     value={formData.account_number}
                                     onChange={(e) => setFormData({ ...formData, account_number: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                             </div>
                             <div>
@@ -647,7 +647,7 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
                                     type="text"
                                     value={formData.ifsc_code}
                                     onChange={(e) => setFormData({ ...formData, ifsc_code: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                             </div>
                             <div className="col-span-2">
@@ -656,7 +656,7 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
                                     type="text"
                                     value={formData.bank_name}
                                     onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                             </div>
                         </div>
@@ -674,7 +674,7 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
                                         setActiveTab(tabs[currentIndex - 1]);
                                     }
                                 }}
-                                className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 border border-gray-300 rounded-md"
+                                className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 border border-gray-300 rounded-[4px]"
                             >
                                 BACK
                             </button>
@@ -687,7 +687,7 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
                         {activeTab === 'bank' ? (
                             <button
                                 onClick={handleSubmit}
-                                className="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-md text-sm font-medium"
+                                className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] text-sm font-medium"
                             >
                                 ADD EMPLOYEE
                             </button>
@@ -700,7 +700,7 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
                                         setActiveTab(tabs[currentIndex + 1]);
                                     }
                                 }}
-                                className="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-md text-sm font-medium"
+                                className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] text-sm font-medium"
                             >
                                 NEXT
                             </button>
@@ -749,7 +749,7 @@ const ProcessPayRunModal: React.FC<{ onClose: () => void; onSuccess: () => void 
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4">
+            <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 w-full max-w-2xl mx-4">
                 <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                     <div>
                         <h2 className="text-xl font-bold text-gray-900">Process Pay Run</h2>
@@ -771,7 +771,7 @@ const ProcessPayRunModal: React.FC<{ onClose: () => void; onSuccess: () => void 
                                 placeholder="e.g., January 2026"
                                 value={formData.pay_period}
                                 onChange={(e) => setFormData({ ...formData, pay_period: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
@@ -783,7 +783,7 @@ const ProcessPayRunModal: React.FC<{ onClose: () => void; onSuccess: () => void 
                                     type="date"
                                     value={formData.start_date}
                                     onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                             </div>
                             <div>
@@ -794,13 +794,13 @@ const ProcessPayRunModal: React.FC<{ onClose: () => void; onSuccess: () => void 
                                     type="date"
                                     value={formData.end_date}
                                     onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                             </div>
                         </div>
 
-                        <div className="bg-teal-50 border border-teal-200 rounded-md p-4 mt-4">
-                            <p className="text-sm text-teal-800">
+                        <div className="bg-indigo-50/50 border border-slate-200 rounded-[4px] p-4 mt-4">
+                            <p className="text-sm text-indigo-800">
                                 <strong>Note:</strong> This will automatically calculate salaries for all active employees based on their salary structure and attendance.
                             </p>
                         </div>
@@ -814,7 +814,7 @@ const ProcessPayRunModal: React.FC<{ onClose: () => void; onSuccess: () => void 
                     <button
                         onClick={handleCreateAndProcess}
                         disabled={isProcessing}
-                        className="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-md text-sm font-medium disabled:opacity-50"
+                        className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] text-sm font-medium disabled:opacity-50"
                     >
                         {isProcessing ? 'PROCESSING...' : 'CREATE & PROCESS'}
                     </button>
@@ -852,13 +852,13 @@ const PayRunsContent: React.FC<{ payRuns: PayRun[]; onRefresh: () => void }> = (
 
     return (
         <>
-            <div className="bg-white rounded-lg shadow-sm border border-gray-100">
+            <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-100">
                 <div className="p-6 border-b border-gray-200">
                     <div className="flex items-center justify-between">
                         <h2 className="text-xl font-bold text-gray-900">Pay Run History</h2>
                         <button
                             onClick={() => setShowCreateModal(true)}
-                            className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-md text-sm font-medium flex items-center gap-2"
+                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] text-sm font-medium flex items-center gap-2"
                         >
                             <Icon name="plus" className="w-4 h-4" />
                             Create Pay Run
@@ -889,8 +889,8 @@ const PayRunsContent: React.FC<{ payRuns: PayRun[]; onRefresh: () => void }> = (
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">₹{Number(run.total_deductions).toLocaleString()}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">₹{Number(run.net_pay).toLocaleString()}</td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${run.status === 'Paid' ? 'bg-green-100 text-green-800' :
-                                                run.status === 'Approved' ? 'bg-teal-100 text-teal-800' :
+                                            <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${run.status === 'Paid' ? 'bg-green-100 text-green-800' :
+                                                run.status === 'Approved' ? 'bg-indigo-100 text-indigo-800' :
                                                     run.status === 'Processed' ? 'bg-yellow-100 text-yellow-800' :
                                                         'bg-gray-100 text-gray-800'
                                                 }`}>
@@ -898,11 +898,11 @@ const PayRunsContent: React.FC<{ payRuns: PayRun[]; onRefresh: () => void }> = (
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-3">
-                                            <button className="text-teal-600 hover:text-indigo-900">View</button>
+                                            <button className="text-indigo-600 hover:text-indigo-900">View</button>
                                             {run.status === 'Draft' && (
                                                 <button
                                                     onClick={() => handleProcess(run.id)}
-                                                    className="text-teal-600 hover:text-green-900"
+                                                    className="text-indigo-600 hover:text-green-900"
                                                 >
                                                     Process
                                                 </button>
@@ -910,7 +910,7 @@ const PayRunsContent: React.FC<{ payRuns: PayRun[]; onRefresh: () => void }> = (
                                             {run.status === 'Processed' && (
                                                 <button
                                                     onClick={() => handleApprove(run.id)}
-                                                    className="text-teal-600 hover:text-teal-900"
+                                                    className="text-indigo-600 hover:text-teal-900"
                                                 >
                                                     Approve
                                                 </button>
@@ -964,13 +964,13 @@ const SalaryTemplatesContent: React.FC = () => {
 
     return (
         <>
-            <div className="bg-white rounded-lg shadow-sm border border-gray-100">
+            <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-100">
                 <div className="p-6 border-b border-gray-200">
                     <div className="flex items-center justify-between">
                         <h2 className="text-xl font-bold text-gray-900">Salary Templates</h2>
                         <button
                             onClick={() => setShowCreateModal(true)}
-                            className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-md text-sm font-medium flex items-center gap-2"
+                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] text-sm font-medium flex items-center gap-2"
                         >
                             <Icon name="plus" className="w-4 h-4" />
                             Create Template
@@ -982,7 +982,7 @@ const SalaryTemplatesContent: React.FC = () => {
                     {templates.length > 0 ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {templates.map((template) => (
-                                <div key={template.id} className="border border-gray-200 rounded-lg p-4 hover:border-teal-500 transition-colors">
+                                <div key={template.id} className="border border-gray-200 rounded-[4px] p-4 hover:border-indigo-500 transition-colors">
                                     <h3 className="font-semibold text-gray-900 mb-2">{template.template_name}</h3>
                                     <p className="text-sm text-gray-500">{template.description || 'No description'}</p>
                                 </div>
@@ -1035,7 +1035,7 @@ const CreateTemplateModal: React.FC<{ onClose: () => void; onSuccess: () => void
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4">
+            <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 w-full max-w-2xl mx-4">
                 <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                     <div>
                         <h2 className="text-xl font-bold text-gray-900">Create Salary Template</h2>
@@ -1057,7 +1057,7 @@ const CreateTemplateModal: React.FC<{ onClose: () => void; onSuccess: () => void
                                 placeholder="e.g., Senior Developer Package"
                                 value={formData.template_name}
                                 onChange={(e) => setFormData({ ...formData, template_name: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             />
                         </div>
                         <div>
@@ -1067,7 +1067,7 @@ const CreateTemplateModal: React.FC<{ onClose: () => void; onSuccess: () => void
                                 value={formData.description}
                                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                                 rows={3}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             />
                         </div>
                     </div>
@@ -1079,7 +1079,7 @@ const CreateTemplateModal: React.FC<{ onClose: () => void; onSuccess: () => void
                     </button>
                     <button
                         onClick={handleSubmit}
-                        className="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-md text-sm font-medium"
+                        className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] text-sm font-medium"
                     >
                         CREATE TEMPLATE
                     </button>
@@ -1095,7 +1095,7 @@ const StatutoryContent: React.FC = () => {
         <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* EPF */}
-                <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-100">
+                <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 p-6 border border-gray-100">
                     <h3 className="text-lg font-bold text-gray-900 mb-4">Employee Provident Fund (EPF)</h3>
                     <div className="space-y-3">
                         <div className="flex justify-between">
@@ -1106,14 +1106,14 @@ const StatutoryContent: React.FC = () => {
                             <span className="text-sm text-gray-600">Employer Contribution</span>
                             <span className="text-sm font-medium">12%</span>
                         </div>
-                        <button className="w-full mt-4 px-4 py-2 bg-green-50 text-teal-700 rounded-md text-sm font-medium hover:bg-green-100">
+                        <button className="w-full mt-4 px-4 py-2 bg-green-50 text-slate-700 rounded-[4px] text-sm font-medium hover:bg-green-100">
                             Configure EPF
                         </button>
                     </div>
                 </div>
 
                 {/* ESI */}
-                <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-100">
+                <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 p-6 border border-gray-100">
                     <h3 className="text-lg font-bold text-gray-900 mb-4">Employee State Insurance (ESI)</h3>
                     <div className="space-y-3">
                         <div className="flex justify-between">
@@ -1124,35 +1124,35 @@ const StatutoryContent: React.FC = () => {
                             <span className="text-sm text-gray-600">Employer Contribution</span>
                             <span className="text-sm font-medium">3.25%</span>
                         </div>
-                        <button className="w-full mt-4 px-4 py-2 bg-green-50 text-teal-700 rounded-md text-sm font-medium hover:bg-green-100">
+                        <button className="w-full mt-4 px-4 py-2 bg-green-50 text-slate-700 rounded-[4px] text-sm font-medium hover:bg-green-100">
                             Configure ESI
                         </button>
                     </div>
                 </div>
 
                 {/* Professional Tax */}
-                <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-100">
+                <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 p-6 border border-gray-100">
                     <h3 className="text-lg font-bold text-gray-900 mb-4">Professional Tax (PT)</h3>
                     <div className="space-y-3">
                         <div className="flex justify-between">
                             <span className="text-sm text-gray-600">State</span>
                             <span className="text-sm font-medium">Not Configured</span>
                         </div>
-                        <button className="w-full mt-4 px-4 py-2 bg-green-50 text-teal-700 rounded-md text-sm font-medium hover:bg-green-100">
+                        <button className="w-full mt-4 px-4 py-2 bg-green-50 text-slate-700 rounded-[4px] text-sm font-medium hover:bg-green-100">
                             Configure PT
                         </button>
                     </div>
                 </div>
 
                 {/* LWF */}
-                <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-100">
+                <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 p-6 border border-gray-100">
                     <h3 className="text-lg font-bold text-gray-900 mb-4">Labour Welfare Fund (LWF)</h3>
                     <div className="space-y-3">
                         <div className="flex justify-between">
                             <span className="text-sm text-gray-600">Status</span>
                             <span className="text-sm font-medium">Not Configured</span>
                         </div>
-                        <button className="w-full mt-4 px-4 py-2 bg-green-50 text-teal-700 rounded-md text-sm font-medium hover:bg-green-100">
+                        <button className="w-full mt-4 px-4 py-2 bg-green-50 text-slate-700 rounded-[4px] text-sm font-medium hover:bg-green-100">
                             Configure LWF
                         </button>
                     </div>
@@ -1165,30 +1165,30 @@ const StatutoryContent: React.FC = () => {
 // Reports Content
 const ReportsContent: React.FC = () => {
     return (
-        <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-100">
+        <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 p-6 border border-gray-100">
             <h2 className="text-xl font-bold text-gray-900 mb-6">Payroll Reports</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <button className="p-4 border border-gray-200 rounded-lg hover:border-teal-500 hover:bg-green-50 transition-colors text-left">
+                <button className="p-4 border border-gray-200 rounded-[4px] hover:border-indigo-500 hover:bg-green-50 transition-colors text-left">
                     <h3 className="font-semibold text-gray-900 mb-1">Payroll Summary</h3>
                     <p className="text-xs text-gray-500">Monthly payroll overview</p>
                 </button>
-                <button className="p-4 border border-gray-200 rounded-lg hover:border-teal-500 hover:bg-green-50 transition-colors text-left">
+                <button className="p-4 border border-gray-200 rounded-[4px] hover:border-indigo-500 hover:bg-green-50 transition-colors text-left">
                     <h3 className="font-semibold text-gray-900 mb-1">Tax Summary</h3>
                     <p className="text-xs text-gray-500">EPF, ESI, PT deductions</p>
                 </button>
-                <button className="p-4 border border-gray-200 rounded-lg hover:border-teal-500 hover:bg-green-50 transition-colors text-left">
+                <button className="p-4 border border-gray-200 rounded-[4px] hover:border-indigo-500 hover:bg-green-50 transition-colors text-left">
                     <h3 className="font-semibold text-gray-900 mb-1">Employee Wise Report</h3>
                     <p className="text-xs text-gray-500">Individual salary details</p>
                 </button>
-                <button className="p-4 border border-gray-200 rounded-lg hover:border-teal-500 hover:bg-green-50 transition-colors text-left">
+                <button className="p-4 border border-gray-200 rounded-[4px] hover:border-indigo-500 hover:bg-green-50 transition-colors text-left">
                     <h3 className="font-semibold text-gray-900 mb-1">Payslips</h3>
                     <p className="text-xs text-gray-500">Generate and download payslips</p>
                 </button>
-                <button className="p-4 border border-gray-200 rounded-lg hover:border-teal-500 hover:bg-green-50 transition-colors text-left">
+                <button className="p-4 border border-gray-200 rounded-[4px] hover:border-indigo-500 hover:bg-green-50 transition-colors text-left">
                     <h3 className="font-semibold text-gray-900 mb-1">Bank Transfer Report</h3>
                     <p className="text-xs text-gray-500">Salary transfer file</p>
                 </button>
-                <button className="p-4 border border-gray-200 rounded-lg hover:border-teal-500 hover:bg-green-50 transition-colors text-left">
+                <button className="p-4 border border-gray-200 rounded-[4px] hover:border-indigo-500 hover:bg-green-50 transition-colors text-left">
                     <h3 className="font-semibold text-gray-900 mb-1">Form 16</h3>
                     <p className="text-xs text-gray-500">Annual tax certificate</p>
                 </button>
@@ -1198,4 +1198,5 @@ const ReportsContent: React.FC = () => {
 };
 
 export default PayrollPage;
+
 
