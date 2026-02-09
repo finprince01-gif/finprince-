@@ -1679,7 +1679,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     <input
                                                         type="tel"
                                                         value={contactNo}
-                                                        onChange={(e) => setContactNo(e.target.value)}
+                                                        onChange={(e) => {
+                                                            const value = e.target.value;
+                                                            if (/^\d*$/.test(value)) {
+                                                                setContactNo(value);
+                                                            }
+                                                        }}
                                                         className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
                                                         placeholder="+91 XXXXX XXXXX"
                                                         required

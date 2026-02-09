@@ -4,6 +4,8 @@ import { apiService } from '../../services/api';
 import { InventoryCategoryWizard } from '../../components/InventoryCategoryWizard';
 import CategoryHierarchicalDropdown from '../../components/CategoryHierarchicalDropdown';
 import { usePermissions } from '../../hooks/usePermissions';
+import { getCountries, getStates, getCities } from '../../utils/locationData';
+import SearchableDropdown from '../../components/SearchableDropdown';
 
 // Interfaces
 interface Location {
@@ -16,6 +18,7 @@ interface Location {
   address_line3: string | null;
   city: string;
   state: string;
+  country: string;
   pincode: string;
   gstin: string | null;
 }
@@ -109,6 +112,7 @@ const InventoryPage: React.FC = () => {
   const [locAddressLine3, setLocAddressLine3] = useState('');
   const [locCity, setLocCity] = useState('');
   const [locState, setLocState] = useState('');
+  const [locCountry, setLocCountry] = useState('');
   const [locPincode, setLocPincode] = useState('');
   const [locationGstin, setLocationGstin] = useState('');
   const [isEditModeLocation, setIsEditModeLocation] = useState(false);
@@ -402,7 +406,7 @@ const InventoryPage: React.FC = () => {
         city: locCity,
         state: locState,
         pincode: locPincode,
-        country: 'India',
+        country: locCountry,
         gstin: locationGstin || null,
         vendor_name: vendorName || null,
         customer_name: customerName || null
@@ -439,6 +443,7 @@ const InventoryPage: React.FC = () => {
     setLocAddressLine3(selectedLocation.address_line3 || '');
     setLocCity(selectedLocation.city);
     setLocState(selectedLocation.state);
+    setLocCountry(selectedLocation.country || 'India');
     setLocPincode(selectedLocation.pincode);
     setLocationGstin(selectedLocation.gstin || '');
     setVendorName('');
@@ -473,6 +478,7 @@ const InventoryPage: React.FC = () => {
     setLocAddressLine3('');
     setLocCity('');
     setLocState('');
+    setLocCountry('');
     setLocPincode('');
     setLocationGstin('');
     setIsEditModeLocation(false);
@@ -740,6 +746,58 @@ const InventoryPage: React.FC = () => {
               </>
             )}
 
+            {/* Country & State */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="relative z-20">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Country <span className="text-red-500">*</span></label>
+                <SearchableDropdown
+                  options={getCountries()}
+                  value={locCountry}
+                  onChange={(val) => {
+                    setLocCountry(val);
+                    setLocState('');
+                    setLocCity('');
+                  }}
+                  placeholder="Select Country"
+                  required
+                />
+              </div>
+              <div className="relative z-20">
+                <label className="block text-sm font-medium text-gray-700 mb-2">State <span className="text-red-500">*</span></label>
+                <SearchableDropdown
+                  options={getStates(locCountry)}
+                  value={locState}
+                  onChange={(val) => {
+                    setLocState(val);
+                    setLocCity('');
+                  }}
+                  placeholder="Select State"
+                  disabled={!locCountry}
+                  required
+                />
+              </div>
+            </div>
+
+            {/* City & Pincode */}
+            <div className="grid grid-cols-2 gap-4 relative z-10">
+              <div className="relative">
+                <label className="block text-sm font-medium text-gray-700 mb-2">City <span className="text-red-500">*</span></label>
+                <SearchableDropdown
+                  options={getCities(locCountry, locState)}
+                  value={locCity}
+                  onChange={(val) => setLocCity(val)}
+                  placeholder="Select City"
+                  disabled={!locState}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Pincode <span className="text-red-500">*</span></label>
+                <input type="text" value={locPincode} onChange={(e) => setLocPincode(e.target.value)} className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Pincode/Zip Code" required />
+              </div>
+            </div>
+
+            {/* Address Lines */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Address Line 1 <span className="text-red-500">*</span></label>
               <input type="text" value={locAddressLine1} onChange={(e) => setLocAddressLine1(e.target.value)} className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Building/Street/Area" required />
@@ -748,14 +806,7 @@ const InventoryPage: React.FC = () => {
               <div><label className="block text-sm font-medium text-gray-700 mb-2">Address Line 2</label><input type="text" value={locAddressLine2} onChange={(e) => setLocAddressLine2(e.target.value)} className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Landmark (Optional)" /></div>
               <div><label className="block text-sm font-medium text-gray-700 mb-2">Address Line 3</label><input type="text" value={locAddressLine3} onChange={(e) => setLocAddressLine3(e.target.value)} className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Additional Info (Optional)" /></div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div><label className="block text-sm font-medium text-gray-700 mb-2">City <span className="text-red-500">*</span></label><input type="text" value={locCity} onChange={(e) => setLocCity(e.target.value)} className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="City" required /></div>
-              <div><label className="block text-sm font-medium text-gray-700 mb-2">State <span className="text-red-500">*</span></label><input type="text" value={locState} onChange={(e) => setLocState(e.target.value)} className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="State" required /></div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Pincode <span className="text-red-500">*</span></label>
-              <input type="text" value={locPincode} onChange={(e) => setLocPincode(e.target.value)} className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Pincode/Zip Code" required />
-            </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">GSTIN (Optional)</label>
               <input type="text" value={locationGstin} onChange={(e) => setLocationGstin(e.target.value)} className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Enter GSTIN (15 characters)" maxLength={15} />
@@ -3998,8 +4049,20 @@ const InventoryPage: React.FC = () => {
                     placeholder="Enter rate"
                     className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                   />
-                  <select className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-100 disabled:cursor-not-allowed" disabled={!editFormData?.isNew && !editFormData?.isEditMode}>
-                    <option>Select unit</option>
+                  <select
+                    className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    disabled={!editFormData?.isNew && !editFormData?.isEditMode}
+                    value={editFormData?.rateUnit || ''}
+                    onChange={(e) => handleFormChange('rateUnit', e.target.value)}
+                  >
+                    <option value="">Select unit</option>
+                    {unitOptions
+                      .filter(unit => unit.value === editFormData?.uom || (editFormData?.altUnit && unit.value === editFormData?.altUnit))
+                      .map((unit) => (
+                        <option key={unit.value} value={unit.value}>
+                          {unit.label}
+                        </option>
+                      ))}
                   </select>
                 </div>
               </div>
@@ -4042,15 +4105,17 @@ const InventoryPage: React.FC = () => {
                     className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                   />
                 </div>
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 text-teal-600 rounded"
-                    checked={editFormData?.isSaleable || false}
-                    onChange={(e) => handleFormChange('isSaleable', e.target.checked)}
-                  />
-                  <span className="ml-2 text-sm font-medium text-gray-700">Saleable Item → for Work-in-Progress</span>
-                </label>
+                {editFormData?.categoryPath?.includes('Work in Progress') && (
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 text-teal-600 rounded"
+                      checked={editFormData?.isSaleable || false}
+                      onChange={(e) => handleFormChange('isSaleable', e.target.checked)}
+                    />
+                    <span className="ml-2 text-sm font-medium text-gray-700">Saleable Item → for Work-in-Progress</span>
+                  </label>
+                )}
               </div>
 
               {/* Buttons */}
