@@ -449,6 +449,27 @@ const CategoryContent: React.FC = () => {
                     throw new Error(errorMsg);
                 }
             }}
+            onEditCategory={async (data) => {
+                try {
+                    await httpClient.put(`/api/customerportal/categories/${data.id}/`, {
+                        category: data.category,
+                        group: data.group,
+                        subgroup: data.subgroup,
+                        is_active: true
+                    });
+                } catch (error: any) {
+                    console.error('Error updating category:', error);
+                    throw error;
+                }
+            }}
+            onDeleteCategory={async (id) => {
+                try {
+                    await httpClient.delete(`/api/customerportal/categories/${id}/`);
+                } catch (error: any) {
+                    console.error('Error deleting category:', error);
+                    throw error;
+                }
+            }}
         />
     );
 };

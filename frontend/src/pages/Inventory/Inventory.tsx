@@ -375,6 +375,24 @@ const InventoryPage: React.FC = () => {
     }
   };
 
+  const handleEditCategory = async (data: { id: number; category: string; group: string | null; subgroup: string }) => {
+    try {
+      await httpClient.put(`/api/inventory/master-categories/${data.id}/`, data);
+    } catch (error) {
+      console.error("Error updating category:", error);
+      throw error;
+    }
+  };
+
+  const handleDeleteCategory = async (id: number) => {
+    try {
+      await httpClient.delete(`/api/inventory/master-categories/${id}/`);
+    } catch (error) {
+      console.error("Error deleting category:", error);
+      throw error;
+    }
+  };
+
   // Effects
   useEffect(() => {
     if (activeTab === 'Master') {
@@ -4681,7 +4699,11 @@ const InventoryPage: React.FC = () => {
       <div className="p-0">
         {activeMasterSubTab === 'Category' && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 min-h-[500px]">
-            <InventoryCategoryWizard onCreateCategory={handleCreateCategory} />
+            <InventoryCategoryWizard
+              onCreateCategory={handleCreateCategory}
+              onEditCategory={handleEditCategory}
+              onDeleteCategory={handleDeleteCategory}
+            />
           </div>
         )}
         {activeMasterSubTab === 'Location' && renderLocation()}

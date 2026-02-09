@@ -17,6 +17,7 @@ interface TreeNode {
     level: number; // 0=Category, 1=Group, 2=Subgroup
     isSystem: boolean;
     data: {
+        id?: number;
         category: string;
         group: string | null;
         subgroup: string | null;
@@ -29,8 +30,17 @@ interface InventoryCategoryWizardProps {
         group: string | null;
         subgroup: string | null;
     }) => Promise<void>;
+    onEditCategory?: (data: {
+        id: number;
+        category: string;
+        group: string | null;
+        subgroup: string;
+    }) => Promise<void>;
+    onDeleteCategory?: (id: number) => Promise<void>;
     apiEndpoint?: string; // Optional API endpoint, defaults to inventory
     allowCreateGroup?: boolean;
+    systemCategories?: string[];
+    defaultGroups?: any[]; // Using any[] for simplicity as the shape is defined in DEFAULT_GROUPS_DATA
 }
 
 // Hardcoded base categories (System Categories) - Default
@@ -58,6 +68,8 @@ const DEFAULT_GROUPS_DATA = [
 
 export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = ({
     onCreateCategory,
+    onEditCategory,
+    onDeleteCategory,
     apiEndpoint = '/api/inventory/master-categories/',
     systemCategories = DEFAULT_SYSTEM_CATEGORIES,
     defaultGroups = DEFAULT_GROUPS_DATA,
@@ -72,6 +84,8 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
 
     // NEW: We need to store API data to rebuild tree without re-fetching
     const [apiData, setApiData] = useState<MasterCategory[]>([]);
+
+    const [isEditing, setIsEditing] = useState(false);
 
     const [formData, setFormData] = useState({
         category: '',
@@ -211,7 +225,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                             children: [],
                             level: 2,
                             isSystem: false,
-                            data: { category: catName, group: item.group, subgroup: item.subgroup }
+                            data: { id: item.id, category: catName, group: item.group, subgroup: item.subgroup }
                         };
                         groupNode.children.push(subgroupNode);
                     }
@@ -226,7 +240,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                         children: [],
                         level: 1, // Level 1 since it's directly under category
                         isSystem: false,
-                        data: { category: catName, group: null, subgroup: item.subgroup }
+                        data: { id: item.id, category: catName, group: null, subgroup: item.subgroup }
                     };
                     rootNode.children.push(subgroupNode);
                 }
@@ -266,6 +280,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
 
     const handleNodeSelect = (node: TreeNode) => {
         setSelectedNode(node);
+        setIsEditing(false); // Reset edit mode on selection
 
         // Update form data based on selection
         setFormData({
@@ -303,23 +318,43 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
         }
 
         if (selectedNode.level === 1 && !formData.subgroup.trim()) {
-            // If selected Group, user MUST enter Subgroup
-            alert('Please enter a Subgroup Name');
-            return;
+            // Check if level 1 is a subgroup (direct child of category)
+            if (selectedNode.data.subgroup) {
+                // It is a subgroup, we are updating it?
+            } else {
+                // If selected Group, user MUST enter Subgroup
+                alert('Please enter a Subgroup Name');
+                return;
+            }
         }
 
         try {
-            // Only Scenario: Selected Group -> Create Subgroup
-            if (selectedNode.level === 1) {
+            // 1. Create Subgroup (under Group)
+            if (selectedNode.level === 1 && !selectedNode.data.subgroup) {
                 await onCreateCategory({
                     category: selectedNode.data.category,
                     group: selectedNode.data.group,
                     subgroup: formData.subgroup.trim()
                 });
+                setFormData(prev => ({ ...prev, group: '', subgroup: '' })); // Clear inputs
+            }
+            // 2. Update Subgroup
+            else if (selectedNode.data.id && onEditCategory) {
+                // If it's an existing subgroup node (Level 2 OR Level 1 if direct under category)
+                await onEditCategory({
+                    id: selectedNode.data.id,
+                    category: selectedNode.data.category,
+                    group: selectedNode.data.group,
+                    subgroup: formData.subgroup.trim()
+                });
+                // Clear selection because the node ID might change (if name changed) and tree will refresh
+                setSelectedNode(null);
+                setFormData({ category: '', group: '', subgroup: '' });
+                setIsEditing(false);
             }
 
+
             // Success
-            setFormData(prev => ({ ...prev, group: '', subgroup: '' })); // Clear inputs
             fetchMasterCategories(); // Refresh tree
 
         } catch (error: any) {
@@ -336,8 +371,24 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                 setFormData(prev => ({ ...prev, group: '', subgroup: '' })); // Clear inputs
                 fetchMasterCategories(); // Re-fetch to ensure the restored item is visible
             } else {
-                console.error("Error creating category:", error);
-                alert(`Error creating category: ${error.message || error}`);
+                console.error("Error creating/updating category:", error);
+                alert(`Error: ${error.message || error}`);
+            }
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!selectedNode || !selectedNode.data.id || !onDeleteCategory) return;
+
+        if (confirm(`Are you sure you want to delete subgroup "${selectedNode.name}"?`)) {
+            try {
+                await onDeleteCategory(selectedNode.data.id);
+                setSelectedNode(null);
+                setFormData({ category: '', group: '', subgroup: '' });
+                fetchMasterCategories();
+            } catch (error: any) {
+                console.error("Error deleting category:", error);
+                alert(`Error deleting category: ${error.message || error}`);
             }
         }
     };
@@ -479,45 +530,113 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                                         <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
                                             SUBGROUP
                                         </label>
-                                        {selectedNode.level === 1 && !selectedNode.data.group && selectedNode.data.subgroup ? (
-                                            <div className="text-gray-900 font-semibold text-base">
-                                                {selectedNode.name}
-                                            </div>
-                                        ) : selectedNode.level === 2 ? (
-                                            <div className="text-gray-900 font-semibold text-base">
-                                                {selectedNode.name}
-                                            </div>
-                                        ) : (
+
+                                        {!selectedNode.data.id ? (
+                                            // Case 1: New Subgroup (No ID yet) - Always allow input
                                             <input
                                                 type="text"
                                                 name="subgroup"
                                                 value={formData.subgroup}
                                                 onChange={handleInputChange}
-                                                disabled={!selectedNode || selectedNode.level > 1}
-                                                className={`w-full px-3 py-2 border border-gray-300 rounded focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none transition-all placeholder-gray-400 text-sm ${!selectedNode || selectedNode.level > 1
+                                                disabled={!selectedNode}
+                                                className={`w-full px-3 py-2 border border-gray-300 rounded focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none transition-all placeholder-gray-400 text-sm ${!selectedNode
                                                     ? 'bg-gray-50 text-gray-400 cursor-not-allowed'
                                                     : 'bg-white text-gray-800'
                                                     }`}
                                                 placeholder="Enter Subgroup Name (Optional - Create Group First)"
                                             />
+                                        ) : isEditing ? (
+                                            // Case 2: Editing Existing Subgroup
+                                            <input
+                                                type="text"
+                                                name="subgroup"
+                                                value={formData.subgroup}
+                                                onChange={handleInputChange}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none transition-all placeholder-gray-400 text-sm bg-white text-gray-800"
+                                                placeholder="Edit Subgroup Name"
+                                                autoFocus
+                                            />
+                                        ) : (
+                                            // Case 3: Viewing Existing Subgroup
+                                            <div className="text-gray-900 font-semibold text-base py-2">
+                                                {selectedNode.data.subgroup}
+                                            </div>
                                         )}
                                     </div>
                                 )}
                             </div>
 
-                            <div className="pt-4">
-                                <button
-                                    type="submit"
-                                    disabled={!selectedNode}
-                                    className={`w-full py-2.5 px-4 rounded font-medium shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm ${selectedNode && formData.subgroup.trim()
-                                        ? 'bg-teal-600 text-white hover:bg-teal-700 cursor-pointer focus:ring-teal-500'
-                                        : selectedNode
-                                            ? 'bg-gray-300 text-gray-700 hover:bg-gray-400 cursor-pointer focus:ring-gray-400'
-                                            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                                        }`}
-                                >
-                                    Create Subgroup
-                                </button>
+                            <div className="pt-4 flex flex-col gap-3">
+                                {/* Case 1: Create New Subgroup */}
+                                {!selectedNode?.data.id && (
+                                    <button
+                                        type="submit"
+                                        disabled={!selectedNode}
+                                        className={`w-full py-2.5 px-4 rounded font-medium shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm ${selectedNode && formData.subgroup.trim()
+                                            ? 'bg-teal-600 text-white hover:bg-teal-700 cursor-pointer focus:ring-teal-500'
+                                            : selectedNode
+                                                ? 'bg-gray-300 text-gray-700 hover:bg-gray-400 cursor-pointer focus:ring-gray-400'
+                                                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                            }`}
+                                    >
+                                        Create Subgroup
+                                    </button>
+                                )}
+
+                                {/* Case 2: View Existing Subgroup - Show Edit/Delete Buttons */}
+                                {selectedNode?.data.id && !isEditing && (
+                                    <div className="flex gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsEditing(true)}
+                                            disabled={!onEditCategory}
+                                            className={`flex-1 py-2.5 px-4 rounded font-medium shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm ${onEditCategory
+                                                ? 'bg-teal-600 text-white hover:bg-teal-700 focus:ring-teal-500'
+                                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
+                                        >
+                                            Edit Subgroup
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleDelete}
+                                            disabled={!onDeleteCategory}
+                                            className={`flex-1 py-2.5 px-4 rounded font-medium shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm ${onDeleteCategory
+                                                ? 'bg-red-100 text-red-700 hover:bg-red-200 focus:ring-red-500'
+                                                : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+                                        >
+                                            Delete Subgroup
+                                        </button>
+                                    </div>
+                                )}
+
+                                {/* Case 3: Editing Existing Subgroup - Show Update/Cancel Buttons */}
+                                {selectedNode?.data.id && isEditing && (
+                                    <div className="flex gap-3">
+                                        <button
+                                            type="submit"
+                                            className="flex-1 py-2.5 px-4 rounded font-medium shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm bg-teal-600 text-white hover:bg-teal-700 focus:ring-teal-500"
+                                        >
+                                            Update Subgroup
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setIsEditing(false);
+                                                // Reset form data to original node data
+                                                if (selectedNode) {
+                                                    setFormData({
+                                                        category: selectedNode.data.category,
+                                                        group: selectedNode.data.group || '',
+                                                        subgroup: selectedNode.data.subgroup || ''
+                                                    });
+                                                }
+                                            }}
+                                            className="flex-1 py-2.5 px-4 rounded font-medium shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 focus:ring-gray-500"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </form>
                     </div>

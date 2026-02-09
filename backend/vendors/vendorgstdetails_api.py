@@ -52,7 +52,8 @@ class VendorGSTDetailsViewSet(viewsets.ModelViewSet):
         tenant_id = self.get_tenant_id()
         is_active = self.request.query_params.get('is_active')
         active_filter = None if is_active is None else (is_active.lower() == 'true')
-        return VendorGSTDetailsDatabase.get_gst_details_by_tenant(tenant_id, active_filter)
+        vendor_id = self.request.query_params.get('vendor_basic_detail')
+        return VendorGSTDetailsDatabase.get_gst_details_by_tenant(tenant_id, active_filter, vendor_id)
     
     def get_serializer_class(self):
         """Return appropriate serializer based on action"""

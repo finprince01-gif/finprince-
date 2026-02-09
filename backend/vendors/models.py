@@ -282,6 +282,7 @@ class VendorMasterBasicDetail(models.Model):
         help_text="Contact number",
         validators=[RegexValidator(regex=r'^\+?1?\d{9,15}$', message="Enter a valid contact number")]
     )
+    vendor_category = models.CharField(max_length=200, blank=True, null=True, help_text="Vendor category")
     is_also_customer = models.BooleanField(default=False, help_text="Is this vendor also a customer?")
     
     # Metadata
