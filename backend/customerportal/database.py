@@ -131,6 +131,47 @@ class CustomerMastersSalesQuotation(models.Model):
         return f"{self.prefix}{number_str}{self.suffix}"
 
 
+class CustomerMastersSalesOrder(models.Model):
+    """
+    Customer Masters Sales Order Series Table
+    Manages sales order series configuration (prefix, suffix, digits, etc.)
+    """
+    id = models.AutoField(primary_key=True)
+    tenant_id = models.CharField(max_length=36, db_index=True)
+    series_name = models.CharField(max_length=100)
+    customer_category = models.CharField(max_length=100, null=True, blank=True)
+    prefix = models.CharField(max_length=20, default='SO/')
+    suffix = models.CharField(max_length=20, default='/24-25')
+    required_digits = models.IntegerField(default=4)
+    current_number = models.IntegerField(default=0)
+    auto_year = models.BooleanField(default=False)
+    
+    # Status and Metadata
+    is_active = models.BooleanField(default=True)
+    is_deleted = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.CharField(max_length=100, null=True, blank=True)
+    
+    class Meta:
+        db_table = 'customer_masters_salesorder'
+        indexes = [
+            models.Index(fields=['tenant_id', 'is_deleted']),
+            models.Index(fields=['tenant_id', 'customer_category']),
+        ]
+        unique_together = ['tenant_id', 'series_name']
+    
+    def __str__(self):
+        return f"{self.series_name} - {self.customer_category}"
+    
+    def get_next_number(self):
+        """Generate the next order number in the series"""
+        self.current_number += 1
+        self.save()
+        number_str = str(self.current_number).zfill(self.required_digits)
+        return f"{self.prefix}{number_str}{self.suffix}"
+
+
 class CustomerMasterCustomerBasicDetails(models.Model):
     """
     Customer Master - Basic Details Table

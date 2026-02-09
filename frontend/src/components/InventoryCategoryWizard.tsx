@@ -426,7 +426,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                             </span>
                         )}
 
-                        <span className="text-sm select-none truncate">
+                        <span className={`text-sm select-none truncate ${!isSelected && node.level === 2 ? 'text-blue-800 font-medium' : 'text-gray-900'}`}>
                             {node.name}
                         </span>
                     </div>

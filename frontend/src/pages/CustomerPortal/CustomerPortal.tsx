@@ -191,7 +191,7 @@ const CustomerPortalPage: React.FC = () => {
                                             setEditQuotationType(null);
                                         }}
                                         editId={editQuotationId}
-                                        editType={activeSalesQuotationSubTab}
+                                        editType={editQuotationType || activeSalesQuotationSubTab}
                                     />
                                 ) : (
                                     <SalesQuotationList
@@ -423,14 +423,7 @@ const CategoryContent: React.FC = () => {
         <InventoryCategoryWizard
             apiEndpoint="/api/customerportal/categories/"
             allowCreateGroup={false} // Hide Group/Subgroup creation fields at root level
-            systemCategories={[
-                'Raw Material',
-                'Work in Progress',
-                'Finished Goods',
-                'Stores and Spares',
-                'Packing Material',
-                'Stock in Trade'
-            ]}
+            systemCategories={CUSTOMER_CATEGORIES.map(c => c.category)}
             // Using default system categories and groups (Inventory/Vendor structure) as requested
             onCreateCategory={async (data) => {
                 try {
@@ -2654,10 +2647,9 @@ const CustomerContent: React.FC = () => {
 };
 
 const CUSTOMER_CATEGORIES: DropdownCategory[] = [
-    { id: 1, category: 'Retail', group: 'Consumer', subgroup: null, full_path: 'Consumer > Retail', is_active: true },
-    { id: 2, category: 'Wholesale', group: 'Business', subgroup: null, full_path: 'Business > Wholesale', is_active: true },
-    { id: 3, category: 'Corporate', group: 'Business', subgroup: null, full_path: 'Business > Corporate', is_active: true },
-    { id: 4, category: 'Distributor', group: 'Business', subgroup: null, full_path: 'Business > Distributor', is_active: true },
+    { id: 1, category: 'Export', group: null, subgroup: null, full_path: 'Export', is_active: true },
+    { id: 2, category: 'Within Country (B2B)', group: null, subgroup: null, full_path: 'Within Country (B2B)', is_active: true },
+    { id: 3, category: 'Within Country (B2C)', group: null, subgroup: null, full_path: 'Within Country (B2C)', is_active: true },
 ];
 
 const SalesOrderContent: React.FC = () => {
@@ -2686,6 +2678,9 @@ const SalesOrderContent: React.FC = () => {
     });
     const [soList, setSoList] = useState<any[]>([]);
     const [soLoading, setSoLoading] = useState(false);
+
+    // Editing State
+    const [editingId, setEditingId] = useState<number | null>(null);
 
     const isSQ = subTab === 'Sales Quotation';
     const form = isSQ ? sqForm : soForm;
@@ -2765,8 +2760,13 @@ const SalesOrderContent: React.FC = () => {
                 ? '/api/customerportal/sales-quotation-series/'
                 : '/api/customerportal/sales-order-series/';
 
-            await httpClient.post(endpoint, payload);
-            alert('Series saved successfully!');
+            if (editingId) {
+                await httpClient.put(`${endpoint}${editingId}/`, payload);
+                alert('Series updated successfully!');
+            } else {
+                await httpClient.post(endpoint, payload);
+                alert('Series saved successfully!');
+            }
 
             if (subTab === 'Sales Quotation') {
                 await fetchSalesQuotationSeries();
@@ -2783,6 +2783,7 @@ const SalesOrderContent: React.FC = () => {
                 autoYear: true,
                 digits: 4
             }));
+            setEditingId(null);
         } catch (error: any) {
             console.error('Error saving series:', error);
             let errorMessage = 'Failed to save series';
@@ -2824,15 +2825,28 @@ const SalesOrderContent: React.FC = () => {
     };
 
     const handleEditSeries = (series: any) => {
-        setSqForm({
+        setEditingId(series.id);
+        setForm({
             name: series.series_name || '',
             category: series.customer_category || '',
-            prefix: series.prefix || 'SQ/',
+            prefix: series.prefix || (isSQ ? 'SQ/' : 'SO/'),
             suffix: series.suffix || '/24-25',
             autoYear: series.auto_year !== undefined ? series.auto_year : true,
             digits: series.required_digits || 4
         });
         window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const handleCancelEdit = () => {
+        setEditingId(null);
+        setForm({
+            name: '',
+            category: '',
+            prefix: isSQ ? 'SQ/' : 'SO/',
+            suffix: '/24-25',
+            autoYear: true,
+            digits: 4
+        });
     };
 
     return (
@@ -2859,7 +2873,7 @@ const SalesOrderContent: React.FC = () => {
                 {/* Left: New Series Form */}
                 <div className="lg:col-span-4 space-y-6">
                     <h3 className="text-lg font-bold text-gray-900 border-b border-gray-100 pb-3">
-                        New {subTab} Series
+                        {editingId ? 'Edit' : 'New'} {subTab} Series
                     </h3>
 
                     <div>
@@ -2932,12 +2946,23 @@ const SalesOrderContent: React.FC = () => {
                         <p className="text-xl font-bold text-gray-800">{getPreview()}</p>
                     </div>
 
-                    <button
-                        onClick={handleSaveSeries}
-                        disabled={!form.name || !form.category}
-                        className="w-full py-2.5 bg-teal-600 text-white font-medium rounded-md hover:bg-indigo-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
-                        Save Series
-                    </button>
+                    <div className="flex gap-2">
+                        {editingId && (
+                            <button
+                                onClick={handleCancelEdit}
+                                className="w-1/2 py-2.5 bg-gray-200 text-gray-700 font-medium rounded-md hover:bg-gray-300 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                        )}
+                        <button
+                            onClick={handleSaveSeries}
+                            disabled={!form.name || !form.category}
+                            className={`py-2.5 bg-teal-600 text-white font-medium rounded-md hover:bg-indigo-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed ${editingId ? 'w-1/2' : 'w-full'}`}
+                        >
+                            {editingId ? 'Update Series' : 'Save Series'}
+                        </button>
+                    </div>
                 </div>
 
                 {/* Right: Table */}
@@ -2962,8 +2987,8 @@ const SalesOrderContent: React.FC = () => {
                                             {'displayDetails' in series ? series.displayDetails : `${series.prefix} (${series.required_digits} digits)`}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <button className="text-teal-600 hover:text-indigo-900 mr-4">Edit</button>
-                                            <button className="text-red-600 hover:text-red-900">Delete</button>
+                                            <button onClick={() => handleEditSeries(series)} className="text-teal-600 hover:text-indigo-900 mr-4">Edit</button>
+                                            <button onClick={() => handleDeleteSeries(series.id)} className="text-red-600 hover:text-red-900">Delete</button>
                                         </td>
                                     </tr>
                                 ))}

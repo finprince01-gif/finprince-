@@ -6,6 +6,7 @@ interface ItemRow {
     itemCode: string;
     itemName: string;
     quantity: string;
+    uom: string; // Unit of Measure
     price: string;
     taxableValue: number;
     gst: number;
@@ -31,10 +32,62 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
     // Section 2: Quotation/Contract Linking
     const [quotationType, setQuotationType] = useState('');
     const [quotationNumber, setQuotationNumber] = useState('');
+    const [salesQuotations, setSalesQuotations] = useState<any[]>([]);
+
+    const [contracts, setContracts] = useState<any[]>([]);
+    const [uomOptions, setUomOptions] = useState<string[]>([]);
+
+    useEffect(() => {
+        const fetchQuotations = async () => {
+            try {
+                const [generalResponse, specificResponse] = await Promise.all([
+                    httpClient.get('/api/customerportal/sales-quotations-general/'),
+                    httpClient.get('/api/customerportal/sales-quotations-specific/')
+                ]);
+
+                const general: any[] = Array.isArray(generalResponse) ? generalResponse : (generalResponse as any).results || [];
+                const specific: any[] = Array.isArray(specificResponse) ? specificResponse : (specificResponse as any).results || [];
+
+                const combined = [
+                    ...general.map(q => ({ ...q, type: 'General', label: `${q.quote_number} (General)` })),
+                    ...specific.map(q => ({ ...q, type: 'Specific', label: `${q.quote_number} (Specific)` }))
+                ];
+                setSalesQuotations(combined);
+            } catch (error) {
+                console.error('Error fetching sales quotations:', error);
+            }
+        };
+        fetchQuotations();
+
+        const fetchContracts = async () => {
+            try {
+                const response = await httpClient.get<any[]>('/api/customerportal/long-term-contracts/');
+                setContracts(Array.isArray(response) ? response : (response as any).results || []);
+            } catch (error) {
+                console.error('Error fetching contracts:', error);
+            }
+        };
+        fetchContracts();
+
+        const fetchInventoryItems = async () => {
+            try {
+                const response = await httpClient.get<any[]>('/api/inventory/items/');
+                const itemsList = Array.isArray(response) ? response : (response as any).results || [];
+
+                // Extract unique UOMs - solely for populating the dropdown options
+                const distinctUoms = Array.from(new Set(itemsList.map((item: any) => item.uom).filter((uom: any) => uom)));
+                setUomOptions(distinctUoms as string[]);
+            } catch (error) {
+                console.error('Error fetching inventory items (for UOMs):', error);
+            }
+        };
+        fetchInventoryItems();
+    }, []);
 
     // Section 3: Item Details
     const [items, setItems] = useState<ItemRow[]>([
-        { id: 1, itemCode: 'ITEM-001', itemName: 'Sample Product', quantity: '1', price: '100', taxableValue: 100, gst: 18, netValue: 118 }
+
+        { id: 1, itemCode: 'ITEM-001', itemName: 'Sample Product', quantity: '1', uom: 'nos', price: '100', taxableValue: 100, gst: 18, netValue: 118 }
     ]);
 
     // Section 4: Totals
@@ -91,6 +144,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
             itemCode: '',
             itemName: '',
             quantity: '',
+            uom: 'nos',
             price: '',
             taxableValue: 0,
             gst: 0,
@@ -165,6 +219,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                     item_code: item.itemCode,
                     item_name: item.itemName,
                     quantity: parseFloat(item.quantity) || 0,
+                    uom: item.uom,
                     price: parseFloat(item.price) || 0,
                     taxable_value: item.taxableValue,
                     gst: item.gst,
@@ -376,11 +431,19 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                     value={quotationNumber}
                                     onChange={(e) => setQuotationNumber(e.target.value)}
                                     className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                    disabled={!quotationType}
                                 >
                                     <option value="">Select quotation/contract</option>
-                                    <option value="sq001">SQ-2024-001</option>
-                                    <option value="sq002">SQ-2024-002</option>
-                                    <option value="ct001">CT-2024-001</option>
+                                    {quotationType === 'quotation' && salesQuotations.map((sq) => (
+                                        <option key={sq.id} value={sq.quote_number}>
+                                            {sq.label}
+                                        </option>
+                                    ))}
+                                    {quotationType === 'contract' && contracts.map((contract) => (
+                                        <option key={contract.id} value={contract.contract_number}>
+                                            {contract.contract_number}
+                                        </option>
+                                    ))}
                                 </select>
                                 <p className="text-xs text-gray-500 mt-1">Only valid for selected customer</p>
                             </div>
@@ -398,6 +461,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Code</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Name</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">UOM</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Taxable Value</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">GST</th>
@@ -435,6 +499,21 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                                     className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
                                                     placeholder="Qty"
                                                 />
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <select
+                                                    value={item.uom}
+                                                    onChange={(e) => handleItemChange(item.id, 'uom', e.target.value)}
+                                                    className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                                >
+                                                    <option value="">Select</option>
+                                                    {uomOptions.map((uom, i) => (
+                                                        <option key={i} value={uom}>{uom}</option>
+                                                    ))}
+                                                    {!uomOptions.includes(item.uom) && item.uom && (
+                                                        <option value={item.uom}>{item.uom}</option>
+                                                    )}
+                                                </select>
                                             </td>
                                             <td className="px-4 py-3">
                                                 <input
