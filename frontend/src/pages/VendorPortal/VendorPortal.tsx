@@ -1,9 +1,11 @@
 // Vendor Portal - Master Configuration
 import React, { useState, useEffect } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { usePermissions } from '../../hooks/usePermissions';
 import { httpClient } from '../../services/httpClient';
 import CategoryHierarchicalDropdown from '../../components/CategoryHierarchicalDropdown';
 import { InventoryCategoryWizard } from '../../components/InventoryCategoryWizard';
+import SearchableDropdown from '../../components/SearchableDropdown';
 
 type VendorTab = 'Master' | 'Transaction';
 type MasterSubTab = 'Category' | 'PO Settings' | 'Vendor Creation' | 'Basic Details' | 'GST Details' | 'Products/Services' | 'TDS & Other Statutory' | 'Banking Info' | 'Terms & Conditions';
@@ -210,6 +212,45 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         }
     ]);
     const [loadingGstFetch, setLoadingGstFetch] = useState(false);
+
+    // Vendor List State for Dropdowns
+    const [vendorList, setVendorList] = useState<VendorBasicDetail[]>([]);
+    const [loadingVendors, setLoadingVendors] = useState(false);
+
+    // Fetch Vendors
+    const fetchVendors = async () => {
+        try {
+            setLoadingVendors(true);
+            const response = await httpClient.get<VendorBasicDetail[] | any>('/api/vendors/basic-details/');
+            // Handle pagination or list
+            const data = Array.isArray(response) ? response : (response.results || []);
+            setVendorList(data);
+        } catch (error) {
+            console.error('Error fetching vendors:', error);
+        } finally {
+            setLoadingVendors(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchVendors();
+    }, []);
+
+
+
+    // Vendor Branch State
+    const [availableBranches, setAvailableBranches] = useState<any[]>([]);
+
+    const fetchVendorBranches = async (vendorId: number) => {
+        try {
+            const response = await httpClient.get<any>(`/api/vendors/gst-details/?vendor_basic_detail=${vendorId}`);
+            const data = Array.isArray(response) ? response : (response.results || []);
+            setAvailableBranches(data);
+        } catch (error) {
+            console.error('Error fetching vendor branches:', error);
+            setAvailableBranches([]);
+        }
+    };
 
     // GST Handler Functions
     const handleAddGstRecord = () => {
@@ -434,7 +475,30 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     };
 
     const handleCreatePOFormChange = (field: string, value: string) => {
-        setCreatePOForm({ ...createPOForm, [field]: value });
+        setCreatePOForm(prev => {
+            const updated = { ...prev, [field]: value };
+
+            if (field === 'vendorName') {
+                const selectedVendor = vendorList.find(v => v.vendor_name === value);
+                if (selectedVendor) {
+                    fetchVendorBranches(selectedVendor.id);
+                } else {
+                    setAvailableBranches([]);
+                }
+            }
+
+            if (field === 'branch') {
+                const selectedBranch = availableBranches.find(b => (b.reference_name || b.id.toString()) === value);
+                if (selectedBranch) {
+                    updated.addressLine1 = selectedBranch.branch_address || '';
+                    updated.emailAddress = selectedBranch.branch_email || '';
+                    updated.state = selectedBranch.gst_state || '';
+                    // Reset other address fields or try to parse if possible, for now just basic fill
+                }
+            }
+
+            return updated;
+        });
     };
 
     const handleSubmitPO = async () => {
@@ -633,7 +697,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         bankName: string;
         branchName: string;
         swiftCode: string;
-        vendorBranch: string;
+        vendorBranch: string[];
         accountType: 'Savings' | 'Current';
     }
 
@@ -773,7 +837,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     ];
 
     const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([
-        { id: 1, accountNumber: '', bankName: '', ifscCode: '', branchName: '', swiftCode: '', vendorBranch: '', accountType: 'Savings' }
+        { id: 1, accountNumber: '', bankName: '', ifscCode: '', branchName: '', swiftCode: '', vendorBranch: [], accountType: 'Savings' }
     ]);
 
     // Payment Bills Interface and Data
@@ -868,14 +932,15 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const [contactPerson, setContactPerson] = useState('');
     const [vendorEmail, setVendorEmail] = useState('');
     const [contactNo, setContactNo] = useState('');
+    const [vendorCategory, setVendorCategory] = useState('');
     const [isAlsoCustomer, setIsAlsoCustomer] = useState(false);
 
     // Handle Basic Details Form Submit (Navigation Only)
     const handleBasicDetailsSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         console.log('Refactored: Basic Details -> Next');
-        if (!vendorName || !vendorEmail || !contactNo) {
-            alert('Please fill in all required fields (Vendor Name, Email, Contact No)');
+        if (!vendorName || !vendorEmail || !contactNo || !vendorCategory) {
+            alert('Please fill in all required fields (Vendor Name, Email, Contact No, Vendor Category)');
             return;
         }
         setActiveMasterSubTab('GST Details');
@@ -976,6 +1041,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 contact_person: contactPerson || undefined,
                 email: vendorEmail,
                 contact_no: contactNo,
+                vendor_category: vendorCategory || null,
                 is_also_customer: isAlsoCustomer
             };
             const basicRes: any = await httpClient.post('/api/vendors/basic-details/', basicPayload);
@@ -1046,7 +1112,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 ifsc_code: bank.ifscCode,
                 branch_name: bank.branchName,
                 swift_code: bank.swiftCode,
-                vendor_branch: bank.vendorBranch,
+                vendor_branch: Array.isArray(bank.vendorBranch) ? bank.vendorBranch.join(',') : bank.vendorBranch,
                 account_type: bank.accountType ? bank.accountType.toLowerCase().replace(' ', '_') : 'savings',
                 is_active: true
             }));
@@ -1088,16 +1154,41 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     interface ProductServiceItem {
         id: number;
         hsnSacCode: string;
-        itemCode: string;
-        itemName: string;
+        itemCode: string; // This will hold the SELECTED VALUE (string)
+        itemName: string; // This will hold the SELECTED VALUE (string)
         supplierItemCode: string;
         supplierItemName: string;
     }
 
+    interface SimplifiedInventoryItem {
+        id: number;
+        item_code: string;
+        item_name: string;
+        hsn_code?: string;
+    }
+
+    const [inventoryItems, setInventoryItems] = useState<SimplifiedInventoryItem[]>([]);
     const [items, setItems] = useState<ProductServiceItem[]>([
         { id: 1, hsnSacCode: '', itemCode: '', itemName: '', supplierItemCode: '', supplierItemName: '' },
         { id: 2, hsnSacCode: '', itemCode: '', itemName: '', supplierItemCode: '', supplierItemName: '' },
     ]);
+
+    // Fetch Inventory Items for Dropdown
+    useEffect(() => {
+        const fetchItems = async () => {
+            try {
+                const response = await httpClient.get<SimplifiedInventoryItem[]>('/api/inventory/items/');
+                // Ensure unique values for dropdowns if API returns duplicates or handle in component
+                setInventoryItems(Array.isArray(response) ? response : []);
+            } catch (error) {
+                console.error('Error fetching inventory items:', error);
+            }
+        };
+
+        if (activeMasterSubTab === 'Products/Services') {
+            fetchItems();
+        }
+    }, [activeMasterSubTab]);
 
     const handleAddItem = () => {
         setItems([...items, {
@@ -1117,9 +1208,28 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     };
 
     const handleItemChange = (id: number, field: keyof ProductServiceItem, value: string) => {
-        setItems(items.map(item =>
-            item.id === id ? { ...item, [field]: value } : item
-        ));
+        setItems(prevItems => prevItems.map(item => {
+            if (item.id !== id) return item;
+
+            const newItem = { ...item, [field]: value };
+
+            // Auto-fill logic
+            if (field === 'itemCode') {
+                const foundItem = inventoryItems.find(i => i.item_code === value);
+                if (foundItem) {
+                    newItem.itemName = foundItem.item_name;
+                    newItem.hsnSacCode = foundItem.hsn_code || '';
+                }
+            } else if (field === 'itemName') {
+                const foundItem = inventoryItems.find(i => i.item_name === value);
+                if (foundItem) {
+                    newItem.itemCode = foundItem.item_code;
+                    newItem.hsnSacCode = foundItem.hsn_code || '';
+                }
+            }
+
+            return newItem;
+        }));
     };
 
     // Update createdVendorId when basic details are saved
@@ -1351,27 +1461,58 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 ))}
             </div>
 
-            {/* Tab Content */}
-            <div className="mt-6">
-                {activeTab === 'Master' && (
-                    <div>
-                        {/* Sub-tabs */}
-                        <div className="mb-6">
-                            <nav className="flex space-x-8 border-b border-gray-200">
-                                {['Category', 'PO Settings', 'Vendor Creation'].filter(t => isSuperuser || hasTabAccess('Vendor Portal', t)).map((subTab) => (
-                                    <button
-                                        key={subTab}
-                                        onClick={() => setActiveMasterSubTab(subTab as MasterSubTab)}
-                                        className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeMasterSubTab === subTab
-                                            ? 'border-indigo-500 text-indigo-600'
-                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                            }`}
-                                    >
-                                        {subTab.toUpperCase()}
-                                    </button>
-                                ))}
-                            </nav>
-                        </div>
+                            <div className="bg-white rounded-lg shadow p-0 overflow-hidden">
+
+                                {activeMasterSubTab === 'Category' && (
+                                    <InventoryCategoryWizard
+                                        apiEndpoint="/api/vendors/categories/"
+                                        allowCreateGroup={false}
+                                        disableGroupCreation={true}
+                                        systemCategories={[
+                                            'Raw Material',
+                                            'Work in Progress',
+                                            'Finished Goods',
+                                            'Stores and Spares',
+                                            'Packing Material',
+                                            'Stock in Trade'
+                                        ]}
+                                        onCreateCategory={async (data) => {
+                                            try {
+                                                await httpClient.post('/api/vendors/categories/', {
+                                                    category: data.category,
+                                                    group: data.group,
+                                                    subgroup: data.subgroup,
+                                                    is_active: true
+                                                });
+                                                alert('Category created successfully!');
+                                            } catch (error: any) {
+                                                console.error('Error creating category:', error);
+                                                throw error;
+                                            }
+                                        }}
+                                        onEditCategory={async (data) => {
+                                            try {
+                                                await httpClient.put(`/api/vendors/categories/${data.id}/`, {
+                                                    category: data.category,
+                                                    group: data.group,
+                                                    subgroup: data.subgroup,
+                                                    is_active: true
+                                                });
+                                            } catch (error: any) {
+                                                console.error('Error updating category:', error);
+                                                throw error;
+                                            }
+                                        }}
+                                        onDeleteCategory={async (id) => {
+                                            try {
+                                                await httpClient.delete(`/api/vendors/categories/${id}/`);
+                                            } catch (error: any) {
+                                                console.error('Error deleting category:', error);
+                                                throw error;
+                                            }
+                                        }}
+                                    />
+                                )}
 
                         <div className="erp-card p-0 overflow-hidden">
 
@@ -1455,13 +1596,24 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     />
                                                 </div>
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-1">Suffix</label>
-                                                    <input
-                                                        type="text"
-                                                        value={poSuffix}
-                                                        onChange={(e) => setPoSuffix(e.target.value)}
-                                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                        placeholder="/24-25"
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                        Category <span className="text-red-500">*</span>
+                                                    </label>
+                                                    <CategoryHierarchicalDropdown
+                                                        apiEndpoint="/api/vendors/categories/"
+                                                        systemCategories={[
+                                                            'Raw Material',
+                                                            'Work in Progress',
+                                                            'Finished Goods',
+                                                            'Stores and Spares',
+                                                            'Packing Material',
+                                                            'Stock in Trade'
+                                                        ]}
+                                                        onSelect={(selection) => {
+                                                            setPoCategoryId(selection.id);
+                                                            setPoCategoryPath(selection.fullPath);
+                                                        }}
+                                                        value={poCategoryPath}
                                                     />
                                                 </div>
                                             </div>
@@ -1637,98 +1789,114 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 />
                                             </div>
                                         </div>
+                                        <form className="space-y-6" onSubmit={handleBasicDetailsSubmit}>
+                                            {/* Row 1: Vendor Code and Vendor Name */}
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                {/* Vendor Code */}
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        Vendor Code
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={vendorCode}
+                                                        onChange={(e) => setVendorCode(e.target.value)}
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                        placeholder="Auto-generated or manual"
+                                                    />
+                                                </div>
 
-                                        {/* Row 2: PAN No. and Contact Person */}
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    PAN No.
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={panNo}
-                                                    onChange={(e) => setPanNo(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                    placeholder="AAAAA0000A"
-                                                    maxLength={10}
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    Contact Person
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={contactPerson}
-                                                    onChange={(e) => setContactPerson(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                    placeholder="Primary contact name"
-                                                />
-                                            </div>
-                                        </div>
+                                                {/* Vendor Name */}
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        Vendor Name <span className="text-red-500">*</span>
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={vendorName}
+                                                        onChange={(e) => setVendorName(e.target.value)}
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                        placeholder="Enter vendor name"
+                                                        required
+                                                    />
+                                                </div>
 
-                                        {/* Row 3: Email address and Contact No */}
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    Email address <span className="text-red-500">*</span>
-                                                </label>
-                                                <input
-                                                    type="email"
-                                                    value={vendorEmail}
-                                                    onChange={(e) => setVendorEmail(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                    placeholder="vendor@example.com"
-                                                    required
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    Contact No <span className="text-red-500">*</span>
-                                                </label>
-                                                <input
-                                                    type="tel"
-                                                    value={contactNo}
-                                                    onChange={(e) => {
-                                                        const value = e.target.value;
-                                                        if (/^\d*$/.test(value)) {
-                                                            setContactNo(value);
-                                                        }
-                                                    }}
-                                                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                    placeholder="+91 XXXXX XXXXX"
-                                                    required
-                                                />
-                                            </div>
-                                        </div>
+                                                {/* Vendor Category */}
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        Vendor Category <span className="text-red-500">*</span>
+                                                    </label>
+                                                    <CategoryHierarchicalDropdown
+                                                        apiEndpoint="/api/vendors/categories/"
+                                                        value={vendorCategory}
+                                                        onSelect={(selection) => setVendorCategory(selection.fullPath)}
+                                                        placeholder="Select Category"
+                                                        className="w-full"
+                                                    />
+                                                </div>
 
-                                        {/* Vendor-Customer Linking Section */}
-                                        <div className="border-t border-gray-200 pt-6 mt-6">
-                                            <div className="mb-4">
-                                                <label className="block text-sm font-medium text-gray-700 mb-3">
-                                                    Is this vendor also a customer?
-                                                </label>
-                                                <div className="flex gap-4">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setIsAlsoCustomer(true)}
-                                                        className={`px-6 py-2 border-2 rounded-[4px] focus:outline-none focus:ring-2 ${isAlsoCustomer
-                                                            ? 'border-indigo-500 text-indigo-600 bg-indigo-50/50 ring-indigo-500'
-                                                            : 'border-gray-300 text-gray-700 hover:bg-gray-50 focus:ring-gray-300'
-                                                            }`}
-                                                    >
-                                                        Yes
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setIsAlsoCustomer(false)}
-                                                        className={`px-6 py-2 border-2 rounded-[4px] focus:outline-none focus:ring-2 ${!isAlsoCustomer
-                                                            ? 'border-indigo-500 text-indigo-600 bg-indigo-50/50 ring-indigo-500'
-                                                            : 'border-gray-300 text-gray-700 hover:bg-gray-50 focus:ring-gray-300'
-                                                            }`}
-                                                    >
-                                                        No
-                                                    </button>
+                                                {/* PAN No */}
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        PAN No.
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={panNo}
+                                                        onChange={(e) => setPanNo(e.target.value)}
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                        placeholder="AAAAA0000A"
+                                                        maxLength={10}
+                                                    />
+                                                </div>
+
+                                                {/* Contact Person */}
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        Contact Person
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={contactPerson}
+                                                        onChange={(e) => setContactPerson(e.target.value)}
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                        placeholder="Primary contact name"
+                                                    />
+                                                </div>
+
+                                                {/* Email address */}
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        Email address <span className="text-red-500">*</span>
+                                                    </label>
+                                                    <input
+                                                        type="email"
+                                                        value={vendorEmail}
+                                                        onChange={(e) => setVendorEmail(e.target.value)}
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                        placeholder="vendor@example.com"
+                                                        required
+                                                    />
+                                                </div>
+
+                                                {/* Contact No */}
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        Contact No <span className="text-red-500">*</span>
+                                                    </label>
+                                                    <input
+                                                        type="tel"
+                                                        value={contactNo}
+                                                        onChange={(e) => {
+                                                            const value = e.target.value;
+                                                            if (/^\d*$/.test(value)) {
+                                                                setContactNo(value);
+                                                            }
+                                                        }}
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                        placeholder="+91 XXXXX XXXXX"
+                                                        required
+                                                    />
                                                 </div>
                                                 <p className="mt-2 text-xs text-gray-500">
                                                     If "Yes" is clicked, search for customer using PAN No & Vendor Name
@@ -2017,21 +2185,343 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 Next
                                             </button>
                                         </div>
-                                    </form>
-                                </div>
-                            )}
+                                        <div className="space-y-6">
+                                            {/* Table for Items */}
+                                            <div className="overflow-x-auto">
+                                                <table className="min-w-full border border-gray-200">
+                                                    <thead className="bg-gray-50">
+                                                        <tr>
+                                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
+                                                                No
+                                                            </th>
+                                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
+                                                                HSN / SAC Code
+                                                            </th>
+                                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
+                                                                Item Code
+                                                            </th>
+                                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
+                                                                Item Name
+                                                            </th>
+                                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
+                                                                Supplier Item Code
+                                                            </th>
+                                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
+                                                                Supplier Item Name
+                                                            </th>
+                                                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider">
+                                                                Action
+                                                            </th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="bg-white divide-y divide-gray-200">
+                                                        {items.map((item, index) => (
+                                                            <tr key={item.id} className="hover:bg-gray-50">
+                                                                <td className="px-4 py-3 text-sm text-gray-900 border-r border-gray-200">
+                                                                    {index + 1}.
+                                                                </td>
+                                                                <td className="px-4 py-3 border-r border-gray-200">
+                                                                    <input
+                                                                        type="text"
+                                                                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-teal-500 focus:border-teal-500"
+                                                                        placeholder="HSN / SAC Code"
+                                                                        value={item.hsnSacCode}
+                                                                        onChange={(e) => handleItemChange(item.id, 'hsnSacCode', e.target.value)}
+                                                                    />
+                                                                </td>
+                                                                <td className="px-4 py-3 border-r border-gray-200">
+                                                                    <div style={{ minWidth: '150px' }}>
+                                                                        <SearchableDropdown
+                                                                            options={inventoryItems.map(i => i.item_code).filter(Boolean)}
+                                                                            value={item.itemCode}
+                                                                            onChange={(val) => handleItemChange(item.id, 'itemCode', val)}
+                                                                            placeholder="Select Code"
+                                                                        />
+                                                                    </div>
+                                                                </td>
+                                                                <td className="px-4 py-3 border-r border-gray-200">
+                                                                    <div style={{ minWidth: '200px' }}>
+                                                                        <SearchableDropdown
+                                                                            options={inventoryItems.map(i => i.item_name).filter(Boolean)}
+                                                                            value={item.itemName}
+                                                                            onChange={(val) => handleItemChange(item.id, 'itemName', val)}
+                                                                            placeholder="Select Item"
+                                                                        />
+                                                                    </div>
+                                                                </td>
+                                                                <td className="px-4 py-3 border-r border-gray-200">
+                                                                    <input
+                                                                        type="text"
+                                                                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-teal-500 focus:border-teal-500"
+                                                                        placeholder="Supplier Code"
+                                                                        value={item.supplierItemCode}
+                                                                        onChange={(e) => handleItemChange(item.id, 'supplierItemCode', e.target.value)}
+                                                                    />
+                                                                </td>
+                                                                <td className="px-4 py-3 border-r border-gray-200">
+                                                                    <input
+                                                                        type="text"
+                                                                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-teal-500 focus:border-teal-500"
+                                                                        placeholder="Supplier Item Name"
+                                                                        value={item.supplierItemName}
+                                                                        onChange={(e) => handleItemChange(item.id, 'supplierItemName', e.target.value)}
+                                                                    />
+                                                                </td>
+                                                                <td className="px-4 py-3 text-center">
+                                                                    <div className="flex items-center justify-center gap-2">
 
-                            {activeMasterSubTab === 'TDS & Other Statutory' && (
-                                <div className="p-6">
-                                    <div className="flex items-center mb-6">
-                                        <button
-                                            onClick={() => setActiveMasterSubTab('Vendor Creation')}
-                                            className="mr-4 p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
-                                            title="Back to Vendor Creation"
-                                        >
-                                            <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                                        </button>
-                                        <h3 className="text-lg font-semibold text-gray-800">TDS & Other Statutory Details</h3>
+                                                                        {/* Delete Button */}
+                                                                        <button
+                                                                            type="button"
+                                                                            className="text-red-600 hover:text-red-900"
+                                                                            title="Delete item"
+                                                                            onClick={() => handleRemoveItem(item.id)}
+                                                                        >
+                                                                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                                                                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                                                                            </svg>
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+
+                                            {/* Add More Button */}
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    className="flex items-center gap-2 px-4 py-2 border-2 border-teal-500 text-teal-600 rounded-full hover:bg-teal-50 focus:outline-none"
+                                                    onClick={handleAddItem}
+                                                >
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                                    </svg>
+                                                    <span className="text-sm font-medium">Add More Items</span>
+                                                </button>
+                                            </div>
+
+                                            {/* Next Button */}
+                                            <div className="flex justify-between pt-4">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setActiveMasterSubTab('GST Details')}
+                                                    className="px-6 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
+                                                >
+                                                    Back
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleProductServicesSubmit}
+                                                    className="px-8 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-teal-600 hover:bg-teal-700 focus:outline-none"
+                                                >
+                                                    Next
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activeMasterSubTab === 'Banking Info' && (
+                                    <div className="p-6">
+                                        <div className="flex items-center mb-6">
+                                            <button
+                                                onClick={() => setActiveMasterSubTab('Vendor Creation')}
+                                                className="mr-4 p-2 hover:bg-gray-100 rounded-full transition-colors"
+                                                title="Back to Vendor Creation"
+                                            >
+                                                <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                                            </button>
+                                            <h3 className="text-lg font-semibold text-gray-800">Banking Information</h3>
+                                        </div>
+                                        <form onSubmit={handleBankingDetailsSubmit} className="space-y-6">
+                                            <div className="space-y-8">
+                                                {bankAccounts.map((bank, index) => (
+                                                    <div key={bank.id} className={`space-y-6 ${index > 0 ? 'pt-8 border-t border-gray-200' : ''}`}>
+                                                        {index > 0 && (
+                                                            <div className="flex justify-between items-center">
+                                                                <h4 className="text-md font-medium text-gray-900">Bank Account #{index + 1}</h4>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleRemoveBank(bank.id)}
+                                                                    className="text-red-600 hover:text-red-800 text-sm font-medium flex items-center gap-1"
+                                                                >
+                                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                                    </svg>
+                                                                    Remove
+                                                                </button>
+                                                            </div>
+                                                        )}
+
+                                                        <div>
+                                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                                Bank account No.
+                                                            </label>
+                                                            <input
+                                                                type="text"
+                                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                                placeholder="Enter bank account number"
+                                                                value={bank.accountNumber}
+                                                                onChange={(e) => handleBankChange(bank.id, 'accountNumber', e.target.value)}
+                                                            />
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                                Bank Name
+                                                            </label>
+                                                            <input
+                                                                type="text"
+                                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                                placeholder="Enter bank name"
+                                                                value={bank.bankName}
+                                                                onChange={(e) => handleBankChange(bank.id, 'bankName', e.target.value)}
+                                                            />
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                                IFSC Code
+                                                            </label>
+                                                            <input
+                                                                type="text"
+                                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                                placeholder="Enter IFSC Code"
+                                                                maxLength={11}
+                                                                value={bank.ifscCode}
+                                                                onChange={(e) => handleBankChange(bank.id, 'ifscCode', e.target.value)}
+                                                            />
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                                Branch Name
+                                                            </label>
+                                                            <input
+                                                                type="text"
+                                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                                placeholder="Enter branch name"
+                                                                value={bank.branchName}
+                                                                onChange={(e) => handleBankChange(bank.id, 'branchName', e.target.value)}
+                                                            />
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                                Swift Code
+                                                            </label>
+                                                            <input
+                                                                type="text"
+                                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                                placeholder="Enter Swift Code (for international transactions)"
+                                                                value={bank.swiftCode}
+                                                                onChange={(e) => handleBankChange(bank.id, 'swiftCode', e.target.value)}
+                                                            />
+                                                        </div>
+
+                                                        <div className="relative">
+                                                            <div className="block text-sm font-medium text-gray-700 mb-2">
+                                                                Associate to a vendor branch
+                                                            </div>
+                                                            <div className="relative">
+                                                                <button
+                                                                    type="button"
+                                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 bg-white text-left flex justify-between items-center"
+                                                                    onClick={() => {
+                                                                        const dropdown = document.getElementById(`vendor-branch-dropdown-${bank.id}`);
+                                                                        if (dropdown) {
+                                                                            dropdown.classList.toggle('hidden');
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <span className="truncate">
+                                                                        {bank.vendorBranch && bank.vendorBranch.length > 0
+                                                                            ? `${bank.vendorBranch.length} Selected`
+                                                                            : "Select vendor branch"}
+                                                                    </span>
+                                                                    <ChevronDown className="w-4 h-4 text-gray-500" />
+                                                                </button>
+
+                                                                {/* Dropdown Content */}
+                                                                <div
+                                                                    id={`vendor-branch-dropdown-${bank.id}`}
+                                                                    className="hidden absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm"
+                                                                >
+                                                                    {/* Collect all branches from GST records */}
+                                                                    {(() => {
+                                                                        const allBranches = gstRecords.flatMap(record =>
+                                                                            record.placesOfBusiness.map(pob => pob.referenceName).filter(Boolean)
+                                                                        );
+
+                                                                        if (allBranches.length === 0) {
+                                                                            return <div className="px-4 py-2 text-gray-500 italic">No branches available</div>;
+                                                                        }
+
+                                                                        return allBranches.map((branchName, idx) => (
+                                                                            <div key={`${branchName}-${idx}`} className="flex items-center px-4 py-2 hover:bg-gray-100 cursor-pointer" onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                const currentBranches = bank.vendorBranch || [];
+                                                                                const isSelected = currentBranches.includes(branchName);
+                                                                                let newBranches;
+                                                                                if (isSelected) {
+                                                                                    newBranches = currentBranches.filter(b => b !== branchName);
+                                                                                } else {
+                                                                                    newBranches = [...currentBranches, branchName];
+                                                                                }
+                                                                                handleBankChange(bank.id, 'vendorBranch', newBranches);
+                                                                            }}>
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    checked={(bank.vendorBranch || []).includes(branchName)}
+                                                                                    onChange={() => { }} // Handled by div click
+                                                                                    className="h-4 w-4 text-teal-600 focus:ring-teal-500 border-gray-300 rounded mr-3 pointer-events-none"
+                                                                                />
+                                                                                <span className="text-gray-900">{branchName}</span>
+                                                                            </div>
+                                                                        ));
+                                                                    })()}
+                                                                </div>
+                                                            </div>
+
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            {/* Add Another Bank Button */}
+                                            <div className="pt-2">
+                                                <button
+                                                    type="button"
+                                                    className="flex items-center gap-2 px-4 py-2 border-2 border-teal-500 text-teal-600 rounded-md hover:bg-teal-50 focus:outline-none"
+                                                    onClick={handleAddBank}
+                                                >
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                                    </svg>
+                                                    <span className="text-sm font-medium">Another Bank</span>
+                                                </button>
+                                            </div>
+
+                                            {/* Next Button */}
+                                            <div className="flex justify-between pt-4">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setActiveMasterSubTab('TDS & Other Statutory')}
+                                                    className="px-6 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
+                                                >
+                                                    Back
+                                                </button>
+                                                <button
+                                                    type="submit"
+                                                    className="px-8 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-teal-600 hover:bg-teal-700 focus:outline-none"
+                                                >
+                                                    Next
+                                                </button>
+                                            </div>
+                                        </form>
                                     </div>
                                     <form onSubmit={handleTDSDetailsSubmit} className="space-y-6">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -2254,24 +2744,18 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             </label>
                                         </div>
 
-                                        <div className="flex justify-between pt-4">
-                                            <button
-                                                type="button"
-                                                onClick={() => setActiveMasterSubTab('Products/Services')}
-                                                className="px-6 py-2 border border-slate-200 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
-                                            >
-                                                Back
-                                            </button>
-                                            <button
-                                                type="submit"
-                                                className="px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
-                                            >
-                                                Next
-                                            </button>
-                                        </div>
-                                    </form>
-                                </div>
-                            )}
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    Dispute Redressal Terms
+                                                </label>
+                                                <textarea
+                                                    rows={3}
+                                                    value={disputeRedressalTerms}
+                                                    onChange={(e) => setDisputeRedressalTerms(e.target.value)}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                                    placeholder="Enter dispute resolution and redressal terms..."
+                                                />
+                                            </div>
 
 
                             {activeMasterSubTab === 'Products/Services' && (
@@ -3575,18 +4059,22 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         />
                                     </div>
 
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">Vendor Name</label>
-                                        <select
-                                            value={createPOForm.vendorName}
-                                            onChange={(e) => handleCreatePOFormChange('vendorName', e.target.value)}
-                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                        >
-                                            <option value="">Select Vendor</option>
-                                            <option value="vendor1">Vendor 1</option>
-                                            <option value="vendor2">Vendor 2</option>
-                                        </select>
-                                    </div>
+                                <div className="space-y-6">
+                                    {/* Form Fields */}
+                                    <div className="grid grid-cols-2 gap-6">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">PO Series Name</label>
+                                            <select
+                                                value={createPOForm.poSeriesName}
+                                                onChange={(e) => handleCreatePOFormChange('poSeriesName', e.target.value)}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                            >
+                                                <option value="">Select Vendor Settings</option>
+                                                <option value="series1">Series 1</option>
+                                                <option value="series2">Series 2</option>
+                                            </select>
+
+                                        </div>
 
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">Branch</label>
@@ -3602,17 +4090,38 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         <p className="text-xs text-gray-500 mt-1">Reference Name in Vendor Master</p>
                                     </div>
 
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">Vendor Name</label>
+                                            <select
+                                                value={createPOForm.vendorName}
+                                                onChange={(e) => handleCreatePOFormChange('vendorName', e.target.value)}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                            >
+                                                <option value="">Select Vendor</option>
+                                                {vendorList.map((vendor) => (
+                                                    <option key={vendor.id} value={vendor.vendor_name}>
+                                                        {vendor.vendor_name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
 
-                                    <div className="col-span-2">
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">Address Line 1</label>
-                                        <input
-                                            type="text"
-                                            value={createPOForm.addressLine1}
-                                            onChange={(e) => handleCreatePOFormChange('addressLine1', e.target.value)}
-                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                            placeholder="Autofill using branch"
-                                        />
-                                    </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">Branch</label>
+                                            <select
+                                                value={createPOForm.branch}
+                                                onChange={(e) => handleCreatePOFormChange('branch', e.target.value)}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                            >
+                                                <option value="">Select Branch</option>
+                                                {availableBranches.map((branch: any) => (
+                                                    <option key={branch.id} value={branch.reference_name || branch.id}>
+                                                        {branch.reference_name || 'Main Branch'}
+                                                    </option>
+                                                ))}
+                                            </select>
+
+                                        </div>
 
                                     <div className="col-span-2">
                                         <label className="block text-sm font-medium text-gray-700 mb-2">Address Line 2</label>
@@ -3826,71 +4335,126 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                 {/* Totals Section */}
                                 <div className="grid grid-cols-3 gap-6 bg-gray-50 p-4 rounded-[4px]">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">Total Taxable Value</label>
-                                        <input
-                                            type="text"
-                                            readOnly
-                                            value="0.00"
-                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] bg-gray-100 text-gray-700"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">Total Tax</label>
-                                        <input
-                                            type="text"
-                                            readOnly
-                                            value="0.00"
-                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] bg-gray-100 text-gray-700"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">Total Value</label>
-                                        <input
-                                            type="text"
-                                            readOnly
-                                            value="0.00"
-                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] bg-gray-100 text-gray-700 font-semibold"
-                                        />
-                                    </div>
-                                </div>
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h4 className="text-lg font-semibold text-gray-900">Items</h4>
+                                            <button
+                                                onClick={handleAddPOItem}
+                                                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-teal-600 hover:bg-teal-700"
+                                            >
+                                                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                                </svg>
+                                                Add Item
+                                            </button>
+                                        </div>
 
-                                {/* Additional Fields */}
-                                <div className="grid grid-cols-2 gap-6">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">Receive by</label>
-                                        <input
-                                            type="date"
-                                            value={createPOForm.receiveBy}
-                                            onChange={(e) => handleCreatePOFormChange('receiveBy', e.target.value)}
-                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                        />
-                                        <p className="text-xs text-gray-500 mt-1">Calendar option to select date</p>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">Receive at</label>
-                                        <select
-                                            value={createPOForm.receiveAt}
-                                            onChange={(e) => handleCreatePOFormChange('receiveAt', e.target.value)}
-                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                        >
-                                            <option value="">Select Location</option>
-                                            <option value="warehouse1">Warehouse 1</option>
-                                            <option value="warehouse2">Warehouse 2</option>
-                                            <option value="store1">Store 1</option>
-                                        </select>
-                                        <p className="text-xs text-gray-500 mt-1">Drop-down of locations from Inventory Module</p>
-                                    </div>
-
-                                    <div className="col-span-2">
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">Delivery terms</label>
-                                        <textarea
-                                            value={createPOForm.deliveryTerms}
-                                            onChange={(e) => handleCreatePOFormChange('deliveryTerms', e.target.value)}
-                                            rows={3}
-                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                            placeholder="Enter delivery terms and conditions"
-                                        />
+                                        <div className="overflow-x-auto">
+                                            <table className="min-w-full divide-y divide-gray-200 border border-gray-200">
+                                                <thead className="bg-gray-50">
+                                                    <tr>
+                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Code</th>
+                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Name</th>
+                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Supplier Item Code</th>
+                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Negotiated Rate</th>
+                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Final Rate</th>
+                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Taxable Value</th>
+                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">GST</th>
+                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice Value</th>
+                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="bg-white divide-y divide-gray-200">
+                                                    {poItems.map((item, index) => (
+                                                        <tr key={item.id}>
+                                                            <td className="px-3 py-2">
+                                                                <input
+                                                                    type="text"
+                                                                    value={item.itemCode}
+                                                                    onChange={(e) => handlePOItemChange(item.id, 'itemCode', e.target.value)}
+                                                                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                                                />
+                                                            </td>
+                                                            <td className="px-3 py-2">
+                                                                <input
+                                                                    type="text"
+                                                                    value={item.itemName}
+                                                                    onChange={(e) => handlePOItemChange(item.id, 'itemName', e.target.value)}
+                                                                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                                                />
+                                                            </td>
+                                                            <td className="px-3 py-2">
+                                                                <input
+                                                                    type="text"
+                                                                    value={item.supplierItemCode}
+                                                                    onChange={(e) => handlePOItemChange(item.id, 'supplierItemCode', e.target.value)}
+                                                                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                                                />
+                                                            </td>
+                                                            <td className="px-3 py-2">
+                                                                <input
+                                                                    type="text"
+                                                                    value={item.quantity}
+                                                                    onChange={(e) => handlePOItemChange(item.id, 'quantity', e.target.value)}
+                                                                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                                                />
+                                                            </td>
+                                                            <td className="px-3 py-2">
+                                                                <input
+                                                                    type="text"
+                                                                    value={item.negotiatedRate}
+                                                                    onChange={(e) => handlePOItemChange(item.id, 'negotiatedRate', e.target.value)}
+                                                                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                                                />
+                                                            </td>
+                                                            <td className="px-3 py-2">
+                                                                <input
+                                                                    type="text"
+                                                                    value={item.finalRate}
+                                                                    onChange={(e) => handlePOItemChange(item.id, 'finalRate', e.target.value)}
+                                                                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                                                />
+                                                            </td>
+                                                            <td className="px-3 py-2">
+                                                                <input
+                                                                    type="text"
+                                                                    value={item.taxableValue}
+                                                                    onChange={(e) => handlePOItemChange(item.id, 'taxableValue', e.target.value)}
+                                                                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                                                />
+                                                            </td>
+                                                            <td className="px-3 py-2">
+                                                                <input
+                                                                    type="text"
+                                                                    value={item.gst}
+                                                                    onChange={(e) => handlePOItemChange(item.id, 'gst', e.target.value)}
+                                                                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                                                />
+                                                            </td>
+                                                            <td className="px-3 py-2">
+                                                                <input
+                                                                    type="text"
+                                                                    value={item.netValue}
+                                                                    onChange={(e) => handlePOItemChange(item.id, 'netValue', e.target.value)}
+                                                                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                                                />
+                                                            </td>
+                                                            <td className="px-3 py-2">
+                                                                <button
+                                                                    onClick={() => handleRemovePOItem(item.id)}
+                                                                    className="text-red-600 hover:text-red-900"
+                                                                    disabled={poItems.length === 1}
+                                                                >
+                                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                                    </svg>
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -3954,13 +4518,32 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                     </div>
                                 </div>
 
-                                {/* Vendor Information */}
-                                <div>
-                                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Vendor Information</h4>
-                                    <div className="grid grid-cols-2 gap-6 bg-gray-50 p-4 rounded-[4px]">
+                                    {/* Additional Fields */}
+                                    <div className="grid grid-cols-2 gap-6">
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Vendor Name</label>
-                                            <p className="text-gray-900">{selectedPO.vendorName}</p>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">Receive by</label>
+                                            <input
+                                                type="date"
+                                                value={createPOForm.receiveBy}
+                                                onChange={(e) => handleCreatePOFormChange('receiveBy', e.target.value)}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                            />
+
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">Receive at</label>
+                                            <select
+                                                value={createPOForm.receiveAt}
+                                                onChange={(e) => handleCreatePOFormChange('receiveAt', e.target.value)}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                            >
+                                                <option value="">Select Location</option>
+                                                <option value="warehouse1">Warehouse 1</option>
+                                                <option value="warehouse2">Warehouse 2</option>
+                                                <option value="store1">Store 1</option>
+                                            </select>
+
                                         </div>
                                         <div className="col-span-2">
                                             <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>

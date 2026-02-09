@@ -19,6 +19,8 @@ interface DropdownProps {
     onlyRoots?: boolean;
     staticCategories?: Category[];
     colorTheme?: 'teal' | 'indigo';
+    apiEndpoint?: string;
+    systemCategories?: string[];
 }
 
 const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
@@ -29,7 +31,13 @@ const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
     className = '',
     onlyRoots = false,
     staticCategories,
-    colorTheme = 'teal'
+    colorTheme = 'teal',
+    apiEndpoint = '/api/inventory/master-categories/',
+    systemCategories = [
+        'Raw Material', 'Work in Progress', 'Finished Goods',
+        'Stores and Spares', 'Packing Material', 'Stock in Trade',
+        'By-product', 'Scrap'
+    ]
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [categories, setCategories] = useState<Category[]>([]);
@@ -74,17 +82,10 @@ const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [staticCategories]);
 
-    // Default system categories to ensure they always appear
-    const DEFAULT_CATS = [
-        'Raw Material', 'Work in Progress', 'Finished Goods',
-        'Stores and Spares', 'Packing Material', 'Stock in Trade',
-        'By-product', 'Scrap'
-    ];
-
     const fetchCategories = async () => {
         try {
             setLoading(true);
-            const data = await httpClient.get<Category[]>('/api/inventory/master-categories/');
+            const data = await httpClient.get<Category[]>(apiEndpoint);
 
             // 1. Process API data
             let processed = data.map(c => ({
@@ -93,11 +94,10 @@ const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
             }));
 
             // 2. Ensure Default Categories exist (if missing from API)
-            // This mirrors the InventoryCategoryWizard logic
-            const existingNames = new Set(processed.map(c => c.category)); // Check top-level names
+            const existingNames = new Set(processed.map(c => c.category));
 
-            let idCounter = 10000; // Temp IDs for defaults
-            const missingDefaults = DEFAULT_CATS.filter(name => !existingNames.has(name)).map(name => ({
+            let idCounter = 10000;
+            const missingDefaults = systemCategories.filter(name => !existingNames.has(name)).map(name => ({
                 id: idCounter++,
                 category: name,
                 group: null,
@@ -111,17 +111,15 @@ const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
 
         } catch (error) {
             console.error('Error fetching categories:', error);
-            // Fallback mock data
-            const mockCategories: Category[] = [
-                { id: 1, category: 'Raw Material', is_active: true, group: null, subgroup: null, full_path: 'Raw Material' },
-                { id: 2, category: 'Work in Progress', is_active: true, group: null, subgroup: null, full_path: 'Work in Progress' },
-                { id: 3, category: 'Finished Goods', is_active: true, group: null, subgroup: null, full_path: 'Finished Goods' },
-                { id: 4, category: 'Stores and Spares', is_active: true, group: null, subgroup: null, full_path: 'Stores and Spares' },
-                { id: 5, category: 'Packing Material', is_active: true, group: null, subgroup: null, full_path: 'Packing Material' },
-                { id: 6, category: 'Stock in Trade', is_active: true, group: null, subgroup: null, full_path: 'Stock in Trade' },
-                { id: 7, category: 'By-product', is_active: true, group: null, subgroup: null, full_path: 'By-product' },
-                { id: 8, category: 'Scrap', is_active: true, group: null, subgroup: null, full_path: 'Scrap' },
-            ];
+            // Fallback mock data matching systemCategories
+            const mockCategories: Category[] = systemCategories.map((name, idx) => ({
+                id: idx + 1,
+                category: name,
+                is_active: true,
+                group: null,
+                subgroup: null,
+                full_path: name
+            }));
             setCategories(mockCategories);
         } finally {
             setLoading(false);
