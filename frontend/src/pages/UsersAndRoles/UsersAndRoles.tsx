@@ -301,25 +301,50 @@ const UsersAndRolesPage: React.FC<UsersAndRolesPageProps> = ({ onNavigate }) => 
     };
 
     return (
-        <div className="flex-1 flex flex-col h-screen overflow-hidden bg-gray-50">
-            <div className="bg-white border-b border-gray-200 px-6 py-4">
-                <h1 className="text-2xl font-bold text-gray-900">Users & Roles</h1>
+        <div className="space-y-8">
+            {/* Page Header */}
+            <div className="flex items-end justify-between border-b border-slate-200 pb-6">
+                <div>
+                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Access Control</p>
+                    <h2 className="text-[20px] font-bold text-slate-900">
+                        Users & Roles
+                    </h2>
+                </div>
             </div>
-            <div className="bg-white border-b border-gray-200 px-6 flex space-x-8">
+
+            {/* Main Tabs */}
+            <div className="flex space-x-8 border-b border-slate-200">
                 <button
                     onClick={() => setActiveTab('users')}
-                    className={`py-3 px-1 border-b-2 font-medium text-sm ${activeTab === 'users' ? 'border-teal-500 text-teal-600' : 'border-transparent text-gray-500'}`}
+                    className={`
+                        whitespace-nowrap pb-4 text-[13px] font-bold uppercase tracking-wider transition-all relative
+                        ${activeTab === 'users'
+                            ? 'text-indigo-600'
+                            : 'text-slate-400 hover:text-slate-600'}
+                    `}
                 >
-                    USERS
+                    User Management
+                    {activeTab === 'users' && (
+                        <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-600" />
+                    )}
                 </button>
                 <button
                     onClick={() => setActiveTab('roles')}
-                    className={`py-3 px-1 border-b-2 font-medium text-sm ${activeTab === 'roles' ? 'border-teal-500 text-teal-600' : 'border-transparent text-gray-500'}`}
+                    className={`
+                        whitespace-nowrap pb-4 text-[13px] font-bold uppercase tracking-wider transition-all relative
+                        ${activeTab === 'roles'
+                            ? 'text-indigo-600'
+                            : 'text-slate-400 hover:text-slate-600'}
+                    `}
                 >
-                    ROLES & PERMISSIONS
+                    Roles & Permissions
+                    {activeTab === 'roles' && (
+                        <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-600" />
+                    )}
                 </button>
             </div>
-            <div className="flex-1 overflow-auto p-6">
+
+            <div className="animate-in fade-in slide-in-from-bottom-1 duration-300">
                 {activeTab === 'users' ? (
                     <UsersTab users={users} roles={roles} loading={loadingUsers} onCreateUser={handleCreateUser} onEditUser={handleEditUser} onDeleteUser={handleDeleteUser} />
                 ) : (
@@ -338,10 +363,10 @@ interface UsersTabProps {
 }
 
 const UsersTab: React.FC<UsersTabProps> = ({ users, roles, loading, onCreateUser, onEditUser, onDeleteUser }) => (
-    <div className="bg-white rounded-lg shadow">
+    <div className="erp-card">
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
             <h2 className="text-lg font-semibold text-gray-900">Users</h2>
-            <button onClick={onCreateUser} className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700">+ Add User</button>
+            <button onClick={onCreateUser} className="px-4 py-2 bg-indigo-600 text-white rounded-[4px] hover:bg-indigo-700">+ Add User</button>
         </div>
         <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200 text-sm">
@@ -359,10 +384,10 @@ const UsersTab: React.FC<UsersTabProps> = ({ users, roles, loading, onCreateUser
                             <td className="px-6 py-4 font-medium">{user.username}</td>
                             <td className="px-6 py-4">{user.email || '-'}</td>
                             <td className="px-6 py-4">
-                                {user.roles.map((r: any) => <span key={r.id} className="bg-teal-100 text-teal-800 px-2 py-0.5 rounded mr-1 text-xs">{r.name}</span>)}
+                                {user.roles.map((r: any) => <span key={r.id} className="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded mr-1 text-xs">{r.name}</span>)}
                             </td>
                             <td className="px-6 py-4 text-right space-x-2">
-                                <button onClick={() => onEditUser(user)} className="text-teal-600 hover:underline">Edit</button>
+                                <button onClick={() => onEditUser(user)} className="text-indigo-600 hover:underline">Edit</button>
                                 <button onClick={() => onDeleteUser(user.id)} className="text-red-600 hover:underline">Delete</button>
                             </td>
                         </tr>
@@ -379,17 +404,17 @@ interface RolesTabProps {
 }
 
 const RolesTab: React.FC<RolesTabProps> = ({ roles, loading, onCreateRole, onEditRole, onDeleteRole }) => (
-    <div className="bg-white rounded-lg shadow p-6 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+    <div className="erp-card p-6 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
         <div className="col-span-full flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold">Roles</h2>
-            <button onClick={onCreateRole} className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700">+ Create Role</button>
+            <button onClick={onCreateRole} className="px-4 py-2 bg-indigo-600 text-white rounded-[4px] hover:bg-indigo-700">+ Create Role</button>
         </div>
         {roles.map(role => (
-            <div key={role.id} className="border border-gray-200 rounded-lg p-4">
+            <div key={role.id} className="border border-gray-200 rounded-[4px] p-4">
                 <h3 className="font-bold">{role.name}</h3>
                 <p className="text-gray-500 text-xs mb-4">{role.description}</p>
                 <div className="flex justify-end space-x-2">
-                    <button onClick={() => onEditRole(role)} className="hover:underline text-teal-600">Edit</button>
+                    <button onClick={() => onEditRole(role)} className="hover:underline text-indigo-600">Edit</button>
                     <button onClick={() => onDeleteRole(role.id)} className="hover:underline text-red-600">Delete</button>
                 </div>
             </div>
@@ -400,7 +425,7 @@ const RolesTab: React.FC<RolesTabProps> = ({ roles, loading, onCreateRole, onEdi
 interface UserModalProps { user: any; form: any; roles: any[]; onFormChange: (form: any) => void; onSave: () => void; onClose: () => void; }
 const UserModal: React.FC<UserModalProps> = ({ user, form, roles, onFormChange, onSave, onClose }) => (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-lg w-full max-w-md p-6">
+        <div className="bg-white rounded-[4px] w-full max-w-md p-6">
             <h2 className="text-xl font-bold mb-4">{user ? 'Edit User' : 'Create User'}</h2>
             <div className="space-y-4">
                 <input className="w-full border p-2 rounded" placeholder="Username" value={form.username} onChange={e => onFormChange({ ...form, username: e.target.value })} disabled={!!user} />
@@ -418,7 +443,7 @@ const UserModal: React.FC<UserModalProps> = ({ user, form, roles, onFormChange, 
             </div>
             <div className="mt-6 flex justify-end space-x-2">
                 <button onClick={onClose} className="px-4 py-2 border rounded">Cancel</button>
-                <button onClick={onSave} className="px-4 py-2 bg-teal-600 text-white rounded">Save</button>
+                <button onClick={onSave} className="px-4 py-2 bg-indigo-600 text-white rounded">Save</button>
             </div>
         </div>
     </div>
@@ -427,7 +452,7 @@ const UserModal: React.FC<UserModalProps> = ({ user, form, roles, onFormChange, 
 interface RoleModalProps { role: any; form: any; permissionsStructure: any; onFormChange: (f: any) => void; onTogglePage: (p: string) => void; onToggleTab: (p: string, t: string) => void; onToggleSubmodule: (p: string, st: string[]) => void; onSave: () => void; onClose: () => void; }
 const RoleModal: React.FC<RoleModalProps> = ({ role, form, permissionsStructure, onFormChange, onTogglePage, onToggleTab, onToggleSubmodule, onSave, onClose }) => (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] flex flex-col p-6">
+        <div className="bg-white rounded-[4px] w-full max-w-4xl max-h-[90vh] flex flex-col p-6">
             <h2 className="text-xl font-bold mb-4">{role ? 'Edit Role' : 'Create Role'}</h2>
             <div className="flex-1 overflow-auto space-y-4">
                 <input className="w-full border p-2 rounded" placeholder="Role Name" value={form.name} onChange={e => onFormChange({ ...form, name: e.target.value })} />
@@ -476,11 +501,12 @@ const RoleModal: React.FC<RoleModalProps> = ({ role, form, permissionsStructure,
             </div>
             <div className="mt-6 flex justify-end space-x-2">
                 <button onClick={onClose} className="px-4 py-2 border rounded">Cancel</button>
-                <button onClick={onSave} className="px-4 py-2 bg-teal-600 text-white rounded">Save</button>
+                <button onClick={onSave} className="px-4 py-2 bg-indigo-600 text-white rounded">Save</button>
             </div>
         </div>
     </div>
 );
 
 export default UsersAndRolesPage;
+
 

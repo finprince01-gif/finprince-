@@ -44,11 +44,11 @@ const SalesQuotationViewModal: React.FC<ViewModalProps> = ({ isOpen, onClose, qu
 
                 <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
 
-                <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
+                <div className="inline-block align-bottom bg-white rounded-[4px] text-left overflow-hidden shadow-none border border-slate-200-none border border-slate-200 transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
                     {/* Header */}
                     <div className="bg-white px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <div className="p-2 bg-teal-50 rounded-lg text-teal-600">
+                            <div className="p-2 bg-indigo-50/50 rounded-[4px] text-indigo-600">
                                 <FileText size={20} />
                             </div>
                             <div>
@@ -58,7 +58,7 @@ const SalesQuotationViewModal: React.FC<ViewModalProps> = ({ isOpen, onClose, qu
                                 <p className="text-sm text-gray-500">{type}</p>
                             </div>
                         </div>
-                        <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors">
+                        <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-[4px] hover:bg-gray-100 transition-colors">
                             <X size={20} />
                         </button>
                     </div>
@@ -67,13 +67,13 @@ const SalesQuotationViewModal: React.FC<ViewModalProps> = ({ isOpen, onClose, qu
                     <div className="px-6 py-8 max-h-[70vh] overflow-y-auto bg-gray-50/50">
                         {loading ? (
                             <div className="flex flex-col items-center justify-center py-20 gap-3">
-                                <div className="w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
+                                <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-[4px] animate-spin"></div>
                                 <p className="text-gray-500 font-medium">Fetching details...</p>
                             </div>
                         ) : details ? (
                             <div className="space-y-8">
                                 {/* Basic Info Grid */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-white p-6 rounded-[4px] border border-gray-100 shadow-none border border-slate-200-none border border-slate-200">
                                     <DetailItem
                                         icon={<FileText size={18} className="text-indigo-500" />}
                                         label="Quote #"
@@ -139,7 +139,7 @@ const SalesQuotationViewModal: React.FC<ViewModalProps> = ({ isOpen, onClose, qu
                                 </div>
 
                                 {/* Items Table */}
-                                <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                                <div className="bg-white rounded-[4px] border border-gray-100 shadow-none border border-slate-200-none border border-slate-200 overflow-hidden">
                                     <div className="px-6 py-4 bg-gray-50 border-b border-gray-100">
                                         <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Item Details</h4>
                                     </div>
@@ -170,7 +170,7 @@ const SalesQuotationViewModal: React.FC<ViewModalProps> = ({ isOpen, onClose, qu
                                             </thead>
                                             <tbody className="divide-y divide-gray-100 bg-white">
                                                 {details.items?.map((item: any, idx: number) => (
-                                                    <tr key={idx} className="hover:bg-teal-50/30 transition-colors">
+                                                    <tr key={idx} className="hover:bg-indigo-50/50/30 transition-colors">
                                                         <td className="px-6 py-3 text-xs font-medium text-gray-500">{idx + 1}</td>
                                                         <td className="px-6 py-3 text-xs font-bold text-gray-900">{item.item_code}</td>
                                                         <td className="px-6 py-3 text-xs text-gray-600">{item.item_name}</td>
@@ -182,12 +182,12 @@ const SalesQuotationViewModal: React.FC<ViewModalProps> = ({ isOpen, onClose, qu
                                                         {type === 'General Customer Quote' ? (
                                                             <>
                                                                 <td className="px-6 py-3 text-xs text-red-600 text-right">{item.max_discount}%</td>
-                                                                <td className="px-6 py-3 text-xs text-teal-600 text-right font-bold">₹{parseFloat(item.best_price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                                <td className="px-6 py-3 text-xs text-indigo-600 text-right font-bold">₹{parseFloat(item.best_price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                                             </>
                                                         ) : (
                                                             <>
                                                                 <td className="px-6 py-3 text-xs text-red-600 text-right">{item.discount}%</td>
-                                                                <td className="px-6 py-3 text-xs text-teal-600 text-right font-bold">₹{parseFloat(item.negotiated_price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                                <td className="px-6 py-3 text-xs text-indigo-600 text-right font-bold">₹{parseFloat(item.negotiated_price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                                             </>
                                                         )}
                                                     </tr>
@@ -199,12 +199,12 @@ const SalesQuotationViewModal: React.FC<ViewModalProps> = ({ isOpen, onClose, qu
 
                                 {/* Additional Details for Specific Quote */}
                                 {type === 'Specific Customer Quote' && details.payment_terms && (
-                                    <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+                                    <div className="bg-white p-6 rounded-[4px] border border-gray-100 shadow-none border border-slate-200-none border border-slate-200">
                                         <div className="flex items-center gap-2 mb-4">
                                             <FileText size={18} className="text-indigo-500" />
                                             <h4 className="text-sm font-bold text-gray-900 uppercase tracking-widest">Payment Terms</h4>
                                         </div>
-                                        <p className="text-sm text-gray-600 leading-relaxed bg-gray-50 p-4 rounded-lg border border-gray-100 italic">
+                                        <p className="text-sm text-gray-600 leading-relaxed bg-gray-50 p-4 rounded-[4px] border border-gray-100 italic">
                                             "{details.payment_terms}"
                                         </p>
                                     </div>
@@ -233,7 +233,7 @@ const SalesQuotationViewModal: React.FC<ViewModalProps> = ({ isOpen, onClose, qu
                     <div className="bg-gray-50 px-6 py-4 flex justify-end">
                         <button
                             onClick={onClose}
-                            className="px-6 py-2 bg-white border border-gray-300 rounded-md text-sm font-bold text-gray-700 hover:bg-gray-50 transition-all shadow-sm active:scale-95"
+                            className="px-6 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-bold text-gray-700 hover:bg-gray-50 transition-all shadow-none border border-slate-200-none border border-slate-200 active:scale-95"
                         >
                             Close
                         </button>
@@ -261,3 +261,4 @@ const DetailItem: React.FC<DetailItemProps> = ({ icon, label, value }) => (
 );
 
 export default SalesQuotationViewModal;
+

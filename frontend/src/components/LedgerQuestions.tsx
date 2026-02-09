@@ -382,7 +382,7 @@ export const LedgerQuestions: React.FC<LedgerQuestionsProps> = ({
         .question-textarea:focus {
           outline: none;
           border-color: #2563eb;
-          box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+          box-shadow-none border border-slate-200: 0 0 0 3px rgba(37, 99, 235, 0.1);
         }
 
         .radio-group {
@@ -485,4 +485,5 @@ export const LedgerQuestions: React.FC<LedgerQuestionsProps> = ({
 };
 
 export default LedgerQuestions;
+
 

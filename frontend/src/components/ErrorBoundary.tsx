@@ -86,7 +86,7 @@ export default class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-6">
+          <div className="max-w-md w-full bg-white shadow-none border border-slate-200-none border border-slate-200 rounded-[4px] p-6">
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <svg className="h-8 w-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -111,7 +111,7 @@ export default class ErrorBoundary extends Component<Props, State> {
                 <div className="mt-4">
                   <button
                     onClick={() => window.location.reload()}
-                    className="bg-teal-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2"
+                    className="bg-indigo-600 text-white px-4 py-2 rounded-[4px] text-sm font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                   >
                     Refresh Page
                   </button>
@@ -126,4 +126,5 @@ export default class ErrorBoundary extends Component<Props, State> {
     return this.props.children as React.ReactElement;
   }
 }
+
 

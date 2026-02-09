@@ -24,54 +24,62 @@ export default function GSTPage() {
     }, [availableTabs, activeTab]);
 
     return (
-        <div className="min-h-screen bg-gray-50 p-8">
-            <div className="max-w-full mx-auto">
-                {/* Header */}
-                <div className="mb-6">
-                    <h1 className="text-3xl font-bold text-gray-900">GST Returns</h1>
-                    <p className="text-gray-600 mt-1">Generate and manage GST return filings</p>
+        <div className="space-y-8">
+            {/* Page Header */}
+            <div className="flex items-end justify-between border-b border-slate-200 pb-6">
+                <div>
+                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Taxation</p>
+                    <h2 className="text-[20px] font-bold text-slate-900">
+                        GST Returns
+                    </h2>
                 </div>
+            </div>
 
-                {/* Primary Tabs */}
-                <div className="bg-white rounded-lg shadow-sm mb-6">
-                    <div className="border-b border-gray-200">
-                        <div className="flex gap-8 px-6">
-                            {availableTabs.map((tab) => (
-                                <button
-                                    key={tab.id}
-                                    onClick={() => setActiveTab(tab.id)}
-                                    className={`py-4 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === tab.id
-                                        ? 'border-teal-600 text-teal-700'
-                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                        }`}
-                                >
-                                    {tab.label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Tab Content */}
-                    <div className="p-6">
-                        {activeTab === 'GSTR1' && <GSTR1Page />}
-
-                        {activeTab === 'GSTR2' && (
-                            <div className="text-center py-12">
-                                <h3 className="text-lg font-semibold text-gray-700 mb-2">GSTR2 - Coming Soon</h3>
-                                <p className="text-gray-500">Purchase returns module will be available soon.</p>
-                            </div>
+            {/* Main Tabs */}
+            <div className="flex space-x-8 border-b border-slate-200">
+                {availableTabs.map((tab) => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`
+                            whitespace-nowrap pb-4 text-[13px] font-bold uppercase tracking-wider transition-all relative
+                            ${activeTab === tab.id
+                                ? 'text-indigo-600'
+                                : 'text-slate-400 hover:text-slate-600'}
+                        `}
+                    >
+                        {tab.label}
+                        {activeTab === tab.id && (
+                            <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-600" />
                         )}
+                    </button>
+                ))}
+            </div>
 
-                        {activeTab === 'GSTR3B' && (
-                            <div className="text-center py-12">
-                                <h3 className="text-lg font-semibold text-gray-700 mb-2">GSTR3B - Coming Soon</h3>
-                                <p className="text-gray-500">Monthly summary return will be auto-computed from GSTR1 and GSTR2.</p>
-                            </div>
-                        )}
+            {/* Tab Content */}
+            <div className="animate-in fade-in slide-in-from-bottom-1 duration-300">
+                {activeTab === 'GSTR1' && (
+                    <div className="erp-card p-0">
+                        <GSTR1Page />
                     </div>
-                </div>
+                )}
+
+                {activeTab === 'GSTR2' && (
+                    <div className="erp-card py-20 text-center">
+                        <h3 className="text-[16px] font-bold text-slate-800 mb-2 uppercase tracking-wide">GSTR2 - Inward Supplies</h3>
+                        <p className="text-slate-500 text-sm">Automated inward supplies reconciliation module is coming soon.</p>
+                    </div>
+                )}
+
+                {activeTab === 'GSTR3B' && (
+                    <div className="erp-card py-20 text-center">
+                        <h3 className="text-[16px] font-bold text-slate-800 mb-2 uppercase tracking-wide">GSTR3B - Monthly Summary</h3>
+                        <p className="text-slate-500 text-sm">Monthly summary return and auto-computation from GSTR1/2 is coming soon.</p>
+                    </div>
+                )}
             </div>
         </div>
     );
 }
+
 

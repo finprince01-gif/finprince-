@@ -125,7 +125,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 w-full max-w-6xl mx-4 max-h-[90vh] overflow-y-auto">
                 {/* Header */}
                 <div className="px-6 py-4 border-b border-gray-200">
                     <h3 className="text-xl font-bold text-gray-800">Create Issue Slip</h3>
@@ -140,7 +140,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                 type="text"
                                 value={outwardSlipNo}
                                 onChange={(e) => setOutwardSlipNo(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
                             />
                         </div>
                         <div>
@@ -150,7 +150,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                     type="date"
                                     value={date}
                                     onChange={(e) => setDate(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
                                 />
                                 {/* Icon handling handled by browser date input or we can add custom icon absolute positioned */}
                             </div>
@@ -161,7 +161,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                 type="time"
                                 value={time}
                                 onChange={(e) => setTime(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
                             />
                         </div>
                         <div>
@@ -169,7 +169,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                             <select
                                 value={location}
                                 onChange={(e) => setLocation(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
                             >
                                 <option value="">Select Location</option>
                                 {locations.map((loc) => (
@@ -188,7 +188,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                             <select
                                 value={salesOrderNo}
                                 onChange={(e) => setSalesOrderNo(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
                             >
                                 <option value="">Select Pending Sales Order</option>
                                 <option value="SO-001">SO-001</option>
@@ -201,7 +201,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                 type="text"
                                 value={customerName}
                                 onChange={(e) => setCustomerName(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
                                 placeholder="Enter Name"
                             />
                         </div>
@@ -210,7 +210,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                             <select
                                 value={branch}
                                 onChange={(e) => setBranch(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
                             >
                                 <option value="">Select Branch</option>
                                 <option value="Main Branch">Main Branch</option>
@@ -226,7 +226,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                             <textarea
                                 value={address}
                                 onChange={(e) => setAddress(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-teal-500 resize-none"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
                                 rows={2}
                             />
                         </div>
@@ -236,7 +236,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                 type="text"
                                 value={gstin}
                                 onChange={(e) => setGstin(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
                             />
                         </div>
                     </div>
@@ -247,12 +247,12 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                             <h4 className="text-sm font-medium text-gray-700">Items</h4>
                             <button
                                 onClick={handleAddItem}
-                                className="text-teal-600 hover:text-teal-700 text-sm font-medium flex items-center"
+                                className="text-indigo-600 hover:text-slate-700 text-sm font-medium flex items-center"
                             >
                                 + Add Item
                             </button>
                         </div>
-                        <div className="border border-gray-200 rounded-lg overflow-hidden">
+                        <div className="border border-gray-200 rounded-[4px] overflow-hidden">
                             <table className="w-full">
                                 <thead className="bg-gray-50 border-b border-gray-200">
                                     <tr>
@@ -273,7 +273,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                                     type="text"
                                                     value={item.itemCode}
                                                     onChange={(e) => handleItemChange(item.id, 'itemCode', e.target.value)}
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
                                                 />
                                             </td>
                                             <td className="p-2">
@@ -281,7 +281,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                                     type="text"
                                                     value={item.itemName}
                                                     onChange={(e) => handleItemChange(item.id, 'itemName', e.target.value)}
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
                                                 />
                                             </td>
                                             <td className="p-2">
@@ -289,7 +289,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                                     type="text"
                                                     value={item.hsnCode}
                                                     onChange={(e) => handleItemChange(item.id, 'hsnCode', e.target.value)}
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
                                                 />
                                             </td>
                                             <td className="p-2">
@@ -297,7 +297,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                                     type="text"
                                                     value={item.uom}
                                                     onChange={(e) => handleItemChange(item.id, 'uom', e.target.value)}
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
                                                 />
                                             </td>
                                             <td className="p-2">
@@ -305,7 +305,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                                     type="number"
                                                     value={item.quantity}
                                                     onChange={(e) => handleItemChange(item.id, 'quantity', e.target.value)}
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
                                                 />
                                             </td>
                                             <td className="p-2">
@@ -313,7 +313,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                                     type="number"
                                                     value={item.boxes}
                                                     onChange={(e) => handleItemChange(item.id, 'boxes', e.target.value)}
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
                                                 />
                                             </td>
                                             <td className="p-2 text-center">
@@ -343,7 +343,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                         <textarea
                             value={postingNote}
                             onChange={(e) => setPostingNote(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-teal-500 resize-none h-24"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none h-24"
                         />
                     </div>
                 </div>
@@ -352,13 +352,13 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                 <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3 bg-gray-50 rounded-b-lg">
                     <button
                         onClick={handleSave}
-                        className="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-md transition-colors"
+                        className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-[4px] transition-colors"
                     >
                         Post & Close
                     </button>
                     <button
                         onClick={onClose}
-                        className="px-6 py-2 bg-white border border-gray-300 text-gray-700 font-medium rounded-md hover:bg-gray-50 transition-colors"
+                        className="px-6 py-2 bg-white border border-gray-300 text-gray-700 font-medium rounded-[4px] hover:bg-gray-50 transition-colors"
                     >
                         Cancel
                     </button>
@@ -369,4 +369,5 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
 };
 
 export default CreateIssueSlipModal;
+
 

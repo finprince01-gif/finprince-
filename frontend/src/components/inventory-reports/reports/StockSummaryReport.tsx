@@ -100,15 +100,15 @@ const StockSummaryReport: React.FC = () => {
             {/* Summary Cards */}
             {!loading && data.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+                    <div className="bg-white p-6 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-slate-200">
                         <div className="text-sm font-medium text-gray-500 mb-1">Total Items</div>
                         <div className="text-3xl font-bold text-gray-900">{totalItems}</div>
                     </div>
-                    <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+                    <div className="bg-white p-6 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-slate-200">
                         <div className="text-sm font-medium text-gray-500 mb-1">Low Stock Items</div>
                         <div className="text-3xl font-bold text-yellow-600">{lowStockItems}</div>
                     </div>
-                    <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+                    <div className="bg-white p-6 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-slate-200">
                         <div className="text-sm font-medium text-gray-500 mb-1">Out of Stock</div>
                         <div className="text-3xl font-bold text-red-600">{outOfStockItems}</div>
                     </div>
@@ -127,3 +127,4 @@ const StockSummaryReport: React.FC = () => {
 };
 
 export default StockSummaryReport;
+

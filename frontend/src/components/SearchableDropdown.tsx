@@ -66,8 +66,8 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
                 type="button"
                 onClick={() => !disabled && setIsOpen(!isOpen)}
                 disabled={disabled}
-                className={`w-full px-4 py-2 text-left border-2 rounded-md flex justify-between items-center bg-white
-          ${disabled ? 'bg-gray-100 cursor-not-allowed border-gray-300 text-gray-500' : 'border-teal-400 focus:ring-2 focus:ring-teal-500 hover:border-teal-500'}
+                className={`w-full px-4 py-2 text-left border-2 rounded-[4px] flex justify-between items-center bg-white
+          ${disabled ? 'bg-gray-100 cursor-not-allowed border-gray-300 text-gray-500' : 'border-slate-300 focus:ring-2 focus:ring-indigo-500 hover:border-indigo-500'}
           ${!value ? 'text-gray-500' : 'text-gray-900'}
         `}
             >
@@ -90,7 +90,7 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
 
             {/* Dropdown Menu */}
             {isOpen && (
-                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 flex flex-col">
+                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 max-h-60 flex flex-col">
 
                     {/* Search Input Sticky Header */}
                     <div className="p-2 border-b border-gray-200 sticky top-0 bg-white rounded-t-md">
@@ -101,7 +101,7 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 placeholder="Search..."
-                                className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
+                                className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                                 autoFocus // Focus search input when opened
                             />
                         </div>
@@ -118,8 +118,8 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
                                         setIsOpen(false);
                                         setSearchTerm('');
                                     }}
-                                    className={`px-4 py-2 cursor-pointer text-sm hover:bg-teal-50 hover:text-teal-700
-                    ${value === option ? 'bg-teal-100 text-teal-800 font-medium' : 'text-gray-700'}
+                                    className={`px-4 py-2 cursor-pointer text-sm hover:bg-indigo-50/50 hover:text-slate-700
+                    ${value === option ? 'bg-indigo-100 text-indigo-800 font-medium' : 'text-gray-700'}
                   `}
                                 >
                                     {option}
@@ -136,3 +136,4 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
 };
 
 export default SearchableDropdown;
+

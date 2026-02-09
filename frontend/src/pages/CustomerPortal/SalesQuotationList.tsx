@@ -98,18 +98,18 @@ const SalesQuotationList: React.FC<SalesQuotationListProps> = ({ onCreateQuotati
     }, [activeType]);
 
     return (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+        <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-100 p-6">
             {/* Header Section */}
             <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
                 <div>
                     <h2 className="text-xl font-bold text-gray-900">Sales Quotation</h2>
 
                     {/* Segmented Control for Quotation Type */}
-                    <div className="mt-4 bg-gray-100 p-1 rounded-lg inline-flex">
+                    <div className="mt-4 bg-gray-100 p-1 rounded-[4px] inline-flex">
                         <button
                             onClick={() => setActiveType('General Customer Quote')}
-                            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeType === 'General Customer Quote'
-                                ? 'bg-teal-600 text-white shadow-sm'
+                            className={`px-4 py-2 rounded-[4px] text-sm font-medium transition-all ${activeType === 'General Customer Quote'
+                                ? 'bg-indigo-600 text-white shadow-none border border-slate-200-none border border-slate-200'
                                 : 'text-gray-600 hover:text-gray-900'
                                 }`}
                         >
@@ -117,8 +117,8 @@ const SalesQuotationList: React.FC<SalesQuotationListProps> = ({ onCreateQuotati
                         </button>
                         <button
                             onClick={() => setActiveType('Specific Customer Quote')}
-                            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeType === 'Specific Customer Quote'
-                                ? 'bg-teal-600 text-white shadow-sm'
+                            className={`px-4 py-2 rounded-[4px] text-sm font-medium transition-all ${activeType === 'Specific Customer Quote'
+                                ? 'bg-indigo-600 text-white shadow-none border border-slate-200-none border border-slate-200'
                                 : 'text-gray-600 hover:text-gray-900'
                                 }`}
                         >
@@ -130,7 +130,7 @@ const SalesQuotationList: React.FC<SalesQuotationListProps> = ({ onCreateQuotati
                 <div className="flex items-center">
                     <button
                         onClick={onCreateQuotation}
-                        className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-teal-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                        className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                     >
                         Create Sales Quotation
                     </button>
@@ -138,7 +138,7 @@ const SalesQuotationList: React.FC<SalesQuotationListProps> = ({ onCreateQuotati
             </div>
 
             {/* Data Table */}
-            <div className="overflow-hidden ring-1 ring-black ring-opacity-5 rounded-lg">
+            <div className="overflow-hidden ring-1 ring-black ring-opacity-5 rounded-[4px]">
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
@@ -180,7 +180,7 @@ const SalesQuotationList: React.FC<SalesQuotationListProps> = ({ onCreateQuotati
                             <tr>
                                 <td colSpan={activeType === 'General Customer Quote' ? 4 : 6} className="px-6 py-12 text-center text-sm text-gray-500">
                                     <div className="flex items-center justify-center gap-2">
-                                        <div className="w-4 h-4 border-2 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
+                                        <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-[4px] animate-spin"></div>
                                         Fetching quotations...
                                     </div>
                                 </td>
@@ -190,7 +190,7 @@ const SalesQuotationList: React.FC<SalesQuotationListProps> = ({ onCreateQuotati
                                 generalQuotations.map((quote) => (
                                     <tr key={quote.id} className="hover:bg-gray-50 transition-colors">
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <button className="text-sm font-medium text-teal-600 hover:text-indigo-900 hover:underline">
+                                            <button className="text-sm font-medium text-indigo-600 hover:text-indigo-900 hover:underline">
                                                 {quote.quoteNumber}
                                             </button>
                                         </td>
@@ -204,19 +204,19 @@ const SalesQuotationList: React.FC<SalesQuotationListProps> = ({ onCreateQuotati
                                             <div className="flex items-center justify-end space-x-3">
                                                 <button
                                                     onClick={() => handleView(quote.id)}
-                                                    className="text-gray-400 hover:text-teal-600 transition-colors tooltip-trigger"
+                                                    className="text-gray-400 hover:text-indigo-600 transition-colors tooltip-trigger"
                                                     title="View"
                                                 >
                                                     <Eye size={18} />
                                                 </button>
                                                 <button
                                                     onClick={() => onEditQuotation(quote.id, activeType)}
-                                                    className="text-gray-400 hover:text-teal-600 transition-colors tooltip-trigger"
+                                                    className="text-gray-400 hover:text-indigo-600 transition-colors tooltip-trigger"
                                                     title="Edit"
                                                 >
                                                     <Pencil size={18} />
                                                 </button>
-                                                <button className="text-gray-400 hover:text-teal-600 transition-colors tooltip-trigger" title="Mail">
+                                                <button className="text-gray-400 hover:text-indigo-600 transition-colors tooltip-trigger" title="Mail">
                                                     <Mail size={18} />
                                                 </button>
                                             </div>
@@ -235,7 +235,7 @@ const SalesQuotationList: React.FC<SalesQuotationListProps> = ({ onCreateQuotati
                                 specificQuotations.map((quote) => (
                                     <tr key={quote.id} className="hover:bg-gray-50 transition-colors">
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <button className="text-sm font-medium text-teal-600 hover:text-indigo-900 hover:underline">
+                                            <button className="text-sm font-medium text-indigo-600 hover:text-indigo-900 hover:underline">
                                                 {quote.quoteNumber}
                                             </button>
                                         </td>
@@ -255,19 +255,19 @@ const SalesQuotationList: React.FC<SalesQuotationListProps> = ({ onCreateQuotati
                                             <div className="flex items-center justify-end space-x-3">
                                                 <button
                                                     onClick={() => handleView(quote.id)}
-                                                    className="text-gray-400 hover:text-teal-600 transition-colors tooltip-trigger"
+                                                    className="text-gray-400 hover:text-indigo-600 transition-colors tooltip-trigger"
                                                     title="View"
                                                 >
                                                     <Eye size={18} />
                                                 </button>
                                                 <button
                                                     onClick={() => onEditQuotation(quote.id, activeType)}
-                                                    className="text-gray-400 hover:text-teal-600 transition-colors tooltip-trigger"
+                                                    className="text-gray-400 hover:text-indigo-600 transition-colors tooltip-trigger"
                                                     title="Edit"
                                                 >
                                                     <Pencil size={18} />
                                                 </button>
-                                                <button className="text-gray-400 hover:text-teal-600 transition-colors tooltip-trigger" title="Mail">
+                                                <button className="text-gray-400 hover:text-indigo-600 transition-colors tooltip-trigger" title="Mail">
                                                     <Mail size={18} />
                                                 </button>
                                             </div>
@@ -298,4 +298,5 @@ const SalesQuotationList: React.FC<SalesQuotationListProps> = ({ onCreateQuotati
 };
 
 export default SalesQuotationList;
+
 

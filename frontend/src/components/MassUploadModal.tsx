@@ -49,7 +49,7 @@ const UploadDropzone: React.FC<{ onFilesSelected: (files: FileList) => void }> =
 
     return (
         <div
-            className={`w-full h-full flex flex-col items-center justify-center border-4 border-dashed rounded-lg transition-colors ${isDragging ? 'border-teal-500 bg-teal-50' : 'border-slate-300 bg-slate-100'}`}
+            className={`w-full h-full flex flex-col items-center justify-center border-4 border-dashed rounded-[4px] transition-colors ${isDragging ? 'border-indigo-500 bg-indigo-50/50' : 'border-slate-300 bg-slate-100'}`}
             onDragEnter={e => handleDrag(e, true)}
             onDragLeave={e => handleDrag(e, false)}
             onDragOver={e => handleDrag(e, true)}
@@ -60,7 +60,7 @@ const UploadDropzone: React.FC<{ onFilesSelected: (files: FileList) => void }> =
             <p className="text-slate-500 mt-1">Supports images (PNG, JPG), PDF files, and Excel files.</p>
             <button
                 onClick={() => inputRef.current?.click()}
-                className="mt-6 px-6 py-2 bg-teal-600 text-white font-semibold rounded-md hover:bg-teal-700"
+                className="mt-6 px-6 py-2 bg-indigo-600 text-white font-semibold rounded-[4px] hover:bg-indigo-700"
             >
                 Or click to browse
             </button>
@@ -359,8 +359,8 @@ const MassUploadModal: React.FC<MassUploadModalProps> = ({ onClose, onComplete, 
     const StatusPill: React.FC<{ status: MassUploadFile['status'] }> = ({ status }) => {
         const styles = {
             pending: 'bg-slate-200 text-slate-600',
-            processing: 'bg-teal-100 text-teal-600 animate-pulse',
-            success: 'bg-green-100 text-teal-700',
+            processing: 'bg-indigo-100 text-indigo-600 animate-pulse',
+            success: 'bg-green-100 text-slate-700',
             error: 'bg-red-100 text-red-700',
         }[status];
         const icon = {
@@ -370,7 +370,7 @@ const MassUploadModal: React.FC<MassUploadModalProps> = ({ onClose, onComplete, 
             error: <Icon name="warning" className="w-3 h-3" />,
         }[status];
         return (
-            <span className={`px-2.5 py-1 text-xs font-semibold rounded-full inline-flex items-center space-x-1.5 ${styles}`}>
+            <span className={`px-2.5 py-1 text-xs font-semibold rounded-[4px] inline-flex items-center space-x-1.5 ${styles}`}>
                 {icon}
                 <span className="capitalize">{status}</span>
             </span>
@@ -382,10 +382,10 @@ const MassUploadModal: React.FC<MassUploadModalProps> = ({ onClose, onComplete, 
             <style>{`
                   .review-input { width: 100%; border: 1px solid transparent; background: #f8fafc; border-radius: 4px; padding: 4px 6px; transition: all 0.2s; color: #1e293b; }
                   .review-input:hover { border-color: #cbd5e1; }
-                  .review-input:focus { border-color: #0d9488; background: white; box-shadow: 0 0 0 1px #0d9488; }
+                  .review-input:focus { border-color: #0d9488; background: white; box-shadow-none border border-slate-200: 0 0 0 1px #0d9488; }
                   .sub-table-header { padding: 0.5rem 0.75rem; text-align: left; font-size: 0.75rem; font-weight: 600; color: #4b5563; }
              `}</style>
-            <div className="bg-slate-50 rounded-xl shadow-2xl w-full max-w-7xl h-[90vh] flex flex-col">
+            <div className="bg-slate-50 rounded-[4px] shadow-none border border-slate-200-2xl w-full max-w-7xl h-[90vh] flex flex-col">
                 <header className="flex items-center justify-between p-4 border-b border-slate-200 flex-shrink-0">
                     <h2 className="text-xl font-bold text-gray-800 flex items-center space-x-3">
                         <Icon name="upload" className="w-6 h-6 text-purple-600" />
@@ -464,14 +464,14 @@ const MassUploadModal: React.FC<MassUploadModalProps> = ({ onClose, onComplete, 
                             <strong>{files.length}</strong> files selected. <strong>{completedCount}</strong> processed. <strong>{successCount}</strong> ready to import.
                         </p>
                         <div className="flex items-center space-x-2">
-                            <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-slate-200">Cancel</button>
+                            <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 rounded-[4px] hover:bg-slate-200">Cancel</button>
                             {isProcessing ? (
-                                <button disabled className="px-4 py-2 text-sm font-medium text-white bg-teal-400 rounded-md flex items-center cursor-not-allowed"><Icon name="spinner" className="animate-spin w-4 h-4 mr-2" />Processing...</button>
+                                <button disabled className="px-4 py-2 text-sm font-medium text-white bg-teal-400 rounded-[4px] flex items-center cursor-not-allowed"><Icon name="spinner" className="animate-spin w-4 h-4 mr-2" />Processing...</button>
                             ) : (
                                 !hasPendingFiles ? (
-                                    <button onClick={handleSave} disabled={successCount === 0} className="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-md flex items-center hover:bg-teal-700 disabled:bg-gray-400"><Icon name="check-circle" className="w-5 h-5 mr-2" /> Save {successCount} Vouchers</button>
+                                    <button onClick={handleSave} disabled={successCount === 0} className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-[4px] flex items-center hover:bg-indigo-700 disabled:bg-gray-400"><Icon name="check-circle" className="w-5 h-5 mr-2" /> Save {successCount} Vouchers</button>
                                 ) : (
-                                    <button onClick={startProcessing} className="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-md flex items-center hover:bg-teal-700"><Icon name="wand-sparkles" className="w-5 h-5 mr-2" /> Start Processing</button>
+                                    <button onClick={startProcessing} className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-[4px] flex items-center hover:bg-indigo-700"><Icon name="wand-sparkles" className="w-5 h-5 mr-2" /> Start Processing</button>
                                 )
                             )}
                         </div>
@@ -483,4 +483,5 @@ const MassUploadModal: React.FC<MassUploadModalProps> = ({ onClose, onComplete, 
 };
 
 export default MassUploadModal;
+
 

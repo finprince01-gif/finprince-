@@ -678,26 +678,26 @@ const InventoryPage: React.FC = () => {
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left Column - Create/Edit Form */}
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-300">
+        <div className="bg-white p-6 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-300">
           <h3 className="text-lg font-semibold text-gray-800 mb-6">{isEditModeLocation ? 'Edit Location' : 'Create Location'}</h3>
           <form onSubmit={handleLocationSubmit} className="space-y-4">
             {/* ... Location inputs ... */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Location Name <span className="text-red-500">*</span></label>
-              <input type="text" value={locationName} onChange={(e) => setLocationName(e.target.value)} className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Enter location name" required />
+              <input type="text" value={locationName} onChange={(e) => setLocationName(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter location name" required />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Location Type <span className="text-red-500">*</span></label>
               <select value={locationType} onChange={(e) => {
                 const value = e.target.value;
                 setLocationType(value);
-              }} className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required>
+              }} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
                 <option value="">Select location type</option>
                 {locationTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
               </select>
               {isCustomLocationType && (
                 <div className="mt-3">
-                  <input type="text" value={customLocationTypeValue} onChange={(e) => setCustomLocationTypeValue(e.target.value)} className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Enter custom location type" required />
+                  <input type="text" value={customLocationTypeValue} onChange={(e) => setCustomLocationTypeValue(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter custom location type" required />
                 </div>
               )}
             </div>
@@ -706,7 +706,7 @@ const InventoryPage: React.FC = () => {
             {(locationType === 'vendor_location' || locationType === 'agent_location' || locationType === 'distributor_location') && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Vendor/Agent Name <span className="text-red-500">*</span></label>
-                <select value={vendorName} onChange={(e) => setVendorName(e.target.value)} className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required>
+                <select value={vendorName} onChange={(e) => setVendorName(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
                   <option value="">Select vendor/agent</option>
                   <option value="vendor1">Vendor 1</option>
                   <option value="vendor2">Vendor 2</option>
@@ -717,7 +717,7 @@ const InventoryPage: React.FC = () => {
             {(locationType === 'customer_location' || locationType === 'customs_warehouse' || locationType === 'other_third_party') && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Customer Name <span className="text-red-500">*</span></label>
-                <select value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required>
+                <select value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
                   <option value="">Select customer</option>
                   <option value="customer1">Customer 1</option>
                   <option value="customer2">Customer 2</option>
@@ -729,7 +729,7 @@ const InventoryPage: React.FC = () => {
             {(locationType === 'company_premises' || locationType === 'vendor_location' || locationType === 'agent_location' || locationType === 'distributor_location') && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Location Address <span className="text-red-500">*</span></label>
-                <select value={locationAddress} onChange={(e) => setLocationAddress(e.target.value)} className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500">
+                <select value={locationAddress} onChange={(e) => setLocationAddress(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500">
                   <option value="">Select address</option>
                   <option value="address1">Address 1</option>
                   <option value="address2">Address 2</option>
@@ -740,7 +740,7 @@ const InventoryPage: React.FC = () => {
             {/* Manual address entry for Customer Location and Other types */}
             {(locationType === 'customer_location' || locationType === 'customs_warehouse' || locationType === 'other_third_party') && (
               <>
-                <div className="bg-teal-50 border border-teal-200 rounded p-3 text-sm text-teal-700">
+                <div className="bg-indigo-50/50 border border-slate-200 rounded p-3 text-sm text-slate-700">
                   📌 Manual Address Entry
                 </div>
               </>
@@ -793,34 +793,34 @@ const InventoryPage: React.FC = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Pincode <span className="text-red-500">*</span></label>
-                <input type="text" value={locPincode} onChange={(e) => setLocPincode(e.target.value)} className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Pincode/Zip Code" required />
+                <input type="text" value={locPincode} onChange={(e) => setLocPincode(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Pincode/Zip Code" required />
               </div>
             </div>
 
             {/* Address Lines */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Address Line 1 <span className="text-red-500">*</span></label>
-              <input type="text" value={locAddressLine1} onChange={(e) => setLocAddressLine1(e.target.value)} className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Building/Street/Area" required />
+              <input type="text" value={locAddressLine1} onChange={(e) => setLocAddressLine1(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Building/Street/Area" required />
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div><label className="block text-sm font-medium text-gray-700 mb-2">Address Line 2</label><input type="text" value={locAddressLine2} onChange={(e) => setLocAddressLine2(e.target.value)} className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Landmark (Optional)" /></div>
-              <div><label className="block text-sm font-medium text-gray-700 mb-2">Address Line 3</label><input type="text" value={locAddressLine3} onChange={(e) => setLocAddressLine3(e.target.value)} className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Additional Info (Optional)" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-2">Address Line 2</label><input type="text" value={locAddressLine2} onChange={(e) => setLocAddressLine2(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Landmark (Optional)" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-2">Address Line 3</label><input type="text" value={locAddressLine3} onChange={(e) => setLocAddressLine3(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Additional Info (Optional)" /></div>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">GSTIN (Optional)</label>
-              <input type="text" value={locationGstin} onChange={(e) => setLocationGstin(e.target.value)} className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Enter GSTIN (15 characters)" maxLength={15} />
+              <input type="text" value={locationGstin} onChange={(e) => setLocationGstin(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter GSTIN (15 characters)" maxLength={15} />
             </div>
             <div className="flex gap-3 pt-4">
-              <button type="submit" className="flex-1 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500">{isEditModeLocation ? 'Update Location' : 'Create Location'}</button>
-              {isEditModeLocation && <button type="button" onClick={resetLocationForm} className="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none">Cancel</button>}
+              <button type="submit" className="flex-1 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">{isEditModeLocation ? 'Update Location' : 'Create Location'}</button>
+              {isEditModeLocation && <button type="button" onClick={resetLocationForm} className="px-4 py-2 border border-gray-300 text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none">Cancel</button>}
             </div>
           </form>
         </div>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-300">
+        <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-300">
           <div className="px-6 py-4 border-b border-gray-200">
             <h3 className="text-lg font-semibold text-gray-800 mb-3">Existing Locations</h3>
-            <input type="text" placeholder="Search locations..." value={locationSearchQuery} onChange={(e) => setLocationSearchQuery(e.target.value)} className="block w-full px-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 sm:text-sm" />
+            <input type="text" placeholder="Search locations..." value={locationSearchQuery} onChange={(e) => setLocationSearchQuery(e.target.value)} className="block w-full px-3 py-2 border border-gray-300 rounded-[4px] leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" />
           </div>
           <div className="max-h-96 overflow-y-auto">
             {loadingLocations ? <p className="text-gray-500 text-center py-8">Loading...</p> : filteredLocations.length === 0 ? <p className="text-gray-500 text-center py-8">No locations</p> : (
@@ -830,14 +830,14 @@ const InventoryPage: React.FC = () => {
                   {filteredLocations.map(loc => {
                     const isSelected = selectedLocation?.id === loc.id;
                     return (
-                      <tr key={loc.id} className={isSelected ? 'bg-teal-50' : ''}>
-                        <td className="px-6 py-4"><input type="radio" checked={isSelected} onChange={() => setSelectedLocation(loc)} className="text-teal-600 focus:ring-teal-500" /></td>
+                      <tr key={loc.id} className={isSelected ? 'bg-indigo-50/50' : ''}>
+                        <td className="px-6 py-4"><input type="radio" checked={isSelected} onChange={() => setSelectedLocation(loc)} className="text-indigo-600 focus:ring-indigo-500" /></td>
                         <td className="px-6 py-4 text-sm font-medium text-gray-900 cursor-pointer" onClick={() => setSelectedLocation(loc)}>{loc.name}</td>
-                        <td className="px-6 py-4 text-sm text-gray-500"><span className="px-2 font-semibold rounded-full bg-teal-100 text-teal-800 text-xs">{loc.location_type_display}</span></td>
+                        <td className="px-6 py-4 text-sm text-gray-500"><span className="px-2 font-semibold rounded-[4px] bg-indigo-100 text-indigo-800 text-xs">{loc.location_type_display}</span></td>
                         <td className="px-6 py-4 text-right">
                           {isSelected && (
                             <div className="inline-flex gap-2">
-                              <button onClick={handleEditLocation} className="text-white bg-teal-600 px-2 py-1 rounded text-xs">Edit</button>
+                              <button onClick={handleEditLocation} className="text-white bg-indigo-600 px-2 py-1 rounded text-xs">Edit</button>
                               <button onClick={handleDeleteLocation} className="text-white bg-red-600 px-2 py-1 rounded text-xs">Del</button>
                             </div>
                           )}
@@ -1180,7 +1180,7 @@ const InventoryPage: React.FC = () => {
     const canCreateGRN = isSuperuser || hasTabAccess('Inventory', 'GRN Creation');
 
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200 p-6">
         {!showItemDetail ? (
           <>
             {/* Stock Movement Main View */}
@@ -1192,7 +1192,7 @@ const InventoryPage: React.FC = () => {
                 {canCreateIssue && (
                   <button
                     onClick={() => setShowIssueSlipForm(true)}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-teal-600 hover:bg-teal-700"
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700"
                   >
                     ➕ Add New Issue Slip
                   </button>
@@ -1200,7 +1200,7 @@ const InventoryPage: React.FC = () => {
                 {canCreateGRN && (
                   <button
                     onClick={() => setShowGRNForm(true)}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-teal-600 hover:bg-teal-700"
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700"
                   >
                     ➕ Add New GRN
                   </button>
@@ -1264,7 +1264,7 @@ const InventoryPage: React.FC = () => {
                                 setSelectedItemForOps(item);
                                 setShowItemDetail(true);
                               }}
-                              className="text-teal-600 hover:text-teal-800 font-medium text-sm"
+                              className="text-indigo-600 hover:text-indigo-800 font-medium text-sm"
                             >
                               View
                             </button>
@@ -1275,7 +1275,7 @@ const InventoryPage: React.FC = () => {
                   </table>
                 </div>
               ) : (
-                <div className="p-8 text-center text-gray-500 bg-gray-50 rounded-lg">
+                <div className="p-8 text-center text-gray-500 bg-gray-50 rounded-[4px]">
                   You do not have permission to view Stock Movement.
                 </div>
               )}
@@ -1301,7 +1301,7 @@ const InventoryPage: React.FC = () => {
                   </button>
                 </div>
 
-                <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="bg-gray-50 p-4 rounded-[4px]">
                   <div className="grid grid-cols-4 gap-4 text-sm">
                     <div>
                       <p className="text-gray-600">Item Code</p>
@@ -1375,7 +1375,7 @@ const InventoryPage: React.FC = () => {
               </div>
             </>
           ) : (
-            <div className="p-8 text-center text-gray-500 bg-gray-50 rounded-lg">
+            <div className="p-8 text-center text-gray-500 bg-gray-50 rounded-[4px]">
               You do not have permission to view Stock Movement Details.
             </div>
           )
@@ -1385,7 +1385,7 @@ const InventoryPage: React.FC = () => {
         {
           showIssueSlipForm && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2">
-              <div className="bg-white rounded-lg shadow-xl w-full h-[90vh] max-w-7xl flex flex-col">
+              <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 w-full h-[90vh] max-w-7xl flex flex-col">
                 <div className="bg-white border-b border-gray-200 p-5 flex justify-between items-center shrink-0">
                   <h3 className="text-2xl font-bold text-gray-900">Create Issue Slip</h3>
                   <button
@@ -1404,7 +1404,7 @@ const InventoryPage: React.FC = () => {
                         key={tab}
                         onClick={() => setIssueSlipTab(tab)}
                         className={`px-6 py-3 font-semibold text-base border-b-3 ${issueSlipTab === tab
-                          ? 'border-teal-600 text-teal-600'
+                          ? 'border-indigo-600 text-indigo-600'
                           : 'border-transparent text-gray-600 hover:text-gray-800'
                           }`}
                       >
@@ -1423,13 +1423,13 @@ const InventoryPage: React.FC = () => {
                       <div className="flex gap-6 border-b border-gray-100">
                         <button
                           onClick={() => setJobWorkSubTab('received')}
-                          className={`pb-2 text-base font-medium transition-colors relative ${jobWorkSubTab === 'received' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-gray-500 hover:text-gray-700'}`}
+                          className={`pb-2 text-base font-medium transition-colors relative ${jobWorkSubTab === 'received' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
                         >
                           Goods received for Jobwork
                         </button>
                         <button
                           onClick={() => setJobWorkSubTab('sent')}
-                          className={`pb-2 text-base font-medium transition-colors relative ${jobWorkSubTab === 'sent' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-gray-500 hover:text-gray-700'}`}
+                          className={`pb-2 text-base font-medium transition-colors relative ${jobWorkSubTab === 'sent' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
                         >
                           Goods sent for Jobwork
                         </button>
@@ -1444,7 +1444,7 @@ const InventoryPage: React.FC = () => {
                               value="outward"
                               checked={jobWorkSentType === 'outward'}
                               onChange={(e) => setJobWorkSentType(e.target.value as 'outward')}
-                              className="w-4 h-4 text-teal-600 border-gray-300 focus:ring-teal-500"
+                              className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
                             />
                             <span className={`font-medium ${jobWorkSentType === 'outward' ? 'text-gray-900' : 'text-gray-600 group-hover:text-gray-900'}`}>Outward</span>
                           </label>
@@ -1456,7 +1456,7 @@ const InventoryPage: React.FC = () => {
                               value="receipt"
                               checked={jobWorkSentType === 'receipt'}
                               onChange={(e) => setJobWorkSentType(e.target.value as 'receipt')}
-                              className="w-4 h-4 text-teal-600 border-gray-300 focus:ring-teal-500"
+                              className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
                             />
                             <span className={`font-medium ${jobWorkSentType === 'receipt' ? 'text-gray-900' : 'text-gray-600 group-hover:text-gray-900'}`}>Receipt</span>
                           </label>
@@ -1476,7 +1476,7 @@ const InventoryPage: React.FC = () => {
                             type="text"
                             value={issueSlipNumber}
                             onChange={(e) => setIssueSlipNumber(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                       </div>
@@ -1489,7 +1489,7 @@ const InventoryPage: React.FC = () => {
                             type="date"
                             value={issueSlipDate}
                             onChange={(e) => setIssueSlipDate(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                         <div>
@@ -1498,7 +1498,7 @@ const InventoryPage: React.FC = () => {
                             type="time"
                             value={issueSlipTime}
                             onChange={(e) => setIssueSlipTime(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                       </div>
@@ -1510,7 +1510,7 @@ const InventoryPage: React.FC = () => {
                           <select
                             value={goodsFromLocation}
                             onChange={(e) => setGoodsFromLocation(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select Location</option>
                             {locations.filter(l => l.location_type === 'company_premises').map(loc => (
@@ -1530,7 +1530,7 @@ const InventoryPage: React.FC = () => {
                             <select
                               value={outwardVendorName}
                               onChange={(e) => setOutwardVendorName(e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             >
                               <option value="">Select Vendor</option>
                               <option value="Vendor A">Vendor A</option>
@@ -1542,7 +1542,7 @@ const InventoryPage: React.FC = () => {
                             <select
                               value={outwardBranch}
                               onChange={(e) => setOutwardBranch(e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             >
                               <option value="">Select Branch</option>
                               <option value="Main">Main</option>
@@ -1558,7 +1558,7 @@ const InventoryPage: React.FC = () => {
                               onChange={(e) => setOutwardAddress(e.target.value)}
                               rows={3}
                               placeholder="Cross-check with Job worker location in inventory masters"
-                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             />
                           </div>
                           <div className="space-y-4">
@@ -1569,7 +1569,7 @@ const InventoryPage: React.FC = () => {
                                 value={outwardGstin}
                                 onChange={(e) => setOutwardGstin(e.target.value)}
                                 placeholder="Fetched from vendor master"
-                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                               />
                             </div>
                             <div>
@@ -1577,7 +1577,7 @@ const InventoryPage: React.FC = () => {
                               <select
                                 value={jobWorkOrderNo}
                                 onChange={(e) => setJobWorkOrderNo(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                               >
                                 <option value="">Select PO</option>
                                 <option value="PO-001">PO-001</option>
@@ -1594,7 +1594,7 @@ const InventoryPage: React.FC = () => {
                           <label className="block text-sm font-bold text-gray-800">Items</label>
                           <button
                             onClick={handleAddIssueSlipItem}
-                            className="text-teal-600 hover:text-teal-800 text-sm font-semibold"
+                            className="text-indigo-600 hover:text-indigo-800 text-sm font-semibold"
                           >
                             + Add Item
                           </button>
@@ -1642,12 +1642,12 @@ const InventoryPage: React.FC = () => {
                           onChange={(e) => setPostingNote(e.target.value)}
                           rows={2}
                           placeholder="Fetch the inventory item's most recent inward stock rate"
-                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         />
                       </div>
 
                       {/* Dispatch Details Section */}
-                      <div className="border shadow-sm rounded-lg p-4 bg-gray-50">
+                      <div className="border shadow-none border border-slate-200-none border border-slate-200 rounded-[4px] p-4 bg-gray-50">
                         <h4 className="text-sm font-bold text-gray-800 mb-3 border-b border-gray-200 pb-2">Dispatch Details</h4>
                         {/* This would ideally be a collapsible section or a set of fields matching Sales Voucher dispatch details. For now, we use a placeholder or partial fields as per sketches often implying standard dispatch fields */}
                         <div className="grid grid-cols-2 gap-4 text-sm text-gray-500">
@@ -1699,7 +1699,7 @@ const InventoryPage: React.FC = () => {
                             type="text"
                             value={jobWorkReceiptNo}
                             onChange={(e) => setJobWorkReceiptNo(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                       </div>
@@ -1712,7 +1712,7 @@ const InventoryPage: React.FC = () => {
                             type="date"
                             value={issueSlipDate}
                             onChange={(e) => setIssueSlipDate(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                         <div>
@@ -1721,7 +1721,7 @@ const InventoryPage: React.FC = () => {
                             type="time"
                             value={issueSlipTime}
                             onChange={(e) => setIssueSlipTime(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                       </div>
@@ -1733,7 +1733,7 @@ const InventoryPage: React.FC = () => {
                           <select
                             value={goodsFromLocation}
                             onChange={(e) => setGoodsFromLocation(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select Location</option>
                             {locations.filter(l => l.location_type === 'company_premises').map(loc => (
@@ -1746,7 +1746,7 @@ const InventoryPage: React.FC = () => {
                           <select
                             value={jobWorkOutwardRefNo}
                             onChange={(e) => setJobWorkOutwardRefNo(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select Outward No</option>
                             <option value="JWO-001">JWO-001</option>
@@ -1763,7 +1763,7 @@ const InventoryPage: React.FC = () => {
                             <select
                               value={outwardVendorName}
                               onChange={(e) => setOutwardVendorName(e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             >
                               <option value="">Select Vendor</option>
                               <option value="Vendor A">Vendor A</option>
@@ -1774,7 +1774,7 @@ const InventoryPage: React.FC = () => {
                             <select
                               value={outwardBranch}
                               onChange={(e) => setOutwardBranch(e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             >
                               <option value="">Select Branch</option>
                               <option value="Main">Main</option>
@@ -1789,7 +1789,7 @@ const InventoryPage: React.FC = () => {
                               value={outwardAddress}
                               onChange={(e) => setOutwardAddress(e.target.value)}
                               rows={3}
-                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             />
                           </div>
                           <div>
@@ -1798,7 +1798,7 @@ const InventoryPage: React.FC = () => {
                               type="text"
                               value={outwardGstin}
                               onChange={(e) => setOutwardGstin(e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             />
                           </div>
                         </div>
@@ -1813,7 +1813,7 @@ const InventoryPage: React.FC = () => {
                             value={vendorDeliveryChallan}
                             onChange={(e) => setVendorDeliveryChallan(e.target.value)}
                             placeholder="Pull from scan or enter"
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                         <div>
@@ -1823,7 +1823,7 @@ const InventoryPage: React.FC = () => {
                             value={outwardSupplierInvoice}
                             onChange={(e) => setOutwardSupplierInvoice(e.target.value)}
                             placeholder="Pull from scan or enter"
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                       </div>
@@ -1833,13 +1833,13 @@ const InventoryPage: React.FC = () => {
                         <div className="flex gap-6 border-b border-gray-200 mb-4">
                           <button
                             onClick={() => setJwItemTab('outward')}
-                            className={`text-lg font-bold pb-1 border-b-2 transition-colors ${jwItemTab === 'outward' ? 'border-teal-600 text-teal-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                            className={`text-lg font-bold pb-1 border-b-2 transition-colors ${jwItemTab === 'outward' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                           >
                             Outward Items
                           </button>
                           <button
                             onClick={() => setJwItemTab('received')}
-                            className={`text-lg font-bold pb-1 border-b-2 transition-colors ${jwItemTab === 'received' ? 'border-teal-600 text-teal-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                            className={`text-lg font-bold pb-1 border-b-2 transition-colors ${jwItemTab === 'received' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                           >
                             Received Items
                           </button>
@@ -1880,8 +1880,8 @@ const InventoryPage: React.FC = () => {
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-r">Item Code</th>
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-r">Item Name</th>
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-r">UOM</th>
-                                  <th className="px-3 py-2 text-center text-xs font-semibold text-gray-700 border-r bg-teal-50">Vendor's RDC Qty</th>
-                                  <th className="px-3 py-2 text-center text-xs font-semibold text-gray-700 border-r bg-teal-50">Received Qty</th>
+                                  <th className="px-3 py-2 text-center text-xs font-semibold text-gray-700 border-r bg-indigo-50/50">Vendor's RDC Qty</th>
+                                  <th className="px-3 py-2 text-center text-xs font-semibold text-gray-700 border-r bg-indigo-50/50">Received Qty</th>
                                   <th className="px-3 py-2 text-center text-xs font-semibold text-gray-700 border-r">Accepted Qty</th>
                                   <th className="px-3 py-2 text-center text-xs font-semibold text-gray-700 border-r">Rejected Qty</th>
                                   <th className="px-3 py-2 text-center text-xs font-semibold text-gray-700 border-r">Shortage/Excess</th>
@@ -1895,8 +1895,8 @@ const InventoryPage: React.FC = () => {
                                     <td className="px-3 py-2 border-r"><input type="text" value={item.itemCode} onChange={(e) => handleIssueSlipItemChange(index, 'itemCode', e.target.value)} className="w-24 px-2 py-1 border border-gray-300 rounded text-sm" /></td>
                                     <td className="px-3 py-2 border-r"><input type="text" value={item.itemName} onChange={(e) => handleIssueSlipItemChange(index, 'itemName', e.target.value)} className="w-32 px-2 py-1 border border-gray-300 rounded text-sm" /></td>
                                     <td className="px-3 py-2 border-r"><input type="text" value={item.uom} readOnly className="w-16 px-2 py-1 bg-gray-50 border border-gray-200 rounded text-sm" /></td>
-                                    <td className="px-3 py-2 border-r bg-teal-50"><input type="number" value={item.vendorQty || ''} onChange={(e) => handleIssueSlipItemChange(index, 'vendorQty', e.target.value)} placeholder="Vendor Qty" className="w-20 px-2 py-1 border border-teal-300 rounded text-sm" /></td>
-                                    <td className="px-3 py-2 border-r bg-teal-50"><input type="number" value={item.receivedQty || ''} onChange={(e) => handleIssueSlipItemChange(index, 'receivedQty', e.target.value)} placeholder="Recv Qty" className="w-20 px-2 py-1 border border-teal-300 rounded text-sm" /></td>
+                                    <td className="px-3 py-2 border-r bg-indigo-50/50"><input type="number" value={item.vendorQty || ''} onChange={(e) => handleIssueSlipItemChange(index, 'vendorQty', e.target.value)} placeholder="Vendor Qty" className="w-20 px-2 py-1 border border-indigo-300 rounded text-sm" /></td>
+                                    <td className="px-3 py-2 border-r bg-indigo-50/50"><input type="number" value={item.receivedQty || ''} onChange={(e) => handleIssueSlipItemChange(index, 'receivedQty', e.target.value)} placeholder="Recv Qty" className="w-20 px-2 py-1 border border-indigo-300 rounded text-sm" /></td>
                                     <td className="px-3 py-2 border-r"><input type="number" value={item.acceptedQty || ''} onChange={(e) => handleIssueSlipItemChange(index, 'acceptedQty', e.target.value)} placeholder="Accept" className="w-20 px-2 py-1 border border-gray-300 rounded text-sm" /></td>
                                     <td className="px-3 py-2 border-r"><input type="number" value={item.rejectedQty || ''} onChange={(e) => handleIssueSlipItemChange(index, 'rejectedQty', e.target.value)} placeholder="Reject" className="w-20 px-2 py-1 border border-gray-300 rounded text-sm" /></td>
                                     <td className="px-3 py-2 border-r"><input type="number" value={item.shortageExcessQty || ''} onChange={(e) => handleIssueSlipItemChange(index, 'shortageExcessQty', e.target.value)} readOnly className="w-20 px-2 py-1 bg-gray-50 border border-gray-200 rounded text-sm" /></td>
@@ -1912,14 +1912,14 @@ const InventoryPage: React.FC = () => {
                                 ))}
                                 <tr>
                                   <td colSpan={10} className="px-3 py-2">
-                                    <button onClick={handleAddIssueSlipItem} className="text-teal-600 hover:text-teal-800 text-sm font-semibold">+ Add Received Item</button>
+                                    <button onClick={handleAddIssueSlipItem} className="text-indigo-600 hover:text-indigo-800 text-sm font-semibold">+ Add Received Item</button>
                                   </td>
                                 </tr>
                               </tbody>
                             </table>
                           )}
                         </div>
-                        <div className="mt-2 text-sm text-teal-600 italic">
+                        <div className="mt-2 text-sm text-indigo-600 italic">
                           {jwItemTab === 'outward'
                             ? '* Items fetched from Job Work Outward.'
                             : '* Verify received quantities against Vendor Delivery Challan.'}
@@ -1933,7 +1933,7 @@ const InventoryPage: React.FC = () => {
                           value={postingNote}
                           onChange={(e) => setPostingNote(e.target.value)}
                           rows={2}
-                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         />
                       </div>
 
@@ -1965,7 +1965,7 @@ const InventoryPage: React.FC = () => {
                           value="sales"
                           checked={outwardType === 'sales'}
                           onChange={(e) => setOutwardType(e.target.value)}
-                          className="text-teal-600 focus:ring-teal-500"
+                          className="text-indigo-600 focus:ring-indigo-500"
                         />
                         <span className="text-gray-700 font-medium">Sales</span>
                       </label>
@@ -1976,7 +1976,7 @@ const InventoryPage: React.FC = () => {
                           value="purchase_return"
                           checked={outwardType === 'purchase_return'}
                           onChange={(e) => setOutwardType(e.target.value)}
-                          className="text-teal-600 focus:ring-teal-500"
+                          className="text-indigo-600 focus:ring-indigo-500"
                         />
                         <span className="text-gray-700 font-medium">Purchase Return</span>
                       </label>
@@ -1993,7 +1993,7 @@ const InventoryPage: React.FC = () => {
                             type="text"
                             value={issueSlipNumber}
                             onChange={(e) => setIssueSlipNumber(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                         <div>
@@ -2002,7 +2002,7 @@ const InventoryPage: React.FC = () => {
                             type="date"
                             value={issueSlipDate}
                             onChange={(e) => setIssueSlipDate(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                         <div>
@@ -2011,7 +2011,7 @@ const InventoryPage: React.FC = () => {
                             type="time"
                             value={issueSlipTime}
                             onChange={(e) => setIssueSlipTime(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                         <div>
@@ -2019,7 +2019,7 @@ const InventoryPage: React.FC = () => {
                           <select
                             value={itemLocation || ''}
                             onChange={(e) => setItemLocation(Number(e.target.value))}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select Location</option>
                             {locations.filter(l => l.location_type === 'company_premises').map(loc => (
@@ -2035,7 +2035,7 @@ const InventoryPage: React.FC = () => {
                           <select
                             value={outwardSalesOrder}
                             onChange={(e) => setOutwardSalesOrder(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select Pending Sales Order</option>
                             <option value="SO-001">SO-001</option>
@@ -2050,7 +2050,7 @@ const InventoryPage: React.FC = () => {
                               value={outwardCustomerName}
                               onChange={(e) => setOutwardCustomerName(e.target.value)}
                               placeholder={outwardSalesOrder ? "Auto-fetched" : "Enter Name"}
-                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             />
                           </div>
                           <div>
@@ -2058,7 +2058,7 @@ const InventoryPage: React.FC = () => {
                             <select
                               value={outwardBranch}
                               onChange={(e) => setOutwardBranch(e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             >
                               <option value="">Select Branch</option>
                               <option value="Main">Main</option>
@@ -2074,7 +2074,7 @@ const InventoryPage: React.FC = () => {
                             value={outwardAddress}
                             onChange={(e) => setOutwardAddress(e.target.value)}
                             rows={2}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                         <div>
@@ -2083,7 +2083,7 @@ const InventoryPage: React.FC = () => {
                             type="text"
                             value={outwardGstin}
                             onChange={(e) => setOutwardGstin(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                       </div>
@@ -2094,7 +2094,7 @@ const InventoryPage: React.FC = () => {
                           <label className="block text-sm font-semibold text-gray-700">Items</label>
                           <button
                             onClick={handleAddIssueSlipItem}
-                            className="text-teal-600 hover:text-teal-800 text-sm font-semibold"
+                            className="text-indigo-600 hover:text-indigo-800 text-sm font-semibold"
                           >
                             + Add Item
                           </button>
@@ -2146,14 +2146,14 @@ const InventoryPage: React.FC = () => {
                           value={postingNote}
                           onChange={(e) => setPostingNote(e.target.value)}
                           rows={3}
-                          className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
+                          className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                         />
                       </div>
 
                       <div className="flex gap-3 justify-end border-t border-gray-200 pt-5 mt-4">
                         <button
                           onClick={handleIssueSlipSubmit}
-                          className="px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700 font-semibold text-sm"
+                          className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 font-semibold text-sm"
                         >
                           Post & Close
                         </button>
@@ -2177,7 +2177,7 @@ const InventoryPage: React.FC = () => {
                             type="text"
                             value={issueSlipNumber}
                             onChange={(e) => setIssueSlipNumber(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                         <div>
@@ -2186,7 +2186,7 @@ const InventoryPage: React.FC = () => {
                             type="date"
                             value={issueSlipDate}
                             onChange={(e) => setIssueSlipDate(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                         <div>
@@ -2195,7 +2195,7 @@ const InventoryPage: React.FC = () => {
                             type="time"
                             value={issueSlipTime}
                             onChange={(e) => setIssueSlipTime(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                         <div>
@@ -2203,7 +2203,7 @@ const InventoryPage: React.FC = () => {
                           <select
                             value={itemLocation || ''}
                             onChange={(e) => setItemLocation(Number(e.target.value))}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select Location</option>
                             {locations.filter(l => l.location_type === 'company_premises').map(loc => (
@@ -2219,7 +2219,7 @@ const InventoryPage: React.FC = () => {
                           <select
                             value={outwardSupplierInvoice}
                             onChange={(e) => setOutwardSupplierInvoice(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select Supplier Invoice</option>
                             <option value="INV-001">INV-001</option>
@@ -2234,7 +2234,7 @@ const InventoryPage: React.FC = () => {
                               value={outwardVendorName}
                               onChange={(e) => setOutwardVendorName(e.target.value)}
                               placeholder={outwardSupplierInvoice ? "Auto-fetched" : "Enter Name"}
-                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             />
                           </div>
                           <div>
@@ -2242,7 +2242,7 @@ const InventoryPage: React.FC = () => {
                             <select
                               value={outwardBranch}
                               onChange={(e) => setOutwardBranch(e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             >
                               <option value="">Select Branch</option>
                               <option value="Main">Main</option>
@@ -2258,7 +2258,7 @@ const InventoryPage: React.FC = () => {
                             value={outwardAddress}
                             onChange={(e) => setOutwardAddress(e.target.value)}
                             rows={2}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                         <div>
@@ -2267,7 +2267,7 @@ const InventoryPage: React.FC = () => {
                             type="text"
                             value={outwardGstin}
                             onChange={(e) => setOutwardGstin(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                       </div>
@@ -2278,7 +2278,7 @@ const InventoryPage: React.FC = () => {
                           <label className="block text-sm font-semibold text-gray-700">Items</label>
                           <button
                             onClick={handleAddIssueSlipItem}
-                            className="text-teal-600 hover:text-teal-800 text-sm font-semibold"
+                            className="text-indigo-600 hover:text-indigo-800 text-sm font-semibold"
                           >
                             + Add Item
                           </button>
@@ -2330,14 +2330,14 @@ const InventoryPage: React.FC = () => {
                           value={postingNote}
                           onChange={(e) => setPostingNote(e.target.value)}
                           rows={3}
-                          className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
+                          className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                         />
                       </div>
 
                       <div className="flex gap-3 justify-end border-t border-gray-200 pt-5 mt-4">
                         <button
                           onClick={handleIssueSlipSubmit}
-                          className="px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700 font-semibold text-sm"
+                          className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 font-semibold text-sm"
                         >
                           Post & Close
                         </button>
@@ -2361,7 +2361,7 @@ const InventoryPage: React.FC = () => {
                           value="materials_issued"
                           checked={productionType === 'materials_issued'}
                           onChange={(e) => setProductionType(e.target.value as 'materials_issued')}
-                          className="w-4 h-4 text-teal-600 border-gray-300 focus:ring-teal-500"
+                          className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
                         />
                         <span className={`font-medium text-base ${productionType === 'materials_issued' ? 'text-gray-900' : 'text-gray-600 group-hover:text-gray-900'}`}>Materials issued for production</span>
                       </label>
@@ -2373,7 +2373,7 @@ const InventoryPage: React.FC = () => {
                           value="inter_process"
                           checked={productionType === 'inter_process'}
                           onChange={(e) => setProductionType(e.target.value as 'inter_process')}
-                          className="w-4 h-4 text-teal-600 border-gray-300 focus:ring-teal-500"
+                          className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
                         />
                         <span className={`font-medium text-base ${productionType === 'inter_process' ? 'text-gray-900' : 'text-gray-600 group-hover:text-gray-900'}`}>Inter-process transfer</span>
                       </label>
@@ -2385,7 +2385,7 @@ const InventoryPage: React.FC = () => {
                           value="finished_goods"
                           checked={productionType === 'finished_goods'}
                           onChange={(e) => setProductionType(e.target.value as 'finished_goods')}
-                          className="w-4 h-4 text-teal-600 border-gray-300 focus:ring-teal-500"
+                          className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
                         />
                         <span className={`font-medium text-base ${productionType === 'finished_goods' ? 'text-gray-900' : 'text-gray-600 group-hover:text-gray-900'}`}>Finished Goods produced</span>
                       </label>
@@ -2405,7 +2405,7 @@ const InventoryPage: React.FC = () => {
                             type="text"
                             value={materialIssueSlipNo}
                             onChange={(e) => setMaterialIssueSlipNo(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                       </div>
@@ -2418,7 +2418,7 @@ const InventoryPage: React.FC = () => {
                             type="date"
                             value={issueSlipDate}
                             onChange={(e) => setIssueSlipDate(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                         <div>
@@ -2427,7 +2427,7 @@ const InventoryPage: React.FC = () => {
                             type="time"
                             value={issueSlipTime}
                             onChange={(e) => setIssueSlipTime(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                       </div>
@@ -2439,7 +2439,7 @@ const InventoryPage: React.FC = () => {
                           <select
                             value={goodsFromLocation}
                             onChange={(e) => setGoodsFromLocation(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select Company Premises</option>
                             {locations.filter(l => l.location_type === 'company_premises').map(loc => (
@@ -2452,7 +2452,7 @@ const InventoryPage: React.FC = () => {
                           <select
                             value={goodsToLocation}
                             onChange={(e) => setGoodsToLocation(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select Company Premises</option>
                             {locations.filter(l => l.location_type === 'company_premises').map(loc => (
@@ -2491,7 +2491,7 @@ const InventoryPage: React.FC = () => {
                                 ))}
                                 <tr>
                                   <td colSpan={4} className="p-2 text-center">
-                                    <button onClick={handleAddIssueSlipItem} className="text-teal-600 text-xs font-bold hover:underline">+ Add Raw Material</button>
+                                    <button onClick={handleAddIssueSlipItem} className="text-indigo-600 text-xs font-bold hover:underline">+ Add Raw Material</button>
                                   </td>
                                 </tr>
                               </tbody>
@@ -2567,7 +2567,7 @@ const InventoryPage: React.FC = () => {
                                   <td colSpan={4} className="p-2 text-center">
                                     <button
                                       onClick={() => setResultingWIPItems([...resultingWIPItems, { itemCode: '', itemName: '', uom: '', quantity: '' }])}
-                                      className="text-teal-600 text-xs font-bold hover:underline"
+                                      className="text-indigo-600 text-xs font-bold hover:underline"
                                     >
                                       + Add WIP Item
                                     </button>
@@ -2586,7 +2586,7 @@ const InventoryPage: React.FC = () => {
                           value={postingNote}
                           onChange={(e) => setPostingNote(e.target.value)}
                           rows={2}
-                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         />
                       </div>
 
@@ -2622,7 +2622,7 @@ const InventoryPage: React.FC = () => {
                             type="text"
                             value={processTransferSlipNo}
                             onChange={(e) => setProcessTransferSlipNo(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                       </div>
@@ -2635,7 +2635,7 @@ const InventoryPage: React.FC = () => {
                             type="date"
                             value={issueSlipDate}
                             onChange={(e) => setIssueSlipDate(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                         <div>
@@ -2644,7 +2644,7 @@ const InventoryPage: React.FC = () => {
                             type="time"
                             value={issueSlipTime}
                             onChange={(e) => setIssueSlipTime(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                       </div>
@@ -2653,7 +2653,7 @@ const InventoryPage: React.FC = () => {
                       <div className="w-1/2">
                         <label className="block text-sm font-semibold text-gray-700 mb-1">Material Issue Slip No.</label>
                         <select
-                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         >
                           <option value="">Select Issue Slip(s)</option>
                           <option value="MIS-001">MIS-001</option>
@@ -2667,7 +2667,7 @@ const InventoryPage: React.FC = () => {
                           <select
                             value={goodsFromLocation}
                             onChange={(e) => setGoodsFromLocation(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Fetch from Material Issue Slip</option>
                             {locations.filter(l => l.location_type === 'company_premises').map(loc => (
@@ -2680,7 +2680,7 @@ const InventoryPage: React.FC = () => {
                           <select
                             value={goodsToLocation}
                             onChange={(e) => setGoodsToLocation(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select Company Premises</option>
                             {locations.filter(l => l.location_type === 'company_premises').map(loc => (
@@ -2695,13 +2695,13 @@ const InventoryPage: React.FC = () => {
                         <div className="flex gap-6 border-b border-gray-200 mb-4">
                           <button
                             onClick={() => setProdItemTab('materials_issued')}
-                            className={`text-lg font-bold pb-1 border-b-2 transition-colors ${prodItemTab === 'materials_issued' ? 'border-teal-600 text-teal-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                            className={`text-lg font-bold pb-1 border-b-2 transition-colors ${prodItemTab === 'materials_issued' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                           >
                             Materials issued
                           </button>
                           <button
                             onClick={() => setProdItemTab('converted_output')}
-                            className={`text-lg font-bold pb-1 border-b-2 transition-colors ${prodItemTab === 'converted_output' ? 'border-teal-600 text-teal-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                            className={`text-lg font-bold pb-1 border-b-2 transition-colors ${prodItemTab === 'converted_output' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                           >
                             Converted Output
                           </button>
@@ -2821,7 +2821,7 @@ const InventoryPage: React.FC = () => {
                                   <td colSpan={6} className="p-2 text-center">
                                     <button
                                       onClick={() => setConvertedOutputItems([...convertedOutputItems, { itemCode: '', itemName: '', uom: '', quantity: '', rate: '', amount: '' }])}
-                                      className="text-teal-600 text-xs font-bold hover:underline"
+                                      className="text-indigo-600 text-xs font-bold hover:underline"
                                     >
                                       + Add Output Item
                                     </button>
@@ -2840,7 +2840,7 @@ const InventoryPage: React.FC = () => {
                           value={postingNote}
                           onChange={(e) => setPostingNote(e.target.value)}
                           rows={2}
-                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         />
                       </div>
 
@@ -2876,7 +2876,7 @@ const InventoryPage: React.FC = () => {
                             type="text"
                             value={fgReceiptSlipNo}
                             onChange={(e) => setFgReceiptSlipNo(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                       </div>
@@ -2889,7 +2889,7 @@ const InventoryPage: React.FC = () => {
                             type="date"
                             value={issueSlipDate}
                             onChange={(e) => setIssueSlipDate(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                         <div>
@@ -2898,7 +2898,7 @@ const InventoryPage: React.FC = () => {
                             type="time"
                             value={issueSlipTime}
                             onChange={(e) => setIssueSlipTime(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                       </div>
@@ -2907,7 +2907,7 @@ const InventoryPage: React.FC = () => {
                       <div className="w-1/2">
                         <label className="block text-sm font-semibold text-gray-700 mb-1">Process Transfer Slip No.</label>
                         <select
-                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         >
                           <option value="">Select Process Transfer Slip(s)</option>
                           <option value="PTS-001">PTS-001</option>
@@ -2921,7 +2921,7 @@ const InventoryPage: React.FC = () => {
                           <select
                             value={goodsFromLocation}
                             onChange={(e) => setGoodsFromLocation(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Fetch from Process Transfer Slip</option>
                             {locations.filter(l => l.location_type === 'company_premises').map(loc => (
@@ -2934,7 +2934,7 @@ const InventoryPage: React.FC = () => {
                           <select
                             value={goodsToLocation}
                             onChange={(e) => setGoodsToLocation(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select Company Premises</option>
                             {locations.filter(l => l.location_type === 'company_premises').map(loc => (
@@ -2949,13 +2949,13 @@ const InventoryPage: React.FC = () => {
                         <div className="flex gap-6 border-b border-gray-200 mb-4">
                           <button
                             onClick={() => setFgItemTab('materials_issued')}
-                            className={`text-lg font-bold pb-1 border-b-2 transition-colors ${fgItemTab === 'materials_issued' ? 'border-teal-600 text-teal-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                            className={`text-lg font-bold pb-1 border-b-2 transition-colors ${fgItemTab === 'materials_issued' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                           >
                             Materials issued
                           </button>
                           <button
                             onClick={() => setFgItemTab('goods_produced')}
-                            className={`text-lg font-bold pb-1 border-b-2 transition-colors ${fgItemTab === 'goods_produced' ? 'border-teal-600 text-teal-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                            className={`text-lg font-bold pb-1 border-b-2 transition-colors ${fgItemTab === 'goods_produced' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                           >
                             Goods Produced
                           </button>
@@ -3088,7 +3088,7 @@ const InventoryPage: React.FC = () => {
                                   <td colSpan={7} className="p-2 text-center">
                                     <button
                                       onClick={() => setGoodsProducedItems([...goodsProducedItems, { itemCode: '', itemName: '', uom: '', quantityProduced: '', costAllocation: '100', rate: '', amount: '' }])}
-                                      className="text-teal-600 text-xs font-bold hover:underline"
+                                      className="text-indigo-600 text-xs font-bold hover:underline"
                                     >
                                       + Add Product
                                     </button>
@@ -3107,7 +3107,7 @@ const InventoryPage: React.FC = () => {
                           value={postingNote}
                           onChange={(e) => setPostingNote(e.target.value)}
                           rows={2}
-                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         />
                       </div>
 
@@ -3141,7 +3141,7 @@ const InventoryPage: React.FC = () => {
                             value={issueSlipNumber}
                             onChange={(e) => setIssueSlipNumber(e.target.value)}
                             placeholder="Auto/Manual"
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                         <div>
@@ -3150,7 +3150,7 @@ const InventoryPage: React.FC = () => {
                             type="date"
                             value={issueSlipDate}
                             onChange={(e) => setIssueSlipDate(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                         <div>
@@ -3159,12 +3159,12 @@ const InventoryPage: React.FC = () => {
                             type="time"
                             value={issueSlipTime}
                             onChange={(e) => setIssueSlipTime(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Status</label>
-                          <select className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+                          <select className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                             <option>Draft</option>
                             <option>Posted</option>
                           </select>
@@ -3180,7 +3180,7 @@ const InventoryPage: React.FC = () => {
                             value={goodsFromLocation}
                             onChange={(e) => setGoodsFromLocation(e.target.value)}
                             placeholder="Select location"
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                         <div>
@@ -3190,7 +3190,7 @@ const InventoryPage: React.FC = () => {
                             value={goodsToLocation}
                             onChange={(e) => setGoodsToLocation(e.target.value)}
                             placeholder="Select location"
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
                       </div>
@@ -3201,7 +3201,7 @@ const InventoryPage: React.FC = () => {
                           <label className="block text-sm font-semibold text-gray-700">Items</label>
                           <button
                             onClick={handleAddIssueSlipItem}
-                            className="text-teal-600 hover:text-teal-800 text-sm font-semibold"
+                            className="text-indigo-600 hover:text-indigo-800 text-sm font-semibold"
                           >
                             + Add Item
                           </button>
@@ -3254,7 +3254,7 @@ const InventoryPage: React.FC = () => {
                           onChange={(e) => setPostingNote(e.target.value)}
                           placeholder="Enter posting note..."
                           rows={3}
-                          className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
+                          className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                         />
                       </div>
 
@@ -3274,7 +3274,7 @@ const InventoryPage: React.FC = () => {
                         </button>
                         <button
                           onClick={handleIssueSlipSubmit}
-                          className="px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700 font-semibold text-sm"
+                          className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 font-semibold text-sm"
                         >
                           Post & Close
                         </button>
@@ -3297,7 +3297,7 @@ const InventoryPage: React.FC = () => {
         {
           showGRNForm && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2">
-              <div className="bg-white rounded-lg shadow-xl w-full h-[90vh] max-w-7xl flex flex-col">
+              <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 w-full h-[90vh] max-w-7xl flex flex-col">
                 <div className="bg-white border-b border-gray-200 p-5 flex justify-between items-center shrink-0">
                   <h3 className="text-2xl font-bold text-gray-900">Goods Receipt Note</h3>
                   <button onClick={() => setShowGRNForm(false)} className="text-gray-400 hover:text-gray-600 text-2xl">✕</button>
@@ -3313,7 +3313,7 @@ const InventoryPage: React.FC = () => {
                         value="purchases"
                         checked={grnType === 'purchases'}
                         onChange={(e) => setGrnType(e.target.value)}
-                        className="text-teal-600 focus:ring-teal-500"
+                        className="text-indigo-600 focus:ring-indigo-500"
                       />
                       <span className="text-gray-700 font-medium">Purchases</span>
                     </label>
@@ -3324,7 +3324,7 @@ const InventoryPage: React.FC = () => {
                         value="sales_return"
                         checked={grnType === 'sales_return'}
                         onChange={(e) => setGrnType(e.target.value)}
-                        className="text-teal-600 focus:ring-teal-500"
+                        className="text-indigo-600 focus:ring-indigo-500"
                       />
                       <span className="text-gray-700 font-medium">Sales Return</span>
                     </label>
@@ -3334,19 +3334,19 @@ const InventoryPage: React.FC = () => {
                   <div className="grid grid-cols-4 gap-5">
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">GRN No.</label>
-                      <input type="text" value={grnNumber} onChange={(e) => setGrnNumber(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                      <input type="text" value={grnNumber} onChange={(e) => setGrnNumber(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Date</label>
-                      <input type="date" value={grnDate} onChange={(e) => setGrnDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                      <input type="date" value={grnDate} onChange={(e) => setGrnDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Time</label>
-                      <input type="time" value={grnTime} onChange={(e) => setGrnTime(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                      <input type="time" value={grnTime} onChange={(e) => setGrnTime(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Location</label>
-                      <select value={grnLocation} onChange={(e) => setGrnLocation(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+                      <select value={grnLocation} onChange={(e) => setGrnLocation(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                         <option value="">Select Location</option>
                         {locations.filter(l => l.location_type === 'company_premises').map(loc => (
                           <option key={loc.id} value={loc.id}>{loc.name}</option>
@@ -3362,14 +3362,14 @@ const InventoryPage: React.FC = () => {
                       <div className="grid grid-cols-2 gap-5 mt-4">
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Vendor Name</label>
-                          <select value={grnVendorName} onChange={(e) => setGrnVendorName(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+                          <select value={grnVendorName} onChange={(e) => setGrnVendorName(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                             <option value="">Select Vendor</option>
                             <option value="Vendor A">Vendor A</option>
                           </select>
                         </div>
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Branch</label>
-                          <select value={grnBranch} onChange={(e) => setGrnBranch(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+                          <select value={grnBranch} onChange={(e) => setGrnBranch(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                             <option value="">Select Branch</option>
                             <option value="Main">Main</option>
                           </select>
@@ -3379,25 +3379,25 @@ const InventoryPage: React.FC = () => {
                       <div className="grid grid-cols-2 gap-5 mt-4">
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Address</label>
-                          <textarea value={grnAddress} onChange={(e) => setGrnAddress(e.target.value)} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                          <textarea value={grnAddress} onChange={(e) => setGrnAddress(e.target.value)} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                         </div>
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">GSTIN No.</label>
-                          <input type="text" value={grnGstin} onChange={(e) => setGrnGstin(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                          <input type="text" value={grnGstin} onChange={(e) => setGrnGstin(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                         </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-5 mt-4">
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Purchase Order No.</label>
-                          <select value={grnReferenceNo} onChange={(e) => setGrnReferenceNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+                          <select value={grnReferenceNo} onChange={(e) => setGrnReferenceNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                             <option value="">Select Pending PO</option>
                             <option value="PO-001">PO-001</option>
                           </select>
                         </div>
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Supplier Invoice No.</label>
-                          <input type="text" value={grnSecondaryRefNo} onChange={(e) => setGrnSecondaryRefNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                          <input type="text" value={grnSecondaryRefNo} onChange={(e) => setGrnSecondaryRefNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                         </div>
                       </div>
                     </>
@@ -3407,14 +3407,14 @@ const InventoryPage: React.FC = () => {
                       <div className="grid grid-cols-2 gap-5 mt-4">
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Customer Name</label>
-                          <select value={grnCustomerName} onChange={(e) => setGrnCustomerName(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+                          <select value={grnCustomerName} onChange={(e) => setGrnCustomerName(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                             <option value="">Select Customer</option>
                             <option value="Customer A">Customer A</option>
                           </select>
                         </div>
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Branch</label>
-                          <select value={grnBranch} onChange={(e) => setGrnBranch(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+                          <select value={grnBranch} onChange={(e) => setGrnBranch(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                             <option value="">Select Branch</option>
                             <option value="Main">Main</option>
                           </select>
@@ -3424,25 +3424,25 @@ const InventoryPage: React.FC = () => {
                       <div className="grid grid-cols-2 gap-5 mt-4">
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Address</label>
-                          <textarea value={grnAddress} onChange={(e) => setGrnAddress(e.target.value)} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                          <textarea value={grnAddress} onChange={(e) => setGrnAddress(e.target.value)} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                         </div>
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">GSTIN No.</label>
-                          <input type="text" value={grnGstin} onChange={(e) => setGrnGstin(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                          <input type="text" value={grnGstin} onChange={(e) => setGrnGstin(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                         </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-5 mt-4">
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Sales Voucher No.</label>
-                          <select value={grnReferenceNo} onChange={(e) => setGrnReferenceNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+                          <select value={grnReferenceNo} onChange={(e) => setGrnReferenceNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                             <option value="">Select Sales Voucher</option>
                             <option value="SV-001">SV-001</option>
                           </select>
                         </div>
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Debit Note No.</label>
-                          <input type="text" value={grnSecondaryRefNo} onChange={(e) => setGrnSecondaryRefNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                          <input type="text" value={grnSecondaryRefNo} onChange={(e) => setGrnSecondaryRefNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                         </div>
                       </div>
                     </>
@@ -3595,7 +3595,7 @@ const InventoryPage: React.FC = () => {
                         </tbody>
                       </table>
                       <div className="p-2">
-                        <button onClick={() => setGrnItems([...grnItems, {}])} className="text-teal-600 font-semibold text-sm">+ Add Item</button>
+                        <button onClick={() => setGrnItems([...grnItems, {}])} className="text-indigo-600 font-semibold text-sm">+ Add Item</button>
                       </div>
                     </div>
                   </div>
@@ -3604,17 +3604,17 @@ const InventoryPage: React.FC = () => {
                   {grnType === 'sales_return' && (
                     <div className="mt-4">
                       <label className="block text-sm font-bold text-gray-700 mb-2">Reasons for Return (mandatory) <span className="text-red-500">*</span></label>
-                      <textarea value={grnReason} onChange={(e) => setGrnReason(e.target.value)} rows={3} className="w-full px-3 py-2 border-2 border-teal-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Enter reason..." />
+                      <textarea value={grnReason} onChange={(e) => setGrnReason(e.target.value)} rows={3} className="w-full px-3 py-2 border-2 border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter reason..." />
                     </div>
                   )}
 
                   <div className="mt-6">
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Posting Note</label>
-                    <textarea value={grnPostingNote} onChange={(e) => setGrnPostingNote(e.target.value)} rows={3} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                    <textarea value={grnPostingNote} onChange={(e) => setGrnPostingNote(e.target.value)} rows={3} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                   </div>
 
                   <div className="flex gap-3 justify-end border-t border-gray-200 pt-5 mt-4">
-                    <button onClick={handleGRNSubmit} className="px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700 font-semibold text-sm">Post & Close</button>
+                    <button onClick={handleGRNSubmit} className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 font-semibold text-sm">Post & Close</button>
                     <button onClick={() => setShowGRNForm(false)} className="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 font-semibold text-sm">Cancel</button>
                   </div>
                 </div>
@@ -3627,7 +3627,7 @@ const InventoryPage: React.FC = () => {
         {
           showDeliveryChallan && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-96 overflow-y-auto">
+              <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 w-full max-w-2xl max-h-96 overflow-y-auto">
                 <div className="sticky top-0 bg-white border-b border-gray-200 p-6 flex justify-between items-center">
                   <h3 className="text-xl font-bold text-gray-900">Delivery Challan Details</h3>
                   <button
@@ -3641,23 +3641,23 @@ const InventoryPage: React.FC = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Dispatch Address</label>
-                      <input type="text" value={deliveryChallanAddress} onChange={(e) => setDeliveryChallanAddress(e.target.value)} placeholder="Address" className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" />
+                      <input type="text" value={deliveryChallanAddress} onChange={(e) => setDeliveryChallanAddress(e.target.value)} placeholder="Address" className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm" />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Dispatch Date</label>
-                      <input type="date" value={deliveryChallanDate} onChange={(e) => setDeliveryChallanDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" />
+                      <input type="date" value={deliveryChallanDate} onChange={(e) => setDeliveryChallanDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm" />
                     </div>
                   </div>
                   <div className="flex gap-3 justify-end border-t border-gray-200 pt-4">
                     <button
                       onClick={() => setShowDeliveryChallan(false)}
-                      className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 font-medium text-sm"
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-[4px] hover:bg-indigo-700 font-medium text-sm"
                     >
                       Save & Close
                     </button>
                     <button
                       onClick={() => setShowDeliveryChallan(false)}
-                      className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 font-medium text-sm"
+                      className="px-4 py-2 border border-gray-300 text-gray-700 rounded-[4px] hover:bg-gray-50 font-medium text-sm"
                     >
                       Cancel
                     </button>
@@ -3672,7 +3672,7 @@ const InventoryPage: React.FC = () => {
         {
           showEWayBill && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-96 overflow-y-auto">
+              <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 w-full max-w-2xl max-h-96 overflow-y-auto">
                 <div className="sticky top-0 bg-white border-b border-gray-200 p-6 flex justify-between items-center">
                   <h3 className="text-xl font-bold text-gray-900">E-Way Bill Details</h3>
                   <button
@@ -3686,23 +3686,23 @@ const InventoryPage: React.FC = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Vehicle Number</label>
-                      <input type="text" value={ewayBillVehicleNo} onChange={(e) => setEwayBillVehicleNo(e.target.value)} placeholder="Vehicle No" className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" />
+                      <input type="text" value={ewayBillVehicleNo} onChange={(e) => setEwayBillVehicleNo(e.target.value)} placeholder="Vehicle No" className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm" />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Valid Till</label>
-                      <input type="date" value={ewayBillValidTill} onChange={(e) => setEwayBillValidTill(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" />
+                      <input type="date" value={ewayBillValidTill} onChange={(e) => setEwayBillValidTill(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm" />
                     </div>
                   </div>
                   <div className="flex gap-3 justify-end border-t border-gray-200 pt-4">
                     <button
                       onClick={() => setShowEWayBill(false)}
-                      className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 font-medium text-sm"
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-[4px] hover:bg-indigo-700 font-medium text-sm"
                     >
                       Save & Close
                     </button>
                     <button
                       onClick={() => setShowEWayBill(false)}
-                      className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 font-medium text-sm"
+                      className="px-4 py-2 border border-gray-300 text-gray-700 rounded-[4px] hover:bg-gray-50 font-medium text-sm"
                     >
                       Cancel
                     </button>
@@ -3727,11 +3727,11 @@ const InventoryPage: React.FC = () => {
     return (
       <div className="space-y-6">
         {/* Header with Buttons */}
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-300">
+        <div className="bg-white p-6 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-300">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-semibold text-gray-800">Inventory Items</h3>
             <div className="flex gap-3">
-              <button className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50">
+              <button className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50">
                 📥 Upload Excel
               </button>
               <button
@@ -3739,7 +3739,7 @@ const InventoryPage: React.FC = () => {
                   setSelectedItemDetail({ isNew: true });
                   setEditFormData({ isNew: true, itemCode: '', itemName: '', description: '', category: '', uom: '', rate: '', hsnCode: '', gstRate: '' });
                 }}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-teal-600 hover:bg-teal-700"
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700"
               >
                 ➕ Add Item
               </button>
@@ -3751,7 +3751,7 @@ const InventoryPage: React.FC = () => {
             <input
               type="text"
               placeholder="Search items..."
-              className="block w-full px-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 sm:text-sm"
+              className="block w-full px-3 py-2 border border-gray-300 rounded-[4px] leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
             />
           </div>
 
@@ -3783,7 +3783,7 @@ const InventoryPage: React.FC = () => {
                     <td className="px-6 py-4 text-center space-x-2">
                       <button
                         onClick={() => handleEditItemOpen(item)}
-                        className="inline-block px-3 py-1 bg-teal-100 text-teal-600 rounded hover:bg-teal-200 font-medium text-sm"
+                        className="inline-block px-3 py-1 bg-indigo-100 text-indigo-600 rounded hover:bg-indigo-200 font-medium text-sm"
                       >
                         Edit
                       </button>
@@ -3803,7 +3803,7 @@ const InventoryPage: React.FC = () => {
 
         {/* Item Detail View */}
         {selectedItemDetail && (
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-300">
+          <div className="bg-white p-6 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-300">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-lg font-semibold text-gray-800">{selectedItemDetail.isNew ? 'Create New Item' : selectedItemDetail.isEditMode ? 'Edit Item' : 'View Item'}</h3>
               <button
@@ -3825,7 +3825,7 @@ const InventoryPage: React.FC = () => {
                     onChange={(e) => handleFormChange('itemCode', e.target.value)}
                     disabled={!editFormData?.isNew && !editFormData?.isEditMode}
                     placeholder="Enter item code"
-                    className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                   />
                 </div>
                 <div>
@@ -3836,7 +3836,7 @@ const InventoryPage: React.FC = () => {
                     onChange={(e) => handleFormChange('itemName', e.target.value)}
                     disabled={!editFormData?.isNew && !editFormData?.isEditMode}
                     placeholder="Enter item name"
-                    className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                   />
                 </div>
               </div>
@@ -3850,7 +3850,7 @@ const InventoryPage: React.FC = () => {
                   onChange={(e) => handleFormChange('description', e.target.value)}
                   disabled={!editFormData?.isNew && !editFormData?.isEditMode}
                   placeholder="Enter item description"
-                  className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -3922,7 +3922,7 @@ const InventoryPage: React.FC = () => {
                     value={editFormData?.subgroup || ''}
                     onChange={(e) => handleFormChange('subgroup', e.target.value)}
                     disabled={!selectedCategoryId || (!editFormData?.isNew && !editFormData?.isEditMode)}
-                    className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
                     <option value="">Select Group</option>
                     {availableSubgroups.map((subgroup) => (
@@ -3941,7 +3941,7 @@ const InventoryPage: React.FC = () => {
                 <label className="flex items-center mb-4">
                   <input
                     type="checkbox"
-                    className="h-4 w-4 text-teal-600 rounded"
+                    className="h-4 w-4 text-indigo-600 rounded"
                     checked={isVendorSpecificItemCode}
                     onChange={(e) => setIsVendorSpecificItemCode(e.target.checked)}
                     disabled={!selectedItemDetail.isNew && !selectedItemDetail.isEditMode}
@@ -3958,7 +3958,7 @@ const InventoryPage: React.FC = () => {
                         value={editFormData?.vendorName || ''}
                         onChange={(e) => handleFormChange('vendorName', e.target.value)}
                         readOnly={!selectedItemDetail.isNew && !selectedItemDetail.isEditMode}
-                        className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
                     </div>
                     <div>
@@ -3969,7 +3969,7 @@ const InventoryPage: React.FC = () => {
                         value={editFormData?.vendorSuffix || ''}
                         onChange={(e) => handleFormChange('vendorSuffix', e.target.value)}
                         readOnly={!selectedItemDetail.isNew && !selectedItemDetail.isEditMode}
-                        className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
                     </div>
                   </div>
@@ -3985,7 +3985,7 @@ const InventoryPage: React.FC = () => {
                       value={editFormData?.uom || ''}
                       onChange={(e) => handleFormChange('uom', e.target.value)}
                       disabled={!editFormData?.isNew && !editFormData?.isEditMode}
-                      className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                     >
                       <option value="">Select UOM</option>
                       {unitOptions.map((unit) => (
@@ -4002,7 +4002,7 @@ const InventoryPage: React.FC = () => {
                       onChange={(e) => handleFormChange('altUnit', e.target.value)}
                       placeholder="Enter alternate unit"
                       disabled={!editFormData?.isNew && !editFormData?.isEditMode}
-                      className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                     >
                       <option value="">Select alternate unit</option>
                       {unitOptions.map((unit) => (
@@ -4022,7 +4022,7 @@ const InventoryPage: React.FC = () => {
                       value="1"
                       readOnly
                       disabled={!editFormData?.isNew && !editFormData?.isEditMode}
-                      className="flex-1 px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-100 disabled:cursor-not-allowed bg-gray-50"
+                      className="flex-1 px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed bg-gray-50"
                     />
                     <span className="text-xl font-bold text-gray-700">=</span>
                     <input
@@ -4031,7 +4031,7 @@ const InventoryPage: React.FC = () => {
                       value={editFormData?.conversionFactor || ''}
                       onChange={(e) => handleFormChange('conversionFactor', e.target.value)}
                       disabled={!editFormData?.isNew && !editFormData?.isEditMode}
-                      className="flex-1 px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      className="flex-1 px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                     />
                   </div>
                 </div>
@@ -4047,10 +4047,10 @@ const InventoryPage: React.FC = () => {
                     onChange={(e) => handleFormChange('rate', e.target.value)}
                     disabled={!editFormData?.isNew && !editFormData?.isEditMode}
                     placeholder="Enter rate"
-                    className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                   />
                   <select
-                    className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                     disabled={!editFormData?.isNew && !editFormData?.isEditMode}
                     value={editFormData?.rateUnit || ''}
                     onChange={(e) => handleFormChange('rateUnit', e.target.value)}
@@ -4077,7 +4077,7 @@ const InventoryPage: React.FC = () => {
                     onChange={(e) => handleFormChange('hsnCode', e.target.value)}
                     disabled={!editFormData?.isNew && !editFormData?.isEditMode}
                     placeholder="Enter HSN code"
-                    className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                   />
                 </div>
                 <div>
@@ -4088,7 +4088,7 @@ const InventoryPage: React.FC = () => {
                     onChange={(e) => handleFormChange('gstRate', e.target.value)}
                     disabled={!editFormData?.isNew && !editFormData?.isEditMode}
                     placeholder="Enter GST rate"
-                    className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                   />
                 </div>
               </div>
@@ -4102,14 +4102,14 @@ const InventoryPage: React.FC = () => {
                     value={editFormData?.reorderLevel || ''}
                     onChange={(e) => handleFormChange('reorderLevel', e.target.value)}
                     placeholder="For Raw Material, Stock-in-trade, Stores & Spares, Packing Material"
-                    className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
                 {editFormData?.categoryPath?.includes('Work in Progress') && (
                   <label className="flex items-center">
                     <input
                       type="checkbox"
-                      className="h-4 w-4 text-teal-600 rounded"
+                      className="h-4 w-4 text-indigo-600 rounded"
                       checked={editFormData?.isSaleable || false}
                       onChange={(e) => handleFormChange('isSaleable', e.target.checked)}
                     />
@@ -4123,7 +4123,7 @@ const InventoryPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleSaveItem}
-                  className="flex-1 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-teal-600 hover:bg-teal-700"
+                  className="flex-1 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700"
                 >
                   Save & Close
                 </button>
@@ -4133,7 +4133,7 @@ const InventoryPage: React.FC = () => {
                     setSelectedItemDetail(null);
                     setEditFormData(null);
                   }}
-                  className="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50"
+                  className="px-4 py-2 border border-gray-300 text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50"
                 >
                   Cancel
                 </button>
@@ -4207,7 +4207,7 @@ const InventoryPage: React.FC = () => {
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left Column - Create/Edit GRN Series Form */}
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-300">
+        <div className="bg-white p-6 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-300">
           <h3 className="text-lg font-semibold text-gray-800 mb-6">{isEditModeGRNSeries ? 'Edit GRN Series' : 'Create GRN Series'}</h3>
           <form onSubmit={handleGRNSeriesSave} className="space-y-4">
             <div>
@@ -4216,7 +4216,7 @@ const InventoryPage: React.FC = () => {
                 type="text"
                 value={grnSeriesName}
                 onChange={(e) => setGrnSeriesName(e.target.value)}
-                className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 placeholder="Enter GRN Series name"
                 required
               />
@@ -4226,7 +4226,7 @@ const InventoryPage: React.FC = () => {
               <select
                 value={grnType}
                 onChange={(e) => setGrnType(e.target.value)}
-                className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 required
               >
                 <option value="">Select GRN Type</option>
@@ -4243,7 +4243,7 @@ const InventoryPage: React.FC = () => {
                   type="text"
                   value={grnPrefix}
                   onChange={(e) => setGrnPrefix(e.target.value)}
-                  className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   placeholder="e.g., GRN"
                 />
               </div>
@@ -4253,7 +4253,7 @@ const InventoryPage: React.FC = () => {
                   type="text"
                   value={grnSuffix}
                   onChange={(e) => setGrnSuffix(e.target.value)}
-                  className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   placeholder="e.g., /2024"
                 />
               </div>
@@ -4265,7 +4265,7 @@ const InventoryPage: React.FC = () => {
                   type="text"
                   value={grnYear}
                   onChange={(e) => setGrnYear(e.target.value)}
-                  className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   placeholder="e.g., 2024"
                   required
                 />
@@ -4276,7 +4276,7 @@ const InventoryPage: React.FC = () => {
                   type="number"
                   value={grnRequiredDigits}
                   onChange={(e) => setGrnRequiredDigits(e.target.value)}
-                  className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   placeholder="e.g., 4"
                   required
                 />
@@ -4288,7 +4288,7 @@ const InventoryPage: React.FC = () => {
                 type="text"
                 value={grnPrefix + (grnRequiredDigits ? '0001'.slice(0, Math.max(0, parseInt(grnRequiredDigits) - 1)) : '') + grnSuffix}
                 onChange={(e) => setGrnPreview(e.target.value)}
-                className="w-full px-4 py-2 border-2 border-teal-400 rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 placeholder="Preview will auto-generate"
                 readOnly
               />
@@ -4296,7 +4296,7 @@ const InventoryPage: React.FC = () => {
             <div className="flex gap-3 pt-4">
               <button
                 type="submit"
-                className="flex-1 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500"
+                className="flex-1 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 {isEditModeGRNSeries ? 'Update Series' : 'Save'}
               </button>
@@ -4313,7 +4313,7 @@ const InventoryPage: React.FC = () => {
                   setIsEditModeGRNSeries(false);
                   setSelectedGrnSeries(null);
                 }}
-                className="flex-1 inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
+                className="flex-1 inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
               >
                 Close
               </button>
@@ -4322,7 +4322,7 @@ const InventoryPage: React.FC = () => {
         </div>
 
         {/* Right Column - Existing GRN Series */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-300">
+        <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-300">
           <div className="px-6 py-4 border-b border-gray-200">
             <h3 className="text-lg font-semibold text-gray-800">GRN Series Preview</h3>
           </div>
@@ -4360,7 +4360,7 @@ const InventoryPage: React.FC = () => {
                               setIsEditModeGRNSeries(true);
                               setSelectedGrnSeries(series);
                             }}
-                            className="text-white bg-teal-600 px-3 py-1 rounded text-xs hover:bg-teal-700"
+                            className="text-white bg-indigo-600 px-3 py-1 rounded text-xs hover:bg-indigo-700"
                             title="Edit"
                           >
                             ✎ Edit
@@ -4458,7 +4458,7 @@ const InventoryPage: React.FC = () => {
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left Column - Create/Edit Issue Slip Series Form */}
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-300">
+        <div className="bg-white p-6 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-300">
           <h3 className="text-lg font-semibold text-gray-800 mb-6">{isEditModeIssueSlipSeries ? 'Edit Issue Slip Series' : 'Create Issue Slip Series'}</h3>
           <form onSubmit={handleIssueSlipSeriesSave} className="space-y-4">
             <div>
@@ -4467,7 +4467,7 @@ const InventoryPage: React.FC = () => {
                 type="text"
                 value={issueSlipSeriesName}
                 onChange={(e) => setIssueSlipSeriesName(e.target.value)}
-                className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 placeholder="Enter Issue Slip Series name"
                 required
               />
@@ -4477,7 +4477,7 @@ const InventoryPage: React.FC = () => {
               <select
                 value={issueSlipType}
                 onChange={(e) => setIssueSlipType(e.target.value)}
-                className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 required
               >
                 <option value="">Select Issue Slip Type</option>
@@ -4494,7 +4494,7 @@ const InventoryPage: React.FC = () => {
                   type="text"
                   value={issueSlipPrefix}
                   onChange={(e) => setIssueSlipPrefix(e.target.value)}
-                  className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   placeholder="e.g., ISP"
                 />
               </div>
@@ -4504,7 +4504,7 @@ const InventoryPage: React.FC = () => {
                   type="text"
                   value={issueSlipSuffix}
                   onChange={(e) => setIssueSlipSuffix(e.target.value)}
-                  className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   placeholder="e.g., /2024"
                 />
               </div>
@@ -4516,7 +4516,7 @@ const InventoryPage: React.FC = () => {
                   type="text"
                   value={issueSlipYear}
                   onChange={(e) => setIssueSlipYear(e.target.value)}
-                  className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   placeholder="e.g., 2024"
                   required
                 />
@@ -4527,7 +4527,7 @@ const InventoryPage: React.FC = () => {
                   type="number"
                   value={issueSlipRequiredDigits}
                   onChange={(e) => setIssueSlipRequiredDigits(e.target.value)}
-                  className="w-full px-4 py-2 border-2 border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   placeholder="e.g., 4"
                   required
                 />
@@ -4539,7 +4539,7 @@ const InventoryPage: React.FC = () => {
                 type="text"
                 value={issueSlipPrefix + (issueSlipRequiredDigits ? '0001'.slice(0, Math.max(0, parseInt(issueSlipRequiredDigits) - 1)) : '') + issueSlipSuffix}
                 onChange={(e) => setIssueSlipPreview(e.target.value)}
-                className="w-full px-4 py-2 border-2 border-teal-400 rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 placeholder="Preview will auto-generate"
                 readOnly
               />
@@ -4547,7 +4547,7 @@ const InventoryPage: React.FC = () => {
             <div className="flex gap-3 pt-4">
               <button
                 type="submit"
-                className="flex-1 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500"
+                className="flex-1 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 {isEditModeIssueSlipSeries ? 'Update Series' : 'Save'}
               </button>
@@ -4564,7 +4564,7 @@ const InventoryPage: React.FC = () => {
                   setIsEditModeIssueSlipSeries(false);
                   setSelectedIssueSlipSeries(null);
                 }}
-                className="flex-1 inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
+                className="flex-1 inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
               >
                 Close
               </button>
@@ -4573,7 +4573,7 @@ const InventoryPage: React.FC = () => {
         </div>
 
         {/* Right Column - Existing Issue Slip Series */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-300">
+        <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-300">
           <div className="px-6 py-4 border-b border-gray-200">
             <h3 className="text-lg font-semibold text-gray-800">Issue Slip Series Preview</h3>
           </div>
@@ -4611,7 +4611,7 @@ const InventoryPage: React.FC = () => {
                               setIsEditModeIssueSlipSeries(true);
                               setSelectedIssueSlipSeries(series);
                             }}
-                            className="text-white bg-teal-600 px-3 py-1 rounded text-xs hover:bg-teal-700"
+                            className="text-white bg-indigo-600 px-3 py-1 rounded text-xs hover:bg-indigo-700"
                             title="Edit"
                           >
                             ✎ Edit
@@ -4649,17 +4649,25 @@ const InventoryPage: React.FC = () => {
 
   const renderGRNIssueSlip = () => {
     return (
-      <div>
-        <div className="mb-6">
-          <nav className="flex space-x-8 border-b border-gray-200" aria-label="GRN & Issue Slip Sub-tabs">
-            {grnIssueSlipSubTabs.map((subTab) => (
-              <button key={subTab} onClick={() => setActiveGRNIssueSlipSubTab(subTab)} className={`pb-3 px-6 text-sm font-medium transition-all relative ${activeGRNIssueSlipSubTab === subTab ? 'text-teal-600 border-b-2 border-teal-600' : 'text-gray-500 hover:text-gray-700'}`}>
-                {subTab.toUpperCase()}
-              </button>
-            ))}
-          </nav>
+      <div className="space-y-6">
+        <div className="flex space-x-6 border-b border-slate-200">
+          {grnIssueSlipSubTabs.map((subTab) => (
+            <button
+              key={subTab}
+              onClick={() => setActiveGRNIssueSlipSubTab(subTab)}
+              className={`pb-3 px-4 text-[12px] font-bold uppercase tracking-widest transition-all relative ${activeGRNIssueSlipSubTab === subTab
+                ? 'text-indigo-600'
+                : 'text-slate-400 hover:text-slate-600'
+                }`}
+            >
+              {subTab}
+              {activeGRNIssueSlipSubTab === subTab && (
+                <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-600" />
+              )}
+            </button>
+          ))}
         </div>
-        <div className="p-0">
+        <div className="p-0 animate-in fade-in duration-300">
           {activeGRNIssueSlipSubTab === 'GRN' && renderGRN()}
           {activeGRNIssueSlipSubTab === 'Issue Slip' && renderIssueSlip()}
         </div>
@@ -4668,19 +4676,26 @@ const InventoryPage: React.FC = () => {
   };
 
   const renderMaster = () => (
-    <div>
-      <div className="mb-6">
-        <nav className="flex space-x-8 border-b border-gray-200" aria-label="Master Sub-tabs">
-          {masterSubTabs.map((subTab) => (
-            <button key={subTab} onClick={() => setActiveMasterSubTab(subTab)} className={`pb-3 px-6 text-sm font-medium transition-all relative ${activeMasterSubTab === subTab ? 'text-teal-600 border-b-2 border-teal-600' : 'text-gray-500 hover:text-gray-700'}`}>
-              {subTab.toUpperCase()}
-            </button>
-          ))}
-        </nav>
+    <div className="space-y-6">
+      <div className="flex space-x-6 border-b border-slate-200">
+        {masterSubTabs.map((subTab) => (
+          <button
+            key={subTab}
+            onClick={() => setActiveMasterSubTab(subTab)}
+            className={`pb-3 px-4 text-[13px] font-semibold uppercase tracking-wider transition-all relative ${activeMasterSubTab === subTab
+              ? 'text-indigo-600'
+              : 'text-slate-500 hover:text-slate-700'
+              }`}
+          >
+            {subTab}            {activeMasterSubTab === subTab && (
+              <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-600" />
+            )}
+          </button>
+        ))}
       </div>
-      <div className="p-0">
+      <div className="p-0 animate-in fade-in duration-300">
         {activeMasterSubTab === 'Category' && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 min-h-[500px]">
+          <div className="erp-card min-h-[500px] overflow-hidden">
             <InventoryCategoryWizard onCreateCategory={handleCreateCategory} />
           </div>
         )}
@@ -4692,23 +4707,44 @@ const InventoryPage: React.FC = () => {
   );
 
   return (
-    <div className="p-6 max-w-[1600px] mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-gray-800">Inventory Management</h2>
+    <div className="space-y-8">
+      {/* Page Header */}
+      <div className="flex items-end justify-between border-b border-slate-200 pb-6">
+        <div>
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Inventory Control</p>
+          <h2 className="text-[20px] font-bold text-slate-900">
+            Inventory Management
+          </h2>
+        </div>
       </div>
-      <div className="flex space-x-6 mb-6 border-b border-gray-200">
+
+      {/* Main Tabs */}
+      <div className="flex space-x-8 border-b border-slate-200">
         {visibleTabs.map((tab) => (
-          <button key={tab} onClick={() => setActiveTab(tab)} className={`pb-2 text-sm font-medium transition-colors ${activeTab === tab ? 'text-teal-600 border-b-2 border-teal-600' : 'text-gray-500 hover:text-gray-700'}`}>
-            {tab.toUpperCase()}
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`pb-4 text-[14px] font-semibold uppercase tracking-wider transition-all relative ${activeTab === tab
+              ? 'text-indigo-600'
+              : 'text-slate-500 hover:text-slate-700'
+              }`}
+          >
+            {tab}            {activeTab === tab && (
+              <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-600" />
+            )}
           </button>
         ))}
       </div>
-      {activeTab === 'Master' && renderMaster()}
-      {activeTab === 'Operations' && renderOperations()}
 
+      {/* Tab Content */}
+      <div className="animate-in fade-in slide-in-from-bottom-1 duration-300">
+        {activeTab === 'Master' && renderMaster()}
+        {activeTab === 'Operations' && renderOperations()}
+      </div>
     </div>
   );
 };
 
 export default InventoryPage;
+
 

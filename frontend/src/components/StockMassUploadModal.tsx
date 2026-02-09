@@ -42,7 +42,7 @@ const UploadDropzone: React.FC<{ onFilesSelected: (files: FileList) => void }> =
 
     return (
         <div
-            className={`w-full h-full flex flex-col items-center justify-center border-4 border-dashed rounded-lg transition-colors ${isDragging ? 'border-teal-500 bg-teal-50' : 'border-slate-300 bg-slate-100'}`}
+            className={`w-full h-full flex flex-col items-center justify-center border-4 border-dashed rounded-[4px] transition-colors ${isDragging ? 'border-indigo-500 bg-indigo-50/50' : 'border-slate-300 bg-slate-100'}`}
             onDragEnter={e => handleDrag(e, true)}
             onDragLeave={e => handleDrag(e, false)}
             onDragOver={e => handleDrag(e, true)}
@@ -53,7 +53,7 @@ const UploadDropzone: React.FC<{ onFilesSelected: (files: FileList) => void }> =
             <p className="text-slate-500 mt-1">Supports Excel, PDF, and Image files.</p>
             <button
                 onClick={() => inputRef.current?.click()}
-                className="mt-6 px-6 py-2 bg-teal-600 text-white font-semibold rounded-md hover:bg-teal-700"
+                className="mt-6 px-6 py-2 bg-indigo-600 text-white font-semibold rounded-[4px] hover:bg-indigo-700"
             >
                 Or click to browse
             </button>
@@ -187,9 +187,9 @@ const StockMassUploadModal: React.FC<StockMassUploadModalProps> = ({ onClose, on
         <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4" aria-modal="true" role="dialog">
             <style>{`
                 .table-input { width: 100%; border: 1px solid transparent; padding: 0.5rem 0.75rem; background-color: transparent; outline: none; border-radius: 0.375rem; transition: all 0.2s; color: #111827; /* Tailwind gray-900 */ }
-                .table-input:focus { background-color: white; border-color: #0d9488; box-shadow: 0 0 0 1px #0d9488; }
+                .table-input:focus { background-color: white; border-color: #0d9488; box-shadow-none border border-slate-200: 0 0 0 1px #0d9488; }
             `}</style>
-            <div className="bg-slate-50 rounded-xl shadow-2xl w-full max-w-5xl h-[80vh] flex flex-col">
+            <div className="bg-slate-50 rounded-[4px] shadow-none border border-slate-200-2xl w-full max-w-5xl h-[80vh] flex flex-col">
                 <header className="flex items-center justify-between p-4 border-b border-slate-200 flex-shrink-0">
                     <h2 className="text-xl font-bold text-gray-800 flex items-center space-x-3">
                         <Icon name="upload" className="w-6 h-6 text-purple-600" />
@@ -203,15 +203,15 @@ const StockMassUploadModal: React.FC<StockMassUploadModalProps> = ({ onClose, on
                         <div className="h-full">
                             <UploadDropzone onFilesSelected={handleFileSelect} />
                             <div className="text-center mt-4">
-                                <button onClick={handleDownloadTemplate} className="text-sm font-medium text-teal-600 hover:underline">
+                                <button onClick={handleDownloadTemplate} className="text-sm font-medium text-indigo-600 hover:underline">
                                     Download Excel Template
                                 </button>
                             </div>
                         </div>
                     ) : (
                         <div>
-                            <div className="p-3 mb-4 bg-teal-50 border border-teal-200 rounded-md flex justify-between items-center">
-                                <p className="text-sm text-teal-800 font-medium truncate pr-4">
+                            <div className="p-3 mb-4 bg-indigo-50/50 border border-slate-200 rounded-[4px] flex justify-between items-center">
+                                <p className="text-sm text-indigo-800 font-medium truncate pr-4">
                                     {files.length} file(s) selected: {files.map(f => f.name).join(', ')}
                                 </p>
                                 <button onClick={clearAll} className="text-sm font-semibold text-red-600 hover:text-red-800 flex-shrink-0">Clear All</button>
@@ -229,7 +229,7 @@ const StockMassUploadModal: React.FC<StockMassUploadModalProps> = ({ onClose, on
                                 !isProcessing && errors.length > 0 && (
                                     <div className="mb-4">
                                         <h4 className="font-semibold text-red-700">Processing Errors:</h4>
-                                        <ul className="list-disc list-inside p-3 bg-red-50 rounded-md text-red-600 text-sm max-h-32 overflow-y-auto">
+                                        <ul className="list-disc list-inside p-3 bg-red-50 rounded-[4px] text-red-600 text-sm max-h-32 overflow-y-auto">
                                             {errors.map((err, i) => <li key={i}><strong>{err.fileName}:</strong> {err.message}</li>)}
                                         </ul>
                                     </div>
@@ -239,8 +239,8 @@ const StockMassUploadModal: React.FC<StockMassUploadModalProps> = ({ onClose, on
                             {
                                 !isProcessing && parsedItems.length > 0 && (
                                     <>
-                                        <p className="text-teal-700 font-semibold mb-2">Found {parsedItems.length} items to import. You can edit the details below before confirming.</p>
-                                        <div className="max-h-[45vh] overflow-y-auto border rounded-md">
+                                        <p className="text-slate-700 font-semibold mb-2">Found {parsedItems.length} items to import. You can edit the details below before confirming.</p>
+                                        <div className="max-h-[45vh] overflow-y-auto border rounded-[4px]">
                                             <table className="min-w-full text-sm">
                                                 <thead className="bg-slate-100 sticky top-0">
                                                     <tr>
@@ -278,11 +278,11 @@ const StockMassUploadModal: React.FC<StockMassUploadModalProps> = ({ onClose, on
                 </main >
 
                 <footer className="p-4 border-t border-slate-200 flex justify-end items-center flex-shrink-0 space-x-2">
-                    <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-slate-200">Cancel</button>
+                    <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 rounded-[4px] hover:bg-slate-200">Cancel</button>
                     <button
                         onClick={handleSave}
                         disabled={parsedItems.length === 0 || isProcessing}
-                        className="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-md flex items-center hover:bg-teal-700 disabled:bg-gray-400"
+                        className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-[4px] flex items-center hover:bg-indigo-700 disabled:bg-gray-400"
                     >
                         <Icon name="check-circle" className="w-5 h-5 mr-2" />
                         Confirm & Import {parsedItems.length > 0 ? `(${parsedItems.length})` : ''}
@@ -294,4 +294,5 @@ const StockMassUploadModal: React.FC<StockMassUploadModalProps> = ({ onClose, on
 };
 
 export default StockMassUploadModal;
+
 

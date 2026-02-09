@@ -168,7 +168,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose }) =>
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-7xl max-h-[90vh] flex flex-col">
+            <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 w-full max-w-7xl max-h-[90vh] flex flex-col">
                 {/* Header */}
                 <div className="flex justify-between items-center p-6 border-b">
                     <h2 className="text-2xl font-bold text-gray-800">Invoice Scanner</h2>
@@ -197,9 +197,9 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose }) =>
                                 <button
                                     onClick={() => fileInputRef.current?.click()}
                                     disabled={isExtracting}
-                                    className={`inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${isExtracting
+                                    className={`inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-white ${isExtracting
                                         ? 'bg-gray-400 cursor-not-allowed'
-                                        : 'bg-teal-600 hover:bg-teal-700'
+                                        : 'bg-indigo-600 hover:bg-indigo-700'
                                         }`}
                                 >
                                     <Icon name={isExtracting ? "spinner" : "upload"} className={`w-5 h-5 mr-2 ${isExtracting ? 'animate-spin' : ''}`} />
@@ -209,7 +209,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose }) =>
                                 {extractedData.length > 0 && (
                                     <button
                                         onClick={handleDownloadExcel}
-                                        className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-teal-600 hover:bg-teal-700"
+                                        className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700"
                                     >
                                         <Icon name="download" className="w-5 h-5 mr-2" />
                                         Download Excel
@@ -227,12 +227,12 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose }) =>
 
                     {/* Data Table */}
                     {extractedData.length > 0 && (
-                        <div className="border rounded-lg overflow-hidden">
+                        <div className="border rounded-[4px] overflow-hidden">
                             <div className="overflow-x-auto">
                                 <table className="min-w-full divide-y divide-gray-200">
-                                    <thead className="bg-teal-600">
+                                    <thead className="bg-indigo-600">
                                         <tr>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider sticky left-0 bg-teal-600">
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider sticky left-0 bg-indigo-600">
                                                 #
                                             </th>
                                             {dynamicHeaders.map((key: string, idx) => (
@@ -272,4 +272,5 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose }) =>
 };
 
 export default InvoiceScannerModal;
+
 

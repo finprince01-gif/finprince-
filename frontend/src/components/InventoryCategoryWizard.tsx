@@ -351,7 +351,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
             return (
                 <div key={node.id} style={{ marginLeft: `${node.level * 20}px` }}>
                     <div
-                        className={`flex items-center py-1.5 px-2 cursor-pointer hover:bg-gray-100 rounded transition-colors ${isSelected ? 'bg-teal-100 text-teal-700 font-medium border-l-2 border-teal-500' : ''}`}
+                        className={`flex items-center py-1.5 px-2 cursor-pointer hover:bg-gray-100 rounded transition-colors ${isSelected ? 'bg-indigo-100 text-slate-700 font-medium border-l-2 border-indigo-500' : ''}`}
                         onClick={() => handleNodeSelect(node)}
                         onDoubleClick={() => {
                             if (hasChildren || node.level < 2) {
@@ -397,7 +397,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
             </div>
             <div className="flex flex-col md:flex-row gap-5 px-6 pb-6 flex-1 min-h-0">
                 {/* Left Panel: Category Tree */}
-                <div className="w-full md:w-1/2 bg-white rounded-md shadow-sm border border-gray-200 flex flex-col">
+                <div className="w-full md:w-1/2 bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200 flex flex-col">
                     <div className="p-4 border-b border-gray-200">
                         <h3 className="font-semibold text-gray-800 text-sm">Select Category</h3>
                         <p className="text-xs text-gray-500 mt-0.5">Single click to select level. Double click to expand/collapse categories.</p>
@@ -414,7 +414,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                 </div>
 
                 {/* Right Panel: Creation Form */}
-                <div className="w-full md:w-1/2 bg-white rounded-md shadow-sm border border-gray-200">
+                <div className="w-full md:w-1/2 bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200">
                     <div className="p-5">
                         <h3 className="font-semibold text-gray-800 text-sm mb-6">Category Preview</h3>
                         <form onSubmit={handleSubmit} className="space-y-5">
@@ -451,7 +451,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                                                 name="group"
                                                 value={formData.group}
                                                 onChange={handleInputChange}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none transition-all placeholder-gray-400 bg-white text-gray-800 text-sm"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all placeholder-gray-400 bg-white text-gray-800 text-sm"
                                                 placeholder="Enter Group Name"
                                                 autoFocus
                                             />
@@ -494,7 +494,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                                                 value={formData.subgroup}
                                                 onChange={handleInputChange}
                                                 disabled={!selectedNode || selectedNode.level > 1}
-                                                className={`w-full px-3 py-2 border border-gray-300 rounded focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none transition-all placeholder-gray-400 text-sm ${!selectedNode || selectedNode.level > 1
+                                                className={`w-full px-3 py-2 border border-gray-300 rounded focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all placeholder-gray-400 text-sm ${!selectedNode || selectedNode.level > 1
                                                     ? 'bg-gray-50 text-gray-400 cursor-not-allowed'
                                                     : 'bg-white text-gray-800'
                                                     }`}
@@ -509,8 +509,8 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                                 <button
                                     type="submit"
                                     disabled={!selectedNode}
-                                    className={`w-full py-2.5 px-4 rounded font-medium shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm ${selectedNode && formData.subgroup.trim()
-                                        ? 'bg-teal-600 text-white hover:bg-teal-700 cursor-pointer focus:ring-teal-500'
+                                    className={`w-full py-2.5 px-4 rounded font-medium shadow-none border border-slate-200-none border border-slate-200 transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm ${selectedNode && formData.subgroup.trim()
+                                        ? 'bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer focus:ring-indigo-500'
                                         : selectedNode
                                             ? 'bg-gray-300 text-gray-700 hover:bg-gray-400 cursor-pointer focus:ring-gray-400'
                                             : 'bg-gray-200 text-gray-400 cursor-not-allowed'
@@ -526,4 +526,5 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
         </div>
     );
 };
+
 
