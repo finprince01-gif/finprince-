@@ -42,7 +42,7 @@ const ChartWidget: React.FC<ChartWidgetProps> = ({
 }) => {
     if (!data || data.length === 0) {
         return (
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+            <div className="bg-white p-6 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-slate-200">
                 {title && <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>}
                 <div className="flex items-center justify-center h-64 text-gray-400">
                     No data available for chart
@@ -140,7 +140,7 @@ const ChartWidget: React.FC<ChartWidgetProps> = ({
     };
 
     return (
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200" style={{ minWidth: 0 }}>
+        <div className="bg-white p-6 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-slate-200" style={{ minWidth: 0 }}>
             {title && (
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
             )}
@@ -150,3 +150,4 @@ const ChartWidget: React.FC<ChartWidgetProps> = ({
 };
 
 export default ChartWidget;
+

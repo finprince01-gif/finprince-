@@ -48,12 +48,12 @@ const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
     // Theme Classes
     const themeClasses = {
         teal: {
-            hoverBorder: 'hover:border-teal-400',
-            focusRing: 'focus:ring-teal-500',
-            focusBorder: 'focus:border-teal-500',
-            activeBg: 'bg-teal-100',
-            activeText: 'text-teal-800',
-            hoverBg: 'hover:bg-teal-50'
+            hoverBorder: 'hover:border-slate-300',
+            focusRing: 'focus:ring-indigo-500',
+            focusBorder: 'focus:border-indigo-500',
+            activeBg: 'bg-indigo-100',
+            activeText: 'text-indigo-800',
+            hoverBg: 'hover:bg-indigo-50/50'
         },
         indigo: {
             hoverBorder: 'hover:border-indigo-400',
@@ -153,7 +153,7 @@ const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
         <div className={`relative ${className}`} ref={dropdownRef}>
             <div
                 onClick={() => setIsOpen(!isOpen)}
-                className={`w-full px-4 py-2 border border-gray-300 rounded-md cursor-pointer bg-white flex items-center justify-between ${themeClasses.hoverBorder} focus:outline-none focus:ring-2 ${themeClasses.focusRing} transition-colors`}
+                className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] cursor-pointer bg-white flex items-center justify-between ${themeClasses.hoverBorder} focus:outline-none focus:ring-2 ${themeClasses.focusRing} transition-colors`}
             >
                 <span className={value ? 'text-gray-700' : 'text-gray-400'}>
                     {value || placeholder}
@@ -164,7 +164,7 @@ const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
             </div>
 
             {isOpen && (
-                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 max-h-60 overflow-y-auto">
                     <div className="p-2 sticky top-0 bg-white border-b border-gray-100">
                         <input
                             type="text"
@@ -201,4 +201,5 @@ const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
 };
 
 export default CategoryHierarchicalDropdown;
+
 

@@ -61,7 +61,7 @@ const ExportButton: React.FC<ExportButtonProps> = ({ data, filename, columns }) 
         <div className="relative inline-block">
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium"
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-[4px] hover:bg-green-700 text-sm font-medium"
                 disabled={data.length === 0}
             >
                 <Icon name="download" className="w-4 h-4" />
@@ -77,7 +77,7 @@ const ExportButton: React.FC<ExportButtonProps> = ({ data, filename, columns }) 
                     />
 
                     {/* Dropdown Menu */}
-                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-20">
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200 z-20">
                         <div className="py-1">
                             <button
                                 onClick={exportToCSV}
@@ -106,3 +106,4 @@ const ExportButton: React.FC<ExportButtonProps> = ({ data, filename, columns }) 
 };
 
 export default ExportButton;
+

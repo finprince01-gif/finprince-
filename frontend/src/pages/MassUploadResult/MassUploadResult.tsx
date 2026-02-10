@@ -89,15 +89,15 @@ const MassUploadResultPage: React.FC<MassUploadResultPageProps> = ({ results, on
         <h2 className="text-2xl font-bold text-gray-800">Review & Confirm Uploads</h2>
         <button
           onClick={onDone}
-          className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500"
+          className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
         >
           <Icon name="check-circle" className="w-5 h-5 mr-2" />
           Done
         </button>
       </div>
 
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
-        <div className="p-4 mb-6 bg-green-50 border border-green-200 rounded-md">
+      <div className="bg-white p-6 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-slate-200">
+        <div className="p-4 mb-6 bg-green-50 border border-green-200 rounded-[4px]">
           <p className="font-semibold text-green-800">
             Successfully created {successfulVouchers.length} purchase vouchers. You can make final edits below before proceeding.
           </p>
@@ -106,7 +106,7 @@ const MassUploadResultPage: React.FC<MassUploadResultPageProps> = ({ results, on
         <div className="overflow-x-auto">
           <style>{`
             .table-input { width: 100%; border: 1px solid transparent; padding: 0.5rem 0.25rem; background-color: transparent; outline: none; border-radius: 0.375rem; transition: all 0.2s; color: #1e293b; }
-            .table-input:focus { background-color: white; border-color: #3b82f6; box-shadow: 0 0 0 1px #3b82f6; }
+            .table-input:focus { background-color: white; border-color: #3b82f6; box-shadow-none border border-slate-200: 0 0 0 1px #3b82f6; }
             .table-input-readonly { background-color: #f8fafc; color: #4b5563; }
           `}</style>
           <table className="min-w-full divide-y divide-gray-200">
@@ -168,3 +168,4 @@ const MassUploadResultPage: React.FC<MassUploadResultPageProps> = ({ results, on
 };
 
 export default MassUploadResultPage;
+

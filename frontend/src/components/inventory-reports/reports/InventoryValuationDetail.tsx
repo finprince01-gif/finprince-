@@ -128,19 +128,19 @@ const InventoryValuationDetail: React.FC = () => {
 
             {!loading && data.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+                    <div className="bg-white p-6 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-slate-200">
                         <div className="text-sm font-medium text-gray-500 mb-1">Total Value In</div>
                         <div className="text-3xl font-bold text-green-600">
                             ₹{totalValueIn.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </div>
                     </div>
-                    <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+                    <div className="bg-white p-6 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-slate-200">
                         <div className="text-sm font-medium text-gray-500 mb-1">Total Value Out</div>
                         <div className="text-3xl font-bold text-red-600">
                             ₹{totalValueOut.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </div>
                     </div>
-                    <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+                    <div className="bg-white p-6 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-slate-200">
                         <div className="text-sm font-medium text-gray-500 mb-1">Net Value Change</div>
                         <div className={`text-3xl font-bold ${netValueChange >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>
                             ₹{netValueChange.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
@@ -171,3 +171,4 @@ const InventoryValuationDetail: React.FC = () => {
 };
 
 export default InventoryValuationDetail;
+

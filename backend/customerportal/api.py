@@ -11,6 +11,7 @@ from .models import (
     CustomerMaster,
     CustomerMasterCategory,
     CustomerMastersSalesQuotation,
+    CustomerMastersSalesOrder,
     CustomerMasterCustomer,
     CustomerTransaction,
     CustomerSalesQuotation,
@@ -33,7 +34,8 @@ from .serializers import (
     CustomerMasterLongTermContractTermsConditionSerializer,
     CustomerTransactionSalesQuotationGeneralSerializer,
     CustomerTransactionSalesQuotationSpecificSerializer,
-    CustomerTransactionSalesOrderSerializer
+    CustomerTransactionSalesOrderSerializer,
+    CustomerMastersSalesOrderSerializer
 )
 
 
@@ -139,6 +141,57 @@ class CustomerMastersSalesQuotationViewSet(viewsets.ModelViewSet):
             'next_number': next_number
         })
 
+
+class CustomerMastersSalesOrderViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Customer Masters Sales Order Series operations
+    Manages sales order series configuration
+    """
+    permission_classes = [IsAuthenticated]
+    serializer_class = CustomerMastersSalesOrderSerializer
+    
+    def get_queryset(self):
+        """Filter sales order series by tenant"""
+        user = self.request.user
+        tenant_id = getattr(user, 'tenant_id', None)
+        if tenant_id:
+            return CustomerMastersSalesOrder.objects.filter(tenant_id=tenant_id, is_deleted=False)
+        return CustomerMastersSalesOrder.objects.none()
+    
+    def perform_create(self, serializer):
+        """Set tenant_id and created_by when creating"""
+        user = self.request.user
+        tenant_id = getattr(user, 'tenant_id', None)
+        
+        if not tenant_id:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({'error': 'User does not have a tenant_id. Please contact administrator.'})
+        
+        serializer.save(
+            tenant_id=tenant_id,
+            created_by=user.username if hasattr(user, 'username') else None
+        )
+    
+    @action(detail=True, methods=['post'])
+    def deactivate(self, request, pk=None):
+        """Soft delete a sales order series"""
+        series = self.get_object()
+        series.is_deleted = True
+        series.save()
+        return Response({'status': 'sales order series deactivated'})
+    
+    @action(detail=True, methods=['get'])
+    def preview(self, request, pk=None):
+        """Preview the next order number without incrementing"""
+        series = self.get_object()
+        next_number = series.current_number + 1
+        number_str = str(next_number).zfill(series.required_digits)
+        preview_number = f"{series.prefix}{number_str}{series.suffix}"
+        return Response({
+            'preview': preview_number,
+            'current_number': series.current_number,
+            'next_number': next_number
+        })
 
 class CustomerMasterCustomerViewSet(viewsets.ModelViewSet):
     """

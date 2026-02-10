@@ -71,7 +71,7 @@ const ReportTable: React.FC<ReportTableProps> = ({
 
     if (loading) {
         return (
-            <div className="bg-white p-12 rounded-lg shadow-sm border border-slate-200 text-center">
+            <div className="bg-white p-12 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-slate-200 text-center">
                 <Icon name="spinner" className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-3" />
                 <p className="text-gray-500">Loading report data...</p>
             </div>
@@ -80,7 +80,7 @@ const ReportTable: React.FC<ReportTableProps> = ({
 
     if (data.length === 0) {
         return (
-            <div className="bg-white p-12 rounded-lg shadow-sm border border-slate-200 text-center">
+            <div className="bg-white p-12 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-slate-200 text-center">
                 <div className="text-6xl mb-3">📭</div>
                 <p className="text-gray-500">No data available for the selected filters.</p>
                 <p className="text-sm text-gray-400 mt-1">Try adjusting your filter criteria.</p>
@@ -89,7 +89,7 @@ const ReportTable: React.FC<ReportTableProps> = ({
     }
 
     return (
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200">
+        <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-slate-200">
             {/* Table */}
             <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
@@ -198,3 +198,4 @@ const ReportTable: React.FC<ReportTableProps> = ({
 };
 
 export default ReportTable;
+

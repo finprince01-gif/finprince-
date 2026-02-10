@@ -129,7 +129,7 @@ export const HierarchicalDropdown: React.FC<HierarchicalDropdownProps> = ({ onSe
             <select
                 value={selectedValue}
                 onChange={handleChange}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm"
+                className="block w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
             >
                 <option value="">Select a Group</option>
                 {options.map((option, index) => (
@@ -144,9 +144,9 @@ export const HierarchicalDropdown: React.FC<HierarchicalDropdownProps> = ({ onSe
 
             {/* Display selected code if available */}
             {selectedValue && options.find(opt => opt.displayLabel === selectedValue)?.code && (
-                <div className="mt-2 p-2 bg-teal-50 border border-teal-200 rounded-md">
+                <div className="mt-2 p-2 bg-indigo-50/50 border border-slate-200 rounded-[4px]">
                     <div className="text-xs font-medium text-teal-900">Code:</div>
-                    <div className="text-sm font-bold text-teal-700">
+                    <div className="text-sm font-bold text-slate-700">
                         {options.find(opt => opt.displayLabel === selectedValue)?.code}
                     </div>
                 </div>
@@ -154,4 +154,5 @@ export const HierarchicalDropdown: React.FC<HierarchicalDropdownProps> = ({ onSe
         </div>
     );
 };
+
 

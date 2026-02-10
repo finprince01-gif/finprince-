@@ -1,130 +1,100 @@
-/**
- * ============================================================================
- * SIDEBAR COMPONENT (Sidebar.tsx)
- * ============================================================================
- * Left navigation sidebar - provides navigation to all main sections of the app.
- * 
- * FEATURES:
- * - Company name display at top
- * - Navigation menu with icons
- * - Active page highlighting
- * - Logout button at bottom
- * - Permission-based filtering using usePermissions hook
- * 
- * NAVIGATION ITEMS:
- * - Dashboard - Overview and metrics
- * - Masters - Ledgers and chart of accounts
- * - Inventory - Stock items and inventory management
- * - Vouchers - Transaction entry (sales, purchase, payments)
- * - Vendor Portal - Vendor management
- * - Customer Portal - Customer management
- * - Payroll - Employee payroll
- * - Reports - Financial reports
- * - Settings - Company settings
- * 
- * FOR NEW DEVELOPERS:
- * - Add new menu items to the `allNavItems` array
- * - Use Icon component for consistent icon display
- * */
-
-// Import React
 import React from 'react';
-
-// Import Page type for navigation
 import type { Page } from '../types';
-
-// Import Icon component for menu icons
 import Icon from './Icon';
-
-// Import permissions hook
 import { usePermissions } from '../hooks/usePermissions';
 
-/**
- * Props for Sidebar component
- */
 interface SidebarProps {
-  currentPage: Page;              // Currently active page (for highlighting)
-  onNavigate: (page: Page) => void;  // Callback when user clicks a menu item
-  onLogout: () => void;           // Callback when user clicks logout
-  companyName: string;            // Company name to display at top
-  userPlan?: string;              // User's subscription plan (Basic, Pro, Enterprise)
+  currentPage: Page;
+  onNavigate: (page: Page) => void;
+  onLogout: () => void;
+  companyName: string;
+  userPlan?: string;
 }
 
-/**
- * Sidebar Component - Main navigation sidebar
- */
 const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, companyName, userPlan }) => {
   const { hasPageAccess, permissions, isSuperuser } = usePermissions();
 
-  // Define all available navigation items
-  // Each item has a name and icon
-  const allNavItems: { name: Page; icon: React.ReactElement }[] = [
-    { name: 'Dashboard', icon: <Icon name="dashboard" /> },
-    { name: 'Masters', icon: <Icon name="masters" /> },
-    { name: 'Inventory', icon: <Icon name="inventory" /> },
-    { name: 'Vouchers', icon: <Icon name="vouchers" /> },
-    { name: 'Vendor Portal', icon: <Icon name="users" /> },
-    { name: 'Customer Portal', icon: <Icon name="users" /> },
-    { name: 'Payroll', icon: <Icon name="users" /> },
-    { name: 'Service', icon: <Icon name="users" /> },
-    { name: 'GST', icon: <Icon name="reports" /> },
-    { name: 'Reports', icon: <Icon name="reports" /> },
-    { name: 'Users & Roles', icon: <Icon name="users" /> },
-    { name: 'Settings', icon: <Icon name="settings" /> },
+  const allNavItems: { name: Page; icon: string }[] = [
+    { name: 'Dashboard', icon: 'dashboard' },
+    { name: 'Masters', icon: 'ledger' },
+    { name: 'Inventory', icon: 'inventory' },
+    { name: 'Vouchers', icon: 'vouchers' },
+    { name: 'Vendor Portal', icon: 'vendor-portal' },
+    { name: 'Customer Portal', icon: 'customer-portal' },
+    { name: 'Payroll', icon: 'payroll' },
+    { name: 'Service', icon: 'service' },
+    { name: 'GST', icon: 'gst' },
+    { name: 'Reports', icon: 'reports' },
+    { name: 'Users & Roles', icon: 'users' },
+    { name: 'Settings', icon: 'settings' },
   ];
 
-  // Filter navigation items based on permissions
   const navItems = allNavItems.filter(item => {
-    // Always show Dashboard
     if (item.name === 'Dashboard') return true;
-
-    // Check view permission for all other pages
     return hasPageAccess(item.name);
   });
 
-  // If RBAC is not configured (no permissions set), show all menu items
-  // This ensures users have full access when roles aren't set up yet
   const hasRBACConfigured = Object.keys(permissions).length > 0 || isSuperuser;
   const displayItems = hasRBACConfigured ? navItems : allNavItems;
 
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col fixed h-full">
-      {/* Company Name */}
-      <div className="p-6 border-b border-gray-200">
-        <h1 className="text-xl font-bold text-teal-600">{companyName || 'muthu'}</h1>
+    <aside className="w-[240px] bg-white border-r border-slate-200 flex flex-col fixed h-full z-40">
+      {/* Brand Section */}
+      <div className="h-[56px] flex items-center px-4 border-b border-slate-200 bg-slate-50/30">
+        <div className="flex items-center gap-2.5 overflow-hidden">
+          <div className="w-7 h-7 bg-indigo-600 rounded flex-shrink-0 flex items-center justify-center text-white text-[13px] font-bold">
+            {companyName?.charAt(0) || 'A'}
+          </div>
+          <span className="text-[15px] font-semibold text-slate-800 truncate">
+            {companyName || 'Ai Accounting'}
+          </span>
+        </div>
       </div>
 
-      {/* Navigation Items */}
-      <nav className="flex-1 overflow-y-auto py-4">
+      {/* Navigation Links */}
+      <nav className="flex-1 overflow-y-auto pt-2">
         {displayItems.map((item) => {
           const isActive = currentPage === item.name;
           return (
-            <a
+            <button
               key={item.name}
               onClick={() => onNavigate(item.name)}
-              className={`flex items-center space-x-3 px-6 py-3 cursor-pointer transition-colors ${isActive
-                ? 'text-teal-600 bg-teal-50'
-                : 'text-gray-600 hover:text-teal-600 hover:bg-gray-50'
+              className={`w-full flex items-center gap-3 px-4 py-[10px] transition-colors relative group ${isActive
+                ? 'bg-indigo-50 text-indigo-700'
+                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
                 }`}
             >
-              <div className="w-5 h-5">
-                {item.icon}
+              {isActive && (
+                <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-indigo-600" />
+              )}
+              <div className={`flex-shrink-0 transition-colors ${isActive ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-500'}`}>
+                <Icon name={item.icon as any} className="w-[18px] h-[18px]" />
               </div>
-              <span className="text-sm font-medium">{item.name}</span>
-            </a>
+              <span className="text-[14px] font-medium leading-5">{item.name}</span>
+            </button>
           );
         })}
       </nav>
 
-      {/* Logout */}
-      <div className="p-4 border-t border-gray-200">
-        <a
+      {/* Footer / User Section */}
+      <div className="mt-auto border-t border-slate-200 p-2">
+        <button
           onClick={onLogout}
-          className="flex items-center space-x-3 px-6 py-3 text-gray-600 hover:text-teal-600 cursor-pointer transition-colors"
+          className="w-full flex items-center gap-3 px-3 py-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-[4px] transition-colors group"
         >
-          <Icon name="logout" className="w-5 h-5" />
-          <span className="text-sm font-medium">Logout</span>
-        </a>
+          <div className="flex-shrink-0 text-slate-400 group-hover:text-red-500">
+            <Icon name="logout" className="w-[18px] h-[18px]" />
+          </div>
+          <span className="text-[14px] font-medium leading-none">Logout</span>
+        </button>
+
+        <div className="mt-2 p-3 bg-slate-50 border border-slate-200 rounded-[4px]">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Active Plan</span>
+            <div className="w-1.5 h-1.5 bg-green-500 rounded-[4px]" />
+          </div>
+          <div className="text-[13px] font-semibold text-slate-700">{userPlan || 'Enterprise Starter'}</div>
+        </div>
       </div>
     </aside>
   );

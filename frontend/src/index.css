@@ -1,27 +1,210 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-body {
-    font-family: 'Inter', sans-serif;
+@layer base {
+
+  /* Global Font Application - Outfit for Premium Enterprise ERP */
+  html {
+    font-family: 'Outfit', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-700 antialiased;
+    font-family: 'Outfit', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Root container */
+  #root {
+    font-family: 'Outfit', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+
+  /* Ensure all elements inherit the font */
+  *,
+  *::before,
+  *::after {
+    font-family: inherit !important;
+  }
+
+  /* Explicit font for all interactive elements */
+  button,
+  input,
+  select,
+  textarea,
+  label,
+  a,
+  span,
+  div,
+  p,
+  table,
+  th,
+  td {
+    font-family: inherit;
+  }
+
+  /* Enterprise-Grade Headings - Premium Uppercase Style */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply text-slate-900 uppercase tracking-wider;
+    font-family: 'Outfit', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    font-weight: 700;
+  }
+
+  h1 {
+    font-size: 18px;
+    line-height: 28px;
+    @apply tracking-[0.1em];
+  }
+
+  h2 {
+    font-size: 16px;
+    line-height: 24px;
+    @apply tracking-[0.05em];
+  }
+
+  h3 {
+    font-size: 15px;
+    line-height: 22px;
+  }
+
+  /* Small text - labels, helper text */
+  small,
+  .text-xs,
+  .text-sm {
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  /* Button text - Premium Style */
+  button {
+    font-size: 13px;
+    @apply font-semibold uppercase tracking-wider;
+  }
+
+  /* Input and form elements */
+  input,
+  select,
+  textarea {
+    font-size: 14px;
+    font-weight: 400;
+  }
+
+  /* Labels - Premium Style */
+  label {
+    @apply text-[11px] font-bold text-slate-500 uppercase tracking-widest;
+  }
+
+  /* Navigation and tabs */
+  nav,
+  ul,
+  li {
+    font-family: inherit;
+  }
+
+  /* All text elements */
+  strong,
+  b,
+  em,
+  i,
+  small,
+  mark,
+  del,
+  ins,
+  sub,
+  sup {
+    font-family: inherit;
+  }
 }
 
+@layer components {
 
-/* Custom scrollbar for a more modern look */
+  /* Modern Enterprise SaaS Components */
+  .erp-card {
+    @apply bg-white border border-slate-200 rounded shadow-sm;
+  }
+
+  .erp-input {
+    @apply h-[40px] px-4 bg-white border border-slate-200 rounded text-sm text-slate-900 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all placeholder:text-slate-400 font-medium;
+  }
+
+  .erp-label {
+    @apply block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2;
+  }
+
+  .erp-button-primary {
+    @apply h-[40px] px-6 bg-indigo-600 text-white font-bold rounded uppercase tracking-wider hover:bg-indigo-700 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-indigo-600/20;
+  }
+
+  .erp-button-secondary {
+    @apply h-[40px] px-6 bg-white border border-slate-200 text-slate-700 font-bold rounded uppercase tracking-wider hover:bg-slate-50 active:scale-[0.98] transition-all;
+  }
+
+  .erp-table-container {
+    @apply erp-card overflow-hidden;
+  }
+
+  .erp-table {
+    @apply w-full text-sm border-collapse;
+  }
+
+  .erp-table th {
+    @apply px-4 py-3 bg-slate-50 border-b border-slate-200 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest;
+  }
+
+  .erp-table td {
+    @apply px-4 py-3.5 border-b border-slate-100 text-slate-700 font-medium;
+  }
+
+  .erp-table tr:last-child td {
+    @apply border-b-0;
+  }
+
+  .erp-table tr:hover td {
+    @apply bg-slate-50/50;
+  }
+
+  /* KPI Cards */
+  .erp-kpi-card {
+    @apply p-6 erp-card flex flex-col gap-2 relative overflow-hidden;
+  }
+
+  .erp-kpi-label {
+    @apply text-[11px] font-bold text-slate-400 uppercase tracking-[0.15em];
+  }
+
+  .erp-kpi-value {
+    @apply text-2xl font-bold text-slate-800 tracking-tight;
+  }
+}
+
+/* Custom scrollbar for modern SaaS feel */
 ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
-    background: #f1f5f9;
+  @apply bg-transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-    background: #94a3b8;
-    border-radius: 10px;
+  @apply bg-slate-200 rounded-full hover:bg-slate-300 transition-colors;
 }
 
-::-webkit-scrollbar-thumb:hover {
-    background: #64748b;
+/* Force Outfit font on absolutely everything */
+@layer utilities {
+  * {
+    font-family: 'Outfit', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif !important;
+  }
 }

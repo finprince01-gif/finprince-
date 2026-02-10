@@ -80,7 +80,7 @@ const InventoryReportsPage: React.FC = () => {
                 {ReportComponent ? (
                     <ReportComponent />
                 ) : (
-                    <div className="bg-white p-12 rounded-lg shadow-sm border border-slate-200 text-center">
+                    <div className="bg-white p-12 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-slate-200 text-center">
                         <p className="text-gray-500">This report is not yet implemented.</p>
                         <p className="text-sm text-gray-400 mt-1">Coming soon...</p>
                     </div>
@@ -95,13 +95,13 @@ const InventoryReportsPage: React.FC = () => {
           padding: 0.5rem 0.75rem;
           border: 1px solid #d1d5db;
           border-radius: 0.375rem;
-          box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+          box-shadow-none border border-slate-200: 0 1px 2px 0 rgb(0 0 0 / 0.05);
           outline: none;
-          transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+          transition: border-color 0.15s ease-in-out, box-shadow-none border border-slate-200 0.15s ease-in-out;
         }
         .form-input:focus {
           border-color: #3b82f6;
-          box-shadow: 0 0 0 1px #3b82f6;
+          box-shadow-none border border-slate-200: 0 0 0 1px #3b82f6;
         }
         .form-button {
           display: inline-flex;
@@ -112,7 +112,7 @@ const InventoryReportsPage: React.FC = () => {
           font-size: 0.875rem;
           font-weight: 500;
           border-radius: 0.375rem;
-          box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+          box-shadow-none border border-slate-200: 0 1px 2px 0 rgb(0 0 0 / 0.05);
           color: white;
           background-color: #2563eb;
         }
@@ -140,3 +140,4 @@ const InventoryReportsPage: React.FC = () => {
 };
 
 export default InventoryReportsPage;
+
