@@ -934,6 +934,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const [contactNo, setContactNo] = useState('');
     const [vendorCategory, setVendorCategory] = useState('');
     const [isAlsoCustomer, setIsAlsoCustomer] = useState(false);
+    const [tcsApplicable, setTcsApplicable] = useState(false);
+    const [createCustomerPrompt, setCreateCustomerPrompt] = useState<boolean | null>(null);
+
 
     // Handle Basic Details Form Submit (Navigation Only)
     const handleBasicDetailsSubmit = (e: React.FormEvent) => {
@@ -1982,49 +1985,183 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             )}
                                         </div>
 
-                                        {/* GSTIN Body */}
-                                        {record.isExpanded && (
-                                            <div className="space-y-6 pl-4 border-l-2 border-slate-100">
+                                            {/* Vendor-Customer Linking Section */}
+                                            <div className="border-t border-gray-200 pt-6 mt-6">
+                                                <div className="mb-6">
+                                                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                                                        Is this vendor also a customer?
+                                                    </label>
+                                                    <div className="flex gap-4">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setIsAlsoCustomer(true)}
+                                                            className={`px-6 py-2 border-2 rounded-md focus:outline-none focus:ring-2 transition-all ${isAlsoCustomer
+                                                                ? 'border-teal-500 text-teal-600 bg-teal-50 ring-teal-500'
+                                                                : 'border-gray-300 text-gray-700 hover:bg-gray-50 focus:ring-gray-300'
+                                                                }`}
+                                                        >
+                                                            Yes
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setIsAlsoCustomer(false)}
+                                                            className={`px-6 py-2 border-2 rounded-md focus:outline-none focus:ring-2 transition-all ${!isAlsoCustomer
+                                                                ? 'border-teal-500 text-teal-600 bg-teal-50 ring-teal-500'
+                                                                : 'border-gray-300 text-gray-700 hover:bg-gray-50 focus:ring-gray-300'
+                                                                }`}
+                                                        >
+                                                            No
+                                                        </button>
+                                                    </div>
+                                                    {isAlsoCustomer && (
+                                                        <p className="mt-2 text-xs text-gray-500">
+                                                            Searching for customer using PAN No & Vendor Name...
+                                                        </p>
+                                                    )}
+                                                </div>
 
-                                                {/* GSTIN & Fetch */}
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">GSTIN</label>
-                                                        <div className="flex gap-2">
-                                                            <input
-                                                                type="text"
-                                                                value={record.gstin}
-                                                                onChange={(e) => handleGstChange(record.id, 'gstin', e.target.value)}
-                                                                className="flex-1 px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100"
-                                                                placeholder="22AAAAA0000A1Z5"
-                                                                disabled={record.registrationType === 'unregistered'}
-                                                            />
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleFetchGstDetails(record.id)}
-                                                                disabled={record.registrationType === 'unregistered' || loadingGstFetch || !record.gstin}
-                                                                className="px-4 py-2 border border-indigo-500 text-indigo-600 rounded-[4px] hover:bg-indigo-50/50 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                                                            >
-                                                                {loadingGstFetch ? 'Fetching...' : 'Fetch Branch Details'}
-                                                            </button>
+                                                {/* Customer Link Section (Simulation for now) */}
+                                                {isAlsoCustomer && (
+                                                    <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-md animate-fade-in">
+                                                        {/* Case 1: Customer Found (Hidden for demo, logic to be implemented) */}
+                                                        <div className="hidden space-y-3">
+                                                            <div className="flex items-center justify-between">
+                                                                <span className="text-sm font-medium text-gray-700">
+                                                                    Link the vendor to this customer:
+                                                                </span>
+                                                            </div>
+                                                            {/* ... existing link UI ... */}
+                                                        </div>
+
+                                                        {/* Case 2: No Customer Found - Show Create Option */}
+                                                        <div className="space-y-4">
+                                                            <p className="text-sm text-red-500 font-medium">
+                                                                No customer found with matching PAN No & Vendor Name
+                                                            </p>
+
+                                                            <div>
+                                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                                    Create a Customer?
+                                                                </label>
+                                                                <div className="flex gap-4">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setCreateCustomerPrompt(true)}
+                                                                        className={`px-6 py-2 border-2 rounded-md focus:outline-none focus:ring-2 transition-all ${createCustomerPrompt === true
+                                                                            ? 'border-teal-500 text-teal-600 bg-teal-50 ring-teal-500'
+                                                                            : 'border-gray-300 text-gray-700 hover:bg-gray-50 focus:ring-gray-300'
+                                                                            }`}
+                                                                    >
+                                                                        Yes
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setCreateCustomerPrompt(false)}
+                                                                        className={`px-6 py-2 border-2 rounded-md focus:outline-none focus:ring-2 transition-all ${createCustomerPrompt === false
+                                                                            ? 'border-teal-500 text-teal-600 bg-teal-50 ring-teal-500'
+                                                                            : 'border-gray-300 text-gray-700 hover:bg-gray-50 focus:ring-gray-300'
+                                                                            }`}
+                                                                    >
+                                                                        No
+                                                                    </button>
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                     </div>
+                                                )}
 
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Registration Type</label>
-                                                        <select
-                                                            value={record.registrationType}
-                                                            onChange={(e) => handleGstChange(record.id, 'registrationType', e.target.value)}
-                                                            className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                {/* TCS Applicable Section */}
+                                                <div className="mt-6 pt-6 border-t border-gray-200">
+                                                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                                                        TCS Applicable under GST?
+                                                    </label>
+                                                    <div className="flex gap-4">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setTcsApplicable(true)}
+                                                            className={`px-6 py-2 border-2 rounded-md focus:outline-none focus:ring-2 transition-all ${tcsApplicable
+                                                                ? 'border-teal-500 text-teal-600 bg-teal-50 ring-teal-500'
+                                                                : 'border-gray-300 text-gray-700 hover:bg-gray-50 focus:ring-gray-300'
+                                                                }`}
                                                         >
-                                                            <option value="regular">Regular</option>
-                                                            <option value="composition">Composition</option>
-                                                            <option value="consumer">Consumer</option>
-                                                            <option value="unregistered">Unregistered</option>
-                                                            <option value="overseas">Overseas</option>
-                                                            <option value="special_economic_zone">Special Economic Zone (SEZ)</option>
-                                                            <option value="deemed_export">Deemed Export</option>
-                                                        </select>
+                                                            Yes
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setTcsApplicable(false)}
+                                                            className={`px-6 py-2 border-2 rounded-md focus:outline-none focus:ring-2 transition-all ${!tcsApplicable
+                                                                ? 'border-teal-500 text-teal-600 bg-teal-50 ring-teal-500'
+                                                                : 'border-gray-300 text-gray-700 hover:bg-gray-50 focus:ring-gray-300'
+                                                                }`}
+                                                        >
+                                                            No
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Action Buttons */}
+                                            <div className="flex justify-between pt-4">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setActiveMasterSubTab('Vendor Creation')}
+                                                    className="px-6 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
+                                                >
+                                                    Back
+                                                </button>
+                                                <button
+                                                    type="submit"
+                                                    className="px-6 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-teal-600 hover:bg-teal-700 focus:outline-none"
+                                                >
+                                                    Next
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                )}
+
+                                {activeMasterSubTab === 'GST Details' && (
+                                    <div className="p-6">
+                                        <div className="flex justify-between items-center mb-6">
+                                            <div className="flex items-center">
+                                                <button
+                                                    onClick={() => setActiveMasterSubTab('Vendor Creation')}
+                                                    className="mr-4 p-2 hover:bg-gray-100 rounded-full transition-colors"
+                                                    title="Back to Vendor Creation"
+                                                >
+                                                    <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                                                </button>
+                                                <h3 className="text-lg font-semibold text-gray-800">GST Details</h3>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={handleAddGstRecord}
+                                                className="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-teal-600 hover:bg-teal-700 focus:outline-none"
+                                            >
+                                                + Add Another GSTIN
+                                            </button>
+                                        </div>
+
+                                        <form className="space-y-8" onSubmit={handleGSTDetailsSubmit}>
+                                            {gstRecords.map((record, index) => (
+                                                <div key={record.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                                                    {/* GSTIN Accordion Header */}
+                                                    <div className="flex justify-between items-center cursor-pointer mb-4" onClick={() => toggleGstExpand(record.id)}>
+                                                        <div className="flex items-center gap-2">
+                                                            <svg className={`w-5 h-5 transition-transform ${record.isExpanded ? 'transform rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                            </svg>
+                                                            <h4 className="font-medium text-gray-800">GSTIN #{index + 1} {record.gstin ? `- ${record.gstin}` : ''}</h4>
+                                                        </div>
+                                                        {index > 0 && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => { e.stopPropagation(); handleRemoveGstRecord(record.id); }}
+                                                                className="text-red-500 hover:text-red-700 text-sm"
+                                                            >
+                                                                Remove
+                                                            </button>
+                                                        )}
                                                     </div>
 
                                                     {record.registrationType !== 'unregistered' && (
