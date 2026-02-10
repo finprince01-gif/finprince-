@@ -934,6 +934,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const [contactNo, setContactNo] = useState('');
     const [vendorCategory, setVendorCategory] = useState('');
     const [isAlsoCustomer, setIsAlsoCustomer] = useState(false);
+    const [tcsApplicable, setTcsApplicable] = useState(false);
+    const [createCustomerPrompt, setCreateCustomerPrompt] = useState<boolean | null>(null);
+
 
     // Handle Basic Details Form Submit (Navigation Only)
     const handleBasicDetailsSubmit = (e: React.FormEvent) => {
@@ -1851,7 +1854,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
                                             {/* Vendor-Customer Linking Section */}
                                             <div className="border-t border-gray-200 pt-6 mt-6">
-                                                <div className="mb-4">
+                                                <div className="mb-6">
                                                     <label className="block text-sm font-medium text-gray-700 mb-3">
                                                         Is this vendor also a customer?
                                                     </label>
@@ -1859,7 +1862,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         <button
                                                             type="button"
                                                             onClick={() => setIsAlsoCustomer(true)}
-                                                            className={`px-6 py-2 border-2 rounded-md focus:outline-none focus:ring-2 ${isAlsoCustomer
+                                                            className={`px-6 py-2 border-2 rounded-md focus:outline-none focus:ring-2 transition-all ${isAlsoCustomer
                                                                 ? 'border-teal-500 text-teal-600 bg-teal-50 ring-teal-500'
                                                                 : 'border-gray-300 text-gray-700 hover:bg-gray-50 focus:ring-gray-300'
                                                                 }`}
@@ -1869,7 +1872,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         <button
                                                             type="button"
                                                             onClick={() => setIsAlsoCustomer(false)}
-                                                            className={`px-6 py-2 border-2 rounded-md focus:outline-none focus:ring-2 ${!isAlsoCustomer
+                                                            className={`px-6 py-2 border-2 rounded-md focus:outline-none focus:ring-2 transition-all ${!isAlsoCustomer
                                                                 ? 'border-teal-500 text-teal-600 bg-teal-50 ring-teal-500'
                                                                 : 'border-gray-300 text-gray-700 hover:bg-gray-50 focus:ring-gray-300'
                                                                 }`}
@@ -1877,59 +1880,89 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                             No
                                                         </button>
                                                     </div>
-                                                    <p className="mt-2 text-xs text-gray-500">
-                                                        If "Yes" is clicked, search for customer using PAN No & Vendor Name
-                                                    </p>
+                                                    {isAlsoCustomer && (
+                                                        <p className="mt-2 text-xs text-gray-500">
+                                                            Searching for customer using PAN No & Vendor Name...
+                                                        </p>
+                                                    )}
                                                 </div>
 
-                                                {/* Customer Link Section (shown when Yes is clicked) */}
-                                                <div className="hidden mt-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
-                                                    <div className="space-y-3">
-                                                        <div className="flex items-center justify-between">
-                                                            <span className="text-sm font-medium text-gray-700">
-                                                                Link the vendor to this customer:
-                                                            </span>
+                                                {/* Customer Link Section (Simulation for now) */}
+                                                {isAlsoCustomer && (
+                                                    <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-md animate-fade-in">
+                                                        {/* Case 1: Customer Found (Hidden for demo, logic to be implemented) */}
+                                                        <div className="hidden space-y-3">
+                                                            <div className="flex items-center justify-between">
+                                                                <span className="text-sm font-medium text-gray-700">
+                                                                    Link the vendor to this customer:
+                                                                </span>
+                                                            </div>
+                                                            {/* ... existing link UI ... */}
                                                         </div>
-                                                        <div className="flex gap-3">
-                                                            <button
-                                                                type="button"
-                                                                className="flex-1 px-4 py-2 border-2 border-teal-500 text-teal-600 rounded-md hover:bg-teal-50 focus:outline-none"
-                                                            >
-                                                                Yes
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                className="flex-1 px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none"
-                                                            >
-                                                                No
-                                                            </button>
-                                                        </div>
-                                                        <div className="text-sm text-gray-600">
-                                                            <span className="font-medium">Customer Code - Customer Name</span>
+
+                                                        {/* Case 2: No Customer Found - Show Create Option */}
+                                                        <div className="space-y-4">
+                                                            <p className="text-sm text-red-500 font-medium">
+                                                                No customer found with matching PAN No & Vendor Name
+                                                            </p>
+
+                                                            <div>
+                                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                                    Create a Customer?
+                                                                </label>
+                                                                <div className="flex gap-4">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setCreateCustomerPrompt(true)}
+                                                                        className={`px-6 py-2 border-2 rounded-md focus:outline-none focus:ring-2 transition-all ${createCustomerPrompt === true
+                                                                            ? 'border-teal-500 text-teal-600 bg-teal-50 ring-teal-500'
+                                                                            : 'border-gray-300 text-gray-700 hover:bg-gray-50 focus:ring-gray-300'
+                                                                            }`}
+                                                                    >
+                                                                        Yes
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setCreateCustomerPrompt(false)}
+                                                                        className={`px-6 py-2 border-2 rounded-md focus:outline-none focus:ring-2 transition-all ${createCustomerPrompt === false
+                                                                            ? 'border-teal-500 text-teal-600 bg-teal-50 ring-teal-500'
+                                                                            : 'border-gray-300 text-gray-700 hover:bg-gray-50 focus:ring-gray-300'
+                                                                            }`}
+                                                                    >
+                                                                        No
+                                                                    </button>
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
+                                                )}
 
-                                                {/* No Customer Found Section */}
-                                                <div className="hidden mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-                                                    <div className="space-y-3">
-                                                        <p className="text-sm text-gray-700">
-                                                            No customer found with matching PAN No & Vendor Name
-                                                        </p>
-                                                        <div className="flex gap-3">
-                                                            <button
-                                                                type="button"
-                                                                className="px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-teal-600 hover:bg-teal-700 focus:outline-none"
-                                                            >
-                                                                Create a Customer
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                className="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
-                                                            >
-                                                                Skip
-                                                            </button>
-                                                        </div>
+                                                {/* TCS Applicable Section */}
+                                                <div className="mt-6 pt-6 border-t border-gray-200">
+                                                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                                                        TCS Applicable under GST?
+                                                    </label>
+                                                    <div className="flex gap-4">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setTcsApplicable(true)}
+                                                            className={`px-6 py-2 border-2 rounded-md focus:outline-none focus:ring-2 transition-all ${tcsApplicable
+                                                                ? 'border-teal-500 text-teal-600 bg-teal-50 ring-teal-500'
+                                                                : 'border-gray-300 text-gray-700 hover:bg-gray-50 focus:ring-gray-300'
+                                                                }`}
+                                                        >
+                                                            Yes
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setTcsApplicable(false)}
+                                                            className={`px-6 py-2 border-2 rounded-md focus:outline-none focus:ring-2 transition-all ${!tcsApplicable
+                                                                ? 'border-teal-500 text-teal-600 bg-teal-50 ring-teal-500'
+                                                                : 'border-gray-300 text-gray-700 hover:bg-gray-50 focus:ring-gray-300'
+                                                                }`}
+                                                        >
+                                                            No
+                                                        </button>
                                                     </div>
                                                 </div>
                                             </div>
