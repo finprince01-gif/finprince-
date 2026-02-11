@@ -66,9 +66,9 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignup, onBack
     setError("");        // Clear previous errors
     setLoading(true);    // Show loading state
 
-    // Validate all fields are filled
-    if (!email || !username || !password) {
-      setError("Please enter email, username and password.");
+    // Validate: password is required, and at least one of email or username
+    if (!password || (!email && !username)) {
+      setError("Please enter your password and either your email or username.");
       setLoading(false);
       return;
     }
@@ -108,7 +108,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignup, onBack
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center relative bg-slate-100">
+    <div className="min-h-screen flex flex-col items-center justify-center relative bg-slate-100 dark:bg-slate-900 transition-colors duration-200">
       {onBack && (
         <div className="absolute left-4 bottom-4">
           <button
@@ -119,14 +119,14 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignup, onBack
           </button>
         </div>
       )}
-      <div className="w-full max-w-sm p-8 space-y-8 bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200">
+      <div className="w-full max-w-sm p-8 space-y-8 bg-white dark:bg-slate-800 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 dark:border-slate-700">
         <div>
-          <h1 className="text-3xl font-bold text-center text-indigo-600">AI-Accounting</h1>
-          <p className="mt-2 text-center text-sm text-gray-600">Sign in to your account</p>
+          <h1 className="text-3xl font-bold text-center text-indigo-600 dark:text-indigo-400">AI-Accounting</h1>
+          <p className="mt-2 text-center text-sm text-gray-600 dark:text-slate-400">Sign in to your account</p>
         </div>
 
         <form className="mt-8 space-y-6" onSubmit={handleLogin}>
-          <div className="rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 -space-y-px">
+          <div className="rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 dark:border-slate-700 -space-y-px">
             <div>
               <label htmlFor="email" className="sr-only">
                 Email
@@ -136,8 +136,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignup, onBack
                 name="email"
                 type="email"
                 autoComplete="email"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm dark:bg-slate-900 dark:border-slate-600 dark:placeholder-slate-400 dark:text-white"
                 placeholder="Email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -153,8 +152,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignup, onBack
                 name="username"
                 type="text"
                 autoComplete="off"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm dark:bg-slate-900 dark:border-slate-600 dark:placeholder-slate-400 dark:text-white"
                 placeholder="Username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
@@ -171,7 +169,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignup, onBack
                 type="password"
                 autoComplete="off"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm dark:bg-slate-900 dark:border-slate-600 dark:placeholder-slate-400 dark:text-white"
                 placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -192,9 +190,9 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignup, onBack
           </div>
         </form>
 
-        <p className="mt-4 text-center text-sm text-gray-600">
+        <p className="mt-4 text-center text-sm text-gray-600 dark:text-slate-400">
           Don't have an account?{" "}
-          <button onClick={onSwitchToSignup} className="font-medium text-indigo-600 hover:text-indigo-500">
+          <button onClick={onSwitchToSignup} className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
             Sign Up
           </button>
         </p>

@@ -205,7 +205,7 @@ export const PaymentVoucherEntry: React.FC<PaymentVoucherEntryProps> = ({ onCanc
                         <Icon name="upload" size={16} />
                         Mass Upload
                     </button>
-                    <button className="px-4 py-2 text-sm bg-indigo-50/500 text-white rounded hover:bg-indigo-600 flex items-center gap-2">
+                    <button className="px-4 py-2 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-600 flex items-center gap-2">
                         <Icon name="download" size={16} />
                         Import Vouchers
                     </button>
@@ -214,7 +214,7 @@ export const PaymentVoucherEntry: React.FC<PaymentVoucherEntryProps> = ({ onCanc
 
             {/* Voucher Type Tabs */}
             <div className="flex gap-2 mb-6 border-b border-gray-200">
-                <button className="px-6 py-2 bg-indigo-50/500 text-white rounded-t font-medium">
+                <button className="px-6 py-2 bg-indigo-600 text-white rounded-t font-medium">
                     Payment Voucher - Single
                 </button>
                 <button className="px-6 py-2 text-gray-600 hover:bg-gray-100 rounded-t">
@@ -283,7 +283,7 @@ export const PaymentVoucherEntry: React.FC<PaymentVoucherEntryProps> = ({ onCanc
                         <span>Pay to</span>
                         <button
                             onClick={() => setIsAdvanceMode(!isAdvanceMode)}
-                            className={`px-3 py-1 text-xs rounded ${isAdvanceMode ? 'bg-indigo-50/500 text-white' : 'bg-gray-200 text-gray-700'}`}
+                            className={`px-3 py-1 text-xs rounded ${isAdvanceMode ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}
                         >
                             Advance
                         </button>
@@ -377,7 +377,7 @@ export const PaymentVoucherEntry: React.FC<PaymentVoucherEntryProps> = ({ onCanc
                                             <td className="px-4 py-3 text-center">
                                                 <button
                                                     onClick={() => handlePayClick(transaction.id)}
-                                                    className="px-3 py-1 bg-indigo-50/500 text-white text-xs rounded hover:bg-indigo-600"
+                                                    className="px-3 py-1 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-600"
                                                 >
                                                     Pay
                                                 </button>

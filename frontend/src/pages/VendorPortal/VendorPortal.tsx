@@ -112,6 +112,22 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const [activeProcurementSubTab, setActiveProcurementSubTab] = useState<ProcurementSubTab>('Dashboard');
     const [activePaymentSubTab, setActivePaymentSubTab] = useState<ProcurementSubTab>('Dashboard');
 
+    // Defaulting logic for sub-tabs
+    const availableMasterSubTabs = ['Category', 'PO Settings', 'Vendor Creation'].filter(subTab => isSuperuser || hasTabAccess('Vendor Portal', subTab));
+    const availableTransactionSubTabs = ['Purchase Orders', 'Procurement', 'Payment'].filter(subTab => isSuperuser || hasTabAccess('Vendor Portal', subTab));
+
+    useEffect(() => {
+        if (!isSuperuser && availableMasterSubTabs.length > 0 && !availableMasterSubTabs.includes(activeMasterSubTab as string)) {
+            setActiveMasterSubTab(availableMasterSubTabs[0] as MasterSubTab);
+        }
+    }, [availableMasterSubTabs, activeMasterSubTab, isSuperuser]);
+
+    useEffect(() => {
+        if (!isSuperuser && availableTransactionSubTabs.length > 0 && !availableTransactionSubTabs.includes(activeTransactionSubTab as string)) {
+            setActiveTransactionSubTab(availableTransactionSubTabs[0] as TransactionSubTab);
+        }
+    }, [availableTransactionSubTabs, activeTransactionSubTab, isSuperuser]);
+
     // Category Management State
     const [categories, setCategories] = useState<Category[]>([]);
     const [loadingCategories, setLoadingCategories] = useState(false);
@@ -214,7 +230,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         {
             id: '1',
             gstin: '',
-            registrationType: 'regular',
+            registrationType: 'Regular',
             placesOfBusiness: [],
             isExpanded: true
         }
@@ -280,7 +296,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         setGstRecords([...gstRecords, {
             id: Date.now().toString(),
             gstin: '',
-            registrationType: 'regular',
+            registrationType: 'Regular',
             placesOfBusiness: [],
             isExpanded: true
         }]);
@@ -295,7 +311,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const handleGstChange = (id: string, field: keyof GSTRecord, value: any) => {
         setGstRecords(gstRecords.map(record => {
             if (record.id === id) {
-                if (field === 'registrationType' && value === 'unregistered') {
+                if (field === 'registrationType' && value === 'Unregistered') {
                     return { ...record, [field]: value, gstin: '', placesOfBusiness: [] };
                 }
                 return { ...record, [field]: value };
@@ -1107,7 +1123,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             // 2. GST Details
             for (const gst of gstRecords) {
                 if (!gst.gstin) continue;
-                const firstBranch = (gst.placesOfBusiness && gst.placesOfBusiness[0]) || {};
+                const firstBranch: PlaceOfBusiness = (gst.placesOfBusiness && gst.placesOfBusiness[0]) || {
+                    id: '',
+                    referenceName: '',
+                    address: '',
+                    contactPerson: '',
+                    email: '',
+                    contactNumber: ''
+                };
 
                 const gstPayload = {
                     vendor_basic_detail: newId,
@@ -1522,24 +1545,26 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                     {/* Sub-tabs for Vendor Master */}
                     <div className="px-6 pt-4 border-b border-gray-200">
                         <nav className="flex space-x-8">
-                            {['Category', 'PO Settings', 'Vendor Creation'].map((subTab) => {
-                                const isVendorCreationActive = subTab === 'Vendor Creation' &&
-                                    ['Vendor Creation', 'Basic Details', 'GST Details', 'Products/Services', 'TDS & Other Statutory', 'Banking Info', 'Terms & Conditions'].includes(activeMasterSubTab);
-                                const isActive = activeMasterSubTab === subTab || isVendorCreationActive;
+                            {['Category', 'PO Settings', 'Vendor Creation']
+                                .filter(subTab => isSuperuser || hasTabAccess('Vendor Portal', subTab))
+                                .map((subTab) => {
+                                    const isVendorCreationActive = subTab === 'Vendor Creation' &&
+                                        ['Vendor Creation', 'Basic Details', 'GST Details', 'Products/Services', 'TDS & Other Statutory', 'Banking Info', 'Terms & Conditions'].includes(activeMasterSubTab);
+                                    const isActive = activeMasterSubTab === subTab || isVendorCreationActive;
 
-                                return (
-                                    <button
-                                        key={subTab}
-                                        onClick={() => setActiveMasterSubTab(subTab as MasterSubTab)}
-                                        className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors ${isActive
-                                            ? 'border-indigo-500 text-indigo-600'
-                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                            }`}
-                                    >
-                                        {subTab}
-                                    </button>
-                                );
-                            })}
+                                    return (
+                                        <button
+                                            key={subTab}
+                                            onClick={() => setActiveMasterSubTab(subTab as MasterSubTab)}
+                                            className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors ${isActive
+                                                ? 'border-indigo-500 text-indigo-600'
+                                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                                }`}
+                                        >
+                                            {subTab}
+                                        </button>
+                                    );
+                                })}
                         </nav>
                     </div>
 
@@ -1547,7 +1572,6 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                         <InventoryCategoryWizard
                             apiEndpoint="/api/vendors/categories/"
                             allowCreateGroup={false}
-                            disableGroupCreation={true}
                             systemCategories={[
                                 'Raw Material',
                                 'Work in Progress',
@@ -2063,16 +2087,70 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             )}
                                         </div>
 
-                                        {record.registrationType !== 'unregistered' && (
-                                            <>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Legal Name</label>
-                                                    <input
-                                                        type="text"
-                                                        value={record.legalName || ''}
-                                                        readOnly
-                                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] bg-gray-100 cursor-not-allowed"
-                                                    />
+                                        {/* GSTIN Body */}
+                                        {record.isExpanded && (
+                                            <div className="space-y-6 pl-4 border-l-2 border-slate-100">
+
+                                                {/* GSTIN & Fetch */}
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">GSTIN</label>
+                                                        <div className="flex gap-2">
+                                                            <input
+                                                                type="text"
+                                                                value={record.gstin}
+                                                                onChange={(e) => handleGstChange(record.id, 'gstin', e.target.value)}
+                                                                className="flex-1 px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100"
+                                                                placeholder="22AAAAA0000A1Z5"
+                                                                disabled={record.registrationType === 'Unregistered'}
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleFetchGstDetails(record.id)}
+                                                                disabled={record.registrationType === 'Unregistered' || loadingGstFetch || !record.gstin}
+                                                                className="px-4 py-2 border border-indigo-500 text-indigo-600 rounded-[4px] hover:bg-indigo-50/50 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                                            >
+                                                                {loadingGstFetch ? 'Fetching...' : 'Fetch Branch Details'}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Registration Type</label>
+                                                        <select
+                                                            value={record.registrationType}
+                                                            onChange={(e) => handleGstChange(record.id, 'registrationType', e.target.value)}
+                                                            className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                        >
+                                                            <option value="Regular">Regular</option>
+                                                            <option value="Composition">Composition</option>
+                                                            <option value="SEZ">Special Economic Zone (SEZ)</option>
+                                                            <option value="Unregistered">Unregistered</option>
+                                                        </select>
+                                                    </div>
+
+                                                    {record.registrationType !== 'Unregistered' && (
+                                                        <>
+                                                            <div>
+                                                                <label className="block text-sm font-medium text-gray-700 mb-2">Legal Name</label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={record.legalName || ''}
+                                                                    readOnly
+                                                                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] bg-gray-100 cursor-not-allowed"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label className="block text-sm font-medium text-gray-700 mb-2">Trade Name</label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={record.tradeName || ''}
+                                                                    readOnly
+                                                                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] bg-gray-100 cursor-not-allowed"
+                                                                />
+                                                            </div>
+                                                        </>
+                                                    )}
                                                 </div>
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">Trade Name</label>
@@ -2120,50 +2198,51 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                     </button>
                                                                 </div>
 
-                                                                {/* POB Fields */}
-                                                                {pob.isExpanded && (
-                                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
-                                                                        <div>
-                                                                            <label className="block text-xs font-medium text-gray-500 mb-1">Reference Name</label>
-                                                                            <input type="text" value={pob.referenceName} onChange={(e) => updatePobField(record.id, pob.id, 'referenceName', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" />
+                                                                    {/* POB Fields */}
+                                                                    {pob.isExpanded && (
+                                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                                                                            <div>
+                                                                                <label className="block text-xs font-medium text-gray-500 mb-1">Reference Name</label>
+                                                                                <input type="text" value={pob.referenceName} onChange={(e) => updatePobField(record.id, pob.id, 'referenceName', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" />
+                                                                            </div>
+                                                                            <div>
+                                                                                <label className="block text-xs font-medium text-gray-500 mb-1">Address</label>
+                                                                                <textarea
+                                                                                    rows={2}
+                                                                                    value={pob.address}
+                                                                                    onChange={(e) => updatePobField(record.id, pob.id, 'address', e.target.value)}
+                                                                                    className={`w-full px-3 py-1.5 border border-slate-200 rounded text-sm ${record.registrationType !== 'Unregistered' && pob.address && pob.referenceName !== '' ? 'bg-gray-50' : ''}`}
+                                                                                    placeholder="Enter address"
+                                                                                />
+                                                                            </div>
+                                                                            <div>
+                                                                                <label className="block text-xs font-medium text-gray-500 mb-1">Contact Person</label>
+                                                                                <input type="text" value={pob.contactPerson} onChange={(e) => updatePobField(record.id, pob.id, 'contactPerson', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" />
+                                                                            </div>
+                                                                            <div>
+                                                                                <label className="block text-xs font-medium text-gray-500 mb-1">Email Address</label>
+                                                                                <input type="email" value={pob.email} onChange={(e) => updatePobField(record.id, pob.id, 'email', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" />
+                                                                            </div>
+                                                                            <div>
+                                                                                <label className="block text-xs font-medium text-gray-500 mb-1">Contact No</label>
+                                                                                <input type="tel" value={pob.contactNumber} onChange={(e) => updatePobField(record.id, pob.id, 'contactNumber', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" />
+                                                                            </div>
                                                                         </div>
-                                                                        <div>
-                                                                            <label className="block text-xs font-medium text-gray-500 mb-1">Address</label>
-                                                                            <textarea
-                                                                                rows={2}
-                                                                                value={pob.address}
-                                                                                onChange={(e) => updatePobField(record.id, pob.id, 'address', e.target.value)}
-                                                                                className={`w-full px-3 py-1.5 border border-slate-200 rounded text-sm ${record.registrationType !== 'unregistered' && pob.address && pob.referenceName !== '' ? 'bg-gray-50' : ''}`}
-                                                                                placeholder="Enter address"
-                                                                            />
-                                                                        </div>
-                                                                        <div>
-                                                                            <label className="block text-xs font-medium text-gray-500 mb-1">Contact Person</label>
-                                                                            <input type="text" value={pob.contactPerson} onChange={(e) => updatePobField(record.id, pob.id, 'contactPerson', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" />
-                                                                        </div>
-                                                                        <div>
-                                                                            <label className="block text-xs font-medium text-gray-500 mb-1">Email Address</label>
-                                                                            <input type="email" value={pob.email} onChange={(e) => updatePobField(record.id, pob.id, 'email', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" />
-                                                                        </div>
-                                                                        <div>
-                                                                            <label className="block text-xs font-medium text-gray-500 mb-1">Contact No</label>
-                                                                            <input type="tel" value={pob.contactNumber} onChange={(e) => updatePobField(record.id, pob.id, 'contactNumber', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" />
-                                                                        </div>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                ) : (
-                                                    <div className="p-4 bg-gray-50 border border-slate-200 rounded text-sm text-gray-500 text-center">
-                                                        {record.registrationType === 'unregistered' ?
-                                                            'Add a branch manually to continue.' :
-                                                            'No places of business found. Fetch via GSTIN or add manually.'
-                                                        }
-                                                    </div>
-                                                )
-                                            }
-                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="p-4 bg-gray-50 border border-slate-200 rounded text-sm text-gray-500 text-center">
+                                                            {record.registrationType === 'Unregistered' ?
+                                                                'Add a branch manually to continue.' :
+                                                                'No places of business found. Fetch via GSTIN or add manually.'
+                                                            }
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 ))
                                 }
@@ -3027,36 +3106,326 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 ))}
                                             </div>
                                         </div>
-                                    )}
+                                    ))}
+                                </div>
 
-                                    {activePOSubTab !== 'Dashboard' && (
-                                        <div>
-                                            <div className="flex items-center gap-4 mb-6">
-                                                <button
-                                                    onClick={() => setActivePOSubTab('Dashboard')}
-                                                    className="p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
-                                                    title="Back to Dashboard"
-                                                >
-                                                    <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                                                </button>
-                                                <div>
-                                                    <h3 className="text-xl font-bold text-gray-800">{activePOSubTab}</h3>
-                                                    <p className="text-sm text-gray-500">Manage your {activePOSubTab.toLowerCase()} details here.</p>
+                                {/* Add Another Bank Button */}
+                                <div className="pt-2">
+                                    <button
+                                        type="button"
+                                        className="flex items-center gap-2 px-4 py-2 border-2 border-indigo-500 text-indigo-600 rounded-[4px] hover:bg-indigo-50/50 focus:outline-none"
+                                        onClick={handleAddBank}
+                                    >
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                        </svg>
+                                        <span className="text-sm font-medium">Another Bank</span>
+                                    </button>
+                                </div>
+
+                                {/* Next Button */}
+                                <div className="flex justify-between pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveMasterSubTab('TDS & Other Statutory')}
+                                        className="px-6 py-2 border border-slate-200 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
+                                    >
+                                        Back
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="px-8 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
+                                    >
+                                        Next
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    )}
+
+                    {activeMasterSubTab === 'Terms & Conditions' && (
+                        <div className="p-6">
+                            <div className="flex items-center mb-6">
+                                <button
+                                    onClick={() => setActiveMasterSubTab('Vendor Creation')}
+                                    className="mr-4 p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
+                                    title="Back to Vendor Creation"
+                                >
+                                    <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                                </button>
+                                <h3 className="text-lg font-semibold text-gray-800">Terms & Conditions</h3>
+                            </div>
+                            <form onSubmit={handleFinish} className="space-y-6">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Credit Limit
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={creditLimit}
+                                        onChange={(e) => setCreditLimit(e.target.value)}
+                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="0.00"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Credit Period
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={creditPeriod}
+                                        onChange={(e) => setCreditPeriod(e.target.value)}
+                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="Enter credit period (e.g., 30 days, 60 days)"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Credit Terms
+                                    </label>
+                                    <textarea
+                                        rows={3}
+                                        value={creditTerms}
+                                        onChange={(e) => setCreditTerms(e.target.value)}
+                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="Enter credit terms and conditions..."
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Penalty Terms
+                                    </label>
+                                    <textarea
+                                        rows={3}
+                                        value={penaltyTerms}
+                                        onChange={(e) => setPenaltyTerms(e.target.value)}
+                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="Enter penalty terms for late payments or breaches..."
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Delivery Terms
+                                    </label>
+                                    <textarea
+                                        rows={3}
+                                        value={deliveryTerms}
+                                        onChange={(e) => setDeliveryTerms(e.target.value)}
+                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="Delivery terms, lead time, shipping conditions..."
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Warranty / Guarantee Details
+                                    </label>
+                                    <textarea
+                                        rows={3}
+                                        value={warrantyGuaranteeDetails}
+                                        onChange={(e) => setWarrantyGuaranteeDetails(e.target.value)}
+                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="Enter warranty and guarantee terms..."
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Force Majeure
+                                    </label>
+                                    <textarea
+                                        rows={3}
+                                        value={forceMajeure}
+                                        onChange={(e) => setForceMajeure(e.target.value)}
+                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="Enter force majeure clauses..."
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Dispute and Redressal Terms
+                                    </label>
+                                    <textarea
+                                        rows={3}
+                                        value={disputeRedressalTerms}
+                                        onChange={(e) => setDisputeRedressalTerms(e.target.value)}
+                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="Enter dispute resolution and redressal terms..."
+                                    />
+                                </div>
+
+                                <div className="flex justify-between pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveMasterSubTab('Banking Info')}
+                                        className="px-6 py-2 border border-slate-200 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
+                                    >
+                                        Back
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleFinish()}
+                                        disabled={isSubmitting}
+                                        className={`px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white focus:outline-none ${isSubmitting ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'
+                                            }`}
+                                    >
+                                        {isSubmitting ? 'Saving...' : 'Finish (Save)'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    )}
+                </div>
+            )}
+
+
+
+            {activeTab === 'Transaction' && (
+                <div>
+                    {/* Sub-tabs for Transaction */}
+                    <div className="mb-6">
+                        <nav className="flex space-x-8 border-b border-gray-200">
+                            {['Purchase Orders', 'Procurement', 'Payment']
+                                .filter(subTab => isSuperuser || hasTabAccess('Vendor Portal', subTab))
+                                .map((subTab) => (
+                                    <button
+                                        key={subTab}
+                                        onClick={() => setActiveTransactionSubTab(subTab as TransactionSubTab)}
+                                        className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTransactionSubTab === subTab
+                                            ? 'border-indigo-500 text-indigo-600'
+                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                            }`}
+                                    >
+                                        {subTab.toUpperCase()}
+                                    </button>
+                                ))}
+                        </nav>
+                    </div>
+
+                    <div className="p-6 erp-card">
+                        {activeTransactionSubTab === 'Purchase Orders' && (
+                            <div>
+                                {activePOSubTab === 'Dashboard' && (
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Purchase Orders</h3>
+                                        <p className="text-gray-600 mb-6">Select an option to manage purchase orders:</p>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                            {['Create PO', 'Pending PO', 'Executed PO']
+                                                .filter(tab => isSuperuser || hasTabAccess('Vendor Portal', tab))
+                                                .map((tab) => (
+                                                    <button
+                                                        key={tab}
+                                                        onClick={() => setActivePOSubTab(tab as POSubTab)}
+                                                        className="p-6 border-2 border-gray-200 rounded-[4px] hover:border-indigo-500 hover:bg-indigo-50/50 transition-all text-left group"
+                                                    >
+                                                        <div className="flex items-center justify-between mb-4">
+                                                            <div className={`p-3 rounded-[4px] ${tab === 'Create PO' ? 'bg-blue-100 text-indigo-600' :
+                                                                tab === 'Pending PO' ? 'bg-indigo-50 text-indigo-600' :
+                                                                    'bg-slate-100 text-indigo-600'
+                                                                }`}>
+                                                                {/* Icons based on tab */}
+                                                                {tab === 'Create PO' && (
+                                                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                                                                )}
+                                                                {tab === 'Pending PO' && (
+                                                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                                )}
+                                                                {tab === 'Executed PO' && (
+                                                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                                )}
+                                                            </div>
+                                                            <svg className="w-5 h-5 text-gray-400 group-hover:text-indigo-500 transform group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                                                        </div>
+                                                        <div className="font-semibold text-gray-900 text-lg">{tab}</div>
+                                                        <div className="text-sm text-gray-500 mt-2">
+                                                            {tab === 'Create PO' ? 'Create new purchase orders' :
+                                                                tab === 'Pending PO' ? 'View and manage pending orders' :
+                                                                    'History of completed orders'}
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activePOSubTab !== 'Dashboard' && (
+                                    <div>
+                                        <div className="flex items-center gap-4 mb-6">
+                                            <button
+                                                onClick={() => setActivePOSubTab('Dashboard')}
+                                                className="p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
+                                                title="Back to Dashboard"
+                                            >
+                                                <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                                            </button>
+                                            <div>
+                                                <h3 className="text-xl font-bold text-gray-800">{activePOSubTab}</h3>
+                                                <p className="text-sm text-gray-500">Manage your {activePOSubTab.toLowerCase()} details here.</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Content Placeholders */}
+                                        {activePOSubTab === 'Create PO' && (
+                                            <div>
+                                                {/* Create PO Button */}
+                                                <div className="mb-6">
+                                                    <button
+                                                        onClick={() => setShowCreatePOModal(true)}
+                                                        className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors">
+                                                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                                        </svg>
+                                                        Create PO
+                                                    </button>
                                                 </div>
                                             </div>
 
-                                            {/* Content Placeholders */}
-                                            {activePOSubTab === 'Create PO' && (
-                                                <div>
-                                                    {/* Create PO Button */}
-                                                    <div className="mb-6">
-                                                        <button
-                                                            onClick={() => setShowCreatePOModal(true)}
-                                                            className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors">
-                                                            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                            {[
+                                                { name: 'Raw Material', desc: 'Manage raw material procurement', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /> },
+                                                { name: 'Stock-in Trade', desc: 'Manage stock-in trade items', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /> },
+                                                { name: 'Consumables', desc: 'Manage consumable items', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /> },
+                                                { name: 'Stores & Spares', desc: 'Manage stores and spares', icon: <g><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></g> },
+                                                { name: 'Services', desc: 'Manage service procurement', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /> },
+                                            ]
+                                                .filter(item => isSuperuser || hasTabAccess('Vendor Portal', item.name))
+                                                .map((item) => (
+                                                    <button
+                                                        key={item.name}
+                                                        onClick={() => setActiveProcurementSubTab(item.name as ProcurementSubTab)}
+                                                        className="p-6 border-2 border-gray-200 rounded-[4px] hover:border-indigo-500 hover:shadow-none border border-slate-200 transition-all duration-200 text-left group bg-white"
+                                                    >
+                                                        <div className="flex items-center justify-between mb-4">
+                                                            <div className="w-12 h-12 bg-indigo-50/50 rounded-[4px] flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    {item.icon}
+                                                                </svg>
+                                                            </div>
+                                                            <svg className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                                             </svg>
-                                                            Create PO
+                                                        </div>
+                                                        <h3 className="text-lg font-bold text-gray-800 group-hover:text-indigo-600 transition-colors">{item.name}</h3>
+                                                        <p className="text-sm text-gray-500 mt-1">{item.desc}</p>
+                                                    </button>
+                                                ))}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div>
+                                        {selectedProcurementVendor ? (
+                                            <div className="erp-card border border-slate-200">
+                                                <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                                                    <div className="flex items-center space-x-4">
+                                                        <button onClick={() => setSelectedProcurementVendor(null)} className="text-gray-500 hover:text-gray-700 p-1 rounded-[4px] hover:bg-gray-100 transition-colors">
+                                                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                                                         </button>
                                                     </div>
 
@@ -3274,34 +3643,53 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 <p className="text-sm text-gray-500 mt-1">Select a procurement category to manage.</p>
                                             </div>
 
-                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                                {[
-                                                    { name: 'Raw Material', desc: 'Manage raw material procurement', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /> },
-                                                    { name: 'Stock-in Trade', desc: 'Manage stock-in trade items', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /> },
-                                                    { name: 'Consumables', desc: 'Manage consumable items', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /> },
-                                                    { name: 'Stores & Spares', desc: 'Manage stores and spares', icon: <g><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></g> },
-                                                    { name: 'Services', desc: 'Manage service procurement', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /> },
-                                                ].map((item) => (
-                                                    <button
-                                                        key={item.name}
-                                                        onClick={() => setActiveProcurementSubTab(item.name as ProcurementSubTab)}
-                                                        className="p-6 border-2 border-gray-200 rounded-[4px] hover:border-indigo-500 hover:shadow-none border border-slate-200 transition-all duration-200 text-left group bg-white"
-                                                    >
-                                                        <div className="flex items-center justify-between mb-4">
-                                                            <div className="w-12 h-12 bg-indigo-50/50 rounded-[4px] flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                                                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    {item.icon}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                            {[
+                                                { name: 'Raw Material', desc: 'Manage raw material procurement', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /> },
+                                                { name: 'Stock-in Trade', desc: 'Manage stock-in trade items', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /> },
+                                                { name: 'Consumables', desc: 'Manage consumable items', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /> },
+                                                { name: 'Stores & Spares', desc: 'Manage stores and spares', icon: <g><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></g> },
+                                                { name: 'Services', desc: 'Manage service procurement', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /> },
+                                            ]
+                                                .filter(item => isSuperuser || hasTabAccess('Vendor Portal', item.name))
+                                                .map((item) => {
+                                                    const totalPendingAmount = paymentBills
+                                                        .filter(bill => bill.status !== 'Posted' && bill.category === item.name)
+                                                        .reduce((sum, bill) => {
+                                                            const amount = parseFloat(bill.amount.replace(/[^0-9.-]+/g, ""));
+                                                            return sum + amount;
+                                                        }, 0);
+                                                    const formattedTotal = totalPendingAmount.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
+
+                                                    return (
+                                                        <button
+                                                            key={item.name}
+                                                            onClick={() => setActivePaymentSubTab(item.name as ProcurementSubTab)}
+                                                            className="p-6 border-2 border-gray-200 rounded-[4px] hover:border-indigo-500 hover:shadow-none border border-slate-200 transition-all duration-200 text-left group bg-white relative"
+                                                        >
+                                                            <div className="flex items-center justify-between mb-4">
+                                                                <div className="w-12 h-12 bg-indigo-50/50 rounded-[4px] flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        {item.icon}
+                                                                    </svg>
+                                                                </div>
+                                                                <svg className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                                                 </svg>
                                                             </div>
-                                                            <svg className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                                            </svg>
-                                                        </div>
-                                                        <h3 className="text-lg font-bold text-gray-800 group-hover:text-indigo-600 transition-colors">{item.name}</h3>
-                                                        <p className="text-sm text-gray-500 mt-1">{item.desc}</p>
-                                                    </button>
-                                                ))}
-                                            </div>
+                                                            <div className="flex justify-between items-end">
+                                                                <div>
+                                                                    <h3 className="text-lg font-bold text-gray-800 group-hover:text-indigo-600 transition-colors">{item.name}</h3>
+                                                                    <p className="text-sm text-gray-500 mt-1">{item.desc}</p>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <p className="text-lg font-bold text-gray-800">{formattedTotal}</p>
+                                                                    <p className="text-xs text-red-600 font-semibold mt-1">Credit</p>
+                                                                </div>
+                                                            </div>
+                                                        </button>
+                                                    );
+                                                })}
                                         </div>
                                     ) : (
                                         <div>

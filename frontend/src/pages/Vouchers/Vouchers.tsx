@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useSubscriptionUsage } from '../../hooks/useSubscriptionUsage';
 import type { VoucherType, Ledger, StockItem, Voucher, SalesPurchaseVoucher, PaymentReceiptVoucher, ContraVoucher, JournalVoucher, JournalEntry, VoucherItem, ExtractedInvoiceData, CompanyDetails } from '../../types';
 import Icon from '../../components/Icon';
 import { apiService, httpClient } from '../../services';
@@ -158,6 +159,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [extractedInvoiceData, setExtractedInvoiceData] = useState<any[]>([]);
   const [isExtracting, setIsExtracting] = useState(false);
 
+  // Subscription Usage
+  const { subscriptionUsage, isLimitReached, refetch } = useSubscriptionUsage();
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+
+  const handleLimitReached = () => {
+    setIsUpgradeModalOpen(true);
+  };
+
   // Common state
   const [date, setDate] = useState(getTodayDate());
   const [party, setParty] = useState('');
@@ -298,11 +307,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   // Mock Data for Verification
   const mockPurchaseOrders: Record<string, typeof purchaseItems> = {
     'PO-001': [
-      { id: '1', itemCode: 'ITM001', itemName: 'Dell Laptop', hsnSac: '8471', qty: 2, uom: 'Nos', rate: 50000, taxableValue: 100000, igst: 18000, cgst: 0, cess: 0, invoiceValue: 118000 },
-      { id: '2', itemCode: 'ITM002', itemName: 'Wireless Mouse', hsnSac: '8471', qty: 5, uom: 'Nos', rate: 500, taxableValue: 2500, igst: 450, cgst: 0, cess: 0, invoiceValue: 2950 }
+      { id: '1', itemCode: 'ITM001', itemName: 'Dell Laptop', hsnSac: '8471', qty: 2, uom: 'Nos', rate: 50000, taxableValue: 100000, igst: 18000, cgst: 0, sgst: 0, cess: 0, invoiceValue: 118000, description: '' },
+      { id: '2', itemCode: 'ITM002', itemName: 'Wireless Mouse', hsnSac: '8471', qty: 5, uom: 'Nos', rate: 500, taxableValue: 2500, igst: 450, cgst: 0, sgst: 0, cess: 0, invoiceValue: 2950, description: '' }
     ],
     'PO-002': [
-      { id: '1', itemCode: 'ITM003', itemName: 'Office Chair', hsnSac: '9403', qty: 10, uom: 'Nos', rate: 4500, taxableValue: 45000, igst: 8100, cgst: 0, cess: 0, invoiceValue: 53100 }
+      { id: '1', itemCode: 'ITM003', itemName: 'Office Chair', hsnSac: '9403', qty: 10, uom: 'Nos', rate: 4500, taxableValue: 45000, igst: 8100, cgst: 0, sgst: 0, cess: 0, invoiceValue: 53100, description: '' }
     ]
   };
 
@@ -590,7 +599,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           data.forEach(item => {
             if (isVoucher(item)) {
               // Override type to respect current voucherType
-              item.type = voucherType;
+              item.type = voucherType as any;
               validVouchers.push(item);
             } else {
               failed++;
@@ -650,7 +659,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 // Override type with current voucherType to ensure consistency
                 let voucher: Partial<Voucher> = {
                   date: parseDate(row.date),
-                  type: voucherType,
+                  type: voucherType as any,
                   narration: row.narration
                 };
 
@@ -830,7 +839,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     setNarration('');
     setFromAccount('');
     setToAccount('');
-    setEntries([{ ledger: '', debit: 0, credit: 0 }, { ledger: '', debit: 0, credit: 0 }]);
+    setEntries([{ ledger: '', note: '', refNo: '', debit: 0, credit: 0 }, { ledger: '', note: '', refNo: '', debit: 0, credit: 0 }]);
     // Removed image clearing
   }, []);
 
@@ -951,8 +960,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         setDate(formatDateForInput(prefilledData.invoiceDate) || getTodayDate());
         // For journal, we could create entries based on the invoice data
         setEntries([
-          { ledger: prefilledData.sellerName || '', debit: prefilledData.totalAmount || 0, credit: 0 },
-          { ledger: '', debit: 0, credit: prefilledData.totalAmount || 0 }
+          { ledger: prefilledData.sellerName || '', note: '', refNo: '', debit: prefilledData.totalAmount || 0, credit: 0 },
+          { ledger: '', note: '', refNo: '', debit: 0, credit: prefilledData.totalAmount || 0 }
         ]);
       }
 
@@ -1038,10 +1047,17 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
   const handleAddItemRow = () => setItems([...items, { name: '', qty: 1, rate: 0, taxableAmount: 0, cgstAmount: 0, sgstAmount: 0, igstAmount: 0, totalAmount: 0 }]);
   const handleRemoveItemRow = (index: number) => items.length > 1 && setItems(items.filter((_, i) => i !== index));
-  const handleAddEntryRow = () => setEntries([...entries, { ledger: '', debit: 0, credit: 0 }]);
+  const handleAddEntryRow = () => setEntries([...entries, { ledger: '', note: '', refNo: '', debit: 0, credit: 0 }]);
   const handleRemoveEntryRow = (index: number) => entries.length > 2 && setEntries(entries.filter((_, i) => i !== index));
 
   const handleSaveVoucher = async () => {
+    // Only block saving for invoice-related types if limit reached
+    const isInvoiceType = voucherType === 'Sales' || voucherType === 'Purchase' || voucherType === 'Expenses';
+    if (isLimitReached && isInvoiceType) {
+      handleLimitReached();
+      return;
+    }
+
     let voucher: Voucher | null = null;
 
     if (voucherType === 'Purchase') {
@@ -1112,7 +1128,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         // Optional: Handle file upload separately if needed, or if we switch to FormData later.
 
         resetForm();
-        // Refresh logic if needed
+        refetch(); // Refresh usage statistics
       } catch (error: any) {
         console.error('Error saving purchase voucher:', error);
         const serverError = error.response?.data;
@@ -1151,6 +1167,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     if (voucher) {
       onAddVouchers([voucher]);
       resetForm();
+      refetch(); // Refresh usage statistics
     }
   };
 
@@ -2992,7 +3009,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             </div>
 
             {/* Right Panel - Transaction List */}
-            <div className="bg-indigo-50/500 rounded-[4px] p-6">
+            <div className="bg-indigo-600 rounded-[4px] p-6">
               <div className="text-center mb-4">
                 <h4 className="text-white font-semibold text-sm">
                   {party || 'Customer Name'} (Whose data is displayed below)
@@ -4049,6 +4066,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
   // Validate and save expense voucher
   const handleSaveExpenseVoucher = async () => {
+    if (isLimitReached) {
+      handleLimitReached();
+      return;
+    }
     // Validation
     let hasError = false;
 
@@ -4572,26 +4593,35 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
       <div className="erp-card p-6">
         <div className="flex justify-between items-center border-b pb-4 mb-6">
-          <h3 className="text-lg font-semibold text-gray-900">{voucherType} Voucher</h3>
+          <div className="flex items-center space-x-4">
+            <h3 className="text-lg font-semibold text-gray-900">{voucherType} Voucher</h3>
+            {subscriptionUsage && (
+              <div className={`px-3 py-1 rounded-full text-xs font-medium ${isLimitReached ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+                Usage: {subscriptionUsage.used} / {subscriptionUsage.limit}
+              </div>
+            )}
+          </div>
           <div className="flex items-center space-x-2">
             <button
-              onClick={() => setIsInvoiceScannerOpen(true)}
-              className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              onClick={() => isLimitReached ? handleLimitReached() : setIsInvoiceScannerOpen(true)}
+              className={`inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded shadow-sm text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${isLimitReached ? 'bg-gray-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+              title={isLimitReached ? "Limit Reached" : "Upload Invoices"}
             >
               <Icon name="upload" className="w-4 h-4 mr-2" />
               Upload Invoices
             </button>
             <button
-              onClick={() => setIsMassUploadOpen(true)}
-              className="inline-flex items-center justify-center px-4 py-2 border border-purple-200 text-sm font-medium rounded shadow-sm text-purple-700 bg-white hover:bg-purple-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+              onClick={() => isLimitReached ? handleLimitReached() : setIsMassUploadOpen(true)}
+              className={`inline-flex items-center justify-center px-4 py-2 border border-purple-200 text-sm font-medium rounded shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 ${isLimitReached ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200' : 'text-purple-700 bg-white hover:bg-purple-50'}`}
+              title={isLimitReached ? "Limit Reached" : "Mass Upload"}
             >
               <Icon name="upload" className="w-4 h-4 mr-2" />
               Mass Upload
             </button>
             <div className="relative" ref={importMenuRef}>
               <button
-                onClick={() => setIsImportMenuOpen(prev => !prev)}
-                className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                onClick={() => isLimitReached ? handleLimitReached() : setIsImportMenuOpen(prev => !prev)}
+                className={`inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded shadow-sm text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${isLimitReached ? 'bg-gray-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
               >
                 <Icon name="upload" className="w-5 h-5 mr-2" />
                 Import Vouchers
@@ -4599,11 +4629,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               {isImportMenuOpen && (
                 <div className="origin-top-right absolute right-0 mt-2 w-56 rounded shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
                   <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
-                    <a href="#" onClick={(e) => { e.preventDefault(); setIsInvoiceScannerOpen(true); setIsImportMenuOpen(false); }} className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Upload Invoices (Scan)</a>
-                    <a href="#" onClick={(e) => { e.preventDefault(); setIsMassUploadOpen(true); setIsImportMenuOpen(false); }} className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 font-medium text-purple-600" role="menuitem">Bulk Upload (AI)</a>
-                    <a href="#" onClick={(e) => { e.preventDefault(); triggerFileUpload(imageInputRef); }} className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">From Image/PDF {(voucherType === 'Purchase' || voucherType === 'Sales') ? '(AI)' : ''}</a>
-                    <a href="#" onClick={(e) => { e.preventDefault(); triggerFileUpload(jsonInputRef); }} className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">From JSON</a>
-                    <a href="#" onClick={(e) => { e.preventDefault(); triggerFileUpload(excelInputRef); }} className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">From Excel</a>
+                    <a href="#" onClick={(e) => { e.preventDefault(); if (isLimitReached) { handleLimitReached(); return; } setIsInvoiceScannerOpen(true); setIsImportMenuOpen(false); }} className={`block px-4 py-2 text-sm ${isLimitReached ? 'text-gray-400 cursor-not-allowed' : 'text-gray-700 hover:bg-gray-100'}`} role="menuitem">Upload Invoices (Scan)</a>
+                    <a href="#" onClick={(e) => { e.preventDefault(); if (isLimitReached) { handleLimitReached(); return; } setIsMassUploadOpen(true); setIsImportMenuOpen(false); }} className={`block px-4 py-2 text-sm font-medium ${isLimitReached ? 'text-gray-400 cursor-not-allowed' : 'text-purple-600 hover:bg-gray-100'}`} role="menuitem">Bulk Upload (AI)</a>
+                    <a href="#" onClick={(e) => { e.preventDefault(); if (isLimitReached) { handleLimitReached(); return; } triggerFileUpload(imageInputRef); }} className={`block px-4 py-2 text-sm ${isLimitReached ? 'text-gray-400 cursor-not-allowed' : 'text-gray-700 hover:bg-gray-100'}`} role="menuitem">From Image/PDF {(voucherType === 'Purchase' || voucherType === 'Sales') ? '(AI)' : ''}</a>
+                    <a href="#" onClick={(e) => { e.preventDefault(); if (isLimitReached) { handleLimitReached(); return; } triggerFileUpload(jsonInputRef); setIsImportMenuOpen(false); }} className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">From JSON</a>
+                    <a href="#" onClick={(e) => { e.preventDefault(); if (isLimitReached) { handleLimitReached(); return; } triggerFileUpload(excelInputRef); setIsImportMenuOpen(false); }} className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">From Excel</a>
                     <a href="#" onClick={(e) => { e.preventDefault(); handleDownloadTemplate(); }} className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">
                       <Icon name="download" className="w-4 h-4 mr-2" />
                       Download Template
@@ -4644,9 +4674,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           .table-header { padding: 0.75rem 1rem; text-align: center; font-size: 0.75rem; font-weight: 600; color: #4b5563; text-transform: uppercase; letter-spacing: 0.05em; background-color: #f9fafb; }
         `}
         </style>
-        {voucherType === 'Sales' && <SalesVoucher prefilledData={prefilledData} clearPrefilledData={clearPrefilledData} />}
-        {voucherType === 'Payment' && <PaymentVoucherSingle prefilledData={prefilledData} clearPrefilledData={clearPrefilledData} />}
-        {voucherType === 'Receipt' && <ReceiptVoucher prefilledData={prefilledData} clearPrefilledData={clearPrefilledData} />}
+        {voucherType === 'Sales' && <SalesVoucher prefilledData={prefilledData} clearPrefilledData={clearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} />}
+        {voucherType === 'Payment' && <PaymentVoucherSingle prefilledData={prefilledData} clearPrefilledData={clearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} />}
+        {voucherType === 'Receipt' && <ReceiptVoucher prefilledData={prefilledData} clearPrefilledData={clearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} />}
         {voucherType === 'Purchase' && renderSalesPurchaseForm()}
         {voucherType === 'Contra' && renderSimpleForm(voucherType)}
         {voucherType === 'Journal' && renderJournalForm()}
@@ -4664,10 +4694,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           </div>
         )}
 
-        {/* Hide page-level buttons for Receipt and Payment since they have their own buttons */}
+        {/* Hide page-level buttons for Receipt, Payment, Expenses and Sales since they have their own buttons */}
         {voucherType !== 'Receipt' && voucherType !== 'Payment' && voucherType !== 'Expenses' && voucherType !== 'Sales' && (
           <div className="mt-8 pt-4 border-t flex justify-end space-x-3">
-            <button onClick={resetForm} className="inline-flex items-center justify-center px-6 py-2 border border-gray-300 text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+            <button onClick={resetForm} className="inline-flex items-center justify-center px-6 py-2 border border-gray-300 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
               Cancel
             </button>
 
@@ -4683,47 +4713,36 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   else if (purchaseActiveTab === 'supply') setPurchaseActiveTab('due');
                   else if (purchaseActiveTab === 'due') setPurchaseActiveTab('transit');
                 }}
-                className="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 Next
               </button>
             ) : (
               <>
-                <button onClick={handleSaveVoucher} className="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                  Post & Close
-                </button>
-                <button onClick={handleSaveVoucher} className="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                  Post & Print/Email
-                </button>
+                {isLimitReached && (voucherType === 'Purchase') ? (
+                  <button
+                    className="inline-flex items-center justify-center px-6 py-2 bg-slate-300 text-slate-500 font-medium rounded-[4px] cursor-not-allowed border border-slate-300"
+                    title="Monthly invoice limit reached. Please upgrade your plan."
+                  >
+                    Limit Reached
+                  </button>
+                ) : (
+                  <>
+                    <button onClick={handleSaveVoucher} className="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                      Post & Close
+                    </button>
+                    <button onClick={handleSaveVoucher} className="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                      Post & Print/Email
+                    </button>
+                  </>
+                )}
               </>
             )}
           </div>
         )}
       </div>
 
-      {
-        isMassUploadOpen && (
-          <ErrorBoundary>
-            <MassUploadModal
-              onClose={() => setIsMassUploadOpen(false)}
-              onComplete={onMassUploadComplete}
-              ledgers={ledgers}
-              stockItems={stockItems}
-              companyDetails={companyDetails}
-              voucherType={voucherType}
-            />
-          </ErrorBoundary>
-        )
-      }
 
-      {/* Invoice Scanner Modal */}
-      {
-        isInvoiceScannerOpen && (
-          <InvoiceScannerModal
-            onClose={() => setIsInvoiceScannerOpen(false)}
-          />
-        )
-      }
 
       {/* Recent / Imported Vouchers - show below the form so imports are visible immediately */}
       {
@@ -4790,7 +4809,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       {
         isInvoiceScannerOpen && (
           <InvoiceScannerModal
-            onClose={() => setIsInvoiceScannerOpen(false)}
+            onClose={() => {
+              setIsInvoiceScannerOpen(false);
+              refetch(); // Refresh usage after scan
+            }}
           />
         )
       }
@@ -4813,6 +4835,50 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               }
             }}
           />
+        )
+      }
+      {/* Upgrade Modal */}
+      {
+        isUpgradeModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+            <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-gray-900">Upgrade Plan</h3>
+                <button onClick={() => setIsUpgradeModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                  <Icon name="x" className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="text-center mb-6">
+                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-indigo-100 mb-4">
+                  <Icon name="upload" className="h-6 w-6 text-indigo-600" />
+                </div>
+                <h4 className="text-lg font-medium text-gray-900">Upload Limit Reached</h4>
+                <p className="text-sm text-gray-500 mt-2">
+                  You have reached the invoice upload limit ({subscriptionUsage?.limit}) for your current plan ({subscriptionUsage?.plan}).
+                </p>
+                <div className="mt-4 bg-gray-50 p-4 rounded text-left">
+                  <p className="text-sm text-gray-700"><strong>Current Usage:</strong> {subscriptionUsage?.used}</p>
+                  <p className="text-sm text-gray-700"><strong>Reset Date:</strong> {new Date(subscriptionUsage?.cycle_start).toLocaleDateString()}</p>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => setIsUpgradeModalOpen(false)}
+                  className="px-4 py-2 border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => window.location.href = '/?page=Settings&tab=Subscription'}
+                  className="px-4 py-2 bg-indigo-600 border border-transparent rounded text-sm font-medium text-white hover:bg-indigo-700"
+                >
+                  Upgrade to Pro
+                </button>
+              </div>
+            </div>
+          </div>
         )
       }
     </div >

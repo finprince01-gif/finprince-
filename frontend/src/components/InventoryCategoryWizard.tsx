@@ -41,6 +41,8 @@ interface InventoryCategoryWizardProps {
     allowCreateGroup?: boolean;
     systemCategories?: string[];
     defaultGroups?: any[]; // Using any[] for simplicity as the shape is defined in DEFAULT_GROUPS_DATA
+    showSubgroup?: boolean; // Optional prop to control visibility of Subgroups
+    excludeGroups?: string[]; // Names of groups to exclude mainly from view
 }
 
 // Hardcoded base categories (System Categories) - Default
@@ -73,7 +75,9 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
     apiEndpoint = '/api/inventory/master-categories/',
     systemCategories = DEFAULT_SYSTEM_CATEGORIES,
     defaultGroups = DEFAULT_GROUPS_DATA,
-    allowCreateGroup = true
+    allowCreateGroup = true,
+    showSubgroup = true, // Default to true to maintain existing behavior,
+    excludeGroups = []
 }) => {
     const [loading, setLoading] = useState(false);
     const [treeData, setTreeData] = useState<TreeNode[]>([]);
@@ -100,7 +104,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
     // Re-build tree when apiData or restoredNodes change
     useEffect(() => {
         buildTree(apiData);
-    }, [apiData, restoredNodes, systemCategories, defaultGroups]);
+    }, [apiData, restoredNodes, systemCategories, defaultGroups, showSubgroup, excludeGroups]);
 
 
     const fetchMasterCategories = async () => {
@@ -142,6 +146,8 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
             // EXCEPTION: 'By-product' and 'Scrap' should NOT have default groups
             if (catName !== 'By-product' && catName !== 'Scrap') {
                 defaultGroups.forEach(groupData => {
+                    if (excludeGroups.includes(groupData.name)) return;
+
                     const groupNode: TreeNode = {
                         id: `group-${catName}-${groupData.name}`,
                         name: groupData.name,
@@ -152,34 +158,37 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                     };
 
                     // Logic for adding subgroups
-                    // If this is the specific 'Inventory' case with 'Stores and Spares', keep original logic
-                    if (catName === 'Stores and Spares' && defaultGroups === DEFAULT_GROUPS_DATA) {
-                        groupData.subgroups.forEach(subgroupName => {
-                            const subgroupNode: TreeNode = {
-                                id: `sub-${catName}-${groupData.name}-${subgroupName}`,
-                                name: subgroupName,
-                                children: [],
-                                level: 2,
-                                isSystem: true,
-                                data: { category: catName, group: groupData.name, subgroup: subgroupName }
-                            };
-                            groupNode.children.push(subgroupNode);
-                        });
-                    }
-                    // If custom groups are provided (not the default inventory ones), we apply subgroups to ALL categories
-                    // This allows other modules (like Customer) to have subgroups for all their categories if defined
-                    else if (defaultGroups !== DEFAULT_GROUPS_DATA && groupData.subgroups && groupData.subgroups.length > 0) {
-                        groupData.subgroups.forEach(subgroupName => {
-                            const subgroupNode: TreeNode = {
-                                id: `sub-${catName}-${groupData.name}-${subgroupName}`,
-                                name: subgroupName,
-                                children: [],
-                                level: 2,
-                                isSystem: true,
-                                data: { category: catName, group: groupData.name, subgroup: subgroupName }
-                            };
-                            groupNode.children.push(subgroupNode);
-                        });
+                    // Only add subgroups if showSubgroup is true
+                    if (showSubgroup) {
+                        // If this is the specific 'Inventory' case with 'Stores and Spares', keep original logic
+                        if (catName === 'Stores and Spares' && defaultGroups === DEFAULT_GROUPS_DATA) {
+                            groupData.subgroups.forEach(subgroupName => {
+                                const subgroupNode: TreeNode = {
+                                    id: `sub-${catName}-${groupData.name}-${subgroupName}`,
+                                    name: subgroupName,
+                                    children: [],
+                                    level: 2,
+                                    isSystem: true,
+                                    data: { category: catName, group: groupData.name, subgroup: subgroupName }
+                                };
+                                groupNode.children.push(subgroupNode);
+                            });
+                        }
+                        // If custom groups are provided (not the default inventory ones), we apply subgroups to ALL categories
+                        // This allows other modules (like Customer) to have subgroups for all their categories if defined
+                        else if (defaultGroups !== DEFAULT_GROUPS_DATA && groupData.subgroups && groupData.subgroups.length > 0) {
+                            groupData.subgroups.forEach(subgroupName => {
+                                const subgroupNode: TreeNode = {
+                                    id: `sub-${catName}-${groupData.name}-${subgroupName}`,
+                                    name: subgroupName,
+                                    children: [],
+                                    level: 2,
+                                    isSystem: true,
+                                    data: { category: catName, group: groupData.name, subgroup: subgroupName }
+                                };
+                                groupNode.children.push(subgroupNode);
+                            });
+                        }
                     }
 
                     categoryNode.children.push(groupNode);
@@ -200,6 +209,8 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
             // 3. Just Group (no subgroup)
 
             if (item.group) {
+                if (excludeGroups.includes(item.group)) return;
+
                 // Case 1 & 3: Has a group
                 let groupNode = rootNode.children.find(c => c.name === item.group);
 
@@ -210,13 +221,18 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                         children: [],
                         level: 1,
                         isSystem: false,
-                        data: { category: catName, group: item.group, subgroup: null }
+                        data: {
+                            id: item.subgroup ? undefined : item.id,
+                            category: catName,
+                            group: item.group,
+                            subgroup: null
+                        }
                     };
                     rootNode.children.push(groupNode);
                 }
 
                 // Process Subgroup under Group
-                if (item.subgroup) {
+                if (showSubgroup && item.subgroup) {
                     // Check if subgroup already exists to avoid duplicates
                     if (!groupNode.children.find(c => c.name === item.subgroup)) {
                         const subgroupNode: TreeNode = {
@@ -230,7 +246,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                         groupNode.children.push(subgroupNode);
                     }
                 }
-            } else if (item.subgroup) {
+            } else if (showSubgroup && item.subgroup) {
                 // Case 2: Subgroup without Group (direct under category)
                 // Check if subgroup already exists to avoid duplicates
                 if (!rootNode.children.find(c => c.name === item.subgroup)) {
@@ -238,7 +254,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                         id: `sub-${catName}-null-${item.subgroup}`,
                         name: item.subgroup,
                         children: [],
-                        level: 1, // Level 1 since it's directly under category
+                        level: 1, // Level 1 since it's directly under category - Wait, if we hide subgroups, this whole branch might be confusing. But for now blindly hiding if !showSubgroup.
                         isSystem: false,
                         data: { id: item.id, category: catName, group: null, subgroup: item.subgroup }
                     };
@@ -279,8 +295,9 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
     };
 
     const handleNodeSelect = (node: TreeNode) => {
+        // Force reset editing state
+        setIsEditing(false);
         setSelectedNode(node);
-        setIsEditing(false); // Reset edit mode on selection
 
         // Update form data based on selection
         setFormData({
@@ -341,11 +358,19 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
 
         // Only allow creating subgroups under existing groups
         if (selectedNode.level === 0) {
-            alert('Please select a group from the tree to create a subgroup.');
-            return;
+            if (showSubgroup) {
+                alert('Please select a group from the tree to create a subgroup.');
+                return;
+            } else {
+                // If Subgroups are disabled, allow creating Group here
+                if (!formData.group.trim()) {
+                    alert('Please enter a Group Name');
+                    return;
+                }
+            }
         }
 
-        if (selectedNode.level === 1 && !formData.subgroup.trim()) {
+        if (selectedNode.level === 1 && !formData.subgroup.trim() && showSubgroup) {
             // Check if level 1 is a subgroup (direct child of category)
             if (selectedNode.data.subgroup) {
                 // It is a subgroup, we are updating it?
@@ -358,7 +383,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
 
         try {
             // 1. Create Subgroup (under Group)
-            if (selectedNode.level === 1 && !selectedNode.data.subgroup) {
+            if (showSubgroup && selectedNode.level === 1 && !selectedNode.data.subgroup) {
                 await onCreateCategory({
                     category: selectedNode.data.category,
                     group: selectedNode.data.group,
@@ -366,6 +391,15 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                 });
                 setFormData(prev => ({ ...prev, group: '', subgroup: '' })); // Clear inputs
                 alert('Subgroup created successfully!');
+            }
+            // 4. Create Group (Level 0 selected, !showSubgroup)
+            else if (!showSubgroup && selectedNode.level === 0) {
+                await onCreateCategory({
+                    category: selectedNode.data.category,
+                    group: formData.group.trim(),
+                    subgroup: null
+                });
+                setFormData(prev => ({ ...prev, group: '', subgroup: '' })); // Clear inputs
             }
 
             // Success
@@ -394,7 +428,8 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
     const handleDelete = async () => {
         if (!selectedNode || !selectedNode.data.id || !onDeleteCategory) return;
 
-        if (confirm(`Are you sure you want to delete subgroup "${selectedNode.name}"?`)) {
+        const itemType = showSubgroup ? "subgroup" : "group";
+        if (confirm(`Are you sure you want to delete ${itemType} "${selectedNode.name}"?`)) {
             try {
                 await onDeleteCategory(selectedNode.data.id);
                 setSelectedNode(null);
@@ -419,7 +454,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                         className={`flex items-center py-1.5 px-2 cursor-pointer hover:bg-gray-100 rounded transition-colors ${isSelected ? 'bg-indigo-100 text-slate-700 font-medium border-l-2 border-indigo-500' : ''}`}
                         onClick={() => handleNodeSelect(node)}
                         onDoubleClick={() => {
-                            if (hasChildren || node.level < 2) {
+                            if (hasChildren || node.level < (showSubgroup ? 2 : 1)) {
                                 toggleNode(node.id);
                             }
                         }}
@@ -440,7 +475,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                             </span>
                         )}
 
-                        <span className={`text-sm select-none truncate ${!isSelected && node.level === 2 ? 'text-blue-800 font-medium' : 'text-gray-900'}`}>
+                        <span className={`text-sm select-none truncate ${!isSelected && node.level === (showSubgroup ? 2 : 1) ? 'text-blue-800 font-medium' : 'text-gray-900'}`}>
                             {node.name}
                         </span>
                     </div>
@@ -521,9 +556,67 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                                                 autoFocus
                                             />
                                         ) : selectedNode && selectedNode.level === 1 && selectedNode.data.group && !selectedNode.data.subgroup ? (
-                                            // If GROUP (not subgroup) selected at level 1, display it
-                                            <div className="text-gray-900 font-semibold text-base">
-                                                {selectedNode.name}
+                                            // If GROUP (not subgroup) selected at level 1
+                                            <div className="flex items-center justify-between">
+                                                {isEditing ? (
+                                                    <input
+                                                        type="text"
+                                                        name="group"
+                                                        value={formData.group}
+                                                        onChange={handleInputChange}
+                                                        className="w-full px-3 py-2 border border-blue-500 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder-gray-400 bg-white text-gray-800 text-sm"
+                                                        placeholder="Enter Group Name"
+                                                        autoFocus
+                                                    />
+                                                ) : (
+                                                    <div className="text-gray-900 font-semibold text-base">
+                                                        {selectedNode.name}
+                                                    </div>
+                                                )}
+
+                                                {/* Only show actions if NOT editing, or cancel if editing */}
+                                                {!showSubgroup && (
+                                                    <div className="flex items-center gap-2 ml-4">
+                                                        {isEditing ? (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setIsEditing(false);
+                                                                    setFormData({ category: '', group: '', subgroup: '' });
+                                                                }}
+                                                                className="text-xs text-gray-500 hover:text-gray-700 underline text-nowrap"
+                                                            >
+                                                                Cancel
+                                                            </button>
+                                                        ) : (
+                                                            <>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setIsEditing(true);
+                                                                        setFormData({
+                                                                            category: selectedNode.data.category,
+                                                                            group: selectedNode.data.group,
+                                                                            subgroup: ''
+                                                                        });
+                                                                    }}
+                                                                    className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                                                                    title="Edit Group"
+                                                                >
+                                                                    Edit
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={handleDelete}
+                                                                    className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                                                                    title="Delete Group"
+                                                                >
+                                                                    Delete
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         ) : selectedNode.level === 2 && selectedNode.data.group ? (
                                             // If SUBGROUP selected, show the parent group
@@ -538,8 +631,8 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                                     </div>
                                 )}
 
-                                {/* 3. Subgroup Input */}
-                                {selectedNode && selectedNode.level >= 1 && (
+                                {/* 3. Subgroup Input - CONDITIONAL */}
+                                {showSubgroup && selectedNode && selectedNode.level >= 1 && (
                                     <div>
                                         <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
                                             SUBGROUP

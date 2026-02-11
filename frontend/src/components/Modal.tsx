@@ -50,7 +50,7 @@ interface ModalProps {
   isOpen: boolean;            // Whether modal is visible
   onClose?: () => void;       // Optional close handler (if provided, shows close button)
   title: string;              // Modal title text
-  type: 'loading' | 'error' | 'success';  // Modal type (determines icon and colors)
+  type: 'loading' | 'error' | 'success' | 'warning';  // Modal type (determines icon and colors)
   children: React.ReactNode;  // Modal content (message, description, etc.)
 }
 
@@ -76,6 +76,11 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, type, children })
           {type === 'error' && (
             <div className="w-12 h-12 flex items-center justify-center bg-red-100 rounded-[4px]">
               <Icon name="warning" className="h-6 w-6 text-red-600" />
+            </div>
+          )}
+          {type === 'warning' && (
+            <div className="w-12 h-12 flex items-center justify-center bg-yellow-100 rounded-[4px]">
+              <Icon name="warning" className="h-6 w-6 text-yellow-600" />
             </div>
           )}
           {type === 'success' && (
