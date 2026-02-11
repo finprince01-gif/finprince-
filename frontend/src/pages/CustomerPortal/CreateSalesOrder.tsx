@@ -10,6 +10,7 @@ interface ItemRow {
     price: string;
     taxableValue: number;
     gst: number;
+    gstRate?: number; // Hidden field for calculation
     netValue: number;
 }
 
@@ -23,19 +24,45 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
     const [soNumber, setSONumber] = useState(`SO-${Date.now().toString().slice(-6)}`); // Auto-generated unique ID
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [customerPONumber, setCustomerPONumber] = useState('');
-    const [customerName, setCustomerName] = useState('customer1');
-    const [branch, setBranch] = useState('main');
+    const [customerName, setCustomerName] = useState('');
+    const [branch, setBranch] = useState('');
     const [address, setAddress] = useState('');
     const [email, setEmail] = useState('');
     const [contactNumber, setContactNumber] = useState('');
+    const [gstNo, setGstNo] = useState('');
 
     // Section 2: Quotation/Contract Linking
     const [quotationType, setQuotationType] = useState('');
     const [quotationNumber, setQuotationNumber] = useState('');
     const [salesQuotations, setSalesQuotations] = useState<any[]>([]);
 
+    // Customer Data Types
+    interface Customer {
+        id: number;
+        customer_name: string;
+        customer_code: string;
+        gst_details: {
+            branches: {
+                id: number;
+                gstin: string;
+                defaultRef: string;
+                address: string;
+            }[];
+        };
+        address_line1?: string;
+        city?: string;
+        state?: string;
+        pincode?: string;
+    }
+
+    const [customers, setCustomers] = useState<Customer[]>([]);
+    const [filteredBranches, setFilteredBranches] = useState<any[]>([]);
+    const [allCustomerBranches, setAllCustomerBranches] = useState<any[]>([]);
+
     const [contracts, setContracts] = useState<any[]>([]);
-    const [uomOptions, setUomOptions] = useState<string[]>([]);
+
+    // Inventory Data
+    const [inventoryItems, setInventoryItems] = useState<any[]>([]);
 
     useEffect(() => {
         const fetchQuotations = async () => {
@@ -71,23 +98,43 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
 
         const fetchInventoryItems = async () => {
             try {
-                const response = await httpClient.get<any[]>('/api/inventory/items/');
+                // Fetch active items only
+                const response = await httpClient.get<any[]>('/api/inventory/items/?is_active=true');
                 const itemsList = Array.isArray(response) ? response : (response as any).results || [];
-
-                // Extract unique UOMs - solely for populating the dropdown options
-                const distinctUoms = Array.from(new Set(itemsList.map((item: any) => item.uom).filter((uom: any) => uom)));
-                setUomOptions(distinctUoms as string[]);
+                setInventoryItems(itemsList);
             } catch (error) {
-                console.error('Error fetching inventory items (for UOMs):', error);
+                console.error('Error fetching inventory items:', error);
             }
         };
         fetchInventoryItems();
+
+        const fetchCustomers = async () => {
+            try {
+                const response = await httpClient.get<any[]>('/api/customerportal/customer-master/');
+                const customerList = Array.isArray(response) ? response : (response as any).results || [];
+                setCustomers(customerList);
+            } catch (error) {
+                console.error('Error fetching customers:', error);
+            }
+        };
+        fetchCustomers();
     }, []);
 
     // Section 3: Item Details
+    // Section 3: Item Details
     const [items, setItems] = useState<ItemRow[]>([
-
-        { id: 1, itemCode: 'ITEM-001', itemName: 'Sample Product', quantity: '1', uom: 'nos', price: '100', taxableValue: 100, gst: 18, netValue: 118 }
+        {
+            id: 1,
+            itemCode: '',
+            itemName: '',
+            quantity: '',
+            uom: '',
+            price: '',
+            taxableValue: 0,
+            gst: 0,
+            gstRate: 0,
+            netValue: 0
+        }
     ]);
 
     // Section 4: Totals
@@ -106,6 +153,8 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
     // Section 7: Salesperson
     const [employeeId, setEmployeeId] = useState('');
     const [employeeName, setEmployeeName] = useState('');
+    const [thirdPartyAgentId, setThirdPartyAgentId] = useState('');
+    const [thirdPartyAgentName, setThirdPartyAgentName] = useState('');
     const [salespersonInCharge, setSalespersonInCharge] = useState('');
 
     // Calculate item values
@@ -113,7 +162,8 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
         const qty = parseFloat(item.quantity) || 0;
         const price = parseFloat(item.price) || 0;
         const taxableValue = qty * price;
-        const gst = taxableValue * 0.18; // 18% GST
+        const gstRate = item.gstRate || 0;
+        const gst = taxableValue * (gstRate / 100);
         const netValue = taxableValue + gst;
 
         return {
@@ -144,10 +194,11 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
             itemCode: '',
             itemName: '',
             quantity: '',
-            uom: 'nos',
+            uom: '',
             price: '',
             taxableValue: 0,
             gst: 0,
+            gstRate: 0,
             netValue: 0
         };
         setItems([...items, newItem]);
@@ -162,7 +213,33 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
     const handleItemChange = (id: number, field: keyof ItemRow, value: string) => {
         setItems(items.map(item => {
             if (item.id === id) {
-                const updatedItem = { ...item, [field]: value };
+                let updatedItem = { ...item, [field]: value };
+
+                // Auto-fill logic based on Item Code or Item Name
+                if (field === 'itemCode') {
+                    const selectedItem = inventoryItems.find(i => i.item_code === value);
+                    if (selectedItem) {
+                        updatedItem = {
+                            ...updatedItem,
+                            itemName: selectedItem.item_name,
+                            uom: selectedItem.uom || '',
+                            price: selectedItem.rate ? selectedItem.rate.toString() : '0',
+                            gstRate: parseFloat(selectedItem.gst_rate) || 0,
+                        };
+                    }
+                } else if (field === 'itemName') {
+                    const selectedItem = inventoryItems.find(i => i.item_name === value);
+                    if (selectedItem) {
+                        updatedItem = {
+                            ...updatedItem,
+                            itemCode: selectedItem.item_code,
+                            uom: selectedItem.uom || '',
+                            price: selectedItem.rate ? selectedItem.rate.toString() : '0',
+                            gstRate: parseFloat(selectedItem.gst_rate) || 0,
+                        };
+                    }
+                }
+
                 return calculateItemValues(updatedItem);
             }
             return item;
@@ -207,6 +284,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                 so_number: soNumber,
                 date: date,
                 customer_po_number: customerPONumber || null,
+                gst_no: gstNo || null,
                 customer_name: customerName,
                 branch: branch,
                 address: address || null,
@@ -222,6 +300,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                     uom: item.uom,
                     price: parseFloat(item.price) || 0,
                     taxable_value: item.taxableValue,
+                    gst_rate: item.gstRate, // Include GST Rate from hidden field
                     gst: item.gst,
                     net_value: item.netValue
                 })),
@@ -264,6 +343,65 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
         }
     };
 
+
+    const handleCustomerChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const selectedName = e.target.value;
+        setCustomerName(selectedName);
+        setBranch('');
+        setGstNo('');
+        setAddress('');
+
+        const customer = customers.find(c => c.customer_name === selectedName);
+        if (customer && customer.gst_details && customer.gst_details.branches) {
+            setAllCustomerBranches(customer.gst_details.branches);
+            setFilteredBranches(customer.gst_details.branches);
+            // If only one branch, auto-select it
+            if (customer.gst_details.branches.length === 1) {
+                const singleBranch = customer.gst_details.branches[0];
+                setBranch(singleBranch.defaultRef || 'Main Branch');
+                setGstNo(singleBranch.gstin || '');
+                setAddress(singleBranch.address || '');
+                setDeliverAt(singleBranch.address || '');
+            }
+        } else {
+            setAllCustomerBranches([]);
+            setFilteredBranches([]);
+        }
+    };
+
+    const handleGstChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const selectedGst = e.target.value;
+        setGstNo(selectedGst);
+        setBranch(''); // Reset branch when GST changes
+        setAddress('');
+
+        if (selectedGst) {
+            const branchesForGst = allCustomerBranches.filter(b => b.gstin === selectedGst);
+            setFilteredBranches(branchesForGst);
+            // If only one branch for this GST, auto-select it
+            if (branchesForGst.length === 1) {
+                const singleBranch = branchesForGst[0];
+                setBranch(singleBranch.defaultRef || '');
+                setAddress(singleBranch.address || '');
+                setDeliverAt(singleBranch.address || '');
+            }
+        } else {
+            // If GST is cleared, show all branches for the customer
+            setFilteredBranches(allCustomerBranches);
+        }
+    };
+
+    const handleBranchChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const selectedBranchRef = e.target.value;
+        setBranch(selectedBranchRef);
+
+        const branchDetails = allCustomerBranches.find(b => b.defaultRef === selectedBranchRef);
+        if (branchDetails) {
+            setGstNo(branchDetails.gstin || '');
+            setAddress(branchDetails.address || '');
+            setDeliverAt(branchDetails.address || '');
+        }
+    };
 
     return (
         <div className="min-h-screen bg-gray-50">
@@ -311,7 +449,6 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                     readOnly
                                     className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-600"
                                 />
-                                <p className="text-xs text-gray-500 mt-1">Auto-generated based on series</p>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -323,7 +460,6 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                     onChange={(e) => setDate(e.target.value)}
                                     className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                 />
-                                <p className="text-xs text-gray-500 mt-1">Default: Today, editable</p>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -334,7 +470,6 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                     value={customerPONumber}
                                     onChange={(e) => setCustomerPONumber(e.target.value)}
                                     className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                    placeholder="Can be fetched from imported PO"
                                 />
                             </div>
                             <div>
@@ -343,12 +478,34 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                 </label>
                                 <select
                                     value={customerName}
-                                    onChange={(e) => setCustomerName(e.target.value)}
+                                    onChange={handleCustomerChange}
                                     className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                                 >
                                     <option value="">Select customer</option>
-                                    <option value="customer1">Acme Corporation</option>
-                                    <option value="customer2">Global Traders</option>
+                                    {customers.map(customer => (
+                                        <option key={customer.id} value={customer.customer_name}>
+                                            {customer.customer_name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    GST NUMBER
+                                </label>
+                                <select
+                                    value={gstNo}
+                                    onChange={handleGstChange}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                    disabled={!customerName}
+                                >
+                                    <option value="">Select GST Number</option>
+                                    {/* Get unique GSTINs */}
+                                    {Array.from(new Set(allCustomerBranches.map(b => b.gstin))).filter(Boolean).map(gst => (
+                                        <option key={gst} value={gst}>
+                                            {gst}
+                                        </option>
+                                    ))}
                                 </select>
                             </div>
                             <div>
@@ -357,12 +514,15 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                 </label>
                                 <select
                                     value={branch}
-                                    onChange={(e) => setBranch(e.target.value)}
+                                    onChange={handleBranchChange}
                                     className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                                 >
                                     <option value="">Select branch</option>
-                                    <option value="main">Main Branch</option>
-                                    <option value="north">North Branch</option>
+                                    {filteredBranches.map(b => (
+                                        <option key={b.id} value={b.defaultRef}>
+                                            {b.defaultRef}
+                                        </option>
+                                    ))}
                                 </select>
                             </div>
                             <div className="md:col-span-2">
@@ -374,9 +534,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                     value={address}
                                     onChange={(e) => setAddress(e.target.value)}
                                     className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 resize-none"
-                                    placeholder="Auto-filled from customer master"
                                 />
-                                <p className="text-xs text-gray-500 mt-1">Fetched from customer master</p>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -387,7 +545,6 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
                                     className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                    placeholder="Auto-filled, editable"
                                 />
                             </div>
                             <div>
@@ -399,7 +556,6 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                     value={contactNumber}
                                     onChange={(e) => setContactNumber(e.target.value)}
                                     className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                    placeholder="Auto-filled"
                                 />
                             </div>
                         </div>
@@ -445,7 +601,6 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                         </option>
                                     ))}
                                 </select>
-                                <p className="text-xs text-gray-500 mt-1">Only valid for selected customer</p>
                             </div>
                         </div>
                     </div>
@@ -453,6 +608,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                     {/* Section 3: Item Details Table */}
                     <div className="mb-8">
                         <h3 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-200">Item Details</h3>
+
                         <div className="overflow-x-auto border border-gray-200 rounded-[4px]">
                             <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
@@ -474,22 +630,32 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                         <tr key={item.id} className="hover:bg-gray-50">
                                             <td className="px-4 py-3 text-sm text-gray-900">{index + 1}</td>
                                             <td className="px-4 py-3">
-                                                <input
-                                                    type="text"
+                                                <select
                                                     value={item.itemCode}
                                                     onChange={(e) => handleItemChange(item.id, 'itemCode', e.target.value)}
-                                                    className="w-24 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                                    placeholder="Code"
-                                                />
+                                                    className="w-32 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                                >
+                                                    <option value="">Select Code</option>
+                                                    {inventoryItems.map(invItem => (
+                                                        <option key={invItem.id} value={invItem.item_code}>
+                                                            {invItem.item_code}
+                                                        </option>
+                                                    ))}
+                                                </select>
                                             </td>
                                             <td className="px-4 py-3">
-                                                <input
-                                                    type="text"
+                                                <select
                                                     value={item.itemName}
                                                     onChange={(e) => handleItemChange(item.id, 'itemName', e.target.value)}
-                                                    className="w-32 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                                    placeholder="Name"
-                                                />
+                                                    className="w-48 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                                >
+                                                    <option value="">Select Name</option>
+                                                    {inventoryItems.map(invItem => (
+                                                        <option key={invItem.id} value={invItem.item_name}>
+                                                            {invItem.item_name}
+                                                        </option>
+                                                    ))}
+                                                </select>
                                             </td>
                                             <td className="px-4 py-3">
                                                 <input
@@ -501,26 +667,20 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                                 />
                                             </td>
                                             <td className="px-4 py-3">
-                                                <select
+                                                <input
+                                                    type="text"
                                                     value={item.uom}
-                                                    onChange={(e) => handleItemChange(item.id, 'uom', e.target.value)}
-                                                    className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                                                >
-                                                    <option value="">Select</option>
-                                                    {uomOptions.map((uom, i) => (
-                                                        <option key={i} value={uom}>{uom}</option>
-                                                    ))}
-                                                    {!uomOptions.includes(item.uom) && item.uom && (
-                                                        <option value={item.uom}>{item.uom}</option>
-                                                    )}
-                                                </select>
+                                                    readOnly // Set to readOnly as per requirement
+                                                    className="w-20 px-2 py-1 border border-gray-300 rounded text-sm bg-gray-50 text-gray-600"
+                                                    placeholder="UOM"
+                                                />
                                             </td>
                                             <td className="px-4 py-3">
                                                 <input
                                                     type="number"
                                                     value={item.price}
-                                                    onChange={(e) => handleItemChange(item.id, 'price', e.target.value)}
-                                                    className="w-24 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                                    readOnly // Set to readOnly as per requirement
+                                                    className="w-24 px-2 py-1 border border-gray-300 rounded text-sm bg-gray-50 text-gray-600"
                                                     placeholder="Price"
                                                 />
                                             </td>
@@ -597,10 +757,13 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                     className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                                 >
                                     <option value="">Select delivery address</option>
-                                    <option value="addr1">Main Office - 123 Business St</option>
-                                    <option value="addr2">Warehouse - 456 Industrial Ave</option>
+                                    {allCustomerBranches.map((branch, index) => (
+                                        <option key={index} value={branch.address}>
+                                            {branch.address}
+                                        </option>
+                                    ))}
+                                    <option value="Third Party">Third Party</option>
                                 </select>
-                                <p className="text-xs text-gray-500 mt-1">All customer addresses</p>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -629,9 +792,37 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                     value={creditPeriod}
                                     onChange={(e) => setCreditPeriod(e.target.value)}
                                     className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                    placeholder="Auto-filled from customer master, editable"
                                 />
                                 <p className="text-xs text-gray-500 mt-1">From customer master</p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Salesperson-in-charge
+                                </label>
+                                <select
+                                    value={salespersonInCharge}
+                                    onChange={(e) => {
+                                        const newVal = e.target.value;
+                                        setSalespersonInCharge(newVal);
+                                        if (newVal === 'Employee') {
+                                            setThirdPartyAgentId('');
+                                            setThirdPartyAgentName('');
+                                        } else if (newVal === 'Third Party Agent') {
+                                            setEmployeeId('');
+                                            setEmployeeName('');
+                                        } else {
+                                            setEmployeeId('');
+                                            setEmployeeName('');
+                                            setThirdPartyAgentId('');
+                                            setThirdPartyAgentName('');
+                                        }
+                                    }}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                >
+                                    <option value="">Select Type</option>
+                                    <option value="Employee">Employee</option>
+                                    <option value="Third Party Agent">Third Party Agent</option>
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -639,19 +830,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                     {/* Employee Fields */}
                     <div className="mb-8">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Salesperson-in-charge
-                                </label>
-                                <input
-                                    type="text"
-                                    value={salespersonInCharge}
-                                    onChange={(e) => setSalespersonInCharge(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                    placeholder=""
-                                />
-                                <p className="text-xs text-gray-500 mt-1">Employee / Third Party Agent</p>
-                            </div>
+
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Employee ID
@@ -664,14 +843,13 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                         if (e.target.value === 'emp001') setEmployeeName('John Doe');
                                         else if (e.target.value === 'emp002') setEmployeeName('Jane Smith');
                                     }}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                    disabled={salespersonInCharge !== 'Employee'}
+                                    className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 ${salespersonInCharge !== 'Employee' ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
                                 >
-                                    <option value="">Select employee/agent</option>
+                                    <option value="">Select Employee ID</option>
                                     <option value="emp001">EMP-001</option>
                                     <option value="emp002">EMP-002</option>
-                                    <option value="agent001">AGENT-001</option>
                                 </select>
-                                <p className="text-xs text-gray-500 mt-1">Employee / Third Party Agent</p>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -682,7 +860,37 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                     value={employeeName}
                                     readOnly
                                     className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-600"
-                                    placeholder="Auto-filled when ID is selected"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Third Party Agent ID
+                                </label>
+                                <select
+                                    value={thirdPartyAgentId}
+                                    onChange={(e) => {
+                                        setThirdPartyAgentId(e.target.value);
+                                        // Auto-fill agent name based on ID
+                                        if (e.target.value === 'agent001') setThirdPartyAgentName('Agent Smith');
+                                        else if (e.target.value === 'agent002') setThirdPartyAgentName('Agent Johnson');
+                                    }}
+                                    disabled={salespersonInCharge !== 'Third Party Agent'}
+                                    className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 ${salespersonInCharge !== 'Third Party Agent' ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
+                                >
+                                    <option value="">Select agent</option>
+                                    <option value="agent001">AGENT-001</option>
+                                    <option value="agent002">AGENT-002</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Third Party Agent Name
+                                </label>
+                                <input
+                                    type="text"
+                                    value={thirdPartyAgentName}
+                                    readOnly
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-600"
                                 />
                             </div>
                         </div>
