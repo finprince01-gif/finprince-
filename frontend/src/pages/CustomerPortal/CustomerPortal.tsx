@@ -425,6 +425,9 @@ const CategoryContent: React.FC = () => {
         <InventoryCategoryWizard
             apiEndpoint="/api/customerportal/categories/"
             allowCreateGroup={false} // Hide Group/Subgroup creation fields at root level
+            showSubgroup={false} // Hiding Subgroup for Customer Portal as requested
+            defaultGroups={[]} // Empty default groups as requested
+            excludeGroups={['Import', 'With in country (Indigenous)']} // Force exclude persistent groups
             systemCategories={CUSTOMER_CATEGORIES.map(c => c.category)}
             // Using default system categories and groups (Inventory/Vendor structure) as requested
             onCreateCategory={async (data) => {
@@ -2892,7 +2895,8 @@ const SalesOrderContent: React.FC = () => {
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Customer Category <span className="text-red-500">*</span></label>
                         <CategoryHierarchicalDropdown
-                            staticCategories={CUSTOMER_CATEGORIES}
+                            apiEndpoint="/api/customerportal/categories/"
+                            systemCategories={['Export', 'Within Country (B2B)', 'Within Country (B2C)']}
                             value={form.category}
                             onSelect={(selection) => handleChange('category', selection.fullPath)}
                             colorTheme="teal"
@@ -2921,27 +2925,17 @@ const SalesOrderContent: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4 items-center">
-                        <div className="flex items-center pt-6">
-                            <input
-                                id="autoYear"
-                                type="checkbox"
-                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                                checked={form.autoYear}
-                                onChange={(e) => handleChange('autoYear', e.target.checked)}
-                            />
-                            <label htmlFor="autoYear" className="ml-2 block text-sm text-gray-700">Auto Year</label>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Digits</label>
-                            <input
-                                type="number"
-                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                value={form.digits}
-                                onChange={(e) => handleChange('digits', Number(e.target.value))}
-                            />
-                        </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Digits</label>
+                        <input
+                            type="number"
+                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                            value={form.digits}
+                            onChange={(e) => handleChange('digits', Number(e.target.value))}
+                        />
                     </div>
+
 
                     <div className="bg-gray-100 rounded-[4px] p-6 text-center">
                         <p className="text-xs uppercase text-gray-500 font-semibold mb-2">SAMPLE PREVIEW</p>

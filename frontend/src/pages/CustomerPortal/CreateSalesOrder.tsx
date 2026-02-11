@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { httpClient } from '../../services/httpClient';
+import { COUNTRY_STATE_CITY_DATA } from '../../data/countriesData';
 
 interface ItemRow {
     id: number;
@@ -146,6 +147,15 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
     // Section 5: Delivery Terms
     const [deliverAt, setDeliverAt] = useState('');
     const [deliveryDate, setDeliveryDate] = useState('');
+
+    // Third Party Delivery Address
+    const [thirdPartyCountry, setThirdPartyCountry] = useState('');
+    const [thirdPartyState, setThirdPartyState] = useState('');
+    const [thirdPartyCity, setThirdPartyCity] = useState('');
+    const [thirdPartyPincode, setThirdPartyPincode] = useState('');
+    const [thirdPartyAddress1, setThirdPartyAddress1] = useState('');
+    const [thirdPartyAddress2, setThirdPartyAddress2] = useState('');
+    const [thirdPartyAddress3, setThirdPartyAddress3] = useState('');
 
     // Section 6: Payment Terms
     const [creditPeriod, setCreditPeriod] = useState('');
@@ -308,7 +318,17 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                 // Delivery Terms
                 delivery_terms: {
                     deliver_at: deliverAt || null,
-                    delivery_date: deliveryDate || null
+                    delivery_date: deliveryDate || null,
+                    // Third Party Address (conditional)
+                    third_party_address: deliverAt === 'Third Party' ? {
+                        country: thirdPartyCountry,
+                        state: thirdPartyState,
+                        city: thirdPartyCity,
+                        pincode: thirdPartyPincode,
+                        address_line_1: thirdPartyAddress1,
+                        address_line_2: thirdPartyAddress2 || null,
+                        address_line_3: thirdPartyAddress3 || null
+                    } : null
                 },
 
                 // Payment and Salesperson (Combined)
@@ -778,6 +798,117 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                             </div>
                         </div>
                     </div>
+
+                    {/* Third Party Delivery Address - Conditional */}
+                    {deliverAt === 'Third Party' && (
+                        <div className="mb-8">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-200">Third Party Delivery Address</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Country <span className="text-red-500">*</span>
+                                    </label>
+                                    <select
+                                        value={thirdPartyCountry}
+                                        onChange={(e) => {
+                                            setThirdPartyCountry(e.target.value);
+                                            setThirdPartyState('');
+                                            setThirdPartyCity('');
+                                        }}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                    >
+                                        <option value="">Select country</option>
+                                        {Object.keys(COUNTRY_STATE_CITY_DATA).map(country => (
+                                            <option key={country} value={country}>{country}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        State <span className="text-red-500">*</span>
+                                    </label>
+                                    <select
+                                        value={thirdPartyState}
+                                        onChange={(e) => {
+                                            setThirdPartyState(e.target.value);
+                                            setThirdPartyCity('');
+                                        }}
+                                        disabled={!thirdPartyCountry}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                    >
+                                        <option value="">Select state</option>
+                                        {thirdPartyCountry && Object.keys(COUNTRY_STATE_CITY_DATA[thirdPartyCountry] || {}).map(state => (
+                                            <option key={state} value={state}>{state}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        City <span className="text-red-500">*</span>
+                                    </label>
+                                    <select
+                                        value={thirdPartyCity}
+                                        onChange={(e) => setThirdPartyCity(e.target.value)}
+                                        disabled={!thirdPartyState}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                    >
+                                        <option value="">Select city</option>
+                                        {thirdPartyCountry && thirdPartyState && (COUNTRY_STATE_CITY_DATA[thirdPartyCountry]?.[thirdPartyState] || []).map(city => (
+                                            <option key={city} value={city}>{city}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Pincode <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={thirdPartyPincode}
+                                        onChange={(e) => setThirdPartyPincode(e.target.value)}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="Enter pincode"
+                                    />
+                                </div>
+                                <div className="md:col-span-2">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Address Line 1 <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={thirdPartyAddress1}
+                                        onChange={(e) => setThirdPartyAddress1(e.target.value)}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="Building name, Street name"
+                                    />
+                                </div>
+                                <div className="md:col-span-2">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Address Line 2
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={thirdPartyAddress2}
+                                        onChange={(e) => setThirdPartyAddress2(e.target.value)}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="Locality, Area"
+                                    />
+                                </div>
+                                <div className="md:col-span-2">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Address Line 3
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={thirdPartyAddress3}
+                                        onChange={(e) => setThirdPartyAddress3(e.target.value)}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="Landmark (optional)"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Section 6: Payment Terms */}
                     <div className="mb-8">
