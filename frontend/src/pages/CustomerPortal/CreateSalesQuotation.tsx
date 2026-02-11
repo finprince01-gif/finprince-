@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { httpClient } from '../../services/httpClient';
+import CategoryHierarchicalDropdown from '../../components/CategoryHierarchicalDropdown';
 
 interface ItemRow {
     id: number;
@@ -49,6 +50,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
     // General Customer Quote states
     const [quoteNumber, setQuoteNumber] = useState('');
     const [customerCategory, setCustomerCategory] = useState('');
+    const [customerCategoryId, setCustomerCategoryId] = useState<number | null>(null);
     const [effectiveFrom, setEffectiveFrom] = useState('');
     const [effectiveTo, setEffectiveTo] = useState('');
     const [items, setItems] = useState<ItemRow[]>([
@@ -402,12 +404,15 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Customer Category <span className="text-red-500">*</span>
                                     </label>
-                                    <input
-                                        type="text"
+                                    <CategoryHierarchicalDropdown
+                                        apiEndpoint="/api/customerportal/categories/"
                                         value={customerCategory}
-                                        onChange={(e) => setCustomerCategory(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                        placeholder="Select or enter category"
+                                        onSelect={(selection) => {
+                                            setCustomerCategoryId(selection.id);
+                                            setCustomerCategory(selection.fullPath);
+                                        }}
+                                        placeholder="Select category"
+                                        colorTheme="indigo"
                                     />
                                 </div>
                             </div>
