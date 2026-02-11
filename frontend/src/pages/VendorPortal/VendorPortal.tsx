@@ -182,8 +182,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         negotiatedRate: string;
         finalRate: string;
         taxableValue: string;
-        gst: string;
+        igst: string;
+        cgst: string;
+        sgst: string;
+        cess: string;
         netValue: string;
+        uom: string;
     }
 
     const [poItems, setPOItems] = useState<POItem[]>([
@@ -196,8 +200,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             negotiatedRate: '',
             finalRate: '',
             taxableValue: '',
-            gst: '',
-            netValue: ''
+            igst: '',
+            cgst: '',
+            sgst: '',
+            cess: '',
+            netValue: '',
+            uom: ''
         }
     ]);
 
@@ -249,6 +257,21 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         } catch (error) {
             console.error('Error fetching vendor branches:', error);
             setAvailableBranches([]);
+        }
+    };
+
+    // Vendor Items State (for PO)
+    const [availableVendorItems, setAvailableVendorItems] = useState<any[]>([]);
+
+    const fetchAvailableVendorItems = async (vendorId: number) => {
+        try {
+            const response = await httpClient.get<any>(`/api/vendors/products-services/?vendor_basic_detail=${vendorId}`);
+            // Assuming the response structure is similar to others
+            const data = Array.isArray(response) ? response : (response.results || []);
+            setAvailableVendorItems(data);
+        } catch (error) {
+            console.error('Error fetching vendor items:', error);
+            setAvailableVendorItems([]);
         }
     };
 
@@ -456,8 +479,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             negotiatedRate: '',
             finalRate: '',
             taxableValue: '',
-            gst: '',
-            netValue: ''
+            igst: '',
+            cgst: '',
+            sgst: '',
+            cess: '',
+            netValue: '',
+            uom: ''
         };
         setPOItems([...poItems, newItem]);
     };
@@ -469,9 +496,33 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     };
 
     const handlePOItemChange = (id: number, field: keyof POItem, value: string) => {
-        setPOItems(poItems.map(item =>
-            item.id === id ? { ...item, [field]: value } : item
-        ));
+        setPOItems(prevItems => prevItems.map(item => {
+            if (item.id === id) {
+                const updatedItem = { ...item, [field]: value };
+
+                // Conversions for calculation
+                const quantity = parseFloat(field === 'quantity' ? value : item.quantity) || 0;
+                const finalRate = parseFloat(field === 'finalRate' ? value : item.finalRate) || 0;
+
+                const igstRate = parseFloat(field === 'igst' ? value : item.igst) || 0;
+                const cgstRate = parseFloat(field === 'cgst' ? value : item.cgst) || 0;
+                const sgstRate = parseFloat(field === 'sgst' ? value : item.sgst) || 0;
+                const cessRate = parseFloat(field === 'cess' ? value : item.cess) || 0;
+
+                // Calculate Taxable Value: Quantity * Final Rate
+                const taxableVal = quantity * finalRate;
+                updatedItem.taxableValue = taxableVal.toFixed(2);
+
+                // Calculate Net Value: Taxable Value + Total GST Amount
+                const totalTaxRate = igstRate + cgstRate + sgstRate + cessRate;
+                const gstAmount = (taxableVal * totalTaxRate) / 100;
+                const netVal = taxableVal + gstAmount;
+                updatedItem.netValue = netVal.toFixed(2);
+
+                return updatedItem;
+            }
+            return item;
+        }));
     };
 
     const handleCreatePOFormChange = (field: string, value: string) => {
@@ -482,8 +533,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 const selectedVendor = vendorList.find(v => v.vendor_name === value);
                 if (selectedVendor) {
                     fetchVendorBranches(selectedVendor.id);
+                    fetchAvailableVendorItems(selectedVendor.id);
                 } else {
                     setAvailableBranches([]);
+                    setAvailableVendorItems([]);
                 }
             }
 
@@ -513,12 +566,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 item_name: item.itemName,
                 supplier_item_code: item.supplierItemCode,
                 quantity: parseFloat(item.quantity) || 0,
-                uom: 'PCS', // Default unit, can be made dynamic
+                uom: item.uom || 'PCS',
                 negotiated_rate: parseFloat(item.negotiatedRate) || 0,
                 final_rate: parseFloat(item.finalRate) || 0,
                 taxable_value: parseFloat(item.taxableValue) || 0,
-                gst_rate: parseFloat(item.gst) || 0,
-                gst_amount: (parseFloat(item.taxableValue) || 0) * (parseFloat(item.gst) || 0) / 100,
+                gst_rate: (parseFloat(item.igst) || 0) + (parseFloat(item.cgst) || 0) + (parseFloat(item.sgst) || 0) + (parseFloat(item.cess) || 0),
+                gst_amount: (parseFloat(item.taxableValue) || 0) * ((parseFloat(item.igst) || 0) + (parseFloat(item.cgst) || 0) + (parseFloat(item.sgst) || 0) + (parseFloat(item.cess) || 0)) / 100,
                 invoice_value: parseFloat(item.netValue) || 0
             }));
 
@@ -918,7 +971,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     };
 
     // Update bank field
-    const handleBankChange = (id: number, field: keyof BankAccount, value: string) => {
+    const handleBankChange = (id: number, field: keyof BankAccount, value: string | string[]) => {
         setBankAccounts(bankAccounts.map(bank =>
             bank.id === id ? { ...bank, [field]: value } : bank
         ));
@@ -1795,6 +1848,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         </label>
                                         <CategoryHierarchicalDropdown
                                             apiEndpoint="/api/vendors/categories/"
+                                            systemCategories={[
+                                                'Raw Material',
+                                                'Work in Progress',
+                                                'Finished Goods',
+                                                'Stores and Spares',
+                                                'Packing Material',
+                                                'Stock in Trade'
+                                            ]}
                                             value={vendorCategory}
                                             onSelect={(selection) => setVendorCategory(selection.fullPath)}
                                             placeholder="Select Category"
@@ -1865,57 +1926,70 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             required
                                         />
                                     </div>
-                                    <p className="mt-2 text-xs text-gray-500">
-                                        If "Yes" is clicked, search for customer using PAN No & Vendor Name
-                                    </p>
                                 </div>
 
-                                {/* Customer Link Section (shown when Yes is clicked) */}
-                                <div className="hidden mt-4 p-4 bg-slate-50/50 border border-blue-200 rounded-[4px]">
-                                    <div className="space-y-3">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-sm font-medium text-gray-700">
-                                                Link the vendor to this customer:
-                                            </span>
-                                        </div>
-                                        <div className="flex gap-3">
+                                {/* Is Also Customer */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                                    <div className="col-span-2">
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Is this vendor also a customer?
+                                        </label>
+                                        <div className="flex gap-2">
                                             <button
                                                 type="button"
-                                                className="flex-1 px-4 py-2 border-2 border-indigo-500 text-indigo-600 rounded-[4px] hover:bg-indigo-50/50 focus:outline-none"
+                                                onClick={() => setIsAlsoCustomer(true)}
+                                                className={`px-6 py-1.5 text-sm border-2 rounded focus:outline-none transition-colors ${isAlsoCustomer
+                                                    ? 'border-teal-500 bg-teal-50 text-teal-700 font-medium'
+                                                    : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                                                    }`}
                                             >
                                                 Yes
                                             </button>
                                             <button
                                                 type="button"
-                                                className="flex-1 px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-[4px] hover:bg-gray-50 focus:outline-none"
+                                                onClick={() => setIsAlsoCustomer(false)}
+                                                className={`px-6 py-1.5 text-sm border-2 rounded focus:outline-none transition-colors ${!isAlsoCustomer
+                                                    ? 'border-teal-500 bg-teal-50 text-teal-700 font-medium'
+                                                    : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                                                    }`}
                                             >
                                                 No
                                             </button>
                                         </div>
-                                        <div className="text-sm text-gray-600">
-                                            <span className="font-medium">Customer Code - Customer Name</span>
-                                        </div>
+                                        {isAlsoCustomer && (
+                                            <p className="mt-2 text-xs text-teal-600">
+                                                System will search for customer using PAN No & Vendor Name
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
 
-                                {/* No Customer Found Section */}
-                                <div className="hidden mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-[4px]">
-                                    <div className="space-y-3">
-                                        <p className="text-sm text-gray-700">
-                                            No customer found with matching PAN No & Vendor Name
-                                        </p>
-                                        <div className="flex gap-3">
+                                {/* TCS Applicable under GST */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                                    <div className="col-span-2">
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            TCS Applicable under GST
+                                        </label>
+                                        <div className="flex gap-2">
                                             <button
                                                 type="button"
-                                                className="px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
+                                                onClick={() => setTcsApplicable(true)}
+                                                className={`px-6 py-1.5 text-sm border-2 rounded focus:outline-none transition-colors ${tcsApplicable
+                                                    ? 'border-teal-500 bg-teal-50 text-teal-700 font-medium'
+                                                    : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                                                    }`}
                                             >
-                                                Create a Customer
+                                                Yes
                                             </button>
                                             <button
                                                 type="button"
-                                                className="px-4 py-2 border border-slate-200 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
+                                                onClick={() => setTcsApplicable(false)}
+                                                className={`px-6 py-1.5 text-sm border-2 rounded focus:outline-none transition-colors ${!tcsApplicable
+                                                    ? 'border-teal-500 bg-teal-50 text-teal-700 font-medium'
+                                                    : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                                                    }`}
                                             >
-                                                Skip
+                                                No
                                             </button>
                                         </div>
                                     </div>
@@ -2113,209 +2187,6 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                             </form>
                         </div>
                     )}
-
-                    {
-                        activeMasterSubTab === 'Banking Info' && (
-                            <div className="p-6">
-                                <div className="flex items-center mb-6">
-                                    <button
-                                        onClick={() => setActiveMasterSubTab('Vendor Creation')}
-                                        className="mr-4 p-2 hover:bg-gray-100 rounded-full transition-colors"
-                                        title="Back to Vendor Creation"
-                                    >
-                                        <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                                    </button>
-                                    <h3 className="text-lg font-semibold text-gray-800">Banking Information</h3>
-                                </div>
-                                <form onSubmit={handleBankingDetailsSubmit} className="space-y-6">
-                                    <div className="space-y-8">
-                                        {bankAccounts.map((bank, index) => (
-                                            <div key={bank.id} className={`space-y-6 ${index > 0 ? 'pt-8 border-t border-gray-200' : ''}`}>
-                                                {index > 0 && (
-                                                    <div className="flex justify-between items-center">
-                                                        <h4 className="text-md font-medium text-gray-900">Bank Account #{index + 1}</h4>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleRemoveBank(bank.id)}
-                                                            className="text-red-600 hover:text-red-800 text-sm font-medium flex items-center gap-1"
-                                                        >
-                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                            </svg>
-                                                            Remove
-                                                        </button>
-                                                    </div>
-                                                )}
-
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                        Bank account No.
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
-                                                        placeholder="Enter bank account number"
-                                                        value={bank.accountNumber}
-                                                        onChange={(e) => handleBankChange(bank.id, 'accountNumber', e.target.value)}
-                                                    />
-                                                </div>
-
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                        Bank Name
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
-                                                        placeholder="Enter bank name"
-                                                        value={bank.bankName}
-                                                        onChange={(e) => handleBankChange(bank.id, 'bankName', e.target.value)}
-                                                    />
-                                                </div>
-
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                        IFSC Code
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
-                                                        placeholder="Enter IFSC Code"
-                                                        maxLength={11}
-                                                        value={bank.ifscCode}
-                                                        onChange={(e) => handleBankChange(bank.id, 'ifscCode', e.target.value)}
-                                                    />
-                                                </div>
-
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                        Branch Name
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
-                                                        placeholder="Enter branch name"
-                                                        value={bank.branchName}
-                                                        onChange={(e) => handleBankChange(bank.id, 'branchName', e.target.value)}
-                                                    />
-                                                </div>
-
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                        Swift Code
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
-                                                        placeholder="Enter Swift Code (for international transactions)"
-                                                        value={bank.swiftCode}
-                                                        onChange={(e) => handleBankChange(bank.id, 'swiftCode', e.target.value)}
-                                                    />
-                                                </div>
-
-                                                <div className="relative">
-                                                    <div className="block text-sm font-medium text-gray-700 mb-2">
-                                                        Associate to a vendor branch
-                                                    </div>
-                                                    <div className="relative">
-                                                        <button
-                                                            type="button"
-                                                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500 bg-white text-left flex justify-between items-center"
-                                                            onClick={() => {
-                                                                const dropdown = document.getElementById(`vendor-branch-dropdown-${bank.id}`);
-                                                                if (dropdown) {
-                                                                    dropdown.classList.toggle('hidden');
-                                                                }
-                                                            }}
-                                                        >
-                                                            <span className="truncate">
-                                                                {bank.vendorBranch && bank.vendorBranch.length > 0
-                                                                    ? `${bank.vendorBranch.length} Selected`
-                                                                    : "Select vendor branch"}
-                                                            </span>
-                                                            <ChevronDown className="w-4 h-4 text-gray-500" />
-                                                        </button>
-
-                                                        {/* Dropdown Content */}
-                                                        <div
-                                                            id={`vendor-branch-dropdown-${bank.id}`}
-                                                            className="hidden absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm"
-                                                        >
-                                                            {/* Collect all branches from GST records */}
-                                                            {(() => {
-                                                                const allBranches = gstRecords.flatMap(record =>
-                                                                    record.placesOfBusiness.map(pob => pob.referenceName).filter(Boolean)
-                                                                );
-
-                                                                if (allBranches.length === 0) {
-                                                                    return <div className="px-4 py-2 text-gray-500 italic">No branches available</div>;
-                                                                }
-
-                                                                return allBranches.map((branchName, idx) => (
-                                                                    <div key={`${branchName}-${idx}`} className="flex items-center px-4 py-2 hover:bg-gray-100 cursor-pointer" onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        const currentBranches = bank.vendorBranch || [];
-                                                                        const isSelected = currentBranches.includes(branchName);
-                                                                        let newBranches;
-                                                                        if (isSelected) {
-                                                                            newBranches = currentBranches.filter(b => b !== branchName);
-                                                                        } else {
-                                                                            newBranches = [...currentBranches, branchName];
-                                                                        }
-                                                                        handleBankChange(bank.id, 'vendorBranch', newBranches);
-                                                                    }}>
-                                                                        <input
-                                                                            type="checkbox"
-                                                                            checked={(bank.vendorBranch || []).includes(branchName)}
-                                                                            onChange={() => { }} // Handled by div click
-                                                                            className="h-4 w-4 text-teal-600 focus:ring-teal-500 border-gray-300 rounded mr-3 pointer-events-none"
-                                                                        />
-                                                                        <span className="text-gray-900">{branchName}</span>
-                                                                    </div>
-                                                                ));
-                                                            })()}
-                                                        </div>
-                                                    </div>
-
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-
-                                    {/* Add Another Bank Button */}
-                                    <div className="pt-2">
-                                        <button
-                                            type="button"
-                                            className="flex items-center gap-2 px-4 py-2 border-2 border-teal-500 text-teal-600 rounded-md hover:bg-teal-50 focus:outline-none"
-                                            onClick={handleAddBank}
-                                        >
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                            </svg>
-                                            <span className="text-sm font-medium">Another Bank</span>
-                                        </button>
-                                    </div>
-
-                                    {/* Next Button */}
-                                    <div className="flex justify-between pt-4">
-                                        <button
-                                            type="button"
-                                            onClick={() => setActiveMasterSubTab('TDS & Other Statutory')}
-                                            className="px-6 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
-                                        >
-                                            Back
-                                        </button>
-                                        <button
-                                            type="submit"
-                                            className="px-8 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-teal-600 hover:bg-teal-700 focus:outline-none"
-                                        >
-                                            Next
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
-                        )
-                    }
 
                     {
                         activeMasterSubTab === 'TDS & Other Statutory' && (
@@ -2560,7 +2431,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             value={disputeRedressalTerms}
                                             onChange={(e) => setDisputeRedressalTerms(e.target.value)}
                                             className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
-                                            placeholder="Enter dispute resolution and redressal terms..."
+                                            placeholder="Enter dispute redressal terms..."
                                         />
                                     </div>
 
@@ -2607,7 +2478,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         No
                                                     </th>
                                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
-                                                        HSN | SAC Code
+                                                        HSN / SAC Code
                                                     </th>
                                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
                                                         Item Code
@@ -2636,28 +2507,38 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                             <input
                                                                 type="text"
                                                                 className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                                                placeholder="HSN | SAC Code"
+                                                                placeholder="HSN / SAC Code"
                                                                 value={item.hsnSacCode}
                                                                 onChange={(e) => handleItemChange(item.id, 'hsnSacCode', e.target.value)}
                                                             />
                                                         </td>
                                                         <td className="px-4 py-3 border-r border-gray-200">
-                                                            <input
-                                                                type="text"
+                                                            <select
                                                                 className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                                                placeholder="Item Code"
                                                                 value={item.itemCode}
                                                                 onChange={(e) => handleItemChange(item.id, 'itemCode', e.target.value)}
-                                                            />
+                                                            >
+                                                                <option value="">Select Item Code</option>
+                                                                {inventoryItems.map((invItem) => (
+                                                                    <option key={invItem.id} value={invItem.item_code}>
+                                                                        {invItem.item_code}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
                                                         </td>
                                                         <td className="px-4 py-3 border-r border-gray-200">
-                                                            <input
-                                                                type="text"
+                                                            <select
                                                                 className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                                                placeholder="Item Name"
                                                                 value={item.itemName}
                                                                 onChange={(e) => handleItemChange(item.id, 'itemName', e.target.value)}
-                                                            />
+                                                            >
+                                                                <option value="">Select Item Name</option>
+                                                                {inventoryItems.map((invItem) => (
+                                                                    <option key={invItem.id} value={invItem.item_name}>
+                                                                        {invItem.item_name}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
                                                         </td>
                                                         <td className="px-4 py-3 border-r border-gray-200">
                                                             <input
@@ -2679,26 +2560,6 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         </td>
                                                         <td className="px-4 py-3 text-center">
                                                             <div className="flex items-center justify-center gap-2">
-                                                                {/* Edit Button */}
-                                                                <button
-                                                                    type="button"
-                                                                    className="text-indigo-600 hover:text-indigo-900"
-                                                                    title="Edit item"
-                                                                >
-                                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                                                    </svg>
-                                                                </button>
-                                                                {/* Save Button */}
-                                                                <button
-                                                                    type="button"
-                                                                    className="text-indigo-600 hover:text-green-900"
-                                                                    title="Save item"
-                                                                >
-                                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                                                    </svg>
-                                                                </button>
                                                                 {/* Delete Button */}
                                                                 <button
                                                                     type="button"
@@ -2857,19 +2718,66 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                                         Associate to a vendor branch
                                                     </label>
-                                                    <select
-                                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                        value={bank.vendorBranch}
-                                                        onChange={(e) => handleBankChange(bank.id, 'vendorBranch', e.target.value)}
-                                                    >
-                                                        <option value="">Select vendor branch</option>
-                                                        <option value="branch1">Main Branch</option>
-                                                        <option value="branch2">Regional Office - North</option>
-                                                        <option value="branch3">Regional Office - South</option>
-                                                    </select>
-                                                    <p className="text-xs text-gray-500 mt-1">
-                                                        Drop-down list of reference Names to select with option to multiple branches. Do not show if only one GSTIN & place of business is available.
-                                                    </p>
+                                                    <div className="relative">
+                                                        <button
+                                                            type="button"
+                                                            className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white text-left flex justify-between items-center"
+                                                            onClick={() => {
+                                                                const dropdown = document.getElementById(`vendor-branch-dropdown-${bank.id}`);
+                                                                if (dropdown) {
+                                                                    dropdown.classList.toggle('hidden');
+                                                                }
+                                                            }}
+                                                        >
+                                                            <span className="truncate">
+                                                                {bank.vendorBranch && bank.vendorBranch.length > 0
+                                                                    ? `${bank.vendorBranch.length} Selected`
+                                                                    : "Select vendor branch"}
+                                                            </span>
+                                                            <ChevronDown className="w-4 h-4 text-gray-500" />
+                                                        </button>
+
+                                                        {/* Dropdown Content */}
+                                                        <div
+                                                            id={`vendor-branch-dropdown-${bank.id}`}
+                                                            className="hidden absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm"
+                                                        >
+                                                            {(() => {
+                                                                // If gstRecords is not available or empty, show no branches
+                                                                const allBranches = (gstRecords || []).flatMap(record =>
+                                                                    record.placesOfBusiness.map(pob => pob.referenceName).filter(Boolean)
+                                                                );
+
+                                                                if (allBranches.length === 0) {
+                                                                    return <div className="px-4 py-2 text-gray-500 italic">No branches available</div>;
+                                                                }
+
+                                                                return allBranches.map((branchName, idx) => (
+                                                                    <div key={`${branchName}-${idx}`} className="flex items-center px-4 py-2 hover:bg-gray-100 cursor-pointer" onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        const currentBranches = Array.isArray(bank.vendorBranch) ? bank.vendorBranch : [];
+                                                                        const isSelected = currentBranches.includes(branchName);
+                                                                        let newBranches;
+                                                                        if (isSelected) {
+                                                                            newBranches = currentBranches.filter(b => b !== branchName);
+                                                                        } else {
+                                                                            newBranches = [...currentBranches, branchName];
+                                                                        }
+                                                                        handleBankChange(bank.id, 'vendorBranch', newBranches);
+                                                                    }}>
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={(Array.isArray(bank.vendorBranch) ? bank.vendorBranch : []).includes(branchName)}
+                                                                            onChange={() => { }}
+                                                                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded mr-3 pointer-events-none"
+                                                                        />
+                                                                        <span className="text-gray-900">{branchName}</span>
+                                                                    </div>
+                                                                ));
+                                                            })()}
+                                                        </div>
+                                                    </div>
+
                                                 </div>
                                             </div>
                                         ))}
@@ -3018,14 +2926,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Dispute and Redressal Terms
+                                            Dispute Redressal Terms
                                         </label>
                                         <textarea
                                             rows={3}
                                             value={disputeRedressalTerms}
                                             onChange={(e) => setDisputeRedressalTerms(e.target.value)}
                                             className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                            placeholder="Enter dispute resolution and redressal terms..."
+                                            placeholder="Enter dispute redressal terms..."
                                         />
                                     </div>
 
@@ -3881,7 +3789,6 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             <option value="series1">Series 1</option>
                                             <option value="series2">Series 2</option>
                                         </select>
-                                        <p className="text-xs text-gray-500 mt-1">Show as "New PO" when clicked "New"</p>
                                     </div>
 
                                     <div>
@@ -3891,7 +3798,6 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             value={createPOForm.poNumber}
                                             onChange={(e) => handleCreatePOFormChange('poNumber', e.target.value)}
                                             className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                            placeholder="Automated Series"
                                         />
                                     </div>
 
@@ -3925,7 +3831,6 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 </option>
                                             ))}
                                         </select>
-                                        <p className="text-xs text-gray-500 mt-1">Reference Name in Vendor Master</p>
                                     </div>
 
                                     <div className="col-span-1 md:col-span-2">
@@ -4032,10 +3937,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Name</th>
                                                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Supplier Item Code</th>
                                                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
-                                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Negotiated Rate</th>
+                                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit</th>
+                                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Base Price</th>
                                                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Final Rate</th>
                                                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Taxable Value</th>
-                                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">GST</th>
+                                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">IGST%</th>
+                                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CGST%</th>
+                                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SGST%</th>
+                                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cess%</th>
                                                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice Value</th>
                                                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
                                                 </tr>
@@ -4044,13 +3953,34 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 {poItems.map((item, index) => (
                                                     <tr key={item.id}>
                                                         <td className="px-3 py-2">
-                                                            <input
-                                                                type="text"
+                                                            <select
                                                                 value={item.itemCode}
-                                                                onChange={(e) => handlePOItemChange(item.id, 'itemCode', e.target.value)}
+                                                                onChange={(e) => {
+                                                                    const selectedCode = e.target.value;
+                                                                    const selectedItem = availableVendorItems.find(i => i.item_code === selectedCode);
+
+                                                                    setPOItems(prevItems => prevItems.map(pItem => {
+                                                                        if (pItem.id === item.id) {
+                                                                            return {
+                                                                                ...pItem,
+                                                                                itemCode: selectedCode,
+                                                                                itemName: selectedItem ? (selectedItem.item_name || '') : '',
+                                                                                supplierItemCode: selectedItem ? (selectedItem.supplier_item_code || '') : '',
+                                                                                uom: selectedItem ? (selectedItem.unit || '') : '',
+                                                                            };
+                                                                        }
+                                                                        return pItem;
+                                                                    }));
+                                                                }}
                                                                 className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                                placeholder="Pull from vendor"
-                                                            />
+                                                            >
+                                                                <option value="">Select Item</option>
+                                                                {availableVendorItems.map((vItem) => (
+                                                                    <option key={vItem.id} value={vItem.item_code}>
+                                                                        {vItem.item_code}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
                                                         </td>
                                                         <td className="px-3 py-2">
                                                             <input
@@ -4074,8 +4004,28 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                 value={item.quantity}
                                                                 onChange={(e) => handlePOItemChange(item.id, 'quantity', e.target.value)}
                                                                 className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                                placeholder="Qty+UoC"
                                                             />
+                                                        </td>
+                                                        <td className="px-3 py-2">
+                                                            {(() => {
+                                                                const selectedItem = availableVendorItems.find(i => i.item_code === item.itemCode);
+                                                                const units = selectedItem ? [selectedItem.unit, selectedItem.alternate_unit].filter(Boolean) : [];
+
+                                                                return (
+                                                                    <select
+                                                                        value={item.uom}
+                                                                        onChange={(e) => handlePOItemChange(item.id, 'uom', e.target.value)}
+                                                                        className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                                    >
+                                                                        <option value="">Unit</option>
+                                                                        {units.length > 0 ? (
+                                                                            units.map((u, i) => <option key={i} value={u}>{u}</option>)
+                                                                        ) : (
+                                                                            <option value="PCS">PCS</option>
+                                                                        )}
+                                                                    </select>
+                                                                );
+                                                            })()}
                                                         </td>
                                                         <td className="px-3 py-2">
                                                             <input
@@ -4091,32 +4041,58 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                 value={item.finalRate}
                                                                 onChange={(e) => handlePOItemChange(item.id, 'finalRate', e.target.value)}
                                                                 className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                                placeholder="Manual entry"
                                                             />
                                                         </td>
                                                         <td className="px-3 py-2">
                                                             <input
                                                                 type="text"
                                                                 value={item.taxableValue}
-                                                                onChange={(e) => handlePOItemChange(item.id, 'taxableValue', e.target.value)}
-                                                                className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                                placeholder="Quantity x"
+                                                                readOnly
+                                                                className="w-full px-2 py-1 text-sm border border-slate-200 rounded bg-gray-50 focus:outline-none"
                                                             />
                                                         </td>
                                                         <td className="px-3 py-2">
                                                             <input
                                                                 type="text"
-                                                                value={item.gst}
-                                                                onChange={(e) => handlePOItemChange(item.id, 'gst', e.target.value)}
+                                                                value={item.igst}
+                                                                onChange={(e) => handlePOItemChange(item.id, 'igst', e.target.value)}
                                                                 className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                                placeholder="0"
+                                                            />
+                                                        </td>
+                                                        <td className="px-3 py-2">
+                                                            <input
+                                                                type="text"
+                                                                value={item.cgst}
+                                                                onChange={(e) => handlePOItemChange(item.id, 'cgst', e.target.value)}
+                                                                className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                                placeholder="0"
+                                                            />
+                                                        </td>
+                                                        <td className="px-3 py-2">
+                                                            <input
+                                                                type="text"
+                                                                value={item.sgst}
+                                                                onChange={(e) => handlePOItemChange(item.id, 'sgst', e.target.value)}
+                                                                className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                                placeholder="0"
+                                                            />
+                                                        </td>
+                                                        <td className="px-3 py-2">
+                                                            <input
+                                                                type="text"
+                                                                value={item.cess}
+                                                                onChange={(e) => handlePOItemChange(item.id, 'cess', e.target.value)}
+                                                                className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                                placeholder="0"
                                                             />
                                                         </td>
                                                         <td className="px-3 py-2">
                                                             <input
                                                                 type="text"
                                                                 value={item.netValue}
-                                                                onChange={(e) => handlePOItemChange(item.id, 'netValue', e.target.value)}
-                                                                className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                                readOnly
+                                                                className="w-full px-2 py-1 text-sm border border-slate-200 rounded bg-gray-50 focus:outline-none"
                                                             />
                                                         </td>
                                                         <td className="px-3 py-2">
@@ -4137,9 +4113,81 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                     </div>
                                 </div>
 
+                                {/* Summary Section */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">Total Taxable Value</label>
+                                        <input
+                                            type="text"
+                                            value={poItems.reduce((sum, item) => sum + (parseFloat(item.taxableValue) || 0), 0).toFixed(2)}
+                                            readOnly
+                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] bg-gray-50 focus:outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">Total Tax</label>
+                                        <input
+                                            type="text"
+                                            value={poItems.reduce((sum, item) => {
+                                                const taxable = parseFloat(item.taxableValue) || 0;
+                                                const totalRate = (parseFloat(item.igst) || 0) + (parseFloat(item.cgst) || 0) + (parseFloat(item.sgst) || 0) + (parseFloat(item.cess) || 0);
+                                                return sum + ((taxable * totalRate) / 100);
+                                            }, 0).toFixed(2)}
+                                            readOnly
+                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] bg-gray-50 focus:outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">Total Value</label>
+                                        <input
+                                            type="text"
+                                            value={poItems.reduce((sum, item) => sum + (parseFloat(item.netValue) || 0), 0).toFixed(2)}
+                                            readOnly
+                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] bg-gray-50 focus:outline-none"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Receive By and Receive At */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">Receive By</label>
+                                        <input
+                                            type="date"
+                                            value={createPOForm.receiveBy || ''}
+                                            onChange={(e) => handleCreatePOFormChange('receiveBy', e.target.value)}
+                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                            placeholder="dd-mm-yyyy"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">Receive At</label>
+                                        <select
+                                            value={createPOForm.receiveAt || ''}
+                                            onChange={(e) => handleCreatePOFormChange('receiveAt', e.target.value)}
+                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        >
+                                            <option value="">Select Location</option>
+                                            <option value="warehouse1">Warehouse 1</option>
+                                            <option value="warehouse2">Warehouse 2</option>
+                                            <option value="main_office">Main Office</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                {/* Delivery Terms */}
+                                <div className="mt-6">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Delivery Terms</label>
+                                    <textarea
+                                        value={createPOForm.deliveryTerms || ''}
+                                        onChange={(e) => handleCreatePOFormChange('deliveryTerms', e.target.value)}
+                                        rows={4}
+                                        className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        placeholder="Enter delivery terms and conditions"
+                                    />
+                                </div>
 
 
-                                {/* Action Buttons */}
                                 <div className="flex justify-end space-x-4 pt-6 border-t">
                                     <button
                                         onClick={() => setShowCreatePOModal(false)}

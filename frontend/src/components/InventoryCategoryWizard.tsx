@@ -305,10 +305,38 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        console.log('handleSubmit called, isEditing:', isEditing);
 
         if (!selectedNode) {
             alert('Please select a category or group.');
             return;
+        }
+
+        // If we're in edit mode, handle the edit
+        if (isEditing && selectedNode.data.id && onEditCategory) {
+            console.log('Processing edit mode update');
+            if (!formData.subgroup.trim()) {
+                alert('Please enter a Subgroup Name');
+                return;
+            }
+
+            try {
+                await onEditCategory({
+                    id: selectedNode.data.id,
+                    category: selectedNode.data.category,
+                    group: selectedNode.data.group,
+                    subgroup: formData.subgroup.trim()
+                });
+
+                alert('Subgroup updated successfully!');
+                setIsEditing(false);
+                fetchMasterCategories(); // Refresh tree
+                return;
+            } catch (error: any) {
+                console.error("Error updating category:", error);
+                alert(`Error updating category: ${error.message || error}`);
+                return;
+            }
         }
 
         // Only allow creating subgroups under existing groups
@@ -337,22 +365,8 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                     subgroup: formData.subgroup.trim()
                 });
                 setFormData(prev => ({ ...prev, group: '', subgroup: '' })); // Clear inputs
+                alert('Subgroup created successfully!');
             }
-            // 2. Update Subgroup
-            else if (selectedNode.data.id && onEditCategory) {
-                // If it's an existing subgroup node (Level 2 OR Level 1 if direct under category)
-                await onEditCategory({
-                    id: selectedNode.data.id,
-                    category: selectedNode.data.category,
-                    group: selectedNode.data.group,
-                    subgroup: formData.subgroup.trim()
-                });
-                // Clear selection because the node ID might change (if name changed) and tree will refresh
-                setSelectedNode(null);
-                setFormData({ category: '', group: '', subgroup: '' });
-                setIsEditing(false);
-            }
-
 
             // Success
             fetchMasterCategories(); // Refresh tree
@@ -567,18 +581,79 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                             </div>
 
                             <div className="pt-4">
-                                <button
-                                    type="submit"
-                                    disabled={!selectedNode}
-                                    className={`w-full py-2.5 px-4 rounded font-medium shadow-none border border-slate-200-none border border-slate-200 transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm ${selectedNode && formData.subgroup.trim()
-                                        ? 'bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer focus:ring-indigo-500'
-                                        : selectedNode
-                                            ? 'bg-gray-300 text-gray-700 hover:bg-gray-400 cursor-pointer focus:ring-gray-400'
-                                            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                                        }`}
-                                >
-                                    Create Subgroup
-                                </button>
+                                {/* Show Edit and Delete buttons for existing subgroups */}
+                                {selectedNode && selectedNode.data.id && !isEditing ? (
+                                    <div className="flex gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                console.log('Edit button clicked, setting isEditing to true');
+                                                setIsEditing(true);
+                                            }}
+                                            className="flex-1 py-2.5 px-4 rounded font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm bg-blue-600 text-white hover:bg-blue-700 cursor-pointer focus:ring-blue-500"
+                                        >
+                                            <Icon name="edit" className="w-4 h-4 inline-block mr-1" />
+                                            Edit
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                handleDelete();
+                                            }}
+                                            className="flex-1 py-2.5 px-4 rounded font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm bg-red-600 text-white hover:bg-red-700 cursor-pointer focus:ring-red-500"
+                                        >
+                                            <Icon name="delete" className="w-4 h-4 inline-block mr-1" />
+                                            Delete
+                                        </button>
+                                    </div>
+                                ) : isEditing ? (
+                                    // Show Save and Cancel buttons when editing
+                                    <div className="flex gap-3">
+                                        <button
+                                            type="submit"
+                                            className="flex-1 py-2.5 px-4 rounded font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm bg-green-600 text-white hover:bg-green-700 cursor-pointer focus:ring-green-500"
+                                        >
+                                            <Icon name="save" className="w-4 h-4 inline-block mr-1" />
+                                            Save
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setIsEditing(false);
+                                                // Reset form data to original values
+                                                if (selectedNode) {
+                                                    setFormData({
+                                                        category: selectedNode.data.category,
+                                                        group: selectedNode.data.group || '',
+                                                        subgroup: selectedNode.data.subgroup || ''
+                                                    });
+                                                }
+                                            }}
+                                            className="flex-1 py-2.5 px-4 rounded font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm bg-gray-500 text-white hover:bg-gray-600 cursor-pointer focus:ring-gray-500"
+                                        >
+                                            <Icon name="close" className="w-4 h-4 inline-block mr-1" />
+                                            Cancel
+                                        </button>
+                                    </div>
+                                ) : (
+                                    // Show Create Subgroup button for new entries
+                                    <button
+                                        type="submit"
+                                        disabled={!selectedNode}
+                                        className={`w-full py-2.5 px-4 rounded font-medium shadow-none border border-slate-200-none border border-slate-200 transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm ${selectedNode && formData.subgroup.trim()
+                                            ? 'bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer focus:ring-indigo-500'
+                                            : selectedNode
+                                                ? 'bg-gray-300 text-gray-700 hover:bg-gray-400 cursor-pointer focus:ring-gray-400'
+                                                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                            }`}
+                                    >
+                                        Create Subgroup
+                                    </button>
+                                )}
                             </div>
                         </form>
                     </div>

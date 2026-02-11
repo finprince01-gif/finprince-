@@ -80,7 +80,7 @@ const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
 
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [staticCategories]);
+    }, [staticCategories, apiEndpoint, systemCategories]);
 
     const fetchCategories = async () => {
         try {
