@@ -45,9 +45,13 @@ const root = ReactDOM.createRoot(rootElement);
 // - Warns about deprecated APIs
 // - Helps identify unsafe lifecycle methods
 // Note: StrictMode only runs in development, not in production builds
+import { ThemeProvider } from '../context/ThemeContext';
+
 root.render(
   <React.StrictMode>
-    <App />
+    <ThemeProvider>
+      <App />
+    </ThemeProvider>
   </React.StrictMode>
 );
 

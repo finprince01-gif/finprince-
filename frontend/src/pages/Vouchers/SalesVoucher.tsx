@@ -25,9 +25,11 @@ interface ItemRow {
 interface SalesVoucherProps {
     prefilledData?: ExtractedInvoiceData | null;
     clearPrefilledData?: () => void;
+    isLimitReached?: boolean;
+    onLimitReached?: () => void;
 }
 
-const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefilledData }) => {
+const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefilledData, isLimitReached, onLimitReached }) => {
     const [activeTab, setActiveTab] = useState('invoice');
     const [isIssueSlipModalOpen, setIsIssueSlipModalOpen] = useState(false);
 
@@ -283,6 +285,11 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
     ];
 
     const handlePost = async () => {
+        if (isLimitReached && onLimitReached) {
+            onLimitReached();
+            return;
+        }
+
         try {
             const parseNum = (val: any) => {
                 if (val === '' || val === null || val === undefined) return 0;
@@ -1118,7 +1125,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                         {/* Foreign Currency Table */}
                         <div className="overflow-x-auto border border-gray-200 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200">
                             <table className="w-full">
-                                <thead className="bg-indigo-50/500 text-white">
+                                <thead className="bg-indigo-600 text-white">
                                     <tr>
                                         <th className="px-3 py-3 text-center w-12 border-r border-blue-400">
 
@@ -1252,7 +1259,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                         {/* Items Table */}
                         <div className="overflow-x-auto border border-gray-200 rounded-[4px]">
                             <table className="w-full">
-                                <thead className="bg-indigo-50/500 text-white">
+                                <thead className="bg-indigo-600 text-white">
                                     <tr>
                                         <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">S. No.</th>
                                         <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">Item Code</th>
@@ -2536,20 +2543,33 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
 
                         {/* Action Buttons */}
                         <div className="flex justify-end gap-4 pt-4">
-                            <button
-                                type="button"
-                                onClick={handlePost}
-                                className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors font-medium"
-                            >
-                                Post & Close
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handlePost}
-                                className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors font-medium"
-                            >
-                                Post & Print/Email
-                            </button>
+                            {isLimitReached ? (
+                                <button
+                                    type="button"
+                                    onClick={onLimitReached}
+                                    className="px-8 py-3 bg-slate-100 text-slate-400 rounded-[4px] border border-slate-200 cursor-not-allowed font-medium"
+                                    title="Monthly invoice limit reached. Please upgrade your plan."
+                                >
+                                    Limit Reached
+                                </button>
+                            ) : (
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={handlePost}
+                                        className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors font-medium"
+                                    >
+                                        Post & Close
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handlePost}
+                                        className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors font-medium"
+                                    >
+                                        Post & Print/Email
+                                    </button>
+                                </>
+                            )}
                         </div>
                     </div>
                 )}

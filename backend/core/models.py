@@ -56,6 +56,7 @@ class User(AbstractBaseUser):
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    subscription_start_date = models.DateField(default=timezone.now)
 
     objects = CustomUserManager()
 

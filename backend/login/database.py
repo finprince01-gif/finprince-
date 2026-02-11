@@ -18,6 +18,17 @@ logger = logging.getLogger('login.database')
 def get_user_by_username(username):
     """Get user by username."""
     try:
-        return User.objects.get(username=username)
+        return User.objects.filter(username=username)
+    except Exception as e:
+        logger.error(f"Error fetching user by username: {e}")
+        return None
+
+def get_user_by_email(email):
+    """Get user by email."""
+    try:
+        return User.objects.get(email=email)
     except User.DoesNotExist:
+        return None
+    except Exception as e:
+        logger.error(f"Error fetching user by email: {e}")
         return None

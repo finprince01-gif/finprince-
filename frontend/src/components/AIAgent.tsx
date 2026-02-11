@@ -67,6 +67,7 @@ interface AIAgentProps {
     queuePosition?: number;
     estimatedWaitSeconds?: number;
     code?: string;
+    retryAfter?: number;
   };
 }
 
@@ -84,7 +85,7 @@ const AIAgent: React.FC<AIAgentProps> = ({ isOpen, onClose, messages, onSendMess
   // REFS - DOM references and timers
   // ============================================================================
   const messagesEndRef = useRef<HTMLDivElement>(null);       // Reference to bottom of messages
-  const debounceTimeoutRef = useRef<NodeJS.Timeout>();       // Debounce timer
+  const debounceTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);       // Debounce timer
 
   /**
    * Scroll to bottom of messages
@@ -175,8 +176,8 @@ const AIAgent: React.FC<AIAgentProps> = ({ isOpen, onClose, messages, onSendMess
           {messages.map((msg, index) => (
             <div key={index}>
               <div className={`flex items-end gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                {msg.role === 'model' && <div className="w-10 h-10 flex items-center justify-center flex-shrink-0"><img src="/src/assets/fox-logo-transparent.png" alt="Kiki" className="w-full h-full object-contain filter drop-shadow-none border border-slate-200-none border border-slate-200" /></div>}
-                <div className={`max-w-xs md:max-w-sm rounded-[4px] px-4 py-2 text-sm ${msg.role === 'user' ? 'bg-indigo-50/500 text-white rounded-br-none' : 'bg-gray-100 text-gray-800 rounded-bl-none'}`}>
+                {msg.role === 'model' && <div className="w-10 h-10 flex items-center justify-center flex-shrink-0"><img src="/src/assets/fox-logo-transparent.png" alt="Kiki" className="w-full h-full object-contain filter drop-shadow-none" /></div>}
+                <div className={`max-w-xs md:max-w-sm rounded-[4px] px-4 py-2 text-sm ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-gray-100 text-gray-800 rounded-bl-none'}`}>
                   {msg.text}
                 </div>
               </div>
@@ -198,7 +199,7 @@ const AIAgent: React.FC<AIAgentProps> = ({ isOpen, onClose, messages, onSendMess
           ))}
           {isLoading && (
             <div className="flex items-end gap-2 justify-start">
-              <div className="w-10 h-10 flex items-center justify-center flex-shrink-0"><img src="/src/assets/fox-logo-transparent.png" alt="Kiki" className="w-full h-full object-contain filter drop-shadow-none border border-slate-200-none border border-slate-200" /></div>
+              <div className="w-10 h-10 flex items-center justify-center flex-shrink-0"><img src="/src/assets/fox-logo-transparent.png" alt="Kiki" className="w-full h-full object-contain filter drop-shadow-none" /></div>
               <div className="max-w-xs rounded-[4px] px-4 py-2 bg-gray-100 text-gray-800 rounded-bl-none">
                 <div className="flex items-center justify-center space-x-1">
                   <div className="w-1.5 h-1.5 bg-gray-400 rounded-[4px] animate-bounce"></div>

@@ -34,9 +34,9 @@ class LoginView(APIView):
             password = request.data.get('password')
             email = request.data.get('email')  # Optional email for disambiguation
             
-            if not username or not password:
+            if not (username or email) or not password:
                 return Response(
-                    {'detail': 'Username and password required'},
+                    {'detail': 'Username/Email and password required'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
@@ -57,6 +57,7 @@ class LoginView(APIView):
                 'email': result['email'],
                 'tenant_id': result['tenant_id'],
                 'company_name': result['company_name'],
+                'selected_plan': result.get('selected_plan', 'Free'),
             }
             
             response = Response(response_data, status=status.HTTP_200_OK)

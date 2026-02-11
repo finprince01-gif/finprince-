@@ -68,7 +68,13 @@ router.register('gst/gstr1', GSTR1ViewSet, basename='gstr1')
 # MOVED TO END to prevent masking specific paths
 router.register('vouchers', VoucherViewSet, basename='vouchers')
 
+from .views_dashboard import DashboardAnalyticsView
+from .views_subscription import SubscriptionUsageView, SubscriptionUpdateView
+
 urlpatterns = [
+    # Dashboard Analytics
+    path('dashboard/analytics/', DashboardAnalyticsView.as_view(), name='dashboard-analytics'),
+
     # Questions System endpoints
     path('ledgers/questions/', LedgerQuestionsView.as_view(), name='ledger-questions'),
     path('ledgers/create-with-questions/', LedgerCreateWithQuestionsView.as_view(), name='ledger-create-with-questions'),
@@ -78,6 +84,11 @@ urlpatterns = [
     path('vouchers/sales/determine-tax-type/', TaxTypeDeterminationAPIView.as_view(), name='determine-tax-type'),
     path('vouchers/sales/upload-document/', SalesDocumentUploadAPIView.as_view(), name='upload-sales-document'),
     path('vouchers/sales/customers/', CustomerListAPIView.as_view(), name='sales-customers'),
+    
+    # Subscription Usage
+    path('subscription/usage/', SubscriptionUsageView.as_view(), name='subscription-usage'),
+    path('subscription/update/', SubscriptionUpdateView.as_view(), name='subscription-update'),
+
     
     # Router URLs (Moved to end to allow manual paths to take precedence)
     path('', include(router.urls)),

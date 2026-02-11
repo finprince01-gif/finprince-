@@ -34,7 +34,7 @@
  * Page - Defines all possible pages/sections in the application
  * Used for routing and navigation
  */
-export type Page = 'Dashboard' | 'Masters' | 'Inventory' | 'Vouchers' | 'Reports' | 'Settings' | 'MassUploadResult' | 'Vendor Portal' | 'Customer Portal' | 'Payroll' | 'Service' | 'Users & Roles' | 'GST';
+export type Page = 'Dashboard' | 'Masters' | 'Inventory' | 'Vouchers' | 'Reports' | 'Settings' | 'MassUploadResult' | 'Vendor Portal' | 'Customer Portal' | 'Payroll' | 'Service' | 'Users & Roles' | 'GST' | 'Dashboard Builder';
 
 // ============================================================================
 // COMPANY & SETTINGS TYPES
@@ -219,18 +219,19 @@ export interface VoucherItem {
   totalAmount: number;
 }
 
-export type VoucherType = 'Purchase' | 'Sales' | 'Payment' | 'Receipt' | 'Contra' | 'Journal' | 'Expenses';
+export type VoucherType = 'Purchase' | 'Sales' | 'Payment' | 'Receipt' | 'Contra' | 'Journal' | 'Expenses' | 'Credit Note' | 'Debit Note';
 
 export interface BaseVoucher {
   id: string;
   type: VoucherType;
   date: string;
+  voucher_number?: string;
   narration?: string;
   image?: string;
 }
 
 export interface SalesPurchaseVoucher extends BaseVoucher {
-  type: 'Purchase' | 'Sales';
+  type: 'Purchase' | 'Sales' | 'Credit Note' | 'Debit Note';
   isInterState: boolean;
   invoiceNo: string;
   dueDate?: string;

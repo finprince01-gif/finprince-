@@ -28,9 +28,11 @@ interface BulkTransaction {
 interface ReceiptVoucherProps {
     prefilledData?: ExtractedInvoiceData | null;
     clearPrefilledData?: () => void;
+    isLimitReached?: boolean;
+    onLimitReached?: () => void;
 }
 
-const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPrefilledData }) => {
+const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPrefilledData, isLimitReached, onLimitReached }) => {
     // Tab state
     const [activeTab, setActiveTab] = useState<'single' | 'bulk'>('single');
 
@@ -210,6 +212,11 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
     };
 
     const handlePostReceipt = async () => {
+        if (isLimitReached && onLimitReached) {
+            onLimitReached();
+            return;
+        }
+
         try {
             if (activeTab === 'single') {
                 const payload = {
@@ -397,7 +404,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                                                 <td className="px-6 py-4 text-center">
                                                     <button
                                                         onClick={() => handleReceive(index)}
-                                                        className="px-4 py-1.5 bg-indigo-50/500 hover:bg-indigo-600 text-white text-xs font-medium rounded"
+                                                        className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-600 text-white text-xs font-medium rounded"
                                                     >
                                                         Receive
                                                     </button>
@@ -583,7 +590,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                     </div>
 
                     {/* Right Panel - Transaction List */}
-                    <div className="bg-indigo-50/500 rounded-[4px] p-6">
+                    <div className="bg-indigo-600 rounded-[4px] p-6">
                         <div className="text-center mb-4">
                             <h4 className="text-white font-semibold text-sm">
                                 {selectedCustomer || 'Customer Name'} (Whose data is displayed below)

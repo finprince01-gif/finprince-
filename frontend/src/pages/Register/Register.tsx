@@ -148,8 +148,11 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
 
         // Save user data
         if ((response as any).user) {
-          localStorage.setItem('user', JSON.stringify((response as any).user));
-          localStorage.setItem('companyName', (response as any).user.company_name || companyName);
+          const user = (response as any).user;
+          localStorage.setItem('user', JSON.stringify(user));
+          localStorage.setItem('companyName', user.company_name || companyName);
+          localStorage.setItem('userPlan', user.selected_plan || user.selectedPlan || selectedPlan);
+          localStorage.setItem('tenantId', user.tenant_id || user.tenantId);
         }
 
         // Save permissions
@@ -200,7 +203,7 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
           }`}
       >
         {popular && (
-          <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 px-3 py-1 text-xs font-semibold text-white bg-indigo-50/500 rounded-[4px]">
+          <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 px-3 py-1 text-xs font-semibold text-white bg-indigo-600 rounded-[4px]">
             Most Popular
           </div>
         )}
@@ -239,7 +242,7 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
   // Step 1: Details
   if (step === 'details') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center relative bg-white">
+      <div className="min-h-screen flex flex-col items-center justify-center relative bg-slate-100 dark:bg-slate-900 transition-colors duration-200">
         {onBack && (
           <div className="absolute left-4 bottom-4">
             <button
@@ -252,41 +255,41 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
         )}
 
         {/* Header */}
-        <div className="bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 w-full text-center">
+        <div className="bg-transparent py-8 px-4 sm:px-6 lg:px-8 w-full text-center">
           <div className="max-w-md mx-auto">
-            <h1 className="text-4xl font-bold text-indigo-600 mb-2">AI-Accounting</h1>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-2">Registration - Step 1/2</h2>
-            <p className="text-gray-600">Enter your business details</p>
+            <h1 className="text-4xl font-bold text-indigo-600 dark:text-indigo-400 mb-2">AI-Accounting</h1>
+            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2">Registration - Step 1/2</h2>
+            <p className="text-gray-600 dark:text-slate-400">Enter your business details</p>
           </div>
         </div>
 
-        <div className="max-w-6xl w-full px-4 sm:px-6 lg:px-8 py-12 flex flex-col items-center justify-center">
-          <div className="max-w-md mx-auto bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200 p-8">
+        <div className="max-w-6xl w-full px-4 sm:px-6 lg:px-8 pb-12 flex flex-col items-center justify-center">
+          <div className="max-w-md mx-auto bg-white dark:bg-slate-800 rounded-[4px] shadow-none border border-slate-200 dark:border-slate-700 p-8">
             <form onSubmit={handleNext} className="space-y-6">
               <div>
-                <label htmlFor="companyName" className="block text-sm font-medium text-gray-700 mb-2">Company Name</label>
-                <input id="companyName" name="companyName" type="text" required className="w-full px-3 py-2 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Your Company Inc." value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
+                <label htmlFor="companyName" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Company Name</label>
+                <input id="companyName" name="companyName" type="text" required className="w-full px-3 py-2 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-900 dark:border-slate-700 dark:text-white dark:placeholder-slate-400" placeholder="Your Company Inc." value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
               </div>
 
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
-                <input id="email" name="email" type="email" autoComplete="email" required className="w-full px-3 py-2 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Email Address</label>
+                <input id="email" name="email" type="email" autoComplete="email" required className="w-full px-3 py-2 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-900 dark:border-slate-700 dark:text-white dark:placeholder-slate-400" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
               </div>
 
               <div>
-                <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
-                <input id="phone" name="phone" type="tel" required className="w-full px-3 py-2 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="+1234567890" value={phone} onChange={(e) => setPhone(e.target.value)} />
+                <label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Phone Number</label>
+                <input id="phone" name="phone" type="tel" required className="w-full px-3 py-2 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-900 dark:border-slate-700 dark:text-white dark:placeholder-slate-400" placeholder="+1234567890" value={phone} onChange={(e) => setPhone(e.target.value)} />
               </div>
 
               <div>
-                <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">Username</label>
-                <input id="username" name="username" type="text" required className="w-full px-3 py-2 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Choose a username" value={username} onChange={(e) => setUsername(e.target.value)} />
+                <label htmlFor="username" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Username</label>
+                <input id="username" name="username" type="text" required className="w-full px-3 py-2 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-900 dark:border-slate-700 dark:text-white dark:placeholder-slate-400" placeholder="Choose a username" value={username} onChange={(e) => setUsername(e.target.value)} />
               </div>
 
               <div>
                 <label htmlFor="password" title="Password must be at least 8 characters long" className="block text-sm font-medium text-gray-700 mb-2">Password</label>
                 <div className="relative">
-                  <input id="password" name="password" type={showPassword ? 'text' : 'password'} required className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
+                  <input id="password" name="password" type={showPassword ? 'text' : 'password'} required className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-900 dark:border-slate-700 dark:text-white dark:placeholder-slate-400" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
                   <button type="button" className="absolute inset-y-0 right-0 pr-3 flex items-center" onClick={() => setShowPassword(!showPassword)}>
                     {showPassword ? (
                       <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" /></svg>
@@ -300,7 +303,7 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
               <div>
                 <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">Confirm Password</label>
                 <div className="relative">
-                  <input id="confirmPassword" name="confirmPassword" type={showConfirmPassword ? 'text' : 'password'} required className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+                  <input id="confirmPassword" name="confirmPassword" type={showConfirmPassword ? 'text' : 'password'} required className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-900 dark:border-slate-700 dark:text-white dark:placeholder-slate-400" placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
                   <button type="button" className="absolute inset-y-0 right-0 pr-3 flex items-center" onClick={() => setShowConfirmPassword(!showConfirmPassword)}>
                     {showConfirmPassword ? (
                       <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" /></svg>
@@ -333,7 +336,7 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
               <button type="submit" className="w-full flex justify-center py-3 px-4 border border-transparent rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-lg font-medium text-white bg-indigo-600 hover:bg-indigo-700">Next Step →</button>
             </form>
             <div className="mt-6 text-center">
-              <p className="text-sm text-gray-600">Already have an account? <button onClick={onSwitchToLogin} className="font-medium text-indigo-600 hover:text-indigo-500">Sign In</button></p>
+              <p className="text-sm text-gray-600 dark:text-slate-400">Already have an account? <button onClick={onSwitchToLogin} className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">Sign In</button></p>
             </div>
           </div>
         </div>
