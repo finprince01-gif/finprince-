@@ -2,6 +2,9 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import type { CompanyDetails } from '../../types';
 import { apiService } from '../../services';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useTheme } from '../../context/ThemeContext';
+import { useSubscriptionUsage } from '../../hooks/useSubscriptionUsage';
+import Icon from '../../components/Icon';
 
 interface SettingsPageProps {
   companyDetails: CompanyDetails;
@@ -18,14 +21,48 @@ const indianStates = [
 ];
 
 const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) => {
+  const { theme, toggleTheme } = useTheme();
   const { hasTabAccess, isSuperuser } = usePermissions();
 
-  const allTabs = ['Company Profile', 'Tax Settings', 'Regional Settings'];
+  const allTabs = ['Company Profile', 'Tax Settings', 'Regional Settings', 'Subscription'];
   const availableTabs = useMemo(() => {
-    return isSuperuser ? allTabs : allTabs.filter(tab => hasTabAccess('Settings', tab));
+    return isSuperuser ? allTabs : allTabs.filter(tab => tab === 'Subscription' || hasTabAccess('Settings', tab));
   }, [hasTabAccess, isSuperuser]);
 
-  const [activeTab, setActiveTab] = useState(availableTabs.length > 0 ? availableTabs[0] : 'Company Profile');
+  const [activeTab, setActiveTab] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get('tab');
+    if (tabParam && ['Company Profile', 'Tax Settings', 'Regional Settings', 'Subscription'].includes(tabParam)) {
+      return tabParam;
+    }
+    return availableTabs.length > 0 ? availableTabs[0] : 'Company Profile';
+  });
+  const { subscriptionUsage, refetch: refetchUsage } = useSubscriptionUsage();
+  const [isUpgrading, setIsUpgrading] = useState(false);
+
+  const handleUpgrade = async (plan: string) => {
+    try {
+      setIsUpgrading(true);
+      // In a real app, this would redirect to a payment gateway.
+      // For now, we'll simulate an upgrade by updating the user's plan.
+      // Assuming apiService has a method or we use direct put.
+      await apiService.updateSubscriptionPlan(plan);
+
+      // Update local storage and reload
+      localStorage.setItem('userPlan', plan);
+
+      // Refresh usage
+      await refetchUsage();
+
+      alert(`Successfully upgraded to ${plan} plan!`);
+      window.location.reload(); // Reload to update all components (Sidebar, etc)
+    } catch (error) {
+      console.error("Upgrade failed", error);
+      alert("Upgrade failed. Please try again.");
+    } finally {
+      setIsUpgrading(false);
+    }
+  };
 
   useEffect(() => {
     if (availableTabs.length > 0 && !availableTabs.includes(activeTab)) {
@@ -138,6 +175,19 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
           <h2 className="text-[20px] font-bold text-slate-900">
             System Settings
           </h2>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Dark Mode</span>
+          <button
+            onClick={toggleTheme}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${theme === 'dark' ? 'bg-indigo-600' : 'bg-slate-200'
+              }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${theme === 'dark' ? 'translate-x-[22px]' : 'translate-x-1'
+                }`}
+            />
+          </button>
         </div>
       </div>
 
@@ -388,9 +438,221 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
       )}
 
       {activeTab === 'Regional Settings' && (
-        <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200 p-8 text-center">
+        <div className="bg-white rounded-[4px] shadow-none border border-slate-200 p-8 text-center">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Regional Settings</h2>
           <p className="text-gray-500">Regional and language settings will be available soon.</p>
+        </div>
+      )}
+
+      {activeTab === 'Subscription' && (
+        <div className="space-y-8">
+          {/* Current Usage Card */}
+          <div className="erp-card p-8">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6 pb-2 border-b border-gray-200">
+              Subscription Status
+            </h2>
+            {subscriptionUsage ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div className="p-6 bg-slate-50 rounded-lg">
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Current Plan</p>
+                  <p className="text-2xl font-bold text-indigo-600">{subscriptionUsage.plan}</p>
+                  <p className="text-xs text-slate-500 mt-2">Next Renewal: {new Date(new Date(subscriptionUsage.cycle_start).getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()}</p>
+                </div>
+                <div className="p-6 bg-slate-50 rounded-lg col-span-2">
+                  <div className="flex justify-between items-center mb-4">
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Usage Progress</p>
+                    <p className="text-sm font-bold text-slate-700">{subscriptionUsage.used} / {subscriptionUsage.limit}</p>
+                  </div>
+                  <div className="w-full bg-slate-200 rounded-full h-2.5">
+                    <div
+                      className={`h-2.5 rounded-full ${subscriptionUsage.limit !== 'Unlimited' && subscriptionUsage.used >= (subscriptionUsage.limit as number)
+                        ? 'bg-red-500'
+                        : 'bg-indigo-600'
+                        }`}
+                      style={{
+                        width: `${subscriptionUsage.limit === 'Unlimited'
+                          ? 100
+                          : Math.min(100, (subscriptionUsage.used / (subscriptionUsage.limit as number)) * 100)}%`
+                      }}
+                    ></div>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-4">
+                    {subscriptionUsage.limit === 'Unlimited'
+                      ? "You have unlimited invoice uploads."
+                      : `You have ${subscriptionUsage.remaining} uploads remaining this cycle.`}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-10 text-slate-500">Loading usage data...</div>
+            )}
+          </div>
+
+          {/* Plan Options */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Free Plan */}
+            <div className={`erp-card p-8 flex flex-col ${subscriptionUsage?.plan === 'FREE' ? 'ring-2 ring-indigo-600' : ''}`}>
+              <div className="mb-6">
+                <h3 className="text-lg font-bold text-slate-900">Free</h3>
+                <p className="text-slate-500 text-sm">For micro businesses</p>
+              </div>
+              <div className="mb-8">
+                <span className="text-4xl font-bold text-slate-900">₹0</span>
+                <span className="text-slate-500 text-sm">/mo</span>
+              </div>
+              <ul className="space-y-4 mb-10 flex-1">
+                <li className="flex items-center text-sm text-slate-600 dark:text-slate-300">
+                  <svg className="w-5 h-5 text-indigo-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Up to 5 invoices per month
+                </li>
+                <li className="flex items-center text-sm text-slate-600 dark:text-slate-300">
+                  <svg className="w-5 h-5 text-indigo-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Basic AI assistance
+                </li>
+                <li className="flex items-center text-sm text-slate-600 dark:text-slate-300">
+                  <svg className="w-5 h-5 text-indigo-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Email support
+                </li>
+                <li className="flex items-center text-sm text-slate-600 dark:text-slate-300">
+                  <svg className="w-5 h-5 text-indigo-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Standard templates
+                </li>
+              </ul>
+              <button
+                disabled={subscriptionUsage?.plan === 'FREE' || isUpgrading}
+                onClick={() => handleUpgrade('FREE')}
+                className={`w-full py-3 rounded-[4px] font-bold text-sm transition-all ${subscriptionUsage?.plan === 'FREE'
+                  ? 'bg-slate-100 text-slate-400 cursor-default'
+                  : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+              >
+                {subscriptionUsage?.plan === 'FREE' ? 'Current Plan' : 'Downgrade'}
+              </button>
+            </div>
+
+            {/* Starter Plan */}
+            <div className={`erp-card p-8 flex flex-col relative ${subscriptionUsage?.plan === 'STARTER' ? 'ring-2 ring-indigo-600' : ''}`}>
+              <div className="absolute top-0 right-0 bg-indigo-600 text-white text-[10px] font-bold px-3 py-1 rounded-bl-lg uppercase tracking-wider">Popular</div>
+              <div className="mb-6">
+                <h3 className="text-lg font-bold text-slate-900">Starter</h3>
+                <p className="text-slate-500 text-sm">For growing startups</p>
+              </div>
+              <div className="mb-8">
+                <span className="text-4xl font-bold text-slate-900">₹1,200</span>
+                <span className="text-slate-500 text-sm">/mo</span>
+              </div>
+              <ul className="space-y-4 mb-10 flex-1">
+                <li className="flex items-center text-sm text-slate-600 dark:text-slate-300">
+                  <svg className="w-5 h-5 text-indigo-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Up to 100 invoices per month
+                </li>
+                <li className="flex items-center text-sm text-slate-600 dark:text-slate-300">
+                  <svg className="w-5 h-5 text-indigo-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Advanced AI processing
+                </li>
+                <li className="flex items-center text-sm text-slate-600 dark:text-slate-300">
+                  <svg className="w-5 h-5 text-indigo-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Priority email support
+                </li>
+                <li className="flex items-center text-sm text-slate-600 dark:text-slate-300">
+                  <svg className="w-5 h-5 text-indigo-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Custom templates
+                </li>
+                <li className="flex items-center text-sm text-slate-600 dark:text-slate-300">
+                  <svg className="w-5 h-5 text-indigo-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Basic reporting
+                </li>
+              </ul>
+              <button
+                disabled={subscriptionUsage?.plan === 'STARTER' || isUpgrading}
+                onClick={() => handleUpgrade('STARTER')}
+                className={`w-full py-3 rounded-[4px] font-bold text-sm transition-all ${subscriptionUsage?.plan === 'STARTER'
+                  ? 'bg-slate-100 text-slate-400 cursor-default'
+                  : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                  }`}
+              >
+                {subscriptionUsage?.plan === 'STARTER' ? 'Current Plan' : (subscriptionUsage?.plan === 'PRO' ? 'Downgrade' : 'Upgrade')}
+              </button>
+            </div>
+
+            {/* Pro Plan */}
+            <div className={`erp-card p-8 flex flex-col ${subscriptionUsage?.plan === 'PRO' ? 'ring-2 ring-indigo-600' : ''}`}>
+              <div className="mb-6">
+                <h3 className="text-lg font-bold text-slate-900">Pro</h3>
+                <p className="text-slate-500 text-sm">For enterprises</p>
+              </div>
+              <div className="mb-8">
+                <span className="text-4xl font-bold text-slate-900">₹5,000</span>
+                <span className="text-slate-500 text-sm">/mo</span>
+              </div>
+              <ul className="space-y-4 mb-10 flex-1">
+                <li className="flex items-center text-sm text-slate-600 dark:text-slate-300">
+                  <svg className="w-5 h-5 text-indigo-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Unlimited invoices
+                </li>
+                <li className="flex items-center text-sm text-slate-600 dark:text-slate-300">
+                  <svg className="w-5 h-5 text-indigo-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Premium AI features
+                </li>
+                <li className="flex items-center text-sm text-slate-600 dark:text-slate-300">
+                  <svg className="w-5 h-5 text-indigo-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Phone & email support
+                </li>
+                <li className="flex items-center text-sm text-slate-600 dark:text-slate-300">
+                  <svg className="w-5 h-5 text-indigo-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Advanced reporting
+                </li>
+                <li className="flex items-center text-sm text-slate-600 dark:text-slate-300">
+                  <svg className="w-5 h-5 text-indigo-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  API access
+                </li>
+                <li className="flex items-center text-sm text-slate-600 dark:text-slate-300">
+                  <svg className="w-5 h-5 text-indigo-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Multi-user access
+                </li>
+              </ul>
+              <button
+                disabled={subscriptionUsage?.plan === 'PRO' || isUpgrading}
+                onClick={() => handleUpgrade('PRO')}
+                className={`w-full py-3 rounded-[4px] font-bold text-sm transition-all shadow-none border border-slate-200-none border border-slate-200 ${subscriptionUsage?.plan === 'PRO'
+                  ? 'bg-slate-100 text-slate-400 cursor-default'
+                  : 'bg-slate-900 text-white hover:bg-black'
+                  }`}
+              >
+                {subscriptionUsage?.plan === 'PRO' ? 'Current Plan' : 'Upgrade to Pro'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

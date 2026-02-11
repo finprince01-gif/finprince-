@@ -49,6 +49,7 @@ import CustomerPortalPage from '../pages/CustomerPortal'; // Customer management
 import PayrollPage from '../pages/Payroll';               // Employee payroll management
 import ServicePage from '../pages/Service';               // Service management page
 import GSTPage from '../pages/GST';                        // GST Returns module
+import DashboardBuilderPage from '../pages/DashboardBuilder'; // Dashboard Builder page
 import LoginPage from '../pages/Login';                   // User login page
 import SignupPage from '../pages/Register';               // New user registration
 // Additional UI Components
@@ -129,10 +130,12 @@ const App: React.FC = () => {
       }
     };
 
-    // Map legacy names to new names
+    // Map legacy names to new names and handle casing
     let activePlan = plan || 'Free';
-    if (activePlan === 'Basic') activePlan = 'Starter';
-    if (activePlan === 'Enterprise') activePlan = 'Pro';
+    // Normalize casing (e.g., 'FREE' -> 'Free', 'STARTER' -> 'Starter')
+    if (activePlan.toUpperCase() === 'FREE') activePlan = 'Free';
+    if (activePlan.toUpperCase() === 'STARTER' || activePlan === 'Basic') activePlan = 'Starter';
+    if (activePlan.toUpperCase() === 'PRO' || activePlan === 'Enterprise') activePlan = 'Pro';
 
     return plans[activePlan] || plans['Free'];
   };
@@ -334,11 +337,20 @@ const App: React.FC = () => {
   // Handle URL query parameters for routing (e.g. ?view=signup)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+
+    // Auth view
     const viewParam = params.get('view');
     if (viewParam === 'signup') {
       setView('signup');
     } else if (viewParam === 'login') {
       setView('login');
+    }
+
+    // Page navigation
+    const pageParam = params.get('page');
+    if (pageParam) {
+      // Validate pageParam matches Page type if needed
+      setCurrentPage(pageParam as Page);
     }
   }, []);
 
@@ -364,6 +376,13 @@ const App: React.FC = () => {
 
         // If user is logged in and has a tenant ID, try to load cached data first
         if (isLoggedIn && savedTenantId) {
+          // Refresh user plan in background
+          apiService.getSubscriptionUsage().then(usage => {
+            if (usage && usage.plan) {
+              localStorage.setItem('userPlan', usage.plan);
+            }
+          }).catch(err => console.warn('Failed to refresh user plan on startup:', err));
+
           const hasCachedData = loadCachedData(savedTenantId);
 
           if (hasCachedData) {
@@ -729,21 +748,6 @@ const App: React.FC = () => {
   }, []);
 
   const handleInvoiceUpload = useCallback(async (file: File, voucherType?: string) => {
-    // Check monthly upload limits (matching plan description: "per month")
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-
-    const monthlyVoucherCount = vouchers.filter(v => {
-      const vDate = new Date(v.date);
-      return vDate.getMonth() === currentMonth && vDate.getFullYear() === currentYear;
-    }).length;
-
-    if (monthlyVoucherCount >= planLimits.maxUploads) {
-      setError(`Upload limit exceeded! Your ${userPlan} plan only allows ${planLimits.maxUploads} voucher uploads per month. Please upgrade your plan for more uploads.`);
-      return;
-    }
-
     setIsLoading(true);
     setError(null);
     try {
@@ -906,10 +910,10 @@ const App: React.FC = () => {
         }
 
         case 'delete_voucher': {
-          const v = vouchers.find(v => v.voucher_number === parameters.voucher_number || v.id === parameters.id);
+          const v = vouchers.find(v => (v as any).voucher_number === parameters.voucher_number || v.id === parameters.id);
           if (v) {
-            await httpClient.delete(`/api/masters/master-voucher-${v.voucher_type}/${v.id}/`);
-            return `🗑️ Deleted voucher ${v.voucher_number}`;
+            await httpClient.delete(`/api/masters/master-voucher-${v.type.toLowerCase()}/${v.id}/`);
+            return `🗑️ Deleted voucher ${(v as any).voucher_number}`;
           }
           return `❌ Voucher not found`;
         }
@@ -1079,11 +1083,13 @@ const App: React.FC = () => {
         onInvoiceUpload={handleInvoiceUpload}
         companyDetails={companyDetails}
         onMassUploadComplete={handleMassUploadComplete}
+        permissions={[]}
       />;
       case 'Reports': return <ErrorBoundary><ReportsPage
         vouchers={vouchers}
         ledgers={ledgers}
         ledgerGroups={ledgerGroups}
+        stockItems={stockItems}
       /></ErrorBoundary>; // Available for all plans
       case 'Settings': return <SettingsPage companyDetails={companyDetails} onSave={handleSaveSettings} />; // Available for all plans
       case 'Users & Roles': return <UsersAndRolesPage onNavigate={handleNavigate} />;
@@ -1092,6 +1098,7 @@ const App: React.FC = () => {
       case 'Payroll': return <PayrollPage />;
       case 'Service': return <ServicePage />;
       case 'GST': return <GSTPage />;
+      case 'Dashboard Builder': return <DashboardBuilderPage vouchers={vouchers} ledgers={ledgers} onNavigate={handleNavigate} />;
       case 'MassUploadResult': return <MassUploadResultPage
         results={massUploadResult || []}
         onDone={() => { setCurrentPage('Vouchers'); setMassUploadResult(null); }}
@@ -1116,7 +1123,6 @@ const App: React.FC = () => {
           onNavigate={handleNavigate}
           onLogout={handleLogout}
           companyName={companyDetails.name}
-          userPlan={userPlan}
         />
       )}
       <main className={`flex-1 ${isSidebarOpen ? 'ml-[240px]' : 'ml-0'} h-full overflow-y-auto bg-slate-50 transition-all duration-300`}>
@@ -1182,11 +1188,13 @@ const App: React.FC = () => {
       {/* Floating AI Agent Button */}
       <button
         onClick={() => setIsAgentOpen(true)}
-        className="fixed bottom-2 right-2 w-28 h-28 hover:scale-110 transition-transform duration-300 z-50 flex items-center justify-center group filter drop-shadow-none border border-slate-200-none border border-slate-200"
+        className="fixed bottom-2 right-2 w-28 h-28 hover:scale-110 transition-transform duration-300 z-50 flex items-center justify-center group filter drop-shadow-none border-none outline-none focus:outline-none"
         title="Chat with Kiki Agent"
       >
         <img src="/src/assets/fox-logo-transparent.png" alt="AI Agent" className="w-full h-full object-contain" />
       </button>
+
+
 
       <AIAgent
         isOpen={isAgentOpen}

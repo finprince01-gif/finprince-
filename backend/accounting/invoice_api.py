@@ -46,6 +46,10 @@ class SalesInvoiceViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
         try:
             tenant_id = request.user.tenant_id
             
+            # Check Limits
+            from .utils_subscription import check_subscription_limit
+            check_subscription_limit(request.user)
+            
             # Prepare data
             invoice_data = {
                 'invoice_date': request.data.get('invoice_date'),

@@ -112,6 +112,22 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const [activeProcurementSubTab, setActiveProcurementSubTab] = useState<ProcurementSubTab>('Dashboard');
     const [activePaymentSubTab, setActivePaymentSubTab] = useState<ProcurementSubTab>('Dashboard');
 
+    // Defaulting logic for sub-tabs
+    const availableMasterSubTabs = ['Category', 'PO Settings', 'Vendor Creation'].filter(subTab => isSuperuser || hasTabAccess('Vendor Portal', subTab));
+    const availableTransactionSubTabs = ['Purchase Orders', 'Procurement', 'Payment'].filter(subTab => isSuperuser || hasTabAccess('Vendor Portal', subTab));
+
+    useEffect(() => {
+        if (!isSuperuser && availableMasterSubTabs.length > 0 && !availableMasterSubTabs.includes(activeMasterSubTab as string)) {
+            setActiveMasterSubTab(availableMasterSubTabs[0] as MasterSubTab);
+        }
+    }, [availableMasterSubTabs, activeMasterSubTab, isSuperuser]);
+
+    useEffect(() => {
+        if (!isSuperuser && availableTransactionSubTabs.length > 0 && !availableTransactionSubTabs.includes(activeTransactionSubTab as string)) {
+            setActiveTransactionSubTab(availableTransactionSubTabs[0] as TransactionSubTab);
+        }
+    }, [availableTransactionSubTabs, activeTransactionSubTab, isSuperuser]);
+
     // Category Management State
     const [categories, setCategories] = useState<Category[]>([]);
     const [loadingCategories, setLoadingCategories] = useState(false);
@@ -206,7 +222,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         {
             id: '1',
             gstin: '',
-            registrationType: 'regular',
+            registrationType: 'Regular',
             placesOfBusiness: [],
             isExpanded: true
         }
@@ -257,7 +273,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         setGstRecords([...gstRecords, {
             id: Date.now().toString(),
             gstin: '',
-            registrationType: 'regular',
+            registrationType: 'Regular',
             placesOfBusiness: [],
             isExpanded: true
         }]);
@@ -272,7 +288,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const handleGstChange = (id: string, field: keyof GSTRecord, value: any) => {
         setGstRecords(gstRecords.map(record => {
             if (record.id === id) {
-                if (field === 'registrationType' && value === 'unregistered') {
+                if (field === 'registrationType' && value === 'Unregistered') {
                     return { ...record, [field]: value, gstin: '', placesOfBusiness: [] };
                 }
                 return { ...record, [field]: value };
@@ -1051,7 +1067,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             // 2. GST Details
             for (const gst of gstRecords) {
                 if (!gst.gstin) continue;
-                const firstBranch = (gst.placesOfBusiness && gst.placesOfBusiness[0]) || {};
+                const firstBranch: PlaceOfBusiness = (gst.placesOfBusiness && gst.placesOfBusiness[0]) || {
+                    id: '',
+                    referenceName: '',
+                    address: '',
+                    contactPerson: '',
+                    email: '',
+                    contactNumber: ''
+                };
 
                 const gstPayload = {
                     vendor_basic_detail: newId,
@@ -1466,24 +1489,26 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                     {/* Sub-tabs for Vendor Master */}
                     <div className="px-6 pt-4 border-b border-gray-200">
                         <nav className="flex space-x-8">
-                            {['Category', 'PO Settings', 'Vendor Creation'].map((subTab) => {
-                                const isVendorCreationActive = subTab === 'Vendor Creation' &&
-                                    ['Vendor Creation', 'Basic Details', 'GST Details', 'Products/Services', 'TDS & Other Statutory', 'Banking Info', 'Terms & Conditions'].includes(activeMasterSubTab);
-                                const isActive = activeMasterSubTab === subTab || isVendorCreationActive;
+                            {['Category', 'PO Settings', 'Vendor Creation']
+                                .filter(subTab => isSuperuser || hasTabAccess('Vendor Portal', subTab))
+                                .map((subTab) => {
+                                    const isVendorCreationActive = subTab === 'Vendor Creation' &&
+                                        ['Vendor Creation', 'Basic Details', 'GST Details', 'Products/Services', 'TDS & Other Statutory', 'Banking Info', 'Terms & Conditions'].includes(activeMasterSubTab);
+                                    const isActive = activeMasterSubTab === subTab || isVendorCreationActive;
 
-                                return (
-                                    <button
-                                        key={subTab}
-                                        onClick={() => setActiveMasterSubTab(subTab as MasterSubTab)}
-                                        className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors ${isActive
-                                            ? 'border-indigo-500 text-indigo-600'
-                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                            }`}
-                                    >
-                                        {subTab}
-                                    </button>
-                                );
-                            })}
+                                    return (
+                                        <button
+                                            key={subTab}
+                                            onClick={() => setActiveMasterSubTab(subTab as MasterSubTab)}
+                                            className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors ${isActive
+                                                ? 'border-indigo-500 text-indigo-600'
+                                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                                }`}
+                                        >
+                                            {subTab}
+                                        </button>
+                                    );
+                                })}
                         </nav>
                     </div>
 
@@ -1491,7 +1516,6 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                         <InventoryCategoryWizard
                             apiEndpoint="/api/vendors/categories/"
                             allowCreateGroup={false}
-                            disableGroupCreation={true}
                             systemCategories={[
                                 'Raw Material',
                                 'Work in Progress',
@@ -1997,12 +2021,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                 onChange={(e) => handleGstChange(record.id, 'gstin', e.target.value)}
                                                                 className="flex-1 px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100"
                                                                 placeholder="22AAAAA0000A1Z5"
-                                                                disabled={record.registrationType === 'unregistered'}
+                                                                disabled={record.registrationType === 'Unregistered'}
                                                             />
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleFetchGstDetails(record.id)}
-                                                                disabled={record.registrationType === 'unregistered' || loadingGstFetch || !record.gstin}
+                                                                disabled={record.registrationType === 'Unregistered' || loadingGstFetch || !record.gstin}
                                                                 className="px-4 py-2 border border-indigo-500 text-indigo-600 rounded-[4px] hover:bg-indigo-50/50 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                                                             >
                                                                 {loadingGstFetch ? 'Fetching...' : 'Fetch Branch Details'}
@@ -2017,17 +2041,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                             onChange={(e) => handleGstChange(record.id, 'registrationType', e.target.value)}
                                                             className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                         >
-                                                            <option value="regular">Regular</option>
-                                                            <option value="composition">Composition</option>
-                                                            <option value="consumer">Consumer</option>
-                                                            <option value="unregistered">Unregistered</option>
-                                                            <option value="overseas">Overseas</option>
-                                                            <option value="special_economic_zone">Special Economic Zone (SEZ)</option>
-                                                            <option value="deemed_export">Deemed Export</option>
+                                                            <option value="Regular">Regular</option>
+                                                            <option value="Composition">Composition</option>
+                                                            <option value="SEZ">Special Economic Zone (SEZ)</option>
+                                                            <option value="Unregistered">Unregistered</option>
                                                         </select>
                                                     </div>
 
-                                                    {record.registrationType !== 'unregistered' && (
+                                                    {record.registrationType !== 'Unregistered' && (
                                                         <>
                                                             <div>
                                                                 <label className="block text-sm font-medium text-gray-700 mb-2">Legal Name</label>
@@ -2098,7 +2119,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                     rows={2}
                                                                                     value={pob.address}
                                                                                     onChange={(e) => updatePobField(record.id, pob.id, 'address', e.target.value)}
-                                                                                    className={`w-full px-3 py-1.5 border border-slate-200 rounded text-sm ${record.registrationType !== 'unregistered' && pob.address && pob.referenceName !== '' ? 'bg-gray-50' : ''}`}
+                                                                                    className={`w-full px-3 py-1.5 border border-slate-200 rounded text-sm ${record.registrationType !== 'Unregistered' && pob.address && pob.referenceName !== '' ? 'bg-gray-50' : ''}`}
                                                                                     placeholder="Enter address"
                                                                                 />
                                                                             </div>
@@ -2121,7 +2142,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         </div>
                                                     ) : (
                                                         <div className="p-4 bg-gray-50 border border-slate-200 rounded text-sm text-gray-500 text-center">
-                                                            {record.registrationType === 'unregistered' ?
+                                                            {record.registrationType === 'Unregistered' ?
                                                                 'Add a branch manually to continue.' :
                                                                 'No places of business found. Fetch via GSTIN or add manually.'
                                                             }
@@ -3090,18 +3111,20 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                     {/* Sub-tabs for Transaction */}
                     <div className="mb-6">
                         <nav className="flex space-x-8 border-b border-gray-200">
-                            {['Purchase Orders', 'Procurement', 'Payment'].map((subTab) => (
-                                <button
-                                    key={subTab}
-                                    onClick={() => setActiveTransactionSubTab(subTab as TransactionSubTab)}
-                                    className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTransactionSubTab === subTab
-                                        ? 'border-indigo-500 text-indigo-600'
-                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                        }`}
-                                >
-                                    {subTab.toUpperCase()}
-                                </button>
-                            ))}
+                            {['Purchase Orders', 'Procurement', 'Payment']
+                                .filter(subTab => isSuperuser || hasTabAccess('Vendor Portal', subTab))
+                                .map((subTab) => (
+                                    <button
+                                        key={subTab}
+                                        onClick={() => setActiveTransactionSubTab(subTab as TransactionSubTab)}
+                                        className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTransactionSubTab === subTab
+                                            ? 'border-indigo-500 text-indigo-600'
+                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                            }`}
+                                    >
+                                        {subTab.toUpperCase()}
+                                    </button>
+                                ))}
                         </nav>
                     </div>
 
@@ -3113,38 +3136,40 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         <h3 className="text-lg font-semibold text-gray-800 mb-4">Purchase Orders</h3>
                                         <p className="text-gray-600 mb-6">Select an option to manage purchase orders:</p>
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                            {['Create PO', 'Pending PO', 'Executed PO'].map((tab) => (
-                                                <button
-                                                    key={tab}
-                                                    onClick={() => setActivePOSubTab(tab as POSubTab)}
-                                                    className="p-6 border-2 border-gray-200 rounded-[4px] hover:border-indigo-500 hover:bg-indigo-50/50 transition-all text-left group"
-                                                >
-                                                    <div className="flex items-center justify-between mb-4">
-                                                        <div className={`p-3 rounded-[4px] ${tab === 'Create PO' ? 'bg-blue-100 text-indigo-600' :
-                                                            tab === 'Pending PO' ? 'bg-indigo-50 text-indigo-600' :
-                                                                'bg-slate-100 text-indigo-600'
-                                                            }`}>
-                                                            {/* Icons based on tab */}
-                                                            {tab === 'Create PO' && (
-                                                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                                                            )}
-                                                            {tab === 'Pending PO' && (
-                                                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                                            )}
-                                                            {tab === 'Executed PO' && (
-                                                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                                            )}
+                                            {['Create PO', 'Pending PO', 'Executed PO']
+                                                .filter(tab => isSuperuser || hasTabAccess('Vendor Portal', tab))
+                                                .map((tab) => (
+                                                    <button
+                                                        key={tab}
+                                                        onClick={() => setActivePOSubTab(tab as POSubTab)}
+                                                        className="p-6 border-2 border-gray-200 rounded-[4px] hover:border-indigo-500 hover:bg-indigo-50/50 transition-all text-left group"
+                                                    >
+                                                        <div className="flex items-center justify-between mb-4">
+                                                            <div className={`p-3 rounded-[4px] ${tab === 'Create PO' ? 'bg-blue-100 text-indigo-600' :
+                                                                tab === 'Pending PO' ? 'bg-indigo-50 text-indigo-600' :
+                                                                    'bg-slate-100 text-indigo-600'
+                                                                }`}>
+                                                                {/* Icons based on tab */}
+                                                                {tab === 'Create PO' && (
+                                                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                                                                )}
+                                                                {tab === 'Pending PO' && (
+                                                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                                )}
+                                                                {tab === 'Executed PO' && (
+                                                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                                )}
+                                                            </div>
+                                                            <svg className="w-5 h-5 text-gray-400 group-hover:text-indigo-500 transform group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                                                         </div>
-                                                        <svg className="w-5 h-5 text-gray-400 group-hover:text-indigo-500 transform group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                                                    </div>
-                                                    <div className="font-semibold text-gray-900 text-lg">{tab}</div>
-                                                    <div className="text-sm text-gray-500 mt-2">
-                                                        {tab === 'Create PO' ? 'Create new purchase orders' :
-                                                            tab === 'Pending PO' ? 'View and manage pending orders' :
-                                                                'History of completed orders'}
-                                                    </div>
-                                                </button>
-                                            ))}
+                                                        <div className="font-semibold text-gray-900 text-lg">{tab}</div>
+                                                        <div className="text-sm text-gray-500 mt-2">
+                                                            {tab === 'Create PO' ? 'Create new purchase orders' :
+                                                                tab === 'Pending PO' ? 'View and manage pending orders' :
+                                                                    'History of completed orders'}
+                                                        </div>
+                                                    </button>
+                                                ))}
                                         </div>
                                     </div>
                                 )}
@@ -3401,26 +3426,28 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 { name: 'Consumables', desc: 'Manage consumable items', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /> },
                                                 { name: 'Stores & Spares', desc: 'Manage stores and spares', icon: <g><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></g> },
                                                 { name: 'Services', desc: 'Manage service procurement', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /> },
-                                            ].map((item) => (
-                                                <button
-                                                    key={item.name}
-                                                    onClick={() => setActiveProcurementSubTab(item.name as ProcurementSubTab)}
-                                                    className="p-6 border-2 border-gray-200 rounded-[4px] hover:border-indigo-500 hover:shadow-none border border-slate-200 transition-all duration-200 text-left group bg-white"
-                                                >
-                                                    <div className="flex items-center justify-between mb-4">
-                                                        <div className="w-12 h-12 bg-indigo-50/50 rounded-[4px] flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                                                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                {item.icon}
+                                            ]
+                                                .filter(item => isSuperuser || hasTabAccess('Vendor Portal', item.name))
+                                                .map((item) => (
+                                                    <button
+                                                        key={item.name}
+                                                        onClick={() => setActiveProcurementSubTab(item.name as ProcurementSubTab)}
+                                                        className="p-6 border-2 border-gray-200 rounded-[4px] hover:border-indigo-500 hover:shadow-none border border-slate-200 transition-all duration-200 text-left group bg-white"
+                                                    >
+                                                        <div className="flex items-center justify-between mb-4">
+                                                            <div className="w-12 h-12 bg-indigo-50/50 rounded-[4px] flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    {item.icon}
+                                                                </svg>
+                                                            </div>
+                                                            <svg className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                                             </svg>
                                                         </div>
-                                                        <svg className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                                        </svg>
-                                                    </div>
-                                                    <h3 className="text-lg font-bold text-gray-800 group-hover:text-indigo-600 transition-colors">{item.name}</h3>
-                                                    <p className="text-sm text-gray-500 mt-1">{item.desc}</p>
-                                                </button>
-                                            ))}
+                                                        <h3 className="text-lg font-bold text-gray-800 group-hover:text-indigo-600 transition-colors">{item.name}</h3>
+                                                        <p className="text-sm text-gray-500 mt-1">{item.desc}</p>
+                                                    </button>
+                                                ))}
                                         </div>
                                     </div>
                                 ) : (
@@ -3629,44 +3656,46 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 { name: 'Consumables', desc: 'Manage consumable items', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /> },
                                                 { name: 'Stores & Spares', desc: 'Manage stores and spares', icon: <g><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></g> },
                                                 { name: 'Services', desc: 'Manage service procurement', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /> },
-                                            ].map((item) => {
-                                                const totalPendingAmount = paymentBills
-                                                    .filter(bill => bill.status !== 'Posted' && bill.category === item.name)
-                                                    .reduce((sum, bill) => {
-                                                        const amount = parseFloat(bill.amount.replace(/[^0-9.-]+/g, ""));
-                                                        return sum + amount;
-                                                    }, 0);
-                                                const formattedTotal = totalPendingAmount.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
+                                            ]
+                                                .filter(item => isSuperuser || hasTabAccess('Vendor Portal', item.name))
+                                                .map((item) => {
+                                                    const totalPendingAmount = paymentBills
+                                                        .filter(bill => bill.status !== 'Posted' && bill.category === item.name)
+                                                        .reduce((sum, bill) => {
+                                                            const amount = parseFloat(bill.amount.replace(/[^0-9.-]+/g, ""));
+                                                            return sum + amount;
+                                                        }, 0);
+                                                    const formattedTotal = totalPendingAmount.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
 
-                                                return (
-                                                    <button
-                                                        key={item.name}
-                                                        onClick={() => setActivePaymentSubTab(item.name as ProcurementSubTab)}
-                                                        className="p-6 border-2 border-gray-200 rounded-[4px] hover:border-indigo-500 hover:shadow-none border border-slate-200 transition-all duration-200 text-left group bg-white relative"
-                                                    >
-                                                        <div className="flex items-center justify-between mb-4">
-                                                            <div className="w-12 h-12 bg-indigo-50/50 rounded-[4px] flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                                                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    {item.icon}
+                                                    return (
+                                                        <button
+                                                            key={item.name}
+                                                            onClick={() => setActivePaymentSubTab(item.name as ProcurementSubTab)}
+                                                            className="p-6 border-2 border-gray-200 rounded-[4px] hover:border-indigo-500 hover:shadow-none border border-slate-200 transition-all duration-200 text-left group bg-white relative"
+                                                        >
+                                                            <div className="flex items-center justify-between mb-4">
+                                                                <div className="w-12 h-12 bg-indigo-50/50 rounded-[4px] flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        {item.icon}
+                                                                    </svg>
+                                                                </div>
+                                                                <svg className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                                                 </svg>
                                                             </div>
-                                                            <svg className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                                            </svg>
-                                                        </div>
-                                                        <div className="flex justify-between items-end">
-                                                            <div>
-                                                                <h3 className="text-lg font-bold text-gray-800 group-hover:text-indigo-600 transition-colors">{item.name}</h3>
-                                                                <p className="text-sm text-gray-500 mt-1">{item.desc}</p>
+                                                            <div className="flex justify-between items-end">
+                                                                <div>
+                                                                    <h3 className="text-lg font-bold text-gray-800 group-hover:text-indigo-600 transition-colors">{item.name}</h3>
+                                                                    <p className="text-sm text-gray-500 mt-1">{item.desc}</p>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <p className="text-lg font-bold text-gray-800">{formattedTotal}</p>
+                                                                    <p className="text-xs text-red-600 font-semibold mt-1">Credit</p>
+                                                                </div>
                                                             </div>
-                                                            <div className="text-right">
-                                                                <p className="text-lg font-bold text-gray-800">{formattedTotal}</p>
-                                                                <p className="text-xs text-red-600 font-semibold mt-1">Credit</p>
-                                                            </div>
-                                                        </div>
-                                                    </button>
-                                                );
-                                            })}
+                                                        </button>
+                                                    );
+                                                })}
                                         </div>
                                     </div>
                                 ) : (

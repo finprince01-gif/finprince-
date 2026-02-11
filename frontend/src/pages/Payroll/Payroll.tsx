@@ -953,7 +953,7 @@ const SalaryTemplatesContent: React.FC = () => {
     const fetchTemplates = async () => {
         try {
             const tenantId = localStorage.getItem('tenantId');
-            const response = await httpClient.get(`/api/payroll/salary-templates/?tenant_id=${tenantId}`);
+            const response = await httpClient.get<any[]>(`/api/payroll/salary-templates/?tenant_id=${tenantId}`);
             setTemplates(response);
         } catch (error) {
             console.error('Error fetching templates:', error);

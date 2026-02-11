@@ -352,7 +352,7 @@ const PaymentVoucherBulk: React.FC = () => {
         </div>
 
         {/* Right Panel - Transaction List */}
-        <div className="bg-indigo-50/500 rounded-[4px] p-6">
+        <div className="bg-indigo-600 rounded-[4px] p-6">
           <div className="text-center mb-4">
             <h4 className="text-white font-semibold text-sm">
               {selectedVendor || 'Vendor Name'} (Whose data is displayed below)

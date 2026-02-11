@@ -1,6 +1,6 @@
 import React from 'react';
 
-type IconName = 'dashboard' | 'masters' | 'inventory' | 'vouchers' | 'reports' | 'plus' | 'trash' | 'upload' | 'close' | 'warning' | 'settings' | 'logout' | 'sparkles' | 'arrow-up-right' | 'arrow-down-left' | 'users' | 'wallet' | 'download' | 'check-circle' | 'x-circle' | 'spinner' | 'wand-sparkles' | 'bot' | 'vendor-portal' | 'customer-portal' | 'payroll' | 'service' | 'gst' | 'ledger' | 'search' | 'clock' | 'inbox' | 'x' | 'exclamation-triangle';
+type IconName = 'dashboard' | 'layout-dashboard' | 'masters' | 'inventory' | 'vouchers' | 'reports' | 'plus' | 'trash' | 'upload' | 'close' | 'warning' | 'settings' | 'logout' | 'sparkles' | 'arrow-up-right' | 'arrow-down-left' | 'users' | 'wallet' | 'download' | 'check-circle' | 'x-circle' | 'spinner' | 'wand-sparkles' | 'bot' | 'vendor-portal' | 'customer-portal' | 'payroll' | 'service' | 'gst' | 'ledger' | 'search' | 'clock' | 'inbox' | 'x' | 'exclamation-triangle' | 'edit' | 'chevron-down' | 'document' | 'check' | 'scanner';
 
 interface IconProps {
   name: IconName;
@@ -14,6 +14,22 @@ const Icon: React.FC<IconProps> = ({ name, className = 'w-5 h-5' }) => {
       <>
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" />
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 7H3M17 10V3M21 17h-7M7 14v7" opacity={0.5} />
+      </>
+    ),
+
+    edit: (
+      <>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 3l5 5L8 21H3v-5L16 3z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14 5l4 4" opacity={0.5} />
+      </>
+    ),
+
+    'layout-dashboard': (
+      <>
+        <rect x="3" y="3" width="7" height="9" rx="1" strokeWidth={1.5} />
+        <rect x="14" y="3" width="7" height="5" rx="1" strokeWidth={1.5} />
+        <rect x="14" y="12" width="7" height="9" rx="1" strokeWidth={1.5} />
+        <rect x="3" y="16" width="7" height="5" rx="1" strokeWidth={1.5} />
       </>
     ),
 
@@ -129,6 +145,10 @@ const Icon: React.FC<IconProps> = ({ name, className = 'w-5 h-5' }) => {
     search: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />,
     clock: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />,
     inbox: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0a2 2 0 01-2 2H6a2 2 0 01-2-2m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />,
+    'chevron-down': <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />,
+    document: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />,
+    check: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />,
+    scanner: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m-3.3 3.3l.7.7m6.5 0l-.7-.7M4 12h1m15 0h1m-3.3 3.3l.7.7m-8.6 0l.7-.7M8 12a4 4 0 118 0 4 4 0 01-8 0z" />,
   };
 
   return (
