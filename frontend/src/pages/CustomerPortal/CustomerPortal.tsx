@@ -489,6 +489,7 @@ const CustomerContent: React.FC = () => {
     // Data State
     const [customers, setCustomers] = useState<any[]>([]);
     const [stockItems, setStockItems] = useState<any[]>([]);
+    const [units, setUnits] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(false);
 
     const fetchCustomers = async () => {
@@ -503,19 +504,32 @@ const CustomerContent: React.FC = () => {
     const fetchStockItems = async () => {
         try {
             const response = await httpClient.get<any[]>('/api/inventory/items/');
-            setStockItems(response.map(item => ({
+            console.log('Raw inventory items response:', response);
+            const mappedItems = response.map(item => ({
                 code: item.item_code,
-                name: item.item_name
-            })));
+                name: item.item_name,
+                uom: item.uom || ''
+            }));
+            console.log('Mapped stock items with UOM:', mappedItems);
+            setStockItems(mappedItems);
         } catch (error) {
             console.error('Error fetching stock items:', error);
+        }
+    };
+
+    const fetchUnits = async () => {
+        try {
+            const response = await httpClient.get<any[]>('/api/inventory/units/');
+            setUnits(response);
+        } catch (error) {
+            console.error('Error fetching units:', error);
         }
     };
 
     useEffect(() => {
         const fetchAll = async () => {
             setIsLoading(true);
-            await Promise.all([fetchCategories(), fetchCustomers(), fetchStockItems()]);
+            await Promise.all([fetchCategories(), fetchCustomers(), fetchStockItems(), fetchUnits()]);
             setIsLoading(false);
         };
 
@@ -870,13 +884,35 @@ const CustomerContent: React.FC = () => {
     };
 
     const handleProductRowChange = (id: number, field: string, value: string) => {
+        console.log('handleProductRowChange called:', { id, field, value });
         setProductRows(prev => prev.map(row => {
             if (row.id === id) {
                 const updatedRow = { ...row, [field]: value };
+                // Bidirectional auto-population
                 if (field === 'itemCode') {
+                    // When Item Code is selected, fetch and populate Item Name and UOM
                     const item = stockItems.find(i => i.code === value);
-                    updatedRow.itemName = item ? item.name : 'Auto-fetched';
+                    console.log('Found item by code:', item);
+                    if (item) {
+                        updatedRow.itemName = item.name;
+                        updatedRow.uom = item.uom;
+                        console.log('Auto-populated UOM:', item.uom);
+                    } else {
+                        updatedRow.itemName = '';
+                    }
+                } else if (field === 'itemName') {
+                    // When Item Name is selected, fetch and populate Item Code and UOM
+                    const item = stockItems.find(i => i.name === value);
+                    console.log('Found item by name:', item);
+                    if (item) {
+                        updatedRow.itemCode = item.code;
+                        updatedRow.uom = item.uom;
+                        console.log('Auto-populated UOM:', item.uom);
+                    } else {
+                        updatedRow.itemCode = '';
+                    }
                 }
+                console.log('Updated row:', updatedRow);
                 return updatedRow;
             }
             return row;
@@ -886,7 +922,7 @@ const CustomerContent: React.FC = () => {
     const handleAddProductRow = () => {
         setProductRows(prev => [
             ...prev,
-            { id: prev.length + 1, itemCode: '', itemName: 'Auto-fetched', uom: '', custItemCode: '', custItemName: '', custUom: '' }
+            { id: prev.length + 1, itemCode: '', itemName: '', uom: '', custItemCode: '', custItemName: '', custUom: '' }
         ]);
     };
 
@@ -968,7 +1004,8 @@ const CustomerContent: React.FC = () => {
             address: '',
             contactPerson: '',
             email: '',
-            contactNumber: ''
+            contactNumber: '',
+            gstin: null
         }]);
         // Auto-expand the new branch
         setExpandedBranches(prev => [...prev, unregisteredBranches.length + 1]);
@@ -1138,8 +1175,29 @@ const CustomerContent: React.FC = () => {
         const matchesStatus = statusFilter === 'All Status' || (customer.status || 'Live') === statusFilter;
 
         // Category matching - handle both mock and real customer structures
-        const customerCategory = customer.customer_category_name || customer.category || '';
-        const matchesCategory = categoryFilter === 'All Categories' || customerCategory === categoryFilter;
+        // For real customers, customer_category is likely an ID, but we might have the expanded name or we need to find it
+        // If categories are loaded, we can map the ID to the name if needed, or if the filter value is the name/path.
+
+        // The filter dropdown sets the value to `cat.full_path || cat.category`.
+        // The customer object might have `customer_category` (ID) or nested object.
+        // Let's assume for now we try to match against available fields.
+
+        let customerCategoryName = '';
+        if (customer.customer_category_details) {
+            customerCategoryName = customer.customer_category_details.full_path || customer.customer_category_details.category;
+        } else if (typeof customer.customer_category === 'object' && customer.customer_category) {
+            customerCategoryName = customer.customer_category.full_path || customer.customer_category.category;
+        } else {
+            // If it's just an ID, try to find it in the categories list
+            const cat = categories.find(c => c.id === customer.customer_category);
+            if (cat) {
+                customerCategoryName = cat.full_path || cat.category;
+            } else {
+                customerCategoryName = customer.customer_category_name || customer.category || '';
+            }
+        }
+
+        const matchesCategory = categoryFilter === 'All Categories' || customerCategoryName === categoryFilter;
 
         return matchesSearch && matchesStatus && matchesCategory;
     });
@@ -1451,7 +1509,6 @@ const CustomerContent: React.FC = () => {
                                             disabled
                                             className="w-full px-4 py-2 border border-gray-200 rounded-[4px] bg-gray-100 text-gray-500 cursor-not-allowed"
                                         />
-                                        <span className="absolute right-0 -top-6 text-xs text-indigo-500 font-medium italic">No GSTIN available</span>
                                     </div>
                                     <div>
                                         <label className="block text-sm font-semibold text-gray-700 mb-2">Taxpayer Type</label>
@@ -1632,7 +1689,6 @@ const CustomerContent: React.FC = () => {
                                             >
                                                 Fetch branch details
                                             </button>
-                                            <span className="text-[10px] text-indigo-500 text-center">from GST Portal & display here</span>
                                         </div>
                                     </div>
                                 </div>
@@ -1754,21 +1810,20 @@ const CustomerContent: React.FC = () => {
                     <div className="max-w-6xl mx-auto">
                         <div className="bg-white border border-gray-200 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 overflow-hidden mb-6">
                             {/* Table Header */}
-                            <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                            <div className="grid grid-cols-11 gap-4 px-6 py-3 bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-700 uppercase tracking-wider">
                                 <div className="col-span-1">No</div>
                                 <div className="col-span-2">Item Code <span className="text-red-500">*</span></div>
                                 <div className="col-span-2">Item Name</div>
                                 <div className="col-span-1">UOM</div>
                                 <div className="col-span-2">Customer Item Code</div>
                                 <div className="col-span-2">Customer Item Name</div>
-                                <div className="col-span-1">Customer UOM</div>
                                 <div className="col-span-1 text-center">Action</div>
                             </div>
 
                             {/* Table Body */}
                             <div className="divide-y divide-gray-100">
                                 {productRows.map((row, index) => (
-                                    <div key={row.id} className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-gray-50/50 transition-colors">
+                                    <div key={row.id} className="grid grid-cols-11 gap-4 px-6 py-4 items-center hover:bg-gray-50/50 transition-colors">
                                         <div className="col-span-1 text-sm text-gray-500 font-medium">{index + 1}</div>
                                         <div className="col-span-2">
                                             <select
@@ -1777,28 +1832,38 @@ const CustomerContent: React.FC = () => {
                                                 onChange={(e) => handleProductRowChange(row.id, 'itemCode', e.target.value)}
                                             >
                                                 <option value="">Select Item</option>
-                                                {stockItems.map(item => (
-                                                    <option key={item.code} value={item.code}>{item.code} - {item.name}</option>
-                                                ))}
+                                                {stockItems
+                                                    .filter(item => !row.uom || item.uom === row.uom)
+                                                    .map(item => (
+                                                        <option key={item.code} value={item.code}>{item.code} - {item.name}</option>
+                                                    ))}
                                             </select>
                                         </div>
                                         <div className="col-span-2">
-                                            <input
-                                                type="text"
-                                                readOnly
-                                                className="w-full px-3 py-2 border border-gray-200 rounded-[4px] bg-gray-100 text-gray-500 text-sm cursor-not-allowed"
-                                                placeholder="Auto-fetched"
+                                            <select
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
                                                 value={row.itemName}
-                                            />
+                                                onChange={(e) => handleProductRowChange(row.id, 'itemName', e.target.value)}
+                                            >
+                                                <option value="">Select Item Name</option>
+                                                {stockItems
+                                                    .filter(item => !row.uom || item.uom === row.uom)
+                                                    .map(item => (
+                                                        <option key={item.name} value={item.name}>{item.name}</option>
+                                                    ))}
+                                            </select>
                                         </div>
                                         <div className="col-span-1">
-                                            <input
-                                                type="text"
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                                placeholder="UOM"
+                                            <select
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
                                                 value={(row as any).uom || ''}
                                                 onChange={(e) => handleProductRowChange(row.id, 'uom', e.target.value)}
-                                            />
+                                            >
+                                                <option value="">Select UOM</option>
+                                                {units.map(unit => (
+                                                    <option key={unit.id} value={unit.symbol}>{unit.name} ({unit.symbol})</option>
+                                                ))}
+                                            </select>
                                         </div>
                                         <div className="col-span-2">
                                             <input
@@ -1816,15 +1881,6 @@ const CustomerContent: React.FC = () => {
                                                 placeholder="Optional"
                                                 value={row.custItemName}
                                                 onChange={(e) => handleProductRowChange(row.id, 'custItemName', e.target.value)}
-                                            />
-                                        </div>
-                                        <div className="col-span-1">
-                                            <input
-                                                type="text"
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                                placeholder="UOM"
-                                                value={(row as any).custUom || ''}
-                                                onChange={(e) => handleProductRowChange(row.id, 'custUom', e.target.value)}
                                             />
                                         </div>
                                         <div className="col-span-1 flex justify-center">
@@ -2271,9 +2327,9 @@ const CustomerContent: React.FC = () => {
                                             </div>
                                         </div>
 
-                                        {/* Associate to Vendor Branch - Multi-select Dropdown with Display Field */}
+                                        {/* Associate to a Customer Branch - Multi-select Dropdown with Display Field */}
                                         <div className="mb-2">
-                                            <label className="block text-xs font-medium text-gray-500 mb-1">Associate to Vendor Branch</label>
+                                            <label className="block text-xs font-medium text-gray-500 mb-1">Associate to a Customer Branch</label>
                                             <div className="grid grid-cols-2 gap-4">
                                                 {/* Multi-select Dropdown */}
                                                 <div className="relative branch-dropdown-container">
@@ -2463,11 +2519,11 @@ const CustomerContent: React.FC = () => {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-2">Dispute and Redressal Terms</label>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">Dispute Redressal Terms</label>
                             <textarea
                                 rows={3}
                                 className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400"
-                                placeholder="Enter dispute and redressal terms"
+                                placeholder="Enter dispute redressal terms"
                                 value={termsDetails.disputeTerms}
                                 onChange={(e) => setTermsDetails({ ...termsDetails, disputeTerms: e.target.value })}
                             />
@@ -2566,9 +2622,11 @@ const CustomerContent: React.FC = () => {
                         onChange={(e) => setCategoryFilter(e.target.value)}
                     >
                         <option>All Categories</option>
-                        <option>Retail</option>
-                        <option>Wholesale</option>
-                        <option>Corporate</option>
+                        {categories.map((cat) => (
+                            <option key={cat.id} value={cat.full_path || cat.category}>
+                                {cat.full_path || [cat.category, cat.group, cat.subgroup].filter(Boolean).join(' > ')}
+                            </option>
+                        ))}
                     </select>
                 </div>
             </div>
@@ -2591,7 +2649,24 @@ const CustomerContent: React.FC = () => {
                         {filteredCustomers.map((customer) => (
                             <tr key={customer.id} className="hover:bg-gray-50 transition-colors">
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    {customer.customer_category_name || customer.category || 'N/A'}
+                                    {(() => {
+                                        // Try to resolve category name
+                                        let categoryName = 'N/A';
+                                        if (customer.customer_category_name) {
+                                            categoryName = customer.customer_category_name;
+                                        } else if (customer.category) {
+                                            categoryName = customer.category; // fallback
+                                        }
+
+                                        // If we have an ID and categories are loaded, try to find the full path
+                                        if (categories.length > 0 && customer.customer_category) {
+                                            const cat = categories.find(c => c.id === customer.customer_category);
+                                            if (cat) {
+                                                categoryName = cat.full_path || cat.category;
+                                            }
+                                        }
+                                        return categoryName;
+                                    })()}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                                     {customer.customer_code || customer.code}
@@ -3009,6 +3084,8 @@ const LongTermContractsContent: React.FC = () => {
     const [customers, setCustomers] = useState<any[]>([]);
     const [filteredBranches, setFilteredBranches] = useState<any[]>([]);
     const [branchLoading, setBranchLoading] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [editingId, setEditingId] = useState<number | null>(null);
 
     // Basic Details State
     const [basicDetails, setBasicDetails] = useState({
@@ -3098,6 +3175,59 @@ const LongTermContractsContent: React.FC = () => {
         }
     };
 
+    const handleEditClick = (contract: any) => {
+        setIsEditing(true);
+        setEditingId(contract.id);
+
+        setBasicDetails({
+            contractNumber: contract.contract_number,
+            customerId: contract.customer_id?.toString() || '',
+            customerName: contract.customer_name || '',
+            branchId: contract.branch_id?.toString() || '',
+            contractType: contract.contract_type || '',
+            validityFrom: contract.contract_validity_from || '',
+            validityTo: contract.contract_validity_to || '',
+            contractDocument: contract.contract_document || ''
+        });
+
+        setAutomateBilling(contract.automate_billing || false);
+        setBillingConfig({
+            billStartDate: contract.bill_start_date || '',
+            billingFrequency: contract.billing_frequency || '',
+            voucherName: contract.voucher_name || '',
+            billPeriodFrom: contract.bill_period_from || '',
+            billPeriodTo: contract.bill_period_to || ''
+        });
+
+        if (contract.products_services && Array.isArray(contract.products_services)) {
+            setContractProducts(contract.products_services.map((p: any, index: number) => ({
+                id: index + 1,
+                itemCode: p.item_code || '',
+                itemName: p.item_name || '',
+                customerItemName: p.customer_item_name || '',
+                qtyMin: p.qty_min?.toString() || '',
+                qtyMax: p.qty_max?.toString() || '',
+                priceMin: p.price_min?.toString() || '',
+                priceMax: p.price_max?.toString() || '',
+                deviation: p.acceptable_price_deviation || ''
+            })));
+        }
+
+        if (contract.terms_conditions) {
+            setTerms({
+                paymentTerms: contract.terms_conditions.payment_terms || '',
+                penaltyTerms: contract.terms_conditions.penalty_terms || '',
+                forceMajeure: contract.terms_conditions.force_majeure || '',
+                terminationClause: contract.terms_conditions.termination_clause || '',
+                disputeTerms: contract.terms_conditions.dispute_terms || '',
+                others: contract.terms_conditions.others || ''
+            });
+        }
+
+        setActiveTab('Basic Details');
+        setView('create');
+    };
+
     const handleSaveContract = async () => {
         setLoading(true);
         try {
@@ -3139,17 +3269,23 @@ const LongTermContractsContent: React.FC = () => {
 
             console.log('Saving contract:', contractData);
 
-            const response = await httpClient.post('/api/customerportal/long-term-contracts/', contractData);
-
-            console.log('Contract saved successfully:', (response as any).data);
-            alert('Contract Created Successfully!');
+            let response;
+            if (isEditing && editingId) {
+                response = await httpClient.put(`/api/customerportal/long-term-contracts/${editingId}/`, contractData);
+                console.log('Contract updated successfully:', (response as any).data);
+                alert('Contract Updated Successfully!');
+            } else {
+                response = await httpClient.post('/api/customerportal/long-term-contracts/', contractData);
+                console.log('Contract created successfully:', (response as any).data);
+                alert('Contract Created Successfully!');
+            }
 
             // Reset form
             resetForm();
             setView('list');
         } catch (error: any) {
             console.error('Error saving contract:', error);
-            const errorMessage = error.response?.data?.error || error.message || 'Failed to create contract';
+            const errorMessage = error.response?.data?.error || error.message || `Failed to ${isEditing ? 'update' : 'create'} contract`;
             alert(`Error: ${errorMessage}`);
         } finally {
             setLoading(false);
@@ -3167,13 +3303,9 @@ const LongTermContractsContent: React.FC = () => {
             validityTo: '',
             contractDocument: ''
         });
-        setBillingConfig({
-            billStartDate: '',
-            billingFrequency: '',
-            voucherName: '',
-            billPeriodFrom: '',
-            billPeriodTo: ''
-        });
+        setIsEditing(false);
+        setEditingId(null);
+        setAutomateBilling(false);
         setContractProducts([
             { id: 1, itemCode: '', itemName: 'Product Name', customerItemName: '', qtyMin: '', qtyMax: '', priceMin: '', priceMax: '', deviation: '' }
         ]);
@@ -3185,7 +3317,13 @@ const LongTermContractsContent: React.FC = () => {
             disputeTerms: '',
             others: ''
         });
-        setAutomateBilling(false);
+        setBillingConfig({
+            billStartDate: '',
+            billingFrequency: '',
+            voucherName: '',
+            billPeriodFrom: '',
+            billPeriodTo: ''
+        });
         setActiveTab('Basic Details');
     };
 
@@ -3204,8 +3342,13 @@ const LongTermContractsContent: React.FC = () => {
             <div className="p-8">
                 <div className="bg-white border border-gray-200 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200">
                     {/* Header */}
-                    <div className="px-8 py-6 border-b border-gray-200">
-                        <h3 className="text-lg font-bold text-gray-900">Add New Contract</h3>
+                    <div className="px-8 py-6 border-b border-gray-200 flex justify-between items-center">
+                        <h3 className="text-lg font-bold text-gray-900">{isEditing ? 'Edit Long-term Contract' : 'Add New Contract'}</h3>
+                        {isEditing && (
+                            <span className="px-3 py-1 bg-indigo-50 text-indigo-700 text-xs font-semibold rounded-full border border-indigo-100 uppercase tracking-wider">
+                                Update Mode
+                            </span>
+                        )}
                     </div>
 
                     {/* Tabs */}
@@ -3606,11 +3749,11 @@ const LongTermContractsContent: React.FC = () => {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-semibold text-gray-700 mb-1">Dispute & Redressal Terms</label>
+                                    <label className="block text-xs font-semibold text-gray-700 mb-1">Dispute Redressal Terms</label>
                                     <textarea
                                         rows={4}
                                         className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400 resize-none"
-                                        placeholder="Enter dispute resolution terms"
+                                        placeholder="Enter dispute redressal terms"
                                         value={terms.disputeTerms}
                                         onChange={(e) => setTerms({ ...terms, disputeTerms: e.target.value })}
                                     />
@@ -3637,7 +3780,10 @@ const LongTermContractsContent: React.FC = () => {
                         {/* Footer */}
                         <div className="flex justify-between border-t border-gray-200 mt-8 pt-6">
                             <button
-                                onClick={() => setView('list')}
+                                onClick={() => {
+                                    resetForm();
+                                    setView('list');
+                                }}
                                 className="px-6 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                             >
                                 Cancel
@@ -3666,7 +3812,7 @@ const LongTermContractsContent: React.FC = () => {
                                     className={`px-8 py-2 text-white rounded-[4px] text-sm font-medium transition-colors ${activeTab === 'Terms & Conditions' ? 'bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400' : 'bg-indigo-600 hover:bg-indigo-700'
                                         }`}
                                 >
-                                    {loading ? 'Saving...' : (activeTab === 'Terms & Conditions' ? 'Save' : 'Next')}
+                                    {loading ? 'Saving...' : (activeTab === 'Terms & Conditions' ? (isEditing ? 'Update' : 'Save') : 'Next')}
                                 </button>
                             </div>
                         </div>
@@ -3685,7 +3831,10 @@ const LongTermContractsContent: React.FC = () => {
                     <p className="text-sm text-gray-500">Manage rate contracts and service contracts</p>
                 </div>
                 <button
-                    onClick={() => setView('create')}
+                    onClick={() => {
+                        resetForm();
+                        setView('create');
+                    }}
                     className="px-5 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-[4px] hover:bg-indigo-700 transition-colors shadow-none border border-slate-200-none border border-slate-200 flex items-center gap-2"
                 >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
@@ -3720,7 +3869,11 @@ const LongTermContractsContent: React.FC = () => {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                                     <div className="flex items-center justify-center gap-3 opacity-60 group-hover:opacity-100 transition-opacity">
-                                        <button className="text-gray-500 hover:text-indigo-600 transition-colors" title="View/Edit Details">
+                                        <button
+                                            onClick={() => handleEditClick(contract)}
+                                            className="text-gray-500 hover:text-indigo-600 transition-colors"
+                                            title="View/Edit Details"
+                                        >
                                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                                         </button>
                                     </div>
