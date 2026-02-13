@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { httpClient } from '../../services/httpClient';
-import { COUNTRY_STATE_CITY_DATA } from '../../data/countriesData';
+import { Country, State, City } from 'country-state-city';
 
 interface ItemRow {
     id: number;
@@ -321,8 +321,8 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                     delivery_date: deliveryDate || null,
                     // Third Party Address (conditional)
                     third_party_address: deliverAt === 'Third Party' ? {
-                        country: thirdPartyCountry,
-                        state: thirdPartyState,
+                        country: Country.getCountryByCode(thirdPartyCountry)?.name || thirdPartyCountry,
+                        state: State.getStateByCodeAndCountry(thirdPartyState, thirdPartyCountry)?.name || thirdPartyState,
                         city: thirdPartyCity,
                         pincode: thirdPartyPincode,
                         address_line_1: thirdPartyAddress1,
@@ -818,8 +818,10 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                         className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                                     >
                                         <option value="">Select country</option>
-                                        {Object.keys(COUNTRY_STATE_CITY_DATA).map(country => (
-                                            <option key={country} value={country}>{country}</option>
+                                        {Country.getAllCountries().map((country) => (
+                                            <option key={country.isoCode} value={country.isoCode}>
+                                                {country.name}
+                                            </option>
                                         ))}
                                     </select>
                                 </div>
@@ -837,8 +839,10 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                         className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
                                     >
                                         <option value="">Select state</option>
-                                        {thirdPartyCountry && Object.keys(COUNTRY_STATE_CITY_DATA[thirdPartyCountry] || {}).map(state => (
-                                            <option key={state} value={state}>{state}</option>
+                                        {thirdPartyCountry && State.getStatesOfCountry(thirdPartyCountry).map((state) => (
+                                            <option key={state.isoCode} value={state.isoCode}>
+                                                {state.name}
+                                            </option>
                                         ))}
                                     </select>
                                 </div>
@@ -853,8 +857,10 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                                         className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
                                     >
                                         <option value="">Select city</option>
-                                        {thirdPartyCountry && thirdPartyState && (COUNTRY_STATE_CITY_DATA[thirdPartyCountry]?.[thirdPartyState] || []).map(city => (
-                                            <option key={city} value={city}>{city}</option>
+                                        {thirdPartyCountry && thirdPartyState && City.getCitiesOfState(thirdPartyCountry, thirdPartyState).map((city) => (
+                                            <option key={city.name} value={city.name}>
+                                                {city.name}
+                                            </option>
                                         ))}
                                     </select>
                                 </div>

@@ -332,20 +332,38 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
         // If we're in edit mode, handle the edit
         if (isEditing && selectedNode.data.id && onEditCategory) {
             console.log('Processing edit mode update');
-            if (!formData.subgroup.trim()) {
-                alert('Please enter a Subgroup Name');
-                return;
-            }
 
             try {
-                await onEditCategory({
-                    id: selectedNode.data.id,
-                    category: selectedNode.data.category,
-                    group: selectedNode.data.group,
-                    subgroup: formData.subgroup.trim()
-                });
+                // Determine if we are updating a Group or Subgroup based on showSubgroup prop
+                if (!showSubgroup) {
+                    // Case 1: Updating Group (e.g. Customer Portal)
+                    if (!formData.group.trim()) {
+                        alert('Please enter a Group Name');
+                        return;
+                    }
 
-                alert('Subgroup updated successfully!');
+                    await onEditCategory({
+                        id: selectedNode.data.id,
+                        category: selectedNode.data.category,
+                        group: formData.group.trim(),
+                        subgroup: '' // Pass empty string as subgroup is not used
+                    });
+                } else {
+                    // Case 2: Updating Subgroup (e.g. Inventory Portal)
+                    if (!formData.subgroup.trim()) {
+                        alert('Please enter a Subgroup Name');
+                        return;
+                    }
+
+                    await onEditCategory({
+                        id: selectedNode.data.id,
+                        category: selectedNode.data.category,
+                        group: selectedNode.data.group,
+                        subgroup: formData.subgroup.trim()
+                    });
+                }
+
+                alert('Category updated successfully!');
                 setIsEditing(false);
                 fetchMasterCategories(); // Refresh tree
                 return;
@@ -492,7 +510,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
     return (
         <div className="flex flex-col h-[calc(100vh-140px)]">
             <div className="px-6 pt-4 pb-3 flex items-center gap-2">
-                <Icon name="local_offer" className="w-5 h-5 text-gray-600" />
+                <Icon name="inventory" className="w-5 h-5 text-gray-600" />
                 <h3 className="text-lg font-semibold text-gray-800">Create Category</h3>
             </div>
             <div className="flex flex-col md:flex-row gap-5 px-6 pb-6 flex-1 min-h-0">
@@ -575,48 +593,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                                                 )}
 
                                                 {/* Only show actions if NOT editing, or cancel if editing */}
-                                                {!showSubgroup && (
-                                                    <div className="flex items-center gap-2 ml-4">
-                                                        {isEditing ? (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    setIsEditing(false);
-                                                                    setFormData({ category: '', group: '', subgroup: '' });
-                                                                }}
-                                                                className="text-xs text-gray-500 hover:text-gray-700 underline text-nowrap"
-                                                            >
-                                                                Cancel
-                                                            </button>
-                                                        ) : (
-                                                            <>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => {
-                                                                        setIsEditing(true);
-                                                                        setFormData({
-                                                                            category: selectedNode.data.category,
-                                                                            group: selectedNode.data.group,
-                                                                            subgroup: ''
-                                                                        });
-                                                                    }}
-                                                                    className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                                                                    title="Edit Group"
-                                                                >
-                                                                    Edit
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={handleDelete}
-                                                                    className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                                                                    title="Delete Group"
-                                                                >
-                                                                    Delete
-                                                                </button>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                )}
+                                                {/* Edit/Delete buttons removed to avoid duplication with bottom preview actions */}
                                             </div>
                                         ) : selectedNode.level === 2 && selectedNode.data.group ? (
                                             // If SUBGROUP selected, show the parent group
@@ -677,31 +654,35 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                                 {/* Show Edit and Delete buttons for existing subgroups */}
                                 {selectedNode && selectedNode.data.id && !isEditing ? (
                                     <div className="flex gap-3">
-                                        <button
-                                            type="button"
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                                console.log('Edit button clicked, setting isEditing to true');
-                                                setIsEditing(true);
-                                            }}
-                                            className="flex-1 py-2.5 px-4 rounded font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm bg-blue-600 text-white hover:bg-blue-700 cursor-pointer focus:ring-blue-500"
-                                        >
-                                            <Icon name="edit" className="w-4 h-4 inline-block mr-1" />
-                                            Edit
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                                handleDelete();
-                                            }}
-                                            className="flex-1 py-2.5 px-4 rounded font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm bg-red-600 text-white hover:bg-red-700 cursor-pointer focus:ring-red-500"
-                                        >
-                                            <Icon name="delete" className="w-4 h-4 inline-block mr-1" />
-                                            Delete
-                                        </button>
+                                        {onEditCategory && (
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    console.log('Edit button clicked, setting isEditing to true');
+                                                    setIsEditing(true);
+                                                }}
+                                                className="flex-1 py-2.5 px-4 rounded font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm bg-blue-600 text-white hover:bg-blue-700 cursor-pointer focus:ring-blue-500"
+                                            >
+                                                <Icon name="edit" className="w-4 h-4 inline-block mr-1" />
+                                                Edit
+                                            </button>
+                                        )}
+                                        {onDeleteCategory && (
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    handleDelete();
+                                                }}
+                                                className="flex-1 py-2.5 px-4 rounded font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm bg-red-600 text-white hover:bg-red-700 cursor-pointer focus:ring-red-500"
+                                            >
+                                                <Icon name="trash" className="w-4 h-4 inline-block mr-1" />
+                                                Delete
+                                            </button>
+                                        )}
                                     </div>
                                 ) : isEditing ? (
                                     // Show Save and Cancel buttons when editing
@@ -710,7 +691,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                                             type="submit"
                                             className="flex-1 py-2.5 px-4 rounded font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm bg-green-600 text-white hover:bg-green-700 cursor-pointer focus:ring-green-500"
                                         >
-                                            <Icon name="save" className="w-4 h-4 inline-block mr-1" />
+                                            <Icon name="check" className="w-4 h-4 inline-block mr-1" />
                                             Save
                                         </button>
                                         <button
