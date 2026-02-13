@@ -367,10 +367,9 @@ class CustomerMasterCustomerProductService(models.Model):
     )
     item_code = models.CharField(max_length=50, null=True, blank=True)
     item_name = models.CharField(max_length=200, null=True, blank=True)
+    uom = models.CharField(max_length=50, null=True, blank=True, help_text='Unit of Measure')
     customer_item_code = models.CharField(max_length=50, null=True, blank=True)
     customer_item_name = models.CharField(max_length=200, null=True, blank=True)
-    uom = models.CharField(max_length=50, null=True, blank=True)
-    customer_uom = models.CharField(max_length=50, null=True, blank=True)
     
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
@@ -806,6 +805,7 @@ class CustomerTransactionSalesOrderBasicDetails(models.Model):
     address = models.TextField(null=True, blank=True, help_text='Address')
     email = models.EmailField(null=True, blank=True, help_text='Email Address')
     contact_number = models.CharField(max_length=20, null=True, blank=True, help_text='Contact Number')
+    gst_no = models.CharField(max_length=20, null=True, blank=True, help_text='GST Number')
     
     # Quotation/Contract Linking - Moved to separate table
     # quotation_type and quotation_number removed
@@ -853,7 +853,9 @@ class CustomerTransactionSalesOrderItemDetails(models.Model):
     price = models.DecimalField(max_digits=15, decimal_places=2, default=0, help_text='Price per unit')
     taxable_value = models.DecimalField(max_digits=15, decimal_places=2, default=0, help_text='Taxable Value (Qty * Price)')
     gst = models.DecimalField(max_digits=15, decimal_places=2, default=0, help_text='GST Amount')
+    gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text='GST Rate (%)')
     net_value = models.DecimalField(max_digits=15, decimal_places=2, default=0, help_text='Net Value (Taxable + GST)')
+    uom = models.CharField(max_length=50, null=True, blank=True, help_text='Unit of Measure')
     
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
@@ -887,6 +889,7 @@ class CustomerTransactionSalesOrderDeliveryTerms(models.Model):
     # Delivery Details
     deliver_at = models.CharField(max_length=500, null=True, blank=True, help_text='Delivery Address')
     delivery_date = models.DateField(null=True, blank=True, help_text='Delivery Date')
+    third_party_address = models.JSONField(null=True, blank=True, help_text='Third Party Delivery Address Details')
     
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
