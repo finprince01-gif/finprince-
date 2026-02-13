@@ -229,6 +229,19 @@ class ApiService {
         return httpClient.post<any>('/api/inventory/operations/outward/', data);
     }
 
+    /**
+     * Get Purchase Orders for a specific vendor
+     * @param vendorName - Vendor name to filter by
+     * @param status - Optional status filter (e.g. 'Draft', 'Pending', 'Closed')
+     */
+    async getVendorPurchaseOrders(vendorName: string, status?: string) {
+        let url = `/api/vendors/purchase-orders/?vendor_name=${encodeURIComponent(vendorName)}`;
+        if (status) {
+            url += `&status=${encodeURIComponent(status)}`;
+        }
+        return httpClient.get<{ success: boolean; data: any[] }>(url);
+    }
+
     // ============================================================================
     // MASTERS - VOUCHER CONFIG
     // ============================================================================

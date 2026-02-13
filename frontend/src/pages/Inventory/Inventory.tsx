@@ -291,9 +291,11 @@ const InventoryPage: React.FC = () => {
   const [grnVendorName, setGrnVendorName] = useState('');
   const [grnCustomerName, setGrnCustomerName] = useState('');
   const [grnBranch, setGrnBranch] = useState('');
+  const [grnBranchOptions, setGrnBranchOptions] = useState<any[]>([]);
   const [grnAddress, setGrnAddress] = useState('');
   const [grnGstin, setGrnGstin] = useState('');
   const [grnReferenceNo, setGrnReferenceNo] = useState(''); // PO No or Sales Voucher No
+  const [grnReferenceNoOptions, setGrnReferenceNoOptions] = useState<any[]>([]);
   const [grnSecondaryRefNo, setGrnSecondaryRefNo] = useState(''); // Supplier Invoice or Debit Note
   const [grnItems, setGrnItems] = useState<any[]>([{ itemCode: '', itemName: '', uom: '', poQty: '', invoiceQty: '', receivedQty: '', acceptedQty: '', rejectedQty: '', shortageExcess: '', remarks: '' }]);
   const [grnReason, setGrnReason] = useState('');
@@ -311,6 +313,28 @@ const InventoryPage: React.FC = () => {
     { id: 2, category: 'Furniture', subCategory: 'Chairs', itemCode: 'IT002', itemName: 'Product B', uom: 'Nos', openingQty: 200, openingValue: 1000000, inwardQty: 100, inwardValue: 500000, outwardQty: 50, outwardValue: 250000, closingQty: 250, closingValue: 1250000 },
     { id: 3, category: 'Textiles', subCategory: 'Fabric', itemCode: 'IT003', itemName: 'Product C', uom: 'Mtr', openingQty: 1000, openingValue: 250000, inwardQty: 500, inwardValue: 125000, outwardQty: 300, outwardValue: 75000, closingQty: 1200, closingValue: 300000 },
   ]);
+
+  const [stockDetailsData, setStockDetailsData] = useState<any[]>([
+    { id: 1, date: '2024-01-01', particulars: 'Purchase', refNo: 'GRN-2024-001', location: 'Main Store', uom: 'Nos', openingQty: 100, openingValue: 150000, inwardQty: 50, inwardValue: 75000, outwardQty: 0, outwardValue: 0, closingQty: 150, closingValue: 225000 },
+    { id: 2, date: '2024-01-05', particulars: 'Job Work', refNo: 'ISS-2024-005', location: 'Floor 1', uom: 'Nos', openingQty: 150, openingValue: 225000, inwardQty: 0, inwardValue: 0, outwardQty: 20, outwardValue: 30000, closingQty: 130, closingValue: 195000 },
+    { id: 3, date: '2024-01-10', particulars: 'Sales Return', refNo: 'GRN-2024-010', location: 'Main Store', uom: 'Nos', openingQty: 130, openingValue: 195000, inwardQty: 10, inwardValue: 15000, outwardQty: 0, outwardValue: 0, closingQty: 140, closingValue: 210000 },
+  ]);
+
+  const [detailsFilters, setDetailsFilters] = useState({
+    date: '',
+    particulars: '',
+    refNo: '',
+    location: '',
+    uom: ''
+  });
+
+  const [stockFilters, setStockFilters] = useState({
+    category: '',
+    subCategory: '',
+    itemCode: '',
+    itemName: '',
+    uom: ''
+  });
 
   // Constants
   const locationTypes = [
@@ -1290,6 +1314,91 @@ const InventoryPage: React.FC = () => {
     }
   };
 
+  const handleGrnVendorChange = async (selectedVendorName: string) => {
+    setGrnVendorName(selectedVendorName);
+    setGrnBranch('');
+    setGrnBranchOptions([]);
+    setGrnAddress('');
+    setGrnGstin('');
+    setGrnReferenceNo('');
+    setGrnReferenceNoOptions([]);
+
+    const vendor = vendors.find(v => v.vendor_name === selectedVendorName);
+    if (vendor) {
+      try {
+        const branchResponse = await apiService.getVendorGSTDetails(vendor.id);
+        setGrnBranchOptions(Array.isArray(branchResponse) ? branchResponse : []);
+
+        const poResponse = await apiService.getVendorPurchaseOrders(selectedVendorName);
+        if (poResponse && poResponse.success && Array.isArray(poResponse.data)) {
+          setGrnReferenceNoOptions(poResponse.data);
+        }
+      } catch (error) {
+        console.error("Error fetching vendor details:", error);
+      }
+    }
+  };
+
+  const handleGrnBranchChange = (branchReferenceName: string) => {
+    setGrnBranch(branchReferenceName);
+    const branchDetails = grnBranchOptions.find(b => b.reference_name === branchReferenceName);
+    if (branchDetails) {
+      setGrnAddress(branchDetails.branch_address || '');
+      setGrnGstin(branchDetails.gstin || '');
+    } else {
+      setGrnAddress('');
+      setGrnGstin('');
+    }
+  };
+
+
+  const handleAddGrnItem = () => {
+    setGrnItems([...grnItems, { itemCode: '', itemName: '', uom: '', poQty: '', invoiceQty: '', receivedQty: '', acceptedQty: '', rejectedQty: '', shortExcess: '', remarks: '' }]);
+  };
+
+  const handleRemoveGrnItem = (index: number) => {
+    setGrnItems(grnItems.filter((_, i) => i !== index));
+  };
+
+  const handleGrnItemChange = (index: number, field: string, value: any) => {
+    const updatedItems = [...grnItems];
+    updatedItems[index][field] = value;
+
+    if (field === 'itemCode') {
+      const selectedItem = items.find(i => i.item_code === value);
+      if (selectedItem) {
+        updatedItems[index].itemName = selectedItem.name;
+        updatedItems[index].uom = selectedItem.unit;
+        updatedItems[index].itemId = selectedItem.id;
+      }
+    } else if (field === 'itemName') {
+      const selectedItem = items.find(i => i.name === value);
+      if (selectedItem) {
+        updatedItems[index].itemCode = selectedItem.item_code;
+        updatedItems[index].uom = selectedItem.unit;
+        updatedItems[index].itemId = selectedItem.id;
+      }
+    }
+
+    // Auto-calculate shortage/excess
+    if (field === 'receivedQty' || field === 'invoiceQty') {
+      const received = parseFloat(updatedItems[index].receivedQty) || 0;
+      const invoice = parseFloat(updatedItems[index].invoiceQty) || 0;
+      if (received && invoice) {
+        const diff = received - invoice;
+        updatedItems[index].shortExcess = diff > 0 ? `Excess: ${diff}` : `Short: ${Math.abs(diff)}`;
+      }
+    }
+
+    setGrnItems(updatedItems);
+  };
+
+  useEffect(() => {
+    if (showGRNForm && items.length === 0) {
+      fetchItems();
+    }
+  }, [showGRNForm]);
+
   const handleGRNSubmit = async () => {
     try {
       const payload = {
@@ -1383,6 +1492,24 @@ const InventoryPage: React.FC = () => {
     const canCreateIssue = isSuperuser || hasTabAccess('Inventory', 'Issue Slip Creation');
     const canCreateGRN = isSuperuser || hasTabAccess('Inventory', 'GRN Creation');
 
+    const filteredStockData = operationsStockData.filter(item => {
+      const matchCategory = item.category.toLowerCase().includes(stockFilters.category.toLowerCase());
+      const matchSubCategory = item.subCategory.toLowerCase().includes(stockFilters.subCategory.toLowerCase());
+      const matchItemCode = item.itemCode.toLowerCase().includes(stockFilters.itemCode.toLowerCase());
+      const matchItemName = item.itemName.toLowerCase().includes(stockFilters.itemName.toLowerCase());
+      const matchUom = item.uom.toLowerCase().includes(stockFilters.uom.toLowerCase());
+      return matchCategory && matchSubCategory && matchItemCode && matchItemName && matchUom;
+    });
+
+    const filteredDetailsData = stockDetailsData.filter(item => {
+      const matchDate = item.date.toLowerCase().includes(detailsFilters.date.toLowerCase());
+      const matchParticulars = item.particulars.toLowerCase().includes(detailsFilters.particulars.toLowerCase());
+      const matchRefNo = item.refNo.toLowerCase().includes(detailsFilters.refNo.toLowerCase());
+      const matchLocation = item.location.toLowerCase().includes(detailsFilters.location.toLowerCase());
+      const matchUom = item.uom.toLowerCase().includes(detailsFilters.uom.toLowerCase());
+      return matchDate && matchParticulars && matchRefNo && matchLocation && matchUom;
+    });
+
     return (
       <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200 p-6">
         {!showItemDetail ? (
@@ -1418,11 +1545,11 @@ const InventoryPage: React.FC = () => {
                   <table className="min-w-full divide-y divide-gray-200 border border-gray-300">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase"><input type="text" placeholder="Category" className="w-20 px-2 py-1 border rounded text-xs" /></th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase"><input type="text" placeholder="Sub-Cat" className="w-20 px-2 py-1 border rounded text-xs" /></th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase"><input type="text" placeholder="Item Code" className="w-20 px-2 py-1 border rounded text-xs" /></th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase"><input type="text" placeholder="Item Name" className="w-24 px-2 py-1 border rounded text-xs" /></th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase"><input type="text" placeholder="UOM" className="w-16 px-2 py-1 border rounded text-xs" /></th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Category</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Sub-Cat</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Item Code</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Item Name</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">UOM</th>
                         <th colSpan={2} className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase">Opening Stock</th>
                         <th colSpan={2} className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase">Inward</th>
                         <th colSpan={2} className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase">Outward</th>
@@ -1430,11 +1557,11 @@ const InventoryPage: React.FC = () => {
                         <th className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase">Action</th>
                       </tr>
                       <tr className="bg-gray-50 border-t border-gray-200">
-                        <th></th>
-                        <th></th>
-                        <th></th>
-                        <th></th>
-                        <th></th>
+                        <th className="px-2 py-2"><input type="text" placeholder="Filter..." value={stockFilters.category} onChange={(e) => setStockFilters({ ...stockFilters, category: e.target.value })} className="w-20 px-2 py-1 border rounded text-xs" /></th>
+                        <th className="px-2 py-2"><input type="text" placeholder="Filter..." value={stockFilters.subCategory} onChange={(e) => setStockFilters({ ...stockFilters, subCategory: e.target.value })} className="w-20 px-2 py-1 border rounded text-xs" /></th>
+                        <th className="px-2 py-2"><input type="text" placeholder="Filter..." value={stockFilters.itemCode} onChange={(e) => setStockFilters({ ...stockFilters, itemCode: e.target.value })} className="w-20 px-2 py-1 border rounded text-xs" /></th>
+                        <th className="px-2 py-2"><input type="text" placeholder="Filter..." value={stockFilters.itemName} onChange={(e) => setStockFilters({ ...stockFilters, itemName: e.target.value })} className="w-24 px-2 py-1 border rounded text-xs" /></th>
+                        <th className="px-2 py-2"><input type="text" placeholder="Filter..." value={stockFilters.uom} onChange={(e) => setStockFilters({ ...stockFilters, uom: e.target.value })} className="w-16 px-2 py-1 border rounded text-xs" /></th>
                         <th className="px-2 py-2 text-center text-xs font-medium text-gray-600">Qty</th>
                         <th className="px-2 py-2 text-center text-xs font-medium text-gray-600">Value</th>
                         <th className="px-2 py-2 text-center text-xs font-medium text-gray-600">Qty</th>
@@ -1447,7 +1574,7 @@ const InventoryPage: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {operationsStockData.map((item) => (
+                      {filteredStockData.map((item) => (
                         <tr key={item.id} className="hover:bg-gray-50">
                           <td className="px-4 py-3 text-sm text-gray-900">{item.category}</td>
                           <td className="px-4 py-3 text-sm text-gray-900">{item.subCategory}</td>
@@ -1531,22 +1658,22 @@ const InventoryPage: React.FC = () => {
                   <table className="min-w-full divide-y divide-gray-200 border border-gray-300">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase"><input type="text" placeholder="Date" className="w-20 px-2 py-1 border rounded text-xs" /></th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase"><input type="text" placeholder="Particulars" className="w-32 px-2 py-1 border rounded text-xs" /></th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase"><input type="text" placeholder="Ref No" className="w-20 px-2 py-1 border rounded text-xs" /></th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase"><input type="text" placeholder="Location" className="w-24 px-2 py-1 border rounded text-xs" /></th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase"><input type="text" placeholder="UOM" className="w-16 px-2 py-1 border rounded text-xs" /></th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Date</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Particulars</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Ref No</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Location</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">UOM</th>
                         <th colSpan={2} className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase">Opening Stock</th>
                         <th colSpan={2} className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase">Inward</th>
                         <th colSpan={2} className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase">Outward</th>
                         <th colSpan={2} className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase">Closing Stock</th>
                       </tr>
                       <tr className="bg-gray-50 border-t border-gray-200">
-                        <th></th>
-                        <th></th>
-                        <th></th>
-                        <th></th>
-                        <th></th>
+                        <th className="px-2 py-2"><input type="text" placeholder="Filter..." value={detailsFilters.date} onChange={(e) => setDetailsFilters({ ...detailsFilters, date: e.target.value })} className="w-20 px-2 py-1 border rounded text-xs" /></th>
+                        <th className="px-2 py-2"><input type="text" placeholder="Filter..." value={detailsFilters.particulars} onChange={(e) => setDetailsFilters({ ...detailsFilters, particulars: e.target.value })} className="w-32 px-2 py-1 border rounded text-xs" /></th>
+                        <th className="px-2 py-2"><input type="text" placeholder="Filter..." value={detailsFilters.refNo} onChange={(e) => setDetailsFilters({ ...detailsFilters, refNo: e.target.value })} className="w-20 px-2 py-1 border rounded text-xs" /></th>
+                        <th className="px-2 py-2"><input type="text" placeholder="Filter..." value={detailsFilters.location} onChange={(e) => setDetailsFilters({ ...detailsFilters, location: e.target.value })} className="w-24 px-2 py-1 border rounded text-xs" /></th>
+                        <th className="px-2 py-2"><input type="text" placeholder="Filter..." value={detailsFilters.uom} onChange={(e) => setDetailsFilters({ ...detailsFilters, uom: e.target.value })} className="w-16 px-2 py-1 border rounded text-xs" /></th>
                         <th className="px-2 py-2 text-center text-xs font-medium text-gray-600">Qty</th>
                         <th className="px-2 py-2 text-center text-xs font-medium text-gray-600">Value</th>
                         <th className="px-2 py-2 text-center text-xs font-medium text-gray-600">Qty</th>
@@ -1558,21 +1685,23 @@ const InventoryPage: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      <tr>
-                        <td className="px-4 py-3 text-sm text-gray-500">GRN-001</td>
-                        <td className="px-4 py-3 text-sm text-gray-500">Purchase from Vendor</td>
-                        <td className="px-4 py-3 text-sm text-gray-500">REF-2024-001</td>
-                        <td className="px-4 py-3 text-sm text-gray-500">Main Store</td>
-                        <td className="px-4 py-3 text-sm text-gray-500">{selectedItemForOps.uom}</td>
-                        <td className="px-4 py-3 text-sm text-right text-gray-500">100</td>
-                        <td className="px-4 py-3 text-sm text-right text-gray-500">₹150000</td>
-                        <td className="px-4 py-3 text-sm text-right text-gray-500">50</td>
-                        <td className="px-4 py-3 text-sm text-right text-gray-500">₹75000</td>
-                        <td className="px-4 py-3 text-sm text-right text-gray-500">0</td>
-                        <td className="px-4 py-3 text-sm text-right text-gray-500">₹0</td>
-                        <td className="px-4 py-3 text-sm text-right text-gray-500">150</td>
-                        <td className="px-4 py-3 text-sm text-right text-gray-500">₹225000</td>
-                      </tr>
+                      {filteredDetailsData.map((item) => (
+                        <tr key={item.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-sm text-gray-900">{item.date}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900">{item.particulars}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900">{item.refNo}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900">{item.location}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900">{item.uom}</td>
+                          <td className="px-4 py-3 text-sm text-right text-gray-900">{item.openingQty}</td>
+                          <td className="px-4 py-3 text-sm text-right text-gray-900">₹{item.openingValue}</td>
+                          <td className="px-4 py-3 text-sm text-right text-gray-900">{item.inwardQty}</td>
+                          <td className="px-4 py-3 text-sm text-right text-gray-900">₹{item.inwardValue}</td>
+                          <td className="px-4 py-3 text-sm text-right text-gray-900">{item.outwardQty}</td>
+                          <td className="px-4 py-3 text-sm text-right text-gray-900">₹{item.outwardValue}</td>
+                          <td className="px-4 py-3 text-sm text-right text-gray-900">{item.closingQty}</td>
+                          <td className="px-4 py-3 text-sm text-right text-gray-900">₹{item.closingValue}</td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -1737,8 +1866,9 @@ const InventoryPage: React.FC = () => {
                               className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             >
                               <option value="">Select Vendor</option>
-                              <option value="Vendor A">Vendor A</option>
-                              <option value="Vendor B">Vendor B</option>
+                              {vendors.map(vendor => (
+                                <option key={vendor.id} value={vendor.vendor_name}>{vendor.vendor_name}</option>
+                              ))}
                             </select>
                           </div>
                           <div>
@@ -1970,7 +2100,9 @@ const InventoryPage: React.FC = () => {
                               className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             >
                               <option value="">Select Vendor</option>
-                              <option value="Vendor A">Vendor A</option>
+                              {vendors.map(vendor => (
+                                <option key={vendor.id} value={vendor.vendor_name}>{vendor.vendor_name}</option>
+                              ))}
                             </select>
                           </div>
                           <div>
@@ -3566,16 +3698,22 @@ const InventoryPage: React.FC = () => {
                       <div className="grid grid-cols-2 gap-5 mt-4">
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Vendor Name</label>
-                          <select value={grnVendorName} onChange={(e) => setGrnVendorName(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                          <select value={grnVendorName} onChange={(e) => handleGrnVendorChange(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                             <option value="">Select Vendor</option>
-                            <option value="Vendor A">Vendor A</option>
+                            {vendors.map(vendor => (
+                              <option key={vendor.id} value={vendor.vendor_name}>{vendor.vendor_name}</option>
+                            ))}
                           </select>
                         </div>
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Branch</label>
-                          <select value={grnBranch} onChange={(e) => setGrnBranch(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                          <select value={grnBranch} onChange={(e) => handleGrnBranchChange(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                             <option value="">Select Branch</option>
-                            <option value="Main">Main</option>
+                            {grnBranchOptions.map((branch, index) => (
+                              <option key={branch.id || index} value={branch.reference_name}>
+                                {branch.reference_name || branch.trade_name || 'Main'}
+                              </option>
+                            ))}
                           </select>
                         </div>
                       </div>
@@ -3583,11 +3721,11 @@ const InventoryPage: React.FC = () => {
                       <div className="grid grid-cols-2 gap-5 mt-4">
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Address</label>
-                          <textarea value={grnAddress} onChange={(e) => setGrnAddress(e.target.value)} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                          <textarea value={grnAddress} readOnly rows={2} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-100 cursor-not-allowed" />
                         </div>
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">GSTIN No.</label>
-                          <input type="text" value={grnGstin} onChange={(e) => setGrnGstin(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                          <input type="text" value={grnGstin} readOnly className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-100 cursor-not-allowed" />
                         </div>
                       </div>
 
@@ -3595,8 +3733,10 @@ const InventoryPage: React.FC = () => {
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Purchase Order No.</label>
                           <select value={grnReferenceNo} onChange={(e) => setGrnReferenceNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                            <option value="">Select Pending PO</option>
-                            <option value="PO-001">PO-001</option>
+                            <option value="">Select PO</option>
+                            {grnReferenceNoOptions.map((po: any) => (
+                              <option key={po.id} value={po.po_number}>{po.po_number}</option>
+                            ))}
                           </select>
                         </div>
                         <div>
@@ -3675,28 +3815,28 @@ const InventoryPage: React.FC = () => {
                           {grnItems.map((item, index) => (
                             <tr key={index}>
                               <td className="px-3 py-2">
-                                <input
-                                  type="text"
+                                <select
                                   value={item.itemCode || ''}
-                                  onChange={(e) => {
-                                    const newItems = [...grnItems];
-                                    newItems[index].itemCode = e.target.value;
-                                    setGrnItems(newItems);
-                                  }}
-                                  className="w-24 px-2 py-1 border border-gray-300 rounded text-xs"
-                                />
+                                  onChange={(e) => handleGrnItemChange(index, 'itemCode', e.target.value)}
+                                  className="w-32 px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                >
+                                  <option value="">Select Code</option>
+                                  {items.map(i => (
+                                    <option key={i.id} value={i.item_code}>{i.item_code}</option>
+                                  ))}
+                                </select>
                               </td>
                               <td className="px-3 py-2">
-                                <input
-                                  type="text"
+                                <select
                                   value={item.itemName || ''}
-                                  onChange={(e) => {
-                                    const newItems = [...grnItems];
-                                    newItems[index].itemName = e.target.value;
-                                    setGrnItems(newItems);
-                                  }}
-                                  className="w-32 px-2 py-1 border border-gray-300 rounded text-xs"
-                                />
+                                  onChange={(e) => handleGrnItemChange(index, 'itemName', e.target.value)}
+                                  className="w-48 px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                >
+                                  <option value="">Select Item</option>
+                                  {items.map(i => (
+                                    <option key={i.id} value={i.name}>{i.name}</option>
+                                  ))}
+                                </select>
                               </td>
                               <td className="px-3 py-2">
                                 <input
@@ -3786,20 +3926,32 @@ const InventoryPage: React.FC = () => {
                                 <input
                                   type="text"
                                   value={item.remarks || ''}
-                                  onChange={(e) => {
-                                    const newItems = [...grnItems];
-                                    newItems[index].remarks = e.target.value;
-                                    setGrnItems(newItems);
-                                  }}
-                                  className="w-24 px-2 py-1 border border-gray-300 rounded text-xs"
+                                  onChange={(e) => handleGrnItemChange(index, 'remarks', e.target.value)}
+                                  className="w-32 px-2 py-1 border border-gray-300 rounded text-xs"
                                 />
+                              </td>
+                              <td className="px-3 py-2 text-center">
+                                <button
+                                  onClick={() => handleRemoveGrnItem(index)}
+                                  className="text-red-600 hover:text-red-900"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                                  </svg>
+                                </button>
                               </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
-                      <div className="p-2">
-                        <button onClick={() => setGrnItems([...grnItems, {}])} className="text-indigo-600 font-semibold text-sm">+ Add Item</button>
+                      <div className="p-2 border-t border-gray-200">
+                        <button
+                          type="button"
+                          onClick={handleAddGrnItem}
+                          className="text-indigo-600 hover:text-indigo-900 text-sm font-medium flex items-center"
+                        >
+                          + ADD ITEM
+                        </button>
                       </div>
                     </div>
                   </div>

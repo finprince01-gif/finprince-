@@ -229,7 +229,7 @@ def get_purchase_order_by_id(po_id: int) -> Optional[Dict[str, Any]]:
         return po_data
 
 
-def get_all_purchase_orders(tenant_id: str, status: Optional[str] = None) -> List[Dict[str, Any]]:
+def get_all_purchase_orders(tenant_id: str, status: Optional[str] = None, vendor_name: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Get all purchase orders for a tenant
     
@@ -251,6 +251,10 @@ def get_all_purchase_orders(tenant_id: str, status: Optional[str] = None) -> Lis
     if status:
         query += " AND po.status = %s"
         params.append(status)
+        
+    if vendor_name:
+        query += " AND po.vendor_name = %s"
+        params.append(vendor_name)
     
     query += " GROUP BY po.id ORDER BY po.created_at DESC"
     

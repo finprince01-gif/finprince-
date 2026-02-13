@@ -47,8 +47,9 @@ class VendorPOViewSet(viewsets.ModelViewSet):
         try:
             tenant_id = self.get_tenant_id(request)
             status_filter = request.query_params.get('status')
+            vendor_name = request.query_params.get('vendor_name')
             
-            po_list = db.get_all_purchase_orders(tenant_id, status_filter)
+            po_list = db.get_all_purchase_orders(tenant_id, status_filter, vendor_name)
             
             return Response({
                 'success': True,
