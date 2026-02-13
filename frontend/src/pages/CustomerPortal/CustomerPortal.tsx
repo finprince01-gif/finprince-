@@ -6,8 +6,11 @@ import { InventoryCategoryWizard } from '../../components/InventoryCategoryWizar
 import Icon from '../../components/Icon'; // Assuming Icon component exists
 import CreateSalesQuotation from './CreateSalesQuotation';
 import CategoryHierarchicalDropdown, { Category as DropdownCategory } from '../../components/CategoryHierarchicalDropdown';
+import { CUSTOMER_CATEGORIES } from '../../constants/customerPortalConstants';
 import SalesQuotationList from './SalesQuotationList';
 import CreateSalesOrder from './CreateSalesOrder';
+import SalesOrderList from './SalesOrderList';
+import SalesOrderViewModal from './SalesOrderViewModal';
 import { Eye, Mail, Filter, ChevronLeft, X, Calendar, Pencil, Trash2 } from 'lucide-react';
 import CustomerViewModal from './CustomerViewModal';
 
@@ -85,6 +88,10 @@ const CustomerPortalPage: React.FC = () => {
     const [editQuotationId, setEditQuotationId] = useState<string | null>(null);
     const [editQuotationType, setEditQuotationType] = useState<SalesQuotationSubTab | null>(null);
     const [showCreateOrder, setShowCreateOrder] = useState(false);
+    const [isSalesOrderViewModalOpen, setIsSalesOrderViewModalOpen] = useState(false);
+    const [selectedSalesOrderId, setSelectedSalesOrderId] = useState<string | null>(null);
+    const [editSalesOrderId, setEditSalesOrderId] = useState<string | null>(null);
+    const [refreshOrders, setRefreshOrders] = useState(0);
 
     const handleEditQuotation = (id: string, type: SalesQuotationSubTab) => {
         setEditQuotationId(id);
@@ -96,6 +103,27 @@ const CustomerPortalPage: React.FC = () => {
         setEditQuotationId(null);
         setEditQuotationType(null);
         setShowCreateQuotation(true);
+    };
+
+    const handleViewSalesOrder = (id: string) => {
+        setSelectedSalesOrderId(id);
+        setIsSalesOrderViewModalOpen(true);
+    };
+
+    const handleEditSalesOrder = (id: string) => {
+        setEditSalesOrderId(id);
+        setShowCreateOrder(true);
+    };
+
+    const handleCancelSalesOrder = async (id: string) => {
+        try {
+            await httpClient.delete(`/api/customerportal/sales-orders/${id}/`);
+            alert('Sales Order cancelled successfully!');
+            setRefreshOrders(prev => prev + 1);
+        } catch (error) {
+            console.error('Error cancelling sales order:', error);
+            alert('Failed to cancel sales order');
+        }
     };
 
     return (
@@ -206,201 +234,24 @@ const CustomerPortalPage: React.FC = () => {
                             )}
                             {activeTransactionSubTab === 'Sales Order' && (
                                 showCreateOrder ? (
-                                    <CreateSalesOrder onCancel={() => setShowCreateOrder(false)} />
+                                    <CreateSalesOrder
+                                        editId={editSalesOrderId}
+                                        onCancel={() => {
+                                            setShowCreateOrder(false);
+                                            setEditSalesOrderId(null);
+                                        }}
+                                    />
                                 ) : (
-                                    <div className="text-left">
-                                        <div className="flex justify-between items-center mb-6">
-                                            <h3 className="text-lg font-medium text-gray-900">Sales Order</h3>
-                                            <button
-                                                className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-[4px] hover:bg-indigo-700 transition-colors"
-                                                onClick={() => setShowCreateOrder(true)}
-                                            >
-                                                Create Sales Order
-                                            </button>
-                                        </div>
-
-                                        {/* Sales Order Sub-tabs */}
-                                        <div className="border-b border-gray-200 mb-6">
-                                            <nav className="flex gap-8">
-                                                {['Pending & Cancelled', 'Executed'].map((tab) => (
-                                                    <button
-                                                        key={tab}
-                                                        onClick={() => setActiveSalesOrderSubTab(tab as SalesOrderSubTab)}
-                                                        className={`py-3 px-1 text-sm font-medium border-b-2 transition-colors ${activeSalesOrderSubTab === tab
-                                                            ? 'border-indigo-500 text-indigo-600'
-                                                            : 'border-transparent text-gray-500 hover:text-gray-700'
-                                                            }`}
-                                                    >
-                                                        {tab.toUpperCase()}
-                                                    </button>
-                                                ))}
-                                            </nav>
-                                        </div>
-
-                                        {/* Pending & Cancelled Tab */}
-                                        {activeSalesOrderSubTab === 'Pending & Cancelled' && (
-                                            <div className="bg-white border border-gray-200 rounded-[4px] overflow-hidden">
-                                                <div className="overflow-x-auto">
-                                                    <table className="min-w-full divide-y divide-gray-200">
-                                                        <thead className="bg-gray-50">
-                                                            <tr>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                    Sales Order #
-                                                                </th>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                    Sales Order Date
-                                                                </th>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                    Customer Reference Name
-                                                                </th>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                    Delivery Date
-                                                                </th>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                    Amount
-                                                                </th>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                    Status
-                                                                </th>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                    Actions
-                                                                </th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="bg-white divide-y divide-gray-200">
-                                                            {/* Sample Data Row - Pending */}
-                                                            <tr className="hover:bg-gray-50">
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                                                    SO-2024-001
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                                    2024-01-15
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                                    Acme Corporation
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                                    2024-01-25
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                                    ₹45,000.00
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                                    <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] bg-yellow-100 text-yellow-800">
-                                                                        Pending
-                                                                    </span>
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-3">
-                                                                    <button className="text-indigo-600 hover:text-indigo-900">View</button>
-                                                                    <button className="text-indigo-600 hover:text-teal-900">Edit</button>
-                                                                    <button className="text-red-600 hover:text-red-900">Cancel</button>
-                                                                </td>
-                                                            </tr>
-                                                            {/* Sample Data Row - Cancelled */}
-                                                            <tr className="hover:bg-gray-50">
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                                                    SO-2024-002
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                                    2024-01-10
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                                    Global Traders
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                                    2024-01-20
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                                    ₹32,500.00
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                                    <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] bg-red-100 text-red-800">
-                                                                        Cancelled
-                                                                    </span>
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-3">
-                                                                    <button className="text-indigo-600 hover:text-indigo-900">View</button>
-                                                                    <button className="text-gray-400 cursor-not-allowed" disabled>Edit</button>
-                                                                    <button className="text-gray-400 cursor-not-allowed" disabled>Cancel</button>
-                                                                </td>
-                                                            </tr>
-                                                            {/* Empty State */}
-                                                            {false && (
-                                                                <tr>
-                                                                    <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
-                                                                        No pending or cancelled sales orders found.
-                                                                    </td>
-                                                                </tr>
-                                                            )}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Executed Tab */}
-                                        {activeSalesOrderSubTab === 'Executed' && (
-                                            <div className="bg-white border border-gray-200 rounded-[4px] overflow-hidden">
-                                                <div className="overflow-x-auto">
-                                                    <table className="min-w-full divide-y divide-gray-200">
-                                                        <thead className="bg-gray-50">
-                                                            <tr>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                    Sales Order #
-                                                                </th>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                    Sales Order Date
-                                                                </th>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                    Customer Reference Name
-                                                                </th>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                    Delivery Date
-                                                                </th>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                    Amount
-                                                                </th>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                    Action
-                                                                </th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="bg-white divide-y divide-gray-200">
-                                                            {/* Sample Data Row - Executed */}
-                                                            <tr className="hover:bg-gray-50">
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                                                    SO-2024-003
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                                    2024-01-05
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                                    Tech Solutions Inc
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                                    2024-01-15
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                                    ₹78,500.00
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                                                    <button className="text-indigo-600 hover:text-indigo-900">View</button>
-                                                                </td>
-                                                            </tr>
-                                                            {/* Empty State */}
-                                                            {false && (
-                                                                <tr>
-                                                                    <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                                                                        No executed sales orders found.
-                                                                    </td>
-                                                                </tr>
-                                                            )}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
+                                    <SalesOrderList
+                                        key={refreshOrders}
+                                        onCreateOrder={() => {
+                                            setEditSalesOrderId(null);
+                                            setShowCreateOrder(true);
+                                        }}
+                                        onEditOrder={handleEditSalesOrder}
+                                        onViewOrder={handleViewSalesOrder}
+                                        onCancelOrder={handleCancelSalesOrder}
+                                    />
                                 )
                             )}
                             {activeTransactionSubTab === 'Sales' && (
@@ -413,6 +264,12 @@ const CustomerPortalPage: React.FC = () => {
                     </div>
                 )}
 
+                {/* Sales Order View Modal */}
+                <SalesOrderViewModal
+                    isOpen={isSalesOrderViewModalOpen}
+                    onClose={() => setIsSalesOrderViewModalOpen(false)}
+                    orderId={selectedSalesOrderId}
+                />
             </div>
         </div>
     );
@@ -2722,15 +2579,11 @@ const CustomerContent: React.FC = () => {
                     onClose={() => setViewCustomer(null)}
                 />
             )}
+
+
         </div>
     );
 };
-
-const CUSTOMER_CATEGORIES: DropdownCategory[] = [
-    { id: 1, category: 'Export', group: null, subgroup: null, full_path: 'Export', is_active: true },
-    { id: 2, category: 'Within Country (B2B)', group: null, subgroup: null, full_path: 'Within Country (B2B)', is_active: true },
-    { id: 3, category: 'Within Country (B2C)', group: null, subgroup: null, full_path: 'Within Country (B2C)', is_active: true },
-];
 
 const SalesOrderContent: React.FC = () => {
     const [subTab, setSubTab] = useState<'Sales Quotation' | 'Sales Order'>('Sales Quotation');
@@ -5489,11 +5342,7 @@ const SalesContent: React.FC = () => {
                 </div>
             </div>
 
-            {/* All Categories Note */}
-            <div className="mb-4 flex items-center text-sm text-emerald-600">
-                <span className="mr-2">→</span>
-                <span className="font-medium">All categories use the same table layout and behavior</span>
-            </div>
+
 
             {/* Aging Table */}
             <div className="bg-white border border-gray-200 rounded-[4px] overflow-hidden">
@@ -5597,17 +5446,7 @@ const SalesContent: React.FC = () => {
                 </div>
             </div>
 
-            {/* Footer Notes */}
-            <div className="mt-4 flex items-start space-x-4 text-xs text-gray-500">
-                <div className="flex items-center">
-                    <Eye className="w-4 h-4 mr-1 text-indigo-600" />
-                    <span>View icon → navigates to Customer Ledger filtered for selected customer</span>
-                </div>
-                <div className="flex items-center">
-                    <Mail className="w-4 h-4 mr-1 text-indigo-600" />
-                    <span>Mail icon → auto-drafts reminder email with due amounts and aging breakup</span>
-                </div>
-            </div>
+
         </div>
     );
 };
