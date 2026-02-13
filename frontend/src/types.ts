@@ -22,6 +22,9 @@ export interface CompanyDetails {
     };
   };
 
+  pincode?: string;
+  country?: string;
+  city?: string;
 }
 
 export interface LedgerGroupMaster {

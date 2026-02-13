@@ -159,6 +159,14 @@ class ApiService {
         return httpClient.get<any[]>('/api/customerportal/customer-master/');
     }
 
+    /**
+     * Get GST Details (Addresses) for a specific Vendor
+     * @param vendorId - Vendor Basic Detail ID
+     */
+    async getVendorGSTDetails(vendorId: number) {
+        return httpClient.get<any[]>(`/api/vendors/gst-details/?vendor_basic_detail=${vendorId}`);
+    }
+
     // ============================================================================
     // INVENTORY - ITEMS
     // ============================================================================
