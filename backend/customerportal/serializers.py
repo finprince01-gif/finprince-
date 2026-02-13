@@ -835,8 +835,84 @@ class CustomerTransactionSalesOrderSerializer(serializers.ModelSerializer):
                 logger.info("=== Sales Order Creation Completed ===")
                 return sales_order
                 
+                
         except Exception as e:
             logger.error(f"❌ Error creating sales order: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            raise
+
+    def update(self, instance, validated_data):
+        """
+        Update sales order and related data in all 5 separate tables
+        """
+        from django.db import transaction
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info(f"=== Updating Sales Order {instance.id} ===")
+        
+        # Extract nested data
+        items_data = validated_data.pop('items', None)
+        delivery_terms_data = validated_data.pop('delivery_terms', None)
+        payment_and_salesperson_data = validated_data.pop('payment_and_salesperson', None)
+        quotation_details_data = validated_data.pop('quotation_details', None)
+        
+        try:
+            with transaction.atomic():
+                # 1. Update Basic Details
+                for attr, value in validated_data.items():
+                    setattr(instance, attr, value)
+                instance.save()
+                logger.info(f"✅ Basic Details updated: ID={instance.id}")
+                
+                # 2. Update Items
+                if items_data is not None:
+                    # Delete existing items and recreate
+                    CustomerTransactionSalesOrderItemDetails.objects.filter(so_basic_detail=instance).delete()
+                    for item_data in items_data:
+                        item_data['tenant_id'] = instance.tenant_id
+                        CustomerTransactionSalesOrderItemDetails.objects.create(
+                            so_basic_detail=instance, 
+                            **item_data
+                        )
+                    logger.info(f"✅ Updated {len(items_data)} items")
+                
+                # 3. Update Delivery Terms
+                if delivery_terms_data is not None:
+                    CustomerTransactionSalesOrderDeliveryTerms.objects.filter(so_basic_detail=instance).delete()
+                    delivery_terms_data['tenant_id'] = instance.tenant_id
+                    CustomerTransactionSalesOrderDeliveryTerms.objects.create(
+                        so_basic_detail=instance, 
+                        **delivery_terms_data
+                    )
+                    logger.info("✅ Delivery Terms updated")
+                
+                # 4. Update Payment and Salesperson
+                if payment_and_salesperson_data is not None:
+                    CustomerTransactionSalesOrderPaymentAndSalesperson.objects.filter(so_basic_detail=instance).delete()
+                    payment_and_salesperson_data['tenant_id'] = instance.tenant_id
+                    CustomerTransactionSalesOrderPaymentAndSalesperson.objects.create(
+                        so_basic_detail=instance, 
+                        **payment_and_salesperson_data
+                    )
+                    logger.info("✅ Payment and Salesperson updated")
+                
+                # 5. Update Quotation Details
+                if quotation_details_data is not None:
+                    CustomerTransactionSalesOrderQuotationDetails.objects.filter(so_basic_detail=instance).delete()
+                    quotation_details_data['tenant_id'] = instance.tenant_id
+                    CustomerTransactionSalesOrderQuotationDetails.objects.create(
+                        so_basic_detail=instance, 
+                        **quotation_details_data
+                    )
+                    logger.info("✅ Quotation Details updated")
+                
+                logger.info("=== Sales Order Update Completed ===")
+                return instance
+                
+        except Exception as e:
+            logger.error(f"❌ Error updating sales order: {str(e)}")
             import traceback
             logger.error(traceback.format_exc())
             raise

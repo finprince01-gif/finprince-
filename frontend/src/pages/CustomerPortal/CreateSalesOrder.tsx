@@ -17,9 +17,10 @@ interface ItemRow {
 
 interface CreateSalesOrderProps {
     onCancel: () => void;
+    editId?: string | null;
 }
 
-const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
+const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId }) => {
     // Section 1: Basic Details
     const [soSeries, setSOSeries] = useState('SO-2024');
     const [soNumber, setSONumber] = useState(`SO-${Date.now().toString().slice(-6)}`); // Auto-generated unique ID
@@ -66,6 +67,92 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
     const [inventoryItems, setInventoryItems] = useState<any[]>([]);
 
     useEffect(() => {
+        const fetchOrderForEdit = async () => {
+            if (!editId) return;
+            try {
+                const order = await httpClient.get<any>(`/api/customerportal/sales-orders/${editId}/`);
+                console.log('Fetched order for edit:', order);
+
+                // Set Basic Details
+                setSOSeries(order.so_series_name);
+                setSONumber(order.so_number);
+                setDate(order.date);
+                setCustomerPONumber(order.customer_po_number || '');
+                setCustomerName(order.customer_name);
+                setBranch(order.branch);
+                setAddress(order.address || '');
+                setEmail(order.email || '');
+                setContactNumber(order.contact_number || '');
+                setGstNo(order.gst_no || '');
+
+                // Quotation Details
+                if (order.quotation_details) {
+                    setQuotationType(order.quotation_details.quotation_type || '');
+                    setQuotationNumber(order.quotation_details.quotation_number || '');
+                }
+
+                // Items
+                if (order.items && order.items.length > 0) {
+                    setItems(order.items.map((item: any, idx: number) => ({
+                        id: idx + 1,
+                        itemCode: item.item_code,
+                        itemName: item.item_name,
+                        quantity: item.quantity?.toString() || '0',
+                        uom: item.uom || '',
+                        price: item.price?.toString() || '0',
+                        taxableValue: parseFloat(item.taxable_value) || 0,
+                        gst: parseFloat(item.gst) || 0,
+                        gstRate: parseFloat(item.gst_rate) || 0,
+                        netValue: parseFloat(item.net_value) || 0
+                    })));
+                }
+
+                // Delivery Terms
+                if (order.delivery_terms) {
+                    setDeliverAt(order.delivery_terms.deliver_at || '');
+                    setDeliveryDate(order.delivery_terms.delivery_date || '');
+
+                    if (order.delivery_terms.third_party_address) {
+                        const tp = order.delivery_terms.third_party_address;
+                        // Map country/state name back to code if possible, or just use as is
+                        // CSC dropdowns expect codes for searching but we might have names
+                        // For now we set whatever we have
+                        setThirdPartyCountry(tp.country || '');
+                        setThirdPartyState(tp.state || '');
+                        setThirdPartyPincode(tp.pincode || '');
+                        setThirdPartyAddress1(tp.address_line_1 || '');
+                        setThirdPartyAddress2(tp.address_line_2 || '');
+                        setThirdPartyAddress3(tp.address_line_3 || '');
+                        setThirdPartyCity(tp.city || '');
+                    }
+                }
+
+                // Payment Terms
+                if (order.payment_and_salesperson) {
+                    setCreditPeriod(order.payment_and_salesperson.credit_period || '');
+                    setSalespersonInCharge(order.payment_and_salesperson.salesperson_in_charge || '');
+                    setEmployeeId(order.payment_and_salesperson.employee_id || '');
+                    setEmployeeName(order.payment_and_salesperson.employee_name || '');
+                    // Agent fields if applicable...
+                }
+
+            } catch (error) {
+                console.error('Error fetching order for edit:', error);
+                alert('Failed to load order details for editing');
+            }
+        };
+
+        const fetchAllData = async () => {
+            await Promise.all([
+                fetchQuotations(),
+                fetchContracts(),
+                fetchInventoryItems(),
+                fetchCustomers()
+            ]);
+            // Call edit fetch after base data is loaded
+            if (editId) await fetchOrderForEdit();
+        };
+
         const fetchQuotations = async () => {
             try {
                 const [generalResponse, specificResponse] = await Promise.all([
@@ -85,7 +172,6 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                 console.error('Error fetching sales quotations:', error);
             }
         };
-        fetchQuotations();
 
         const fetchContracts = async () => {
             try {
@@ -95,11 +181,9 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                 console.error('Error fetching contracts:', error);
             }
         };
-        fetchContracts();
 
         const fetchInventoryItems = async () => {
             try {
-                // Fetch active items only
                 const response = await httpClient.get<any[]>('/api/inventory/items/?is_active=true');
                 const itemsList = Array.isArray(response) ? response : (response as any).results || [];
                 setInventoryItems(itemsList);
@@ -107,7 +191,6 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                 console.error('Error fetching inventory items:', error);
             }
         };
-        fetchInventoryItems();
 
         const fetchCustomers = async () => {
             try {
@@ -118,8 +201,9 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
                 console.error('Error fetching customers:', error);
             }
         };
-        fetchCustomers();
-    }, []);
+
+        fetchAllData();
+    }, [editId]);
 
     // Section 3: Item Details
     // Section 3: Item Details
@@ -348,18 +432,21 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
 
             console.log('Sending sales order data:', salesOrderData);
 
-            // Send to backend API using httpClient (automatically handles auth)
-            const result = await httpClient.post('/api/customerportal/sales-orders/', salesOrderData);
+            let result;
+            if (editId) {
+                result = await httpClient.patch(`/api/customerportal/sales-orders/${editId}/`, salesOrderData);
+                console.log('Sales order updated successfully:', result);
+                alert('Sales Order updated successfully!');
+            } else {
+                result = await httpClient.post('/api/customerportal/sales-orders/', salesOrderData);
+                console.log('Sales order saved successfully:', result);
+                alert('Sales Order saved successfully!');
+            }
 
-            console.log('Sales order saved successfully:', result);
-            alert('Sales Order saved successfully!');
-
-            // Optionally call onCancel to go back to the list
             onCancel();
-
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error saving sales order:', error);
-            alert(`Error saving sales order: ${error.message}`);
+            alert(`Error saving sales order: ${error.message || 'Unknown error'}`);
         }
     };
 
@@ -429,7 +516,9 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel }) => {
             <div className="px-8 py-6">
                 <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200 p-8">
                     {/* Page Title */}
-                    <h2 className="text-2xl font-bold text-gray-900 mb-6">Create Sales Order</h2>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-6">
+                        {editId ? 'Edit Sales Order' : 'Create Sales Order'}
+                    </h2>
 
                     {/* Section 1: Basic Details */}
                     <div className="mb-8">

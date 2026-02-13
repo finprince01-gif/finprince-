@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { ChevronLeft, ChevronDown } from 'lucide-react';
 import { httpClient } from '../../services/httpClient';
 import CategoryHierarchicalDropdown from '../../components/CategoryHierarchicalDropdown';
+import { CUSTOMER_CATEGORIES } from '../../constants/customerPortalConstants';
 
 interface ItemRow {
     id: number;
@@ -74,6 +76,10 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
     const [specificItems, setSpecificItems] = useState<SpecificItemRow[]>([
         { id: 1, itemCode: '', itemName: '', customerItemName: '', minOrderQty: '', basePrice: '', discount: '', negotiatedPrice: '', uom: '' }
     ]);
+    const [allCustomers, setAllCustomers] = useState<any[]>([]);
+    const [filteredCustomersForSearch, setFilteredCustomersForSearch] = useState<any[]>([]);
+    const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
+    const [customerBranches, setCustomerBranches] = useState<any[]>([]);
 
     // Fetch Inventory Items
     useEffect(() => {
@@ -89,7 +95,20 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                 console.error('Error fetching inventory items:', error);
             }
         };
+
+        const fetchAllCustomersList = async () => {
+            try {
+                const response = await httpClient.get('/api/customerportal/customer-master/');
+                if (Array.isArray(response)) {
+                    setAllCustomers(response);
+                }
+            } catch (error) {
+                console.error('Error fetching customers:', error);
+            }
+        };
+
         fetchInventory();
+        fetchAllCustomersList();
     }, []);
 
     useEffect(() => {
@@ -413,6 +432,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                                         }}
                                         placeholder="Select category"
                                         colorTheme="indigo"
+                                        systemCategories={CUSTOMER_CATEGORIES.map(c => c.category)}
                                     />
                                 </div>
                             </div>
@@ -588,17 +608,85 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                                             placeholder="Enter quote number"
                                         />
                                     </div>
-                                    <div className="md:col-start-1">
+                                    <div className="md:col-start-1 relative">
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
                                             Customer Name <span className="text-red-500">*</span>
                                         </label>
-                                        <input
-                                            type="text"
-                                            value={customerName}
-                                            onChange={(e) => setCustomerName(e.target.value)}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                            placeholder="Enter customer name"
-                                        />
+                                        <div className="relative group">
+                                            <input
+                                                type="text"
+                                                value={customerName}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    setCustomerName(val);
+                                                    const matches = allCustomers.filter(c =>
+                                                        c.customer_name.toLowerCase().includes(val.toLowerCase())
+                                                    );
+                                                    setFilteredCustomersForSearch(matches);
+                                                    setShowCustomerSuggestions(true);
+                                                }}
+                                                onFocus={() => {
+                                                    // Show all if empty, or filter if typing
+                                                    const matches = allCustomers.filter(c =>
+                                                        c.customer_name.toLowerCase().includes(customerName.toLowerCase())
+                                                    );
+                                                    setFilteredCustomersForSearch(matches);
+                                                    setShowCustomerSuggestions(true);
+                                                }}
+                                                className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                placeholder="Enter or select customer name"
+                                            />
+                                            <div
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-gray-400 group-hover:text-indigo-500 transition-colors"
+                                                onClick={() => {
+                                                    if (!showCustomerSuggestions) {
+                                                        setFilteredCustomersForSearch(allCustomers);
+                                                        setShowCustomerSuggestions(true);
+                                                    } else {
+                                                        setShowCustomerSuggestions(false);
+                                                    }
+                                                }}
+                                            >
+                                                <ChevronDown className="w-5 h-5" />
+                                            </div>
+                                        </div>
+                                        {showCustomerSuggestions && filteredCustomersForSearch.length > 0 && (
+                                            <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-200 rounded-[4px] shadow-lg max-h-60 overflow-y-auto">
+                                                {filteredCustomersForSearch.map((cust) => (
+                                                    <div
+                                                        key={cust.id}
+                                                        onClick={() => {
+                                                            setCustomerName(cust.customer_name);
+                                                            setAddress(cust.address || (cust.gst_details?.branches?.[0]?.address) || '');
+                                                            setEmail(cust.email_address || '');
+                                                            setContactNo(cust.contact_number || '');
+                                                            setShowCustomerSuggestions(false);
+
+                                                            const branches = cust.gst_details?.branches || [];
+                                                            setCustomerBranches(branches);
+
+                                                            if (branches.length > 0) {
+                                                                const mainBranch = branches.find((b: any) =>
+                                                                    (b.referenceName || b.defaultRef)?.toLowerCase().includes('main')
+                                                                ) || branches[0];
+                                                                setBranch(mainBranch.referenceName || mainBranch.defaultRef || '');
+                                                            } else {
+                                                                setBranch('');
+                                                            }
+                                                        }}
+                                                        className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-none transition-colors"
+                                                    >
+                                                        <div className="font-medium text-gray-900">{cust.customer_name}</div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {showCustomerSuggestions && (
+                                            <div
+                                                className="fixed inset-0 z-[55]"
+                                                onClick={() => setShowCustomerSuggestions(false)}
+                                            />
+                                        )}
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -606,13 +694,22 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                                         </label>
                                         <select
                                             value={branch}
-                                            onChange={(e) => setBranch(e.target.value)}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                setBranch(val);
+                                                const selectedBranch = customerBranches.find(b => (b.referenceName || b.defaultRef) === val);
+                                                if (selectedBranch && selectedBranch.address) {
+                                                    setAddress(selectedBranch.address);
+                                                }
+                                            }}
                                             className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                                         >
                                             <option value="">Select branch</option>
-                                            <option value="main">Main Branch</option>
-                                            <option value="north">North Branch</option>
-                                            <option value="south">South Branch</option>
+                                            {customerBranches.length > 0 && customerBranches.map((b, idx) => (
+                                                <option key={idx} value={b.referenceName || b.defaultRef}>
+                                                    {b.referenceName || b.defaultRef}
+                                                </option>
+                                            ))}
                                         </select>
                                     </div>
                                     <div className="md:col-span-2">
