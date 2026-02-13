@@ -23,6 +23,12 @@ interface DropdownProps {
     systemCategories?: string[];
 }
 
+const DEFAULT_SYSTEM_CATEGORIES = [
+    'Raw Material', 'Work in Progress', 'Finished Goods',
+    'Stores and Spares', 'Packing Material', 'Stock in Trade',
+    'By-product', 'Scrap'
+];
+
 const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
     onSelect,
     value = '',
@@ -33,11 +39,7 @@ const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
     staticCategories,
     colorTheme = 'teal',
     apiEndpoint = '/api/inventory/master-categories/',
-    systemCategories = [
-        'Raw Material', 'Work in Progress', 'Finished Goods',
-        'Stores and Spares', 'Packing Material', 'Stock in Trade',
-        'By-product', 'Scrap'
-    ]
+    systemCategories = DEFAULT_SYSTEM_CATEGORIES
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [categories, setCategories] = useState<Category[]>([]);
@@ -65,12 +67,60 @@ const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
         }
     }[colorTheme];
 
+    // Effect to fetch categories
+    // We only re-fetch if staticCategories, apiEndpoint, or systemCategories change.
+    // NOTE: systemCategories default value is now a constant, so it won't trigger re-renders unless passed a new array.
     useEffect(() => {
         if (staticCategories && staticCategories.length > 0) {
             setCategories(staticCategories);
-        } else {
-            fetchCategories();
+            return;
         }
+
+        const fetchCategories = async () => {
+            try {
+                setLoading(true);
+                const data = await httpClient.get<Category[]>(apiEndpoint);
+
+                // 1. Process API data
+                let processed = data.map(c => ({
+                    ...c,
+                    full_path: [c.category, c.group, c.subgroup].filter(Boolean).join(' > ')
+                }));
+
+                // 2. Ensure Default Categories exist (if missing from API)
+                const existingNames = new Set(processed.map(c => c.category));
+
+                let idCounter = 10000;
+                const missingDefaults = systemCategories.filter(name => !existingNames.has(name)).map(name => ({
+                    id: idCounter++,
+                    category: name,
+                    group: null,
+                    subgroup: null,
+                    is_active: true,
+                    full_path: name
+                }));
+
+                // 3. Combine API data + Missing Defaults
+                setCategories([...missingDefaults, ...processed]);
+
+            } catch (error) {
+                console.error('Error fetching categories:', error);
+                // Fallback mock data matching systemCategories
+                const mockCategories: Category[] = systemCategories.map((name, idx) => ({
+                    id: idx + 1,
+                    category: name,
+                    is_active: true,
+                    group: null,
+                    subgroup: null,
+                    full_path: name
+                }));
+                setCategories(mockCategories);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchCategories();
 
         const handleClickOutside = (event: MouseEvent) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -81,50 +131,6 @@ const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [staticCategories, apiEndpoint, systemCategories]);
-
-    const fetchCategories = async () => {
-        try {
-            setLoading(true);
-            const data = await httpClient.get<Category[]>(apiEndpoint);
-
-            // 1. Process API data
-            let processed = data.map(c => ({
-                ...c,
-                full_path: [c.category, c.group, c.subgroup].filter(Boolean).join(' > ')
-            }));
-
-            // 2. Ensure Default Categories exist (if missing from API)
-            const existingNames = new Set(processed.map(c => c.category));
-
-            let idCounter = 10000;
-            const missingDefaults = systemCategories.filter(name => !existingNames.has(name)).map(name => ({
-                id: idCounter++,
-                category: name,
-                group: null,
-                subgroup: null,
-                is_active: true,
-                full_path: name
-            }));
-
-            // 3. Combine API data + Missing Defaults
-            setCategories([...missingDefaults, ...processed]);
-
-        } catch (error) {
-            console.error('Error fetching categories:', error);
-            // Fallback mock data matching systemCategories
-            const mockCategories: Category[] = systemCategories.map((name, idx) => ({
-                id: idx + 1,
-                category: name,
-                is_active: true,
-                group: null,
-                subgroup: null,
-                full_path: name
-            }));
-            setCategories(mockCategories);
-        } finally {
-            setLoading(false);
-        }
-    };
 
     const filteredCategories = categories.filter(cat => {
         // Exclude specific ID if needed (for editing parent)

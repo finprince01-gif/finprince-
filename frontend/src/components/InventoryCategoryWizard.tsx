@@ -144,7 +144,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
 
             // Add default groups and subgroups to each system category
             // EXCEPTION: 'By-product' and 'Scrap' should NOT have default groups
-            if (catName !== 'By-product' && catName !== 'Scrap') {
+            if (catName !== 'By-product' && catName !== 'Scrap' && catName !== 'Work in Progress' && catName !== 'Finished Goods') {
                 defaultGroups.forEach(groupData => {
                     if (excludeGroups.includes(groupData.name)) return;
 
