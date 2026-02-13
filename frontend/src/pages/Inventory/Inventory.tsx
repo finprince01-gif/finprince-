@@ -29,16 +29,19 @@ interface Location {
 interface Item {
   id: number;
   item_code: string;
-  name: string;
+  item_name?: string; // Backend style
+  name: string;      // Frontend style
   category: number;
   category_name: string;
   hsn_code: string | null;
   description: string;
   unit: string;
+  uom?: string;      // Backend style
   has_multiple_units: boolean;
   alternative_unit: string | null;
-  conversion_factor: string | null;
-  gst_rate: string;
+  alternate_uom?: string | null; // Backend style
+  conversion_factor: string | number | null;
+  gst_rate: string | number | null;
   rate: string;
   location: number | null;
   location_name: string | null;
@@ -633,17 +636,16 @@ const InventoryPage: React.FC = () => {
     try {
       const data = {
         item_code: itemCode,
-        name: itemName,
+        item_name: itemName,
         category: itemCategory,
         hsn_code: itemHsn || null,
         description: itemDescription,
-        unit: itemUnit,
+        uom: itemUnit,
         has_multiple_units: itemHasMultipleUnits,
-        alternative_unit: itemHasMultipleUnits ? itemAltUnit : null,
+        alternate_uom: itemHasMultipleUnits ? itemAltUnit : null,
         conversion_factor: itemHasMultipleUnits && itemConversionFactor ? itemConversionFactor : null,
         gst_rate: itemGstRate,
-        rate: itemRate || '0.00',
-        location: itemLocation
+        rate: itemRate || '0.00'
       };
       if (isEditModeItem && selectedItem) {
         await httpClient.put(`/api/inventory/items/${selectedItem.id}/`, data);
@@ -661,7 +663,7 @@ const InventoryPage: React.FC = () => {
   const handleEditItem = () => {
     if (!selectedItem) return;
     setItemCode(selectedItem.item_code);
-    setItemName(selectedItem.name);
+    setItemName(selectedItem.item_name || selectedItem.name);
     setItemCategory(selectedItem.category);
     setItemCategoryPath(selectedItem.category_name);
     setItemHsn(selectedItem.hsn_code || '');
@@ -669,9 +671,9 @@ const InventoryPage: React.FC = () => {
     setItemUnit(selectedItem.unit);
     setItemHasMultipleUnits(selectedItem.has_multiple_units);
     setItemAltUnit(selectedItem.alternative_unit || '');
-    setItemConversionFactor(selectedItem.conversion_factor || '');
-    setItemGstRate(selectedItem.gst_rate);
-    setItemRate(selectedItem.rate);
+    setItemConversionFactor(String(selectedItem.conversion_factor || ''));
+    setItemGstRate(String(selectedItem.gst_rate || ''));
+    setItemRate(String(selectedItem.rate || ''));
     setItemLocation(selectedItem.location);
     setIsEditModeItem(true);
   };
@@ -695,10 +697,21 @@ const InventoryPage: React.FC = () => {
     // Ensure all fields are mapped correctly for editing
     setEditFormData({
       ...item,
+      id: item.id,
       isEditMode: true,
+      itemCode: item.item_code || item.itemCode,
+      itemName: item.item_name || item.itemName,
+      description: item.description,
       category: item.categoryId || item.category, // Ensure ID is used
+      categoryPath: item.category_path || item.categoryPath,
+      subgroup: item.subgroup || item.subgroup_id,
+      uom: item.uom,
       altUnit: item.alternate_uom || item.altUnit,
       conversionFactor: item.conversion_factor || item.conversionFactor,
+      rate: item.rate,
+      rateUnit: item.rate_unit || item.rateUnit || item.uom,
+      hsnCode: item.hsn_code || item.hsnCode,
+      gstRate: item.gst_rate || item.gstRate,
       reorderLevel: item.reorder_level || item.reorderLevel,
       isSaleable: item.is_saleable || item.isSaleable,
       vendorName: item.vendor_specific_name || item.vendorName,
@@ -710,31 +723,38 @@ const InventoryPage: React.FC = () => {
 
   const handleSaveItem = async () => {
     try {
+      if (!editFormData.itemCode || !editFormData.itemName) {
+        alert('Item Code and Item Name are required');
+        return;
+      }
+
       const data = {
         item_code: editFormData.itemCode,
         item_name: editFormData.itemName,
-        description: editFormData.description,
-        category: editFormData.category,
-        category_path: editFormData.categoryPath,
+        description: editFormData.description || null,
+        category: editFormData.category || null,
+        category_path: editFormData.categoryPath || null,
         subgroup: editFormData.subgroup || null,
 
-        is_vendor_specific: isVendorSpecificItemCode,
+        is_vendor_specific: !!isVendorSpecificItemCode,
         vendor_specific_name: isVendorSpecificItemCode ? editFormData.vendorName : null,
         vendor_specific_suffix: isVendorSpecificItemCode ? editFormData.vendorSuffix : null,
 
-        uom: editFormData.uom,
+        uom: editFormData.uom || 'nos',
         alternate_uom: editFormData.altUnit || null,
         conversion_factor: editFormData.conversionFactor || null,
 
         rate: editFormData.rate || 0,
-        rate_unit: editFormData.uom,
+        rate_unit: editFormData.rateUnit || editFormData.uom || 'nos',
 
-        hsn_code: editFormData.hsnCode,
-        gst_rate: editFormData.gstRate,
+        hsn_code: editFormData.hsnCode || null,
+        gst_rate: editFormData.gstRate || null,
 
         reorder_level: editFormData.reorderLevel || null,
         is_saleable: editFormData.isSaleable || false
       };
+
+      console.log('Saving item with data:', data);
 
       if (editFormData.id) {
         await httpClient.put(`/api/inventory/items/${editFormData.id}/`, data);
@@ -742,13 +762,20 @@ const InventoryPage: React.FC = () => {
         await httpClient.post('/api/inventory/items/', data);
       }
 
+      alert('Item saved successfully');
       await fetchInventoryItems();
       setSelectedItemDetail(null);
       setEditFormData(null);
       setIsVendorSpecificItemCode(false);
     } catch (error: any) {
       console.error('Error saving item:', error);
-      const errorMsg = error.response?.data ? JSON.stringify(error.response.data) : 'Error saving item';
+      // The httpClient throws the parsed error body directly, or an Error object
+      let errorMsg = 'Error saving item';
+      if (error && typeof error === 'object') {
+        errorMsg = JSON.stringify(error);
+      } else if (error instanceof Error) {
+        errorMsg = error.message;
+      }
       alert(errorMsg);
     }
   };
@@ -4436,7 +4463,7 @@ const InventoryPage: React.FC = () => {
 
   const handleGRNSeriesSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!grnSeriesName || !grnType || !grnRequiredDigits) {
+    if (!grnSeriesName || !grnSeriesType || !grnRequiredDigits) {
       alert('Please fill all required fields');
       return;
     }
@@ -4458,7 +4485,7 @@ const InventoryPage: React.FC = () => {
 
       const data = {
         name: grnSeriesName,
-        grn_type: grnType,
+        grn_type: grnSeriesType,
         prefix: grnPrefix,
         suffix: grnSuffix,
         year: grnYear || new Date().getFullYear().toString(),
@@ -4474,9 +4501,11 @@ const InventoryPage: React.FC = () => {
         alert('GRN Series created successfully!');
       }
 
+      fetchGrnSeries();
+
       // Reset form
       setGrnSeriesName('');
-      setGrnType('');
+      setGrnSeriesType('');
       setGrnPrefix('');
       setGrnSuffix('');
       setGrnYear('');
@@ -4484,11 +4513,13 @@ const InventoryPage: React.FC = () => {
       setGrnPreview('');
       setIsEditModeGRNSeries(false);
       setSelectedGrnSeries(null);
-      fetchGrnSeries();
     } catch (error: any) {
       console.error('Error saving GRN Series:', error);
       const errorMsg = error.response?.data?.preview ? `Preview Error: ${error.response.data.preview[0]}` : 'Error saving GRN Series';
       alert(errorMsg);
+      // Also reset on error to avoid getting stuck in edit mode for non-existent record
+      setIsEditModeGRNSeries(false);
+      setSelectedGrnSeries(null);
     }
   };
 
@@ -4513,8 +4544,8 @@ const InventoryPage: React.FC = () => {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">GRN Type <span className="text-red-500">*</span></label>
               <select
-                value={grnType}
-                onChange={(e) => setGrnType(e.target.value)}
+                value={grnSeriesType}
+                onChange={(e) => setGrnSeriesType(e.target.value)}
                 className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 required
               >
@@ -4582,7 +4613,7 @@ const InventoryPage: React.FC = () => {
                 type="button"
                 onClick={() => {
                   setGrnSeriesName('');
-                  setGrnType('');
+                  setGrnSeriesType('');
                   setGrnPrefix('');
                   setGrnSuffix('');
                   setGrnYear('');
@@ -4630,7 +4661,7 @@ const InventoryPage: React.FC = () => {
                           <button
                             onClick={() => {
                               setGrnSeriesName(series.name);
-                              setGrnType(series.grnType);
+                              setGrnSeriesType(series.grnType);
                               setGrnPrefix(series.prefix);
                               setGrnSuffix(series.suffix);
                               setGrnYear(series.year);
@@ -4714,6 +4745,8 @@ const InventoryPage: React.FC = () => {
         alert('Issue Slip Series created successfully!');
       }
 
+      fetchIssueSlipSeries();
+
       // Reset form
       setIssueSlipSeriesName('');
       setIssueSlipType('');
@@ -4724,11 +4757,13 @@ const InventoryPage: React.FC = () => {
       setIssueSlipPreview('');
       setIsEditModeIssueSlipSeries(false);
       setSelectedIssueSlipSeries(null);
-      fetchIssueSlipSeries();
     } catch (error: any) {
       console.error('Error saving Issue Slip Series:', error);
       const errorMsg = error.response?.data?.preview ? `Preview Error: ${error.response.data.preview[0]}` : 'Error saving Issue Slip Series';
       alert(errorMsg);
+      // Reset on error
+      setIsEditModeIssueSlipSeries(false);
+      setSelectedIssueSlipSeries(null);
     }
   };
 

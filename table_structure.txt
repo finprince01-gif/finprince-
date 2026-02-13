@@ -1,0 +1,22 @@
+================================================================================
+TABLE: customer_master_customer_productservice
+================================================================================
+
+Field                          Type                      Null   Key   
+--------------------------------------------------------------------------------
+id                             int                       NO     PRI   
+tenant_id                      varchar(36)               YES    MUL   
+item_code                      varchar(50)               YES          
+item_name                      varchar(200)              YES          
+customer_item_code             varchar(50)               YES          
+customer_item_name             varchar(200)              YES          
+created_at                     datetime(6)               NO           
+updated_at                     datetime(6)               NO           
+created_by                     varchar(100)              YES          
+updated_by                     varchar(100)              YES          
+customer_basic_detail_id       int                       YES    MUL   
+uom                            varchar(50)               YES          
+
+================================================================================
+STATUS: customer_uom column REMOVED (migration successful!)
+================================================================================

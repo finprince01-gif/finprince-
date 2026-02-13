@@ -182,10 +182,9 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
                         'id': item.id,
                         'itemCode': item.item_code,
                         'itemName': item.item_name,
-                        'custItemCode': item.customer_item_code,
-                        'custItemName': item.customer_item_name,
                         'uom': item.uom,
-                        'custUom': item.customer_uom
+                        'custItemCode': item.customer_item_code,
+                        'custItemName': item.customer_item_name
                     }
                     for item in instance.product_services.all()
                 ]
@@ -364,10 +363,9 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
                         tenant_id=basic_details.tenant_id,
                         item_code=item_code,
                         item_name=item.get('itemName'),
+                        uom=item.get('uom'),
                         customer_item_code=item.get('custItemCode'),
                         customer_item_name=item.get('custItemName'),
-                        uom=item.get('uom'),
-                        customer_uom=item.get('custUom'),
                         created_by=basic_details.created_by
                     )
                     logger.info(f"  ✅ Product/Service created: ID={prod_record.id}, Code={item_code}")
@@ -566,10 +564,9 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
                             tenant_id=instance.tenant_id,
                             item_code=item.get('itemCode'),
                             item_name=item.get('itemName'),
+                            uom=item.get('uom'),
                             customer_item_code=item.get('custItemCode'),
                             customer_item_name=item.get('custItemName'),
-                            uom=item.get('uom'),
-                            customer_uom=item.get('custUom'),
                             updated_by=instance.updated_by
                         )
             
@@ -730,13 +727,13 @@ class CustomerTransactionSalesQuotationSpecificSerializer(serializers.ModelSeria
 class CustomerTransactionSalesOrderItemDetailsSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomerTransactionSalesOrderItemDetails
-        fields = ['id', 'item_code', 'item_name', 'quantity', 'price', 'taxable_value', 'gst', 'net_value']
+        fields = ['id', 'item_code', 'item_name', 'quantity', 'uom', 'price', 'taxable_value', 'gst_rate', 'gst', 'net_value']
 
 
 class CustomerTransactionSalesOrderDeliveryTermsSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomerTransactionSalesOrderDeliveryTerms
-        fields = ['id', 'deliver_at', 'delivery_date']
+        fields = ['id', 'deliver_at', 'delivery_date', 'third_party_address']
 
 
 class CustomerTransactionSalesOrderPaymentAndSalespersonSerializer(serializers.ModelSerializer):
@@ -765,7 +762,7 @@ class CustomerTransactionSalesOrderSerializer(serializers.ModelSerializer):
         model = CustomerTransactionSalesOrderBasicDetails
         fields = [
             'id', 'tenant_id', 'so_series_name', 'so_number', 'date', 
-            'customer_po_number', 'customer_name', 'branch', 'address', 
+            'customer_po_number', 'customer_name', 'gst_no', 'branch', 'address', 
             'email', 'contact_number',
             'is_active', 'is_deleted', 'created_at', 'updated_at', 
             'created_by', 'updated_by', 'items', 'delivery_terms', 

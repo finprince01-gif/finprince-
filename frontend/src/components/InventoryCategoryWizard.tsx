@@ -376,17 +376,11 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
             }
         }
 
-        // Only allow creating subgroups under existing groups
+        // Validations
         if (selectedNode.level === 0) {
-            if (showSubgroup) {
-                alert('Please select a group from the tree to create a subgroup.');
+            if (!formData.group.trim()) {
+                alert('Please enter a Group Name');
                 return;
-            } else {
-                // If Subgroups are disabled, allow creating Group here
-                if (!formData.group.trim()) {
-                    alert('Please enter a Group Name');
-                    return;
-                }
             }
         }
 
@@ -402,8 +396,18 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
         }
 
         try {
-            // 1. Create Subgroup (under Group)
-            if (showSubgroup && selectedNode.level === 1 && !selectedNode.data.subgroup) {
+            // 1. Create Group (Level 0 selected)
+            if (selectedNode.level === 0) {
+                await onCreateCategory({
+                    category: selectedNode.data.category,
+                    group: formData.group.trim(),
+                    subgroup: null
+                });
+                setFormData(prev => ({ ...prev, group: '', subgroup: '' })); // Clear inputs
+                alert('Group created successfully!');
+            }
+            // 2. Create Subgroup (under Group)
+            else if (showSubgroup && selectedNode.level === 1 && !selectedNode.data.subgroup) {
                 await onCreateCategory({
                     category: selectedNode.data.category,
                     group: selectedNode.data.group,
@@ -411,15 +415,6 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                 });
                 setFormData(prev => ({ ...prev, group: '', subgroup: '' })); // Clear inputs
                 alert('Subgroup created successfully!');
-            }
-            // 4. Create Group (Level 0 selected, !showSubgroup)
-            else if (!showSubgroup && selectedNode.level === 0) {
-                await onCreateCategory({
-                    category: selectedNode.data.category,
-                    group: formData.group.trim(),
-                    subgroup: null
-                });
-                setFormData(prev => ({ ...prev, group: '', subgroup: '' })); // Clear inputs
             }
 
             // Success
@@ -517,7 +512,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
             </div>
             <div className="flex flex-col md:flex-row gap-5 px-6 pb-6 flex-1 min-h-0">
                 {/* Left Panel: Category Tree */}
-                <div className="w-full md:w-1/2 bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200 flex flex-col">
+                <div className="w-full md:w-1/2 bg-white rounded-[4px] border border-gray-200 flex flex-col">
                     <div className="p-4 border-b border-gray-200">
                         <h3 className="font-semibold text-gray-800 text-sm">Select Category</h3>
                         <p className="text-xs text-gray-500 mt-0.5">Single click to select level. Double click to expand/collapse categories.</p>
@@ -534,7 +529,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                 </div>
 
                 {/* Right Panel: Creation Form */}
-                <div className="w-full md:w-1/2 bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200">
+                <div className="w-full md:w-1/2 bg-white rounded-[4px] border border-gray-200">
                     <div className="p-5">
                         <h3 className="font-semibold text-gray-800 text-sm mb-6">Category Preview</h3>
                         <form onSubmit={handleSubmit} className="space-y-5">
@@ -715,15 +710,15 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                                     // Show Create Subgroup button for new entries
                                     <button
                                         type="submit"
-                                        disabled={!selectedNode}
-                                        className={`w-full py-2.5 px-4 rounded font-medium shadow-none border border-slate-200-none border border-slate-200 transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm ${selectedNode && formData.subgroup.trim()
-                                            ? 'bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer focus:ring-indigo-500'
-                                            : selectedNode
-                                                ? 'bg-gray-300 text-gray-700 hover:bg-gray-400 cursor-pointer focus:ring-gray-400'
-                                                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                        disabled={!selectedNode || (selectedNode.level === 0 ? !formData.group.trim() : (showSubgroup && selectedNode.level === 1 ? !formData.subgroup.trim() : true))}
+                                        className={`w-full py-2.5 px-4 rounded font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm ${selectedNode && ((selectedNode.level === 0 && formData.group.trim()) || (showSubgroup && selectedNode.level === 1 && formData.subgroup.trim()))
+                                                ? 'bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer focus:ring-indigo-500'
+                                                : selectedNode
+                                                    ? 'bg-gray-300 text-gray-700 hover:bg-gray-400 cursor-pointer focus:ring-gray-400'
+                                                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                                             }`}
                                     >
-                                        Create Subgroup
+                                        {selectedNode ? (selectedNode.level === 0 ? "Create Group" : "Create Subgroup") : "Create"}
                                     </button>
                                 )}
                             </div>

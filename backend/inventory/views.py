@@ -77,7 +77,10 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         tenant_id = get_tenant_from_request(self.request)
-        return InventoryItem.objects.filter(tenant_id=tenant_id, is_active=True)
+        queryset = InventoryItem.objects.filter(tenant_id=tenant_id)
+        if self.action == 'list':
+            return queryset.filter(is_active=True)
+        return queryset
     
     def perform_create(self, serializer):
         tenant_id = get_tenant_from_request(self.request)
@@ -131,7 +134,10 @@ class InventoryMasterGRNViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         tenant_id = get_tenant_from_request(self.request)
-        return InventoryMasterGRN.objects.filter(tenant_id=tenant_id, is_active=True)
+        queryset = InventoryMasterGRN.objects.filter(tenant_id=tenant_id)
+        if self.action == 'list':
+            return queryset.filter(is_active=True)
+        return queryset
 
     def perform_create(self, serializer):
         tenant_id = get_tenant_from_request(self.request)
@@ -154,7 +160,10 @@ class InventoryMasterIssueSlipViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         tenant_id = get_tenant_from_request(self.request)
-        return InventoryMasterIssueSlip.objects.filter(tenant_id=tenant_id, is_active=True)
+        queryset = InventoryMasterIssueSlip.objects.filter(tenant_id=tenant_id)
+        if self.action == 'list':
+            return queryset.filter(is_active=True)
+        return queryset
 
     def perform_create(self, serializer):
         tenant_id = get_tenant_from_request(self.request)
