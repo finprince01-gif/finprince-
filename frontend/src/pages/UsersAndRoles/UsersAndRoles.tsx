@@ -88,7 +88,10 @@ const UsersAndRolesPage: React.FC<UsersAndRolesPageProps> = ({ onNavigate }) => 
     };
 
     const loadPermissionsStructure = async () => {
-        const frontendStructure = {
+        const frontendStructure: any = {
+            'Dashboard': {
+                tabs: []
+            },
             'Masters': {
                 tabs: [
                     { name: 'Ledgers', subs: ['Ledgers', 'Ledger Groups'] },
@@ -101,12 +104,16 @@ const UsersAndRolesPage: React.FC<UsersAndRolesPageProps> = ({ onNavigate }) => 
                     { name: 'Operations', subs: ['Stock Movement', 'Issue Slip Creation', 'GRN Creation'] }
                 ]
             },
-            'Vouchers': { tabs: ['Sales', 'Purchase', 'Payment', 'Receipt', 'Contra', 'Journal', 'Expenses', 'Credit Note', 'Debit Note'] },
-            'Reports': { tabs: ['DayBook', 'LedgerReport', 'TrialBalance', 'BalanceSheet', 'StockSummary', 'GSTReports', 'AIReport'] },
+            'Vouchers': {
+                tabs: ['Sales', 'Purchase', 'Payment', 'Receipt', 'Contra', 'Journal', 'Expenses', 'Credit Note', 'Debit Note']
+            },
+            'Reports': {
+                tabs: ['DayBook', 'LedgerReport', 'TrialBalance', 'BalanceSheet', 'StockSummary', 'GSTReports', 'AIReport']
+            },
             'Vendor Portal': {
                 tabs: [
                     { name: 'Master', subs: ['Category', 'PO Settings', 'Vendor Creation'] },
-                    { name: 'Transaction', subs: ['Purchase Orders', 'Create PO', 'Pending PO', 'Executed PO', 'Procurement', 'Raw Material', 'Stock-in Trade', 'Consumables', 'Stores & Spares', 'Services', 'Payment'] }
+                    { name: 'Transaction', subs: ['Purchase Orders', 'Procurement', 'Payment'] }
                 ]
             },
             'Customer Portal': {
@@ -115,11 +122,15 @@ const UsersAndRolesPage: React.FC<UsersAndRolesPageProps> = ({ onNavigate }) => 
                     { name: 'Transaction', subs: ['Sales Quotation', 'Sales Order', 'Sales', 'Receipt'] }
                 ]
             },
-            'Payroll': { tabs: ['EMPLOYEES', 'PAY RUNS', 'SALARY TEMPLATES', 'STATUTORY', 'REPORTS'] },
-            'Service': { tabs: ['Service Group', 'Service List'] },
-            'GST': { tabs: ['GSTR1', 'GSTR2', 'GSTR3B'] },
-            'Settings': { tabs: ['Company Profile', 'Tax Settings', 'Regional Settings'] },
-            'Users & Roles': { tabs: ['User Management', 'Role Management'] }
+            'Payroll': {
+                tabs: ['EMPLOYEES', 'PAY RUNS', 'SALARY TEMPLATES', 'STATUTORY', 'REPORTS']
+            },
+            'Service': {
+                tabs: ['Service Group', 'Service List']
+            },
+            'GST': {
+                tabs: ['GSTR1', 'GSTR2', 'GSTR3B']
+            }
         };
         setPermissionsStructure(frontendStructure);
     };
@@ -464,8 +475,8 @@ const RoleModal: React.FC<RoleModalProps> = ({ role, form, permissionsStructure,
                             const tabs = permissionsStructure[pageName].tabs || [];
                             return (
                                 <div key={pageName} className="bg-white border rounded p-3">
-                                    <label className="flex items-center font-bold text-sm">
-                                        <input type="checkbox" className="mr-2" checked={pagePerms.view} onChange={() => onTogglePage(pageName)} />
+                                    <label className="flex items-center font-black text-sm uppercase tracking-widest text-slate-800">
+                                        <input type="checkbox" className="mr-3 w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" checked={pagePerms.view} onChange={() => onTogglePage(pageName)} />
                                         {pageName}
                                     </label>
                                     <div className="ml-6 mt-2 grid grid-cols-2 lg:grid-cols-4 gap-2">

@@ -57,12 +57,18 @@ def authenticate_user(username, password, email=None):
             elif len(matched_users) == 1:
                 user = matched_users[0]
             else:
-                return None, "Invalid credentials"
+                return None, "Invalid password"
         else:
             return None, "No account found with this username"
 
     if user is None:
-        return None, "Invalid credentials"
+        # This part should ideally not be reached if either email or username was provided
+        # but as a fallback:
+        if email:
+            return None, "No account found with this email"
+        if username:
+            return None, "No account found with this username"
+        return None, "Invalid login details"
     
     if not user.is_active:
         return None, "Account is inactive"
@@ -112,3 +118,134 @@ def refresh_access_token(refresh_token):
     except Exception as e:
         logger.error(f"Token refresh failed: {e}")
         return None
+
+def forgot_user_id(identifier):
+    """Business logic for retrieving User IDs."""
+    users = database.get_users_by_identifier(identifier)
+    if not users:
+        return None, "No account found with this information"
+    
+    user_ids = [u.username for u in users]
+    # Return masked IDs for demo purposes
+    masked_ids = [uid[:2] + '*' * (len(uid)-2) for uid in user_ids]
+    
+    return masked_ids, "User ID(s) found"
+
+def reset_password(username, identifier, new_password):
+    """Business logic for resetting password."""
+    user = database.get_user_by_username_and_identifier(username, identifier)
+    if not user:
+        return False, "No matching account found with these details"
+    
+    from django.contrib.auth.hashers import make_password
+    user.password = make_password(new_password)
+    user.save()
+    
+    logger.info(f"🔑 Password reset for user: {username}")
+    return True, "Password has been reset successfully"
+
+def request_reset_otp(email):
+    """
+    Handle OTP request for password reset.
+    Returns: (success_bool, message)
+    """
+    import random
+    from django.utils import timezone
+    from datetime import timedelta
+    from django.contrib.auth.hashers import make_password
+    from django.core.mail import send_mail
+    from django.conf import settings
+
+    user = database.get_user_by_email(email)
+    
+    if not user:
+        return False, "This email address is not registered."
+
+    # Generate 6-digit OTP
+    otp = f"{random.randint(100000, 999999)}"
+    otp_hash = make_password(otp)
+    expires_at = timezone.now() + timedelta(minutes=5)
+
+    # Store OTP in DB (this also invalidates previous ones)
+    database.create_otp(user, otp_hash, expires_at)
+
+    # Send OTP to email
+    try:
+        send_mail(
+            subject="Your Password Reset Code",
+            message=f"Your OTP is {otp}. It will expire in 5 minutes.",
+            from_email=None,
+            recipient_list=[user.email],
+            fail_silently=False
+        )
+        logger.info(f"OTP sent to {user.email}")
+    except Exception as e:
+        logger.error(f"Failed to send OTP email: {e}")
+        # We still return success to the user to avoid leaking account existence
+    
+    return True, "A verification code has been sent to your email."
+
+def verify_reset_otp(email, otp, new_password):
+    """
+    Verify OTP and reset password.
+    Returns: (success_bool, message)
+    """
+    from django.contrib.auth.hashers import check_password, make_password
+    from django.utils import timezone
+
+    user = database.get_user_by_email(email)
+    if not user:
+        return False, "Invalid request"
+
+    otp_record = database.get_active_otp_by_user(user)
+    
+    if not otp_record:
+        return False, "OTP expired or not found. Please request a new one."
+
+    if otp_record.attempts >= 5:
+        database.mark_otp_used(otp_record)
+        return False, "Too many failed attempts. Please request a new one."
+
+    if not check_password(otp, otp_record.otp_hash):
+        database.increment_otp_attempts(otp_record)
+        return False, "Invalid verification code"
+
+    # Success: Reset password
+    user.password = make_password(new_password)
+    user.save()
+
+    # Mark OTP as used
+    database.mark_otp_used(otp_record)
+    
+    # Revoke sessions: Changing the password naturally invalidates the session 
+    # and if the JWT payload includes a hash of the password or similar, it would invalidate tokens.
+    # For standard Django sessions, it invalidates. For JWT, usually blacklisting is needed.
+    
+    logger.info(f"Password reset successful for {email}")
+    return True, "Your password has been successfully reset."
+
+def verify_otp_only(email, otp):
+    """
+    Verify OTP without resetting password.
+    Returns: (success_bool, message)
+    """
+    from django.contrib.auth.hashers import check_password
+    
+    user = database.get_user_by_email(email)
+    if not user:
+        return False, "Invalid request"
+
+    otp_record = database.get_active_otp_by_user(user)
+    
+    if not otp_record:
+        return False, "OTP expired or not found. Please request a new one."
+
+    if otp_record.attempts >= 5:
+        database.mark_otp_used(otp_record)
+        return False, "Too many failed attempts. Please request a new one."
+
+    if not check_password(otp, otp_record.otp_hash):
+        database.increment_otp_attempts(otp_record)
+        return False, "Invalid verification code"
+
+    return True, "Verification successful"

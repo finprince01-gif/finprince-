@@ -41,25 +41,29 @@ import { apiService } from "../../services";
 interface LoginPageProps {
   onLogin: (payload: any) => void;     // Callback when login succeeds (passes user data to App.tsx)
   onSwitchToSignup: () => void;        // Callback to switch to signup page
+  onForgotPassword: () => void;        // Callback to switch to forgot password page
   onBack?: () => void;                 // Optional callback for back button (to landing page)
 }
 
 /**
  * LoginPage Component - User authentication form
  */
-const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignup, onBack }) => {
-  // Form input states
+const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignup, onForgotPassword, onBack }) => {
+  // Navigation states: 'login'
+  const [view, setView] = useState<'login' | 'forgot-userid'>('login');
+
+  // Form input states (Login)
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
   // UI states
   const [error, setError] = useState("");         // Error message to display
+  const [success, setSuccess] = useState("");     // Success message to display
   const [loading, setLoading] = useState(false);  // Loading state during API call
 
   /**
    * Handle login form submission
-   * Validates inputs, calls API, handles response
    */
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();  // Prevent default form submission
@@ -100,7 +104,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignup, onBack
       console.error("❌ Login error:", err);
 
       // Extract error message from various error formats
-      const msg = err?.message || (err && err.error) || "Network error. Please try again.";
+      const msg = err?.detail || err?.message || (err && err.error) || "Network error. Please try again.";
       setError(msg);
     } finally {
       setLoading(false);  // Hide loading state
@@ -119,23 +123,22 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignup, onBack
           </button>
         </div>
       )}
-      <div className="w-full max-w-sm p-8 space-y-8 bg-white dark:bg-slate-800 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 dark:border-slate-700">
+      <div className="w-full max-w-sm p-8 space-y-8 bg-white dark:bg-slate-800 rounded-[4px] shadow-none border border-slate-200 dark:border-slate-700">
         <div>
           <h1 className="text-3xl font-bold text-center text-indigo-600 dark:text-indigo-400">AI-Accounting</h1>
-          <p className="mt-2 text-center text-sm text-gray-600 dark:text-slate-400">Sign in to your account</p>
+          <p className="mt-2 text-center text-sm text-gray-600 dark:text-slate-400">
+            Sign in to your account
+          </p>
         </div>
 
         <form className="mt-8 space-y-6" onSubmit={handleLogin}>
-          <div className="rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 dark:border-slate-700 -space-y-px">
+          <div className="rounded-[4px] -space-y-px">
             <div>
-              <label htmlFor="email" className="sr-only">
-                Email
-              </label>
+              <label htmlFor="email" className="sr-only">Email</label>
               <input
                 id="email"
                 name="email"
                 type="email"
-                autoComplete="email"
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm dark:bg-slate-900 dark:border-slate-600 dark:placeholder-slate-400 dark:text-white"
                 placeholder="Email"
                 value={email}
@@ -144,14 +147,11 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignup, onBack
             </div>
 
             <div>
-              <label htmlFor="username" className="sr-only">
-                Username
-              </label>
+              <label htmlFor="username" className="sr-only">Username</label>
               <input
                 id="username"
                 name="username"
                 type="text"
-                autoComplete="off"
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm dark:bg-slate-900 dark:border-slate-600 dark:placeholder-slate-400 dark:text-white"
                 placeholder="Username"
                 value={username}
@@ -160,14 +160,11 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignup, onBack
             </div>
 
             <div>
-              <label htmlFor="password" className="sr-only">
-                Password
-              </label>
+              <label htmlFor="password" className="sr-only">Password</label>
               <input
                 id="password"
                 name="password"
                 type="password"
-                autoComplete="off"
                 required
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm dark:bg-slate-900 dark:border-slate-600 dark:placeholder-slate-400 dark:text-white"
                 placeholder="Password"
@@ -175,6 +172,16 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignup, onBack
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
+          </div>
+
+          <div className="flex flex-col space-y-2">
+            <button
+              type="button"
+              onClick={onForgotPassword}
+              className="text-xs text-indigo-600 hover:text-indigo-500 text-right font-medium"
+            >
+              Forgot Password?
+            </button>
           </div>
 
           {error && <p className="text-xs text-red-600 text-center">{error}</p>}

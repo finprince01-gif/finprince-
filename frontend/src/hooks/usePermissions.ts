@@ -84,8 +84,6 @@ export const usePermissions = (): UsePermissionsReturn => {
         // Superusers have access to everything
         if (isSuperuser) return true;
 
-        // Dashboard is always accessible
-        if (pageName === 'Dashboard') return true;
 
         // Check if page exists in permissions and has view access
         return permissions[pageName]?.view === true;

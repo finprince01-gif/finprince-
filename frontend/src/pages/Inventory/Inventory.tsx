@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { httpClient } from '../../services/httpClient';
 import { apiService } from '../../services/api';
+import { CompanyDetails } from '../../types';
 import { InventoryCategoryWizard } from '../../components/InventoryCategoryWizard';
 import CategoryHierarchicalDropdown from '../../components/CategoryHierarchicalDropdown';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -21,6 +22,8 @@ interface Location {
   country: string;
   pincode: string;
   gstin: string | null;
+  vendor_name?: string | null;
+  customer_name?: string | null;
 }
 
 interface Item {
@@ -138,6 +141,18 @@ const InventoryPage: React.FC = () => {
   const [isEditModeItem, setIsEditModeItem] = useState(false);
   const [loadingItems, setLoadingItems] = useState(false);
   const [itemSearchQuery, setItemSearchQuery] = useState('');
+
+  // --- Dynamic Data State for Location ---
+  const [vendors, setVendors] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [vendorAddresses, setVendorAddresses] = useState<any[]>([]);
+  const [customerAddresses, setCustomerAddresses] = useState<any[]>([]);
+  const [selectedVendorId, setSelectedVendorId] = useState<number | null>(null);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
+  const [categoryUpdateCount, setCategoryUpdateCount] = useState(0);
+
+  // --- Company Details State ---
+  const [companyDetails, setCompanyDetails] = useState<CompanyDetails | null>(null);
 
   // --- GRN Series State ---
   const [grnSeriesName, setGrnSeriesName] = useState('');
@@ -353,11 +368,51 @@ const InventoryPage: React.FC = () => {
     }
   };
 
+  const fetchCompanyDetails = async () => {
+    try {
+      const details = await apiService.getCompanyDetails();
+      setCompanyDetails(details);
+    } catch (error) {
+      console.error('Error fetching company details:', error);
+    }
+  };
+
+  const fetchVendors = async () => {
+    try {
+      const data = await apiService.getRichVendors();
+      setVendors(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error fetching vendors:', error);
+    }
+  };
+
+  const fetchCustomers = async () => {
+    try {
+      const data = await apiService.getRichCustomers();
+      setCustomers(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error fetching customers:', error);
+    }
+  };
+
   // Helper function for Creating Category from Wizard
   const handleCreateCategory = async (data: { category: string; group: string | null; subgroup: string | null }) => {
     try {
+      // 1. Ensure Root Category exists if we are creating a Group or Subgroup
+      if (data.group) {
+        try {
+          await httpClient.post('/api/inventory/master-categories/', {
+            category: data.category,
+            group: null,
+            subgroup: null
+          });
+        } catch (e) {
+          // Ignore if already exists (400 Bad Request usually due to unique constraint)
+        }
+      }
+
+      // 2. Ensure Group exists if we are creating a Subgroup
       if (data.group && data.subgroup) {
-        // Try to ensure group exists if needed, or let backend handle it
         try {
           await httpClient.post('/api/inventory/master-categories/', {
             category: data.category,
@@ -368,7 +423,10 @@ const InventoryPage: React.FC = () => {
           // Ignore if group already exists
         }
       }
+
+      // 3. Create the requested item
       await httpClient.post('/api/inventory/master-categories/', data);
+      setCategoryUpdateCount(prev => prev + 1);
     } catch (error) {
       console.error("Error creating category:", error);
       throw error;
@@ -378,6 +436,7 @@ const InventoryPage: React.FC = () => {
   const handleEditCategory = async (data: { id: number; category: string; group: string | null; subgroup: string }) => {
     try {
       await httpClient.put(`/api/inventory/master-categories/${data.id}/`, data);
+      setCategoryUpdateCount(prev => prev + 1);
     } catch (error) {
       console.error("Error updating category:", error);
       throw error;
@@ -387,6 +446,7 @@ const InventoryPage: React.FC = () => {
   const handleDeleteCategory = async (id: number) => {
     try {
       await httpClient.delete(`/api/inventory/master-categories/${id}/`);
+      setCategoryUpdateCount(prev => prev + 1);
     } catch (error) {
       console.error("Error deleting category:", error);
       throw error;
@@ -398,9 +458,13 @@ const InventoryPage: React.FC = () => {
     if (activeTab === 'Master') {
       if (activeMasterSubTab === 'Location') {
         fetchLocations();
-      } else if (activeMasterSubTab === 'Item Code') {
+        fetchCompanyDetails();
+        fetchVendors();
+        fetchCustomers();
+      } else if (activeMasterSubTab === 'Inventory Items') {
         fetchItems();
         fetchLocations(); // For dropdown
+        fetchVendors();
       }
     }
   }, [activeTab, activeMasterSubTab]);
@@ -501,6 +565,10 @@ const InventoryPage: React.FC = () => {
     setLocationGstin('');
     setIsEditModeLocation(false);
     setSelectedLocation(null);
+    setSelectedVendorId(null);
+    setSelectedCustomerId(null);
+    setVendorAddresses([]);
+    setCustomerAddresses([]);
   };
 
   const fetchInventoryItems = async () => {
@@ -721,42 +789,157 @@ const InventoryPage: React.FC = () => {
             </div>
 
             {/* Conditional fields based on location type */}
-            {(locationType === 'vendor_location' || locationType === 'agent_location' || locationType === 'distributor_location') && (
+            {(locationType === 'vendor_location' || locationType === 'agent_location' || locationType === 'distributor_location' || locationType === 'job_worker_location') && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Vendor/Agent Name <span className="text-red-500">*</span></label>
-                <select value={vendorName} onChange={(e) => setVendorName(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
-                  <option value="">Select vendor/agent</option>
-                  <option value="vendor1">Vendor 1</option>
-                  <option value="vendor2">Vendor 2</option>
+                <label className="block text-sm font-medium text-gray-700 mb-2">{locationType === 'job_worker_location' ? 'Job Worker Name' : 'Vendor/Agent Name'} <span className="text-red-500">*</span></label>
+                <select
+                  value={selectedVendorId || ''}
+                  onChange={async (e) => {
+                    const vId = Number(e.target.value);
+                    setSelectedVendorId(vId);
+                    const v = vendors.find(ven => ven.id === vId);
+                    setVendorName(v ? v.vendor_name : '');
+
+                    // Fetch addresses
+                    if (vId) {
+                      try {
+                        const details = await apiService.getVendorGSTDetails(vId);
+                        // Map to common structure
+                        const mapped = Array.isArray(details) ? details.map((d: any) => ({
+                          id: d.id,
+                          address: d.branch_address,
+                          gstin: d.gstin,
+                          state: d.gst_state_code,
+                          fullObj: d
+                        })) : [];
+                        setVendorAddresses(mapped);
+                      } catch (err) {
+                        console.error("Error fetching vendor addresses", err);
+                        setVendorAddresses([]);
+                      }
+                    } else {
+                      setVendorAddresses([]);
+                    }
+                  }}
+                  className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  required
+                >
+                  <option value="">Select {locationType === 'job_worker_location' ? 'Job Worker' : 'Vendor/Agent'}</option>
+                  {vendors.map(v => (
+                    <option key={v.id} value={v.id}>{v.vendor_name} ({v.vendor_code})</option>
+                  ))}
                 </select>
               </div>
             )}
 
-            {(locationType === 'customer_location' || locationType === 'customs_warehouse' || locationType === 'other_third_party') && (
+            {(locationType === 'customer_location') && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Customer Name <span className="text-red-500">*</span></label>
-                <select value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                <select
+                  value={selectedCustomerId || ''}
+                  onChange={(e) => {
+                    const cId = Number(e.target.value);
+                    setSelectedCustomerId(cId);
+                    const c = customers.find(cus => cus.id === cId);
+                    setCustomerName(c ? c.customer_name : '');
+
+                    // Extract addresses from customer object
+                    if (c && c.gst_details && Array.isArray(c.gst_details.branches)) {
+                      setCustomerAddresses(c.gst_details.branches.map((b: any) => ({
+                        id: b.id,
+                        address: b.address,
+                        gstin: b.gstin,
+                        defaultRef: b.defaultRef
+                      })));
+                    } else {
+                      setCustomerAddresses([]);
+                    }
+                  }}
+                  className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  required
+                >
                   <option value="">Select customer</option>
-                  <option value="customer1">Customer 1</option>
-                  <option value="customer2">Customer 2</option>
+                  {customers.map(c => (
+                    <option key={c.id} value={c.id}>{c.customer_name} ({c.customer_code})</option>
+                  ))}
                 </select>
               </div>
             )}
 
             {/* Location Address - conditional based on type */}
-            {(locationType === 'company_premises' || locationType === 'vendor_location' || locationType === 'agent_location' || locationType === 'distributor_location') && (
+            {(locationType === 'company_premises' || locationType === 'vendor_location' || locationType === 'agent_location' || locationType === 'distributor_location') && locationType === 'company_premises' && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Location Address <span className="text-red-500">*</span></label>
-                <select value={locationAddress} onChange={(e) => setLocationAddress(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <select
+                  value={locationAddress}
+                  onChange={(e) => {
+                    const selectedAddr = e.target.value;
+                    setLocationAddress(selectedAddr);
+                    if (selectedAddr && companyDetails) {
+                      // If user selects an address from company profile, auto-fill details
+                      setLocAddressLine1(selectedAddr);
+                      // We don't split further blindly, but we can assume state/country from company details
+                      if (companyDetails.state) setLocState(companyDetails.state);
+                      if (companyDetails.country) setLocCountry(companyDetails.country);
+                      if (companyDetails.pincode) setLocPincode(companyDetails.pincode);
+                      if (companyDetails.gstin) setLocationGstin(companyDetails.gstin);
+                    }
+                  }}
+                  className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
                   <option value="">Select address</option>
-                  <option value="address1">Address 1</option>
-                  <option value="address2">Address 2</option>
+                  {companyDetails?.address && companyDetails.address.split('\n').map((addrLine, idx) => (
+                    addrLine.trim() && <option key={idx} value={addrLine.trim()}>{addrLine.trim()}</option>
+                  ))}
                 </select>
               </div>
             )}
 
-            {/* Manual address entry for Customer Location and Other types */}
-            {(locationType === 'customer_location' || locationType === 'customs_warehouse' || locationType === 'other_third_party') && (
+            {/* Location Address for other types */}
+            {/* Location Address for other types */}
+            {(locationType !== 'company_premises' && locationType !== '' && locationType !== 'custom' && !isCustomLocationType) && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Location Address <span className="text-red-500">*</span></label>
+                <select
+                  value={locationAddress}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setLocationAddress(val);
+                    setLocAddressLine1(val);
+
+                    // Try to find more details
+                    if (locationType.includes('customer')) {
+                      const addrObj = customerAddresses.find(a => a.address === val);
+                      if (addrObj) {
+                        if (addrObj.gstin) setLocationGstin(addrObj.gstin);
+                      }
+                    } else if (locationType.includes('vendor') || locationType.includes('agent') || locationType.includes('job') || locationType.includes('distributor')) {
+                      const addrObj = vendorAddresses.find(a => a.address === val);
+                      if (addrObj) {
+                        if (addrObj.gstin) setLocationGstin(addrObj.gstin);
+                        if (addrObj.state) setLocState(addrObj.state); // Might be code, but better than nothing
+                      }
+                    }
+                  }}
+                  className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">Select address</option>
+                  {/* Vendor Addresses */}
+                  {(locationType === 'vendor_location' || locationType === 'agent_location' || locationType === 'distributor_location' || locationType === 'job_worker_location') &&
+                    vendorAddresses.map((addr, idx) => (
+                      <option key={addr.id || idx} value={addr.address}>{addr.address} {addr.gstin ? `(GST: ${addr.gstin})` : ''}</option>
+                    ))}
+                  {/* Customer Addresses */}
+                  {(locationType === 'customer_location' || locationType === 'customs_warehouse' || locationType === 'other_third_party') &&
+                    customerAddresses.map((addr, idx) => (
+                      <option key={addr.id || idx} value={addr.address}>{addr.address} {addr.gstin ? `(GST: ${addr.gstin})` : ''}</option>
+                    ))}
+                </select>
+              </div>
+            )}
+
+            {/* Manual address entry for Customer Location */}
+            {(locationType === 'customer_location') && (
               <>
                 <div className="bg-indigo-50/50 border border-slate-200 rounded p-3 text-sm text-slate-700">
                   📌 Manual Address Entry
@@ -847,11 +1030,14 @@ const InventoryPage: React.FC = () => {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredLocations.map(loc => {
                     const isSelected = selectedLocation?.id === loc.id;
+                    const typeOption = locationTypes.find(t => t.value === loc.location_type);
+                    const displayType = typeOption ? typeOption.label : loc.location_type;
+
                     return (
                       <tr key={loc.id} className={isSelected ? 'bg-indigo-50/50' : ''}>
                         <td className="px-6 py-4"><input type="radio" checked={isSelected} onChange={() => setSelectedLocation(loc)} className="text-indigo-600 focus:ring-indigo-500" /></td>
                         <td className="px-6 py-4 text-sm font-medium text-gray-900 cursor-pointer" onClick={() => setSelectedLocation(loc)}>{loc.name}</td>
-                        <td className="px-6 py-4 text-sm text-gray-500"><span className="px-2 font-semibold rounded-[4px] bg-indigo-100 text-indigo-800 text-xs">{loc.location_type_display}</span></td>
+                        <td className="px-6 py-4 text-sm text-gray-500"><span className="px-2 font-semibold rounded-[4px] bg-indigo-100 text-indigo-800 text-xs">{displayType}</span></td>
                         <td className="px-6 py-4 text-right">
                           {isSelected && (
                             <div className="inline-flex gap-2">
@@ -3873,85 +4059,19 @@ const InventoryPage: React.FC = () => {
               </div>
 
               {/* Category & Subgroup */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                  <CategoryHierarchicalDropdown
-                    onlyRoots={false}
-                    onSelect={async (selection) => {
-                      handleFormChange('category', selection.id);
-                      handleFormChange('categoryPath', selection.fullPath);
-                      setSelectedCategoryId(selection.id);
-
-                      // Fetch subgroups for the selected category
-                      try {
-                        // Fetch all categories and filter for subgroups
-                        const response = await httpClient.get('/api/inventory/master-categories/');
-                        const allCategories = Array.isArray(response) ? response : [];
-
-                        console.log('All categories:', allCategories);
-                        console.log('Selected category ID:', selection.id);
-                        console.log('Selected category fullPath:', selection.fullPath);
-
-                        // Find the selected category record
-                        const selectedCat = allCategories.find((cat: any) => cat.id === selection.id);
-                        console.log('Selected category record:', selectedCat);
-
-                        // Filter to get subgroups based on the hierarchy
-                        let subgroups: any[] = [];
-
-                        if (selectedCat) {
-                          if (selectedCat.subgroup) {
-                            // Level 2: Subgroup selected -> No children
-                            subgroups = [];
-                          } else if (selectedCat.group) {
-                            // Level 1: Group selected -> Show its contents (Subgroups)
-                            subgroups = allCategories.filter((cat: any) =>
-                              cat.category === selectedCat.category &&
-                              cat.group === selectedCat.group &&
-                              cat.subgroup
-                            );
-                          } else {
-                            // Level 0: Category selected -> Show Groups (will be deduped) or flat Subgroups
-                            subgroups = allCategories.filter((cat: any) =>
-                              cat.category === selectedCat.category &&
-                              cat.id !== selectedCat.id &&
-                              (cat.group || cat.subgroup)
-                            );
-                          }
-                        }
-
-
-
-                        console.log('Final filtered subgroups:', subgroups);
-                        console.log('Subgroup count:', subgroups.length);
-                        setAvailableSubgroups(subgroups);
-                      } catch (error) {
-                        console.error('Error fetching subgroups:', error);
-                        setAvailableSubgroups([]);
-                      }
-                    }}
-                    value={editFormData?.categoryPath || editFormData?.category || ''}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Group</label>
-                  <select
-                    value={editFormData?.subgroup || ''}
-                    onChange={(e) => handleFormChange('subgroup', e.target.value)}
-                    disabled={!selectedCategoryId || (!editFormData?.isNew && !editFormData?.isEditMode)}
-                    className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                  >
-                    <option value="">Select Group</option>
-                    {availableSubgroups.map((subgroup) => (
-                      <option key={subgroup.id} value={subgroup.id}>
-                        {subgroup.group && subgroup.subgroup
-                          ? `${subgroup.group} > ${subgroup.subgroup}`
-                          : (subgroup.subgroup || subgroup.group)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                <CategoryHierarchicalDropdown
+                  key={categoryUpdateCount}
+                  onlyRoots={false}
+                  onSelect={async (selection) => {
+                    handleFormChange('category', selection.id);
+                    handleFormChange('categoryPath', selection.fullPath);
+                    setSelectedCategoryId(selection.id);
+                    // Subgroup fetching logic removed as it's no longer used
+                  }}
+                  value={editFormData?.categoryPath || editFormData?.category || ''}
+                />
               </div>
 
               {/* Vendor-Specific Item Code */}
@@ -3970,13 +4090,12 @@ const InventoryPage: React.FC = () => {
                   <div className="grid grid-cols-2 gap-4 pl-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Vendor Name</label>
-                      <input
-                        type="text"
-                        placeholder="Enter vendor name"
+                      <SearchableDropdown
+                        options={Array.from(new Set(vendors.map((v: any) => v.vendor_name).filter(Boolean)))}
                         value={editFormData?.vendorName || ''}
-                        onChange={(e) => handleFormChange('vendorName', e.target.value)}
-                        readOnly={!selectedItemDetail.isNew && !selectedItemDetail.isEditMode}
-                        className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        onChange={(val) => handleFormChange('vendorName', val)}
+                        placeholder="Select Vendor"
+                        disabled={!selectedItemDetail.isNew && !selectedItemDetail.isEditMode}
                       />
                     </div>
                     <div>
@@ -4018,7 +4137,7 @@ const InventoryPage: React.FC = () => {
                     <select
                       value={editFormData?.altUnit || ''}
                       onChange={(e) => handleFormChange('altUnit', e.target.value)}
-                      placeholder="Enter alternate unit"
+
                       disabled={!editFormData?.isNew && !editFormData?.isEditMode}
                       className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                     >
@@ -4119,7 +4238,7 @@ const InventoryPage: React.FC = () => {
                     type="text"
                     value={editFormData?.reorderLevel || ''}
                     onChange={(e) => handleFormChange('reorderLevel', e.target.value)}
-                    placeholder="For Raw Material, Stock-in-trade, Stores & Spares, Packing Material"
+                    placeholder="Enter reorder level"
                     className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
@@ -4131,7 +4250,7 @@ const InventoryPage: React.FC = () => {
                       checked={editFormData?.isSaleable || false}
                       onChange={(e) => handleFormChange('isSaleable', e.target.checked)}
                     />
-                    <span className="ml-2 text-sm font-medium text-gray-700">Saleable Item → for Work-in-Progress</span>
+                    <span className="ml-2 text-sm font-medium text-gray-700">Saleable Item</span>
                   </label>
                 )}
               </div>
@@ -4157,15 +4276,15 @@ const InventoryPage: React.FC = () => {
                 </button>
               </div>
             </form>
-          </div>
+          </div >
         )}
-      </div>
+      </div >
     );
   };
 
   const handleGRNSeriesSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!grnSeriesName || !grnType || !grnYear || !grnRequiredDigits) {
+    if (!grnSeriesName || !grnType || !grnRequiredDigits) {
       alert('Please fill all required fields');
       return;
     }
@@ -4177,7 +4296,7 @@ const InventoryPage: React.FC = () => {
       }
 
       // Generate preview
-      const paddedNumber = '0001'.padStart(parseInt(grnRequiredDigits), '0');
+      const paddedNumber = '1'.padStart(parseInt(grnRequiredDigits), '0');
       const preview = (grnPrefix || '') + paddedNumber + (grnSuffix || '');
 
       if (preview.length > 255) {
@@ -4190,7 +4309,7 @@ const InventoryPage: React.FC = () => {
         grn_type: grnType,
         prefix: grnPrefix,
         suffix: grnSuffix,
-        year: grnYear,
+        year: grnYear || new Date().getFullYear().toString(),
         required_digits: parseInt(grnRequiredDigits),
         preview: preview
       };
@@ -4248,15 +4367,13 @@ const InventoryPage: React.FC = () => {
                 required
               >
                 <option value="">Select GRN Type</option>
-                <option value="job_work">Job Work</option>
                 <option value="purchase">Purchase</option>
-                <option value="import">Import</option>
-                <option value="other">Other</option>
+                <option value="sales_return">Sales Return</option>
               </select>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Prefix</label>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Prefix</label>
                 <input
                   type="text"
                   value={grnPrefix}
@@ -4266,7 +4383,7 @@ const InventoryPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Suffix</label>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Suffix</label>
                 <input
                   type="text"
                   value={grnSuffix}
@@ -4276,40 +4393,31 @@ const InventoryPage: React.FC = () => {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Year <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  value={grnYear}
-                  onChange={(e) => setGrnYear(e.target.value)}
-                  className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="e.g., 2024"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Required Digits <span className="text-red-500">*</span></label>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Digits <span className="text-red-500">*</span></label>
                 <input
                   type="number"
                   value={grnRequiredDigits}
-                  onChange={(e) => setGrnRequiredDigits(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '' || parseInt(val) > 0) {
+                      setGrnRequiredDigits(val);
+                    }
+                  }}
+                  min="1"
                   className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   placeholder="e.g., 4"
                   required
                 />
               </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Preview</label>
-              <input
-                type="text"
-                value={grnPrefix + (grnRequiredDigits ? '0001'.slice(0, Math.max(0, parseInt(grnRequiredDigits) - 1)) : '') + grnSuffix}
-                onChange={(e) => setGrnPreview(e.target.value)}
-                className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                placeholder="Preview will auto-generate"
-                readOnly
-              />
+
+            <div className="mt-6 bg-slate-50 p-6 rounded text-center">
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Sample Preview</label>
+              <div className="text-2xl font-bold text-gray-800">
+                {grnPrefix + (grnRequiredDigits ? '1'.padStart(parseInt(grnRequiredDigits), '0') : '0001') + grnSuffix}
+              </div>
             </div>
             <div className="flex gap-3 pt-4">
               <button
@@ -4416,7 +4524,7 @@ const InventoryPage: React.FC = () => {
 
   const handleIssueSlipSeriesSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!issueSlipSeriesName || !issueSlipType || !issueSlipYear || !issueSlipRequiredDigits) {
+    if (!issueSlipSeriesName || !issueSlipType || !issueSlipRequiredDigits) {
       alert('Please fill all required fields');
       return;
     }
@@ -4428,7 +4536,7 @@ const InventoryPage: React.FC = () => {
       }
 
       // Generate preview
-      const paddedNumber = '0001'.padStart(parseInt(issueSlipRequiredDigits), '0');
+      const paddedNumber = '1'.padStart(parseInt(issueSlipRequiredDigits), '0');
       const preview = (issueSlipPrefix || '') + paddedNumber + (issueSlipSuffix || '');
 
       if (preview.length > 255) {
@@ -4441,7 +4549,7 @@ const InventoryPage: React.FC = () => {
         issue_slip_type: issueSlipType,
         prefix: issueSlipPrefix,
         suffix: issueSlipSuffix,
-        year: issueSlipYear,
+        year: issueSlipYear || new Date().getFullYear().toString(),
         required_digits: parseInt(issueSlipRequiredDigits),
         preview: preview
       };
@@ -4499,15 +4607,18 @@ const InventoryPage: React.FC = () => {
                 required
               >
                 <option value="">Select Issue Slip Type</option>
-                <option value="internal_transfer">Internal Transfer</option>
-                <option value="customer_return">Customer Return</option>
-                <option value="damage">Damage/Loss</option>
-                <option value="other">Other</option>
+                <option value="job_work">Job-work</option>
+                <option value="inter_unit">Inter-unit</option>
+                <option value="location_change">Location Change</option>
+                <option value="production">Production</option>
+                <option value="consumption">Consumption</option>
+                <option value="outward">Outward</option>
+                <option value="scrap">Scrap</option>
               </select>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Prefix</label>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Prefix</label>
                 <input
                   type="text"
                   value={issueSlipPrefix}
@@ -4517,7 +4628,7 @@ const InventoryPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Suffix</label>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Suffix</label>
                 <input
                   type="text"
                   value={issueSlipSuffix}
@@ -4527,40 +4638,31 @@ const InventoryPage: React.FC = () => {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Year <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  value={issueSlipYear}
-                  onChange={(e) => setIssueSlipYear(e.target.value)}
-                  className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="e.g., 2024"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Required Digits <span className="text-red-500">*</span></label>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Digits <span className="text-red-500">*</span></label>
                 <input
                   type="number"
                   value={issueSlipRequiredDigits}
-                  onChange={(e) => setIssueSlipRequiredDigits(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '' || parseInt(val) > 0) {
+                      setIssueSlipRequiredDigits(val);
+                    }
+                  }}
+                  min="1"
                   className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   placeholder="e.g., 4"
                   required
                 />
               </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Preview</label>
-              <input
-                type="text"
-                value={issueSlipPrefix + (issueSlipRequiredDigits ? '0001'.slice(0, Math.max(0, parseInt(issueSlipRequiredDigits) - 1)) : '') + issueSlipSuffix}
-                onChange={(e) => setIssueSlipPreview(e.target.value)}
-                className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                placeholder="Preview will auto-generate"
-                readOnly
-              />
+
+            <div className="mt-6 bg-slate-50 p-6 rounded text-center">
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Sample Preview</label>
+              <div className="text-2xl font-bold text-gray-800">
+                {issueSlipPrefix + (issueSlipRequiredDigits ? '1'.padStart(parseInt(issueSlipRequiredDigits), '0') : '0001') + issueSlipSuffix}
+              </div>
             </div>
             <div className="flex gap-3 pt-4">
               <button

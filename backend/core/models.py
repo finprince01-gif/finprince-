@@ -112,5 +112,13 @@ class CompanyFullInfo(BaseModel):
     voucher_numbering = models.JSONField(null=True, blank=True)
     
 
+class PasswordResetOTP(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_reset_otps')
+    otp_hash = models.CharField(max_length=255)
+    expires_at = models.DateTimeField()
+    attempts = models.IntegerField(default=0)
+    used = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
     class Meta:
-        db_table = 'company_informations'
+        db_table = 'password_reset_otps'

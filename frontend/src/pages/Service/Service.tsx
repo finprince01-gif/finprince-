@@ -660,7 +660,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
       {activeTab === 'service-group' && (
         <div className="bg-white rounded-[4px] erp-card min-h-[500px]">
           <div className="px-4 pt-6 pb-3 flex items-center gap-2">
-            <Icon name="local_offer" className="w-5 h-5 text-gray-600" />
+            <Icon name="tag" className="w-5 h-5 text-gray-600" />
             <h3 className="text-lg font-semibold text-gray-800">Create Service Group</h3>
           </div>
 

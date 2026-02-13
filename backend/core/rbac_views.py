@@ -64,39 +64,8 @@ class RoleViewSet(viewsets.ModelViewSet):
         
         Returns the structure of the application for building the permission tree
         """
-        structure = {
-            "Dashboard": {
-                "tabs": []  # No tabs, just page-level access
-            },
-            "Masters": {
-                "tabs": ["Ledgers", "Ledger Groups", "Chart of Accounts"]
-            },
-            "Inventory": {
-                "tabs": ["Master", "Operations", "Reports"]
-            },
-            "Vouchers": {
-                "tabs": ["Sales", "Purchase", "Payment", "Receipt", "Contra", "Journal", "Expenses"]
-            },
-            "Vendor Portal": {
-                "tabs": ["Vendors", "Purchase Orders", "Payments"]
-            },
-            "Customer Portal": {
-                "tabs": ["Customers", "Sales Orders", "Receipts"]
-            },
-            "Payroll": {
-                "tabs": ["Employees", "Salary", "Attendance", "Reports"]
-            },
-            "Service": {
-                "tabs": ["Services", "Bookings", "Invoices"]
-            },
-            "Reports": {
-                "tabs": ["Trial Balance", "Profit & Loss", "Balance Sheet", "GST Reports", "Ledger Reports"]
-            },
-            "Settings": {
-                "tabs": ["Company", "Users", "Preferences", "Integrations"]
-            }
-        }
-        return Response(structure)
+        from .rbac import APP_PERMISSIONS_STRUCTURE
+        return Response(APP_PERMISSIONS_STRUCTURE)
 
 
 class UserRoleViewSet(viewsets.ModelViewSet):

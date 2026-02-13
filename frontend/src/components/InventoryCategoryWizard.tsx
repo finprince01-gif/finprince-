@@ -68,6 +68,8 @@ const DEFAULT_GROUPS_DATA = [
     }
 ];
 
+const DEFAULT_EXCLUDE_GROUPS: string[] = [];
+
 export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = ({
     onCreateCategory,
     onEditCategory,
@@ -77,7 +79,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
     defaultGroups = DEFAULT_GROUPS_DATA,
     allowCreateGroup = true,
     showSubgroup = true, // Default to true to maintain existing behavior,
-    excludeGroups = []
+    excludeGroups = DEFAULT_EXCLUDE_GROUPS
 }) => {
     const [loading, setLoading] = useState(false);
     const [treeData, setTreeData] = useState<TreeNode[]>([]);
@@ -144,7 +146,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
 
             // Add default groups and subgroups to each system category
             // EXCEPTION: 'By-product' and 'Scrap' should NOT have default groups
-            if (catName !== 'By-product' && catName !== 'Scrap') {
+            if (catName !== 'By-product' && catName !== 'Scrap' && catName !== 'Work in Progress' && catName !== 'Finished Goods') {
                 defaultGroups.forEach(groupData => {
                     if (excludeGroups.includes(groupData.name)) return;
 
@@ -510,7 +512,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
     return (
         <div className="flex flex-col h-[calc(100vh-140px)]">
             <div className="px-6 pt-4 pb-3 flex items-center gap-2">
-                <Icon name="inventory" className="w-5 h-5 text-gray-600" />
+                <Icon name="tag" className="w-5 h-5 text-gray-600" />
                 <h3 className="text-lg font-semibold text-gray-800">Create Category</h3>
             </div>
             <div className="flex flex-col md:flex-row gap-5 px-6 pb-6 flex-1 min-h-0">
@@ -654,35 +656,31 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                                 {/* Show Edit and Delete buttons for existing subgroups */}
                                 {selectedNode && selectedNode.data.id && !isEditing ? (
                                     <div className="flex gap-3">
-                                        {onEditCategory && (
-                                            <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    e.stopPropagation();
-                                                    console.log('Edit button clicked, setting isEditing to true');
-                                                    setIsEditing(true);
-                                                }}
-                                                className="flex-1 py-2.5 px-4 rounded font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm bg-blue-600 text-white hover:bg-blue-700 cursor-pointer focus:ring-blue-500"
-                                            >
-                                                <Icon name="edit" className="w-4 h-4 inline-block mr-1" />
-                                                Edit
-                                            </button>
-                                        )}
-                                        {onDeleteCategory && (
-                                            <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    e.stopPropagation();
-                                                    handleDelete();
-                                                }}
-                                                className="flex-1 py-2.5 px-4 rounded font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm bg-red-600 text-white hover:bg-red-700 cursor-pointer focus:ring-red-500"
-                                            >
-                                                <Icon name="trash" className="w-4 h-4 inline-block mr-1" />
-                                                Delete
-                                            </button>
-                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                console.log('Edit button clicked, setting isEditing to true');
+                                                setIsEditing(true);
+                                            }}
+                                            className="flex-1 py-2.5 px-4 rounded font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm bg-blue-600 text-white hover:bg-blue-700 cursor-pointer focus:ring-blue-500"
+                                        >
+                                            <Icon name="edit" className="w-4 h-4 inline-block mr-1" />
+                                            Edit
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                handleDelete();
+                                            }}
+                                            className="flex-1 py-2.5 px-4 rounded font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm bg-red-600 text-white hover:bg-red-700 cursor-pointer focus:ring-red-500"
+                                        >
+                                            <Icon name="trash" className="w-4 h-4 inline-block mr-1" />
+                                            Delete
+                                        </button>
                                     </div>
                                 ) : isEditing ? (
                                     // Show Save and Cancel buttons when editing

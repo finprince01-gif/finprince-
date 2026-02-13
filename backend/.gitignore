@@ -27,6 +27,7 @@ MANIFEST
 # CRITICAL: Environment Variables & Secrets
 # ============================================================================
 # .env files are now tracked for team collaboration (private repo only)
+.env
 *.pem
 *.key
 
