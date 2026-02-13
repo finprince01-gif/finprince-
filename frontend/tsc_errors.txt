@@ -1,0 +1,5 @@
+﻿src/pages/VendorPortal/VendorPortal.tsx(1515,10): error TS17008: JSX element 'div' has no corresponding closing tag.
+src/pages/VendorPortal/VendorPortal.tsx(3043,22): error TS17008: JSX element 'div' has no corresponding closing tag.
+src/pages/VendorPortal/VendorPortal.tsx(4713,66): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+src/pages/VendorPortal/VendorPortal.tsx(4783,1): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+src/pages/VendorPortal/VendorPortal.tsx(4786,1): error TS1005: '</' expected.
