@@ -2,6 +2,7 @@ import React from 'react';
 import type { Page } from '../types';
 import Icon from './Icon';
 import { usePermissions } from '../hooks/usePermissions';
+import { useSubscriptionUsage } from '../hooks/useSubscriptionUsage';
 
 interface SidebarProps {
   currentPage: Page;
@@ -11,11 +12,13 @@ interface SidebarProps {
   userPlan?: string;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, companyName, userPlan }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, companyName }) => {
   const { hasPageAccess, permissions, isSuperuser } = usePermissions();
+  const { subscriptionUsage } = useSubscriptionUsage();
 
   const allNavItems: { name: Page; icon: string }[] = [
     { name: 'Dashboard', icon: 'dashboard' },
+
     { name: 'Masters', icon: 'ledger' },
     { name: 'Inventory', icon: 'inventory' },
     { name: 'Vouchers', icon: 'vouchers' },
@@ -38,9 +41,9 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, co
   const displayItems = hasRBACConfigured ? navItems : allNavItems;
 
   return (
-    <aside className="w-[240px] bg-white border-r border-slate-200 flex flex-col fixed h-full z-40">
+    <aside className="w-[240px] bg-white border-r border-slate-300 flex flex-col fixed h-full z-40">
       {/* Brand Section */}
-      <div className="h-[56px] flex items-center px-4 border-b border-slate-200 bg-slate-50/30">
+      <div className="h-[56px] flex items-center px-4 border-b border-slate-300 bg-slate-50/30">
         <div className="flex items-center gap-2.5 overflow-hidden">
           <div className="w-7 h-7 bg-indigo-600 rounded flex-shrink-0 flex items-center justify-center text-white text-[13px] font-bold">
             {companyName?.charAt(0) || 'A'}
@@ -77,7 +80,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, co
       </nav>
 
       {/* Footer / User Section */}
-      <div className="mt-auto border-t border-slate-200 p-2">
+      <div className="mt-auto border-t border-slate-300 p-2">
         <button
           onClick={onLogout}
           className="w-full flex items-center gap-3 px-3 py-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-[4px] transition-colors group"
@@ -88,12 +91,33 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, co
           <span className="text-[14px] font-medium leading-none">Logout</span>
         </button>
 
-        <div className="mt-2 p-3 bg-slate-50 border border-slate-200 rounded-[4px]">
-          <div className="flex items-center justify-between mb-1">
+        <div className="mt-2 p-3 bg-slate-50 border border-slate-300 rounded-[4px]">
+          <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Active Plan</span>
-            <div className="w-1.5 h-1.5 bg-green-500 rounded-[4px]" />
+            <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">{subscriptionUsage?.plan || 'Loading...'}</span>
           </div>
-          <div className="text-[13px] font-semibold text-slate-700">{userPlan || 'Enterprise Starter'}</div>
+
+          {subscriptionUsage && subscriptionUsage.limit !== 'Unlimited' ? (
+            <div className="space-y-1.5">
+              <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-500 ${(subscriptionUsage.used / (subscriptionUsage.limit as number)) > 0.9 ? 'bg-amber-500' : 'bg-indigo-600'
+                    }`}
+                  style={{ width: `${Math.min(100, (subscriptionUsage.used / (subscriptionUsage.limit as number)) * 100)}%` }}
+                />
+              </div>
+              <div className="flex justify-between items-center text-[10px] font-medium text-slate-500">
+                <span>Usage</span>
+                <span>{subscriptionUsage.used} / {subscriptionUsage.limit}</span>
+              </div>
+            </div>
+          ) : subscriptionUsage?.limit === 'Unlimited' ? (
+            <div className="text-[11px] font-medium text-slate-600 italic">
+              Unlimited Access
+            </div>
+          ) : (
+            <div className="h-4 bg-slate-100 animate-pulse rounded w-full" />
+          )}
         </div>
       </div>
     </aside>

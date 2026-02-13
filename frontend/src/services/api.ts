@@ -450,7 +450,7 @@ class ApiService {
      * @param password - Password
      * @returns User data, tokens, and permissions
      */
-    async login(email: string, username: string, password: string) {
+    async login(email: string | null | undefined, username: string | null | undefined, password: string) {
         const data = await httpClient.post<any>('/api/auth/login/', { email, username, password });
 
         // Save tokens to localStorage (backup for HttpOnly cookies)
@@ -835,6 +835,36 @@ class ApiService {
      */
     async getPermissionLogs() {
         return httpClient.get<any[]>('/api/rbac/permission-logs/');
+    }
+
+    // ============================================================================
+    // DASHBOARD ANALYTICS
+    // ============================================================================
+
+    /**
+     * Get dashboard analytics data (charts, KPIs, etc.)
+     * @returns Dashboard data 
+     */
+    async getDashboardAnalytics() {
+        return httpClient.get<any>('/api/dashboard/analytics/');
+    }
+
+    // ============================================================================
+    // SUBSCRIPTION & USAGE
+    // ============================================================================
+
+    async getSubscriptionUsage() {
+        return httpClient.get<{
+            plan: string;
+            used: number;
+            limit: number | string;
+            cycle_start: string;
+            remaining: number | string;
+        }>('/api/subscription/usage/');
+    }
+
+    async updateSubscriptionPlan(plan: string) {
+        return httpClient.post<{ success: boolean }>('/api/subscription/update/', { plan });
     }
 
     // ============================================================================

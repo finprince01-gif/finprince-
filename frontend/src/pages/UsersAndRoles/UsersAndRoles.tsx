@@ -106,7 +106,7 @@ const UsersAndRolesPage: React.FC<UsersAndRolesPageProps> = ({ onNavigate }) => 
             'Vendor Portal': {
                 tabs: [
                     { name: 'Master', subs: ['Category', 'PO Settings', 'Vendor Creation'] },
-                    { name: 'Transaction', subs: ['Purchase Orders', 'Procurement', 'Payment'] }
+                    { name: 'Transaction', subs: ['Purchase Orders', 'Create PO', 'Pending PO', 'Executed PO', 'Procurement', 'Raw Material', 'Stock-in Trade', 'Consumables', 'Stores & Spares', 'Services', 'Payment'] }
                 ]
             },
             'Customer Portal': {

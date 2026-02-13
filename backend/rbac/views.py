@@ -76,7 +76,13 @@ class RoleViewSet(viewsets.ModelViewSet):
                 "tabs": ["Sales", "Purchase", "Payment", "Receipt", "Contra", "Journal", "Expenses"]
             },
             "Vendor Portal": {
-                "tabs": ["Vendors", "Purchase Orders", "Payments"]
+                "tabs": [
+                    "Master", "Transaction", 
+                    "Category", "PO Settings", "Vendor Creation", 
+                    "Purchase Orders", "Procurement", "Payment",
+                    "Create PO", "Pending PO", "Executed PO",
+                    "Raw Material", "Stock-in Trade", "Consumables", "Stores & Spares", "Services"
+                ]
             },
             "Customer Portal": {
                 "tabs": ["Customers", "Sales Orders", "Receipts"]

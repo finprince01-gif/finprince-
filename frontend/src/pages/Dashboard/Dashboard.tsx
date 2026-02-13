@@ -1,7 +1,18 @@
-import React, { useMemo, useState, useEffect } from 'react';
-import type { Voucher, Ledger, SalesPurchaseVoucher, Page } from '../../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import type { Voucher, Ledger, Page } from '../../types';
+import { Widget } from '../DashboardBuilder';
 import Icon from '../../components/Icon';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { useDashboardData } from '../../hooks/useDashboardData';
+import RevenueChart from '../../components/charts/RevenueChart';
+import ExpenseBreakdownChart from '../../components/charts/ExpenseBreakdownChart';
+import ProfitMarginChart from '../../components/charts/ProfitMarginChart';
+import ARAgingChart from '../../components/charts/ARAgingChart';
+import CashFlowChart from '../../components/charts/CashFlowChart';
+import BudgetVsActualChart from '../../components/charts/BudgetVsActualChart';
+import WaterfallChart from '../../components/charts/WaterfallChart';
+import StatCard from '../../components/StatCard';
+import { useSubscriptionUsage } from '../../hooks/useSubscriptionUsage';
+import { formatCurrency } from '../../utils/formatting';
 
 interface DashboardPageProps {
     onNavigate: (page: Page) => void;
@@ -11,171 +22,223 @@ interface DashboardPageProps {
     isAdmin?: boolean;
 }
 
-const StatCard: React.FC<{ title: string; value: string; icon: string; trend?: string; borderColor?: string }> = ({ title, value, icon, trend, borderColor = 'border-indigo-600' }) => (
-    <div className={`erp-card p-4 flex flex-col gap-1 border-2 ${borderColor}`}>
-        <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{title}</p>
-        <div className="flex items-baseline justify-between">
-            <p className="text-[22px] font-bold text-slate-800 tracking-tight">{value}</p>
-            <Icon name={icon as any} className="w-4 h-4 text-slate-300" />
-        </div>
-        {trend && (
-            <div className="flex items-center gap-1.5 mt-1">
-                <span className={`text-[11px] font-bold ${trend.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
-                    {trend}
-                </span>
-                <span className="text-[11px] text-slate-400 font-medium">vs last period</span>
-            </div>
-        )}
-    </div>
-);
-
-const MonthlyActivityChart: React.FC<{ data: { month: string; sales: number; purchases: number }[] }> = ({ data }) => {
-    const validatedData = data.map(item => ({
-        month: String(item.month),
-        sales: Number(item.sales) || 0,
-        purchases: Number(item.purchases) || 0
-    }));
-
-    if (!validatedData || validatedData.length === 0) {
-        return (
-            <div className="flex items-center justify-center h-[300px] border border-dashed border-slate-200 rounded-[4px] bg-slate-50">
-                <div className="text-center">
-                    <p className="text-slate-400 text-[14px] font-medium">No transaction data available yet.</p>
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="w-full h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={validatedData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis
-                        dataKey="month"
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 500 }}
-                        dy={10}
-                    />
-                    <YAxis
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 500 }}
-                        tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}k`}
-                    />
-                    <Tooltip
-                        contentStyle={{
-                            borderRadius: '4px',
-                            border: '1px solid #e2e8f0',
-                            boxShadow: 'none',
-                            fontSize: '12px',
-                            fontWeight: '600'
-                        }}
-                    />
-                    <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: '500', paddingBottom: '20px' }} />
-                    <Line type="monotone" dataKey="sales" name="Sales" stroke="#16a34a" strokeWidth={2} dot={{ r: 3, fill: '#16a34a', strokeWidth: 0 }} activeDot={{ r: 5 }} />
-                    <Line type="monotone" dataKey="purchases" name="Purchases" stroke="#ef4444" strokeWidth={2} dot={{ r: 3, fill: '#ef4444', strokeWidth: 0 }} activeDot={{ r: 5 }} />
-                </LineChart>
-            </ResponsiveContainer>
-        </div>
-    );
-};
-
 const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, companyName, vouchers, ledgers, isAdmin = false }) => {
-    const { totalSales, totalPurchases, totalReceivables, totalPayables } = useMemo(() => {
-        let ts = 0, tp = 0;
-        const bal: { [key: string]: number } = {};
+    const [customWidgets, setCustomWidgets] = useState<Widget[]>([]);
+    const { subscriptionUsage, isLimitReached } = useSubscriptionUsage();
 
-        ledgers.forEach(l => bal[l.name] = 0);
-        vouchers.forEach(v => {
-            const type = v.type.toLowerCase();
-            const val = Number('total' in v ? v.total : 'amount' in v ? v.amount : 0) || 0;
-            if (type === 'sales') {
-                ts += val;
-                bal[v.party] = (bal[v.party] || 0) + val;
-            } else if (type === 'purchase') {
-                tp += val;
-                bal[v.party] = (bal[v.party] || 0) - val;
-            } else if (type === 'receipt') {
-                bal[v.party] = (bal[v.party] || 0) - val;
-            } else if (type === 'payment') {
-                bal[v.party] = (bal[v.party] || 0) + val;
-            }
-        });
-
-        const sDebtors = ledgers.filter(l => l.group === 'Sundry Debtors').map(l => l.name);
-        const sCreditors = ledgers.filter(l => l.group === 'Sundry Creditors').map(l => l.name);
-        const tr = sDebtors.reduce((acc, l) => acc + (bal[l] > 0 ? bal[l] : 0), 0);
-        const tpay = sCreditors.reduce((acc, l) => acc + (bal[l] < 0 ? -bal[l] : 0), 0);
-
-        return { totalSales: ts, totalPurchases: tp, totalReceivables: tr, totalPayables: tpay };
-    }, [vouchers, ledgers]);
-
-    const chartData = useMemo(() => {
-        const mData: { [key: string]: { sales: number; purchases: number } } = {};
-        vouchers.filter(v => ['sales', 'purchase'].includes(v.type.toLowerCase())).forEach(v => {
-            const m = new Date(v.date).toLocaleString('default', { month: 'short', year: '2-digit' });
-            if (!mData[m]) mData[m] = { sales: 0, purchases: 0 };
-            if (v.type.toLowerCase() === 'sales') mData[m].sales += Number((v as any).total) || 0;
-            else mData[m].purchases += Number((v as any).total) || 0;
-        });
-
-        const sorted = Object.keys(mData).sort((a, b) => {
-            const [mA, yA] = a.split(' '), [mB, yB] = b.split(' ');
-            return new Date(`1 ${mA} ${yA}`) > new Date(`1 ${mB} ${yB}`) ? 1 : -1;
-        }).slice(-6);
-
-
-        return sorted.length ? sorted.map(m => ({ month: m, ...mData[m] })) : [];
-    }, [vouchers]);
+    // Hook
+    const {
+        chartData,
+        revenueData,
+        expenseBreakdown,
+        arAging,
+        cashFlow,
+        budgetVsActual,
+        profitMargin,
+        waterfallData,
+        totalSales,
+        totalPurchases,
+        totalReceivables,
+        totalPayables
+    } = useDashboardData(vouchers, ledgers);
 
     const recentVouchers = vouchers.slice(0, 6);
 
+    // Initial Load & Listeners
+    useEffect(() => {
+        const loadWidgets = () => {
+            const saved = localStorage.getItem('dashboard_builder_layout');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    if (Array.isArray(parsed)) {
+                        setCustomWidgets(parsed);
+                    } else {
+                        setCustomWidgets([]);
+                    }
+                } catch (e) {
+                    console.error("Failed to load dashboard layout", e);
+                    setCustomWidgets([]);
+                }
+            } else {
+                setCustomWidgets([]);
+            }
+        };
+
+        loadWidgets();
+        window.addEventListener('storage', loadWidgets);
+        window.addEventListener('dashboard-layout-updated', loadWidgets);
+
+        return () => {
+            window.removeEventListener('storage', loadWidgets);
+            window.removeEventListener('dashboard-layout-updated', loadWidgets);
+        };
+    }, []);
+
+    const handleResetDefault = () => {
+        if (confirm("Switch back to default dashboard view?")) {
+            setCustomWidgets([]);
+            localStorage.removeItem('dashboard_builder_layout');
+            window.dispatchEvent(new Event('dashboard-layout-updated'));
+        }
+    };
+
+    const renderWidget = (widget: Widget) => {
+        const { type, settings } = widget;
+        switch (type) {
+            case 'revenue-chart': return <div className="h-full w-full p-2 flex flex-col"><div className="flex-1 w-full min-h-0"><RevenueChart data={revenueData} /></div></div>;
+            case 'expenses-breakdown': return <div className="h-full w-full p-2 flex flex-col"><div className="flex-1 w-full min-h-0 relative"><ExpenseBreakdownChart data={expenseBreakdown} /></div></div>;
+            case 'profit-gauge': return <div className="h-full w-full p-2 flex flex-col"><div className="flex-1 w-full min-h-0"><ProfitMarginChart data={profitMargin} /></div></div>;
+            case 'accounts-receivable': return <div className="h-full w-full p-2 flex flex-col"><div className="flex-1 w-full min-h-0"><ARAgingChart data={arAging} /></div></div>;
+            case 'cash-flow-chart': return <div className="h-full w-full p-2 flex flex-col"><div className="flex-1 w-full min-h-0"><CashFlowChart data={cashFlow} /></div></div>;
+            case 'sales-vs-purchase': return <div className="h-full w-full p-2 flex flex-col"><div className="flex-1 w-full min-h-0"><BudgetVsActualChart data={budgetVsActual} /></div></div>;
+
+            case 'outstanding-receivables-card': return <StatCard title="Outstanding Receivables" value={formatCurrency(totalReceivables)} icon="exclamation-circle" color="amber" />;
+            case 'total-sales-card': return <StatCard title="Total Revenue" value={formatCurrency(totalSales)} icon="arrow-up-right" trend="+12.5%" color="emerald" />;
+            case 'total-purchase-card': return <StatCard title="Total Expenses" value={formatCurrency(totalPurchases)} icon="arrow-down-left" trend="-2.4%" color="rose" />;
+            case 'profit-loss-card': return <StatCard title="Net Profit" value={formatCurrency(totalSales - totalPurchases)} icon="currency-rupee" color="blue" />;
+            case 'cash-balance-card': return <StatCard title="Cash Balance" value={formatCurrency(totalSales - totalPurchases - totalReceivables * 0.1)} icon="wallet" color="purple" />;
+
+            case 'accounts-payable': return <div className="h-full w-full p-2 flex flex-col"><div className="flex-1 w-full min-h-0"><ARAgingChart data={[{ range: '0-30 days', amount: totalPayables * 0.4 }, { range: '31-60 days', amount: totalPayables * 0.3 }, { range: '61-90 days', amount: totalPayables * 0.2 }, { range: '90+ days', amount: totalPayables * 0.1 }]} /></div></div>;
+
+            case 'aging-receivables': return <div className="h-full w-full p-2 flex flex-col"><div className="flex-1 w-full min-h-0"><WaterfallChart data={waterfallData} /></div></div>;
+
+            case 'text-block': return <div className="h-full overflow-auto p-1"><p className="text-gray-600 text-sm whitespace-pre-wrap font-sans leading-relaxed">{settings?.content || 'This is a customizable text block. Edit me!'}</p></div>;
+
+            case 'bar-chart':
+            case 'line-chart':
+                if (settings?.dataSource === 'revenue' || settings?.dataSource === 'expenses') return <div className="h-full w-full p-2 flex flex-col"><div className="flex-1 w-full min-h-0"><RevenueChart data={revenueData} /></div></div>;
+                if (settings?.dataSource === 'profit') return <div className="h-full w-full p-2 flex flex-col"><div className="flex-1 w-full min-h-0"><ProfitMarginChart data={profitMargin} /></div></div>;
+                if (settings?.dataSource === 'cashflow') return <div className="h-full w-full p-2 flex flex-col"><div className="flex-1 w-full min-h-0"><CashFlowChart data={cashFlow} /></div></div>;
+                if (settings?.dataSource === 'receivables') return <div className="h-full w-full p-2 flex flex-col"><div className="flex-1 w-full min-h-0"><ARAgingChart data={arAging} /></div></div>;
+                if (settings?.dataSource === 'payables') return <div className="h-full w-full p-2 flex flex-col"><div className="flex-1 w-full min-h-0"><ARAgingChart data={[{ range: '0-30 days', amount: totalPayables * 0.4 }, { range: '31-60 days', amount: totalPayables * 0.3 }, { range: '61-90 days', amount: totalPayables * 0.2 }, { range: '90+ days', amount: totalPayables * 0.1 }]} /></div></div>;
+
+                return (
+                    <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50 rounded text-slate-400 p-4 text-center">
+                        <span className="mb-2 text-2xl">📊</span>
+                        <span className="text-sm font-medium">Generic Chart Placeholder</span>
+                    </div>
+                );
+
+            case 'pie-chart':
+                if (settings?.dataSource === 'expenses') return <div className="h-full w-full p-2 flex flex-col"><div className="flex-1 w-full min-h-0 relative"><ExpenseBreakdownChart data={expenseBreakdown} /></div></div>;
+                if (settings?.dataSource === 'revenue') return <div className="h-full w-full p-2 flex flex-col"><div className="flex-1 w-full min-h-0 relative"><ExpenseBreakdownChart data={revenueData.map(d => ({ name: d.period, value: d.revenue }))} /></div></div>;
+                if (settings?.dataSource === 'profit') return <div className="h-full w-full p-2 flex flex-col"><div className="flex-1 w-full min-h-0 relative"><ExpenseBreakdownChart data={[{ name: 'Net Profit', value: Math.max(0, totalSales - totalPurchases) }, { name: 'Expenses', value: totalPurchases }]} /></div></div>;
+                if (settings?.dataSource === 'cashflow') {
+                    const totalIn = cashFlow.reduce((acc, curr) => acc + (curr.inflow || 0), 0);
+                    const totalOut = cashFlow.reduce((acc, curr) => acc + (curr.outflow || 0), 0);
+                    return <div className="h-full w-full p-2 flex flex-col"><div className="flex-1 w-full min-h-0 relative"><ExpenseBreakdownChart data={[{ name: 'Inflow', value: totalIn }, { name: 'Outflow', value: totalOut }]} /></div></div>;
+                }
+                if (settings?.dataSource === 'receivables') return <div className="h-full w-full p-2 flex flex-col"><div className="flex-1 w-full min-h-0 relative"><ExpenseBreakdownChart data={arAging.map(x => ({ name: x.range, value: x.amount }))} /></div></div>;
+                if (settings?.dataSource === 'payables') return <div className="h-full w-full p-2 flex flex-col"><div className="flex-1 w-full min-h-0 relative"><ExpenseBreakdownChart data={[{ name: '0-30 days', value: totalPayables * 0.4 }, { name: '31-60 days', value: totalPayables * 0.3 }, { name: '61-90 days', value: totalPayables * 0.2 }, { name: '90+ days', value: totalPayables * 0.1 }]} /></div></div>;
+
+                return (
+                    <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50 rounded text-slate-400 p-4 text-center">
+                        <span className="mb-2 text-2xl">🥧</span>
+                        <span className="text-sm font-medium">Generic Chart Placeholder</span>
+                    </div>
+                );
+
+            case 'data-table':
+            case 'top-customers':
+            case 'top-vendors':
+            case 'pl-summary':
+            case 'balance-sheet-summary':
+            case 'gst-summary':
+            case 'bank-reconciliation':
+                return (
+                    <div className="h-full w-full flex items-center justify-center bg-white border border-slate-100 rounded">
+                        <p className="text-sm text-slate-500 font-medium">{type.replace(/-/g, ' ').toUpperCase()}</p>
+                    </div>
+                );
+
+            default: return <div className="flex items-center justify-center h-full text-slate-300 text-sm">Widget: {type}</div>;
+        }
+    };
+
     return (
         <div className="space-y-6">
-            {/* Page Header */}
             <div className="flex items-center justify-between pb-4 border-b border-slate-200">
                 <div>
                     <h1 className="text-[18px] font-semibold text-slate-800">
                         {companyName || 'Business Dashboard'}
                     </h1>
-                    <p className="text-[13px] text-slate-500">Welcome back, here is what's happening today.</p>
+                    <p className="text-[13px] text-slate-500">
+                        {customWidgets.length > 0 ? 'Customized Analytics View' : "Welcome back, here is what's happening today."}
+                    </p>
+                </div>
+                <div className="flex items-center gap-2">
+                    {customWidgets.length > 0 && (
+                        <button
+                            onClick={handleResetDefault}
+                            className="flex items-center px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-[4px] hover:bg-slate-50 transition-colors"
+                        >
+                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                            Reset Default
+                        </button>
+                    )}
+                    <button
+                        onClick={() => onNavigate('Dashboard Builder')}
+                        className="flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-[4px] hover:bg-indigo-700 shadow-sm transition-colors"
+                    >
+                        <Icon name="edit" className="w-4 h-4 mr-2" />
+                        Edit Dashboard
+                    </button>
                 </div>
             </div>
 
-            {/* KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard title="Total Sales" value={`₹${totalSales.toLocaleString()}`} icon="arrow-up-right" trend="+12.5%" borderColor="border-green-600" />
-                <StatCard title="Total Purchase" value={`₹${totalPurchases.toLocaleString()}`} icon="arrow-down-left" trend="-2.4%" borderColor="border-red-500" />
-                <StatCard title="Receivables" value={`₹${totalReceivables.toLocaleString()}`} icon="users" borderColor="border-cyan-500" />
-                <StatCard title="Payables" value={`₹${totalPayables.toLocaleString()}`} icon="wallet" borderColor="border-amber-500" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                <StatCard title="Total Sales" value={formatCurrency(totalSales)} icon="arrow-up-right" trend="+12.5%" color="emerald" />
+                <StatCard title="Total Purchase" value={formatCurrency(totalPurchases)} icon="arrow-down-left" trend="-2.4%" color="rose" />
+                <StatCard title="Receivables" value={formatCurrency(totalReceivables)} icon="users" color="cyan" />
+                <StatCard title="Payables" value={formatCurrency(totalPayables)} icon="wallet" color="amber" />
+                <StatCard
+                    title="Invoice Usage"
+                    value={`${subscriptionUsage?.used ?? 0} / ${subscriptionUsage?.limit ?? '...'}`}
+                    icon="document"
+                    color={isLimitReached ? "rose" : "indigo"}
+                    subValue={subscriptionUsage?.plan ?? "Loading..."}
+                />
             </div>
 
-            {/* Charts & Lists */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 erp-card p-6">
-                    <div className="flex items-center justify-between mb-8">
-                        <h3 className="text-[15px] font-bold text-slate-800 uppercase tracking-wider">Revenue Trend</h3>
-                        <div className="flex gap-4">
-                            <div className="flex items-center gap-2">
-                                <div className="w-2.5 h-2.5 rounded-[4px] bg-green-600" />
-                                <span className="text-[11px] font-medium text-slate-500 uppercase">Sales</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <div className="w-2.5 h-2.5 rounded-[4px] bg-red-500" />
-                                <span className="text-[11px] font-medium text-slate-500 uppercase">Purchases</span>
+                <div className="lg:col-span-2 erp-card flex flex-col relative overflow-hidden h-[500px]">
+                    {customWidgets.length > 0 ? (
+                        <div className="w-full h-full overflow-auto bg-slate-50/50 relative">
+                            <div className="relative w-full h-full min-w-[800px] min-h-[600px] bg-grid-pattern">
+                                {customWidgets.map(widget => (
+                                    <div
+                                        key={widget.id}
+                                        className="dashboard-widget absolute bg-white rounded-lg shadow-sm border border-slate-200 flex flex-col overflow-hidden hover:border-blue-300 transition-all"
+                                        style={{ left: widget.x, top: widget.y, width: widget.width, height: widget.height }}
+                                    >
+                                        <div className="h-8 border-b border-slate-100 flex items-center justify-between px-3 bg-white">
+                                            <span className="text-xs font-semibold text-slate-700">{widget.title}</span>
+                                        </div>
+                                        <div className="flex-1 relative">
+                                            {renderWidget(widget)}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
-                    </div>
-                    <MonthlyActivityChart data={chartData} />
+                    ) : (
+                        <div className="p-4 h-full flex flex-col">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Revenue Analysis</h3>
+                            </div>
+                            <div className="flex-1 min-h-0">
+                                <RevenueChart data={revenueData} />
+                            </div>
+                        </div>
+                    )}
                 </div>
 
-                <div className="erp-card overflow-hidden">
+                <div className="erp-card overflow-hidden flex flex-col">
                     <div className="p-4 border-b border-slate-100 bg-slate-50/50">
                         <h3 className="text-[13px] font-semibold text-slate-700 uppercase tracking-wider">Recent Activity</h3>
                     </div>
-                    <div className="divide-y divide-slate-100">
+                    <div className="divide-y divide-slate-100 overflow-auto flex-1">
                         {recentVouchers.map((v, i) => (
                             <div
                                 key={i}
@@ -184,23 +247,25 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, companyName, 
                             >
                                 <div className="flex items-center gap-3 overflow-hidden">
                                     <Icon
-                                        name={v.type.toLowerCase() === 'sales' ? 'arrow-up-right' : 'vouchers'}
+                                        name={v.type.toLowerCase() === 'sales' ? 'arrow-up-right' : 'vouchers' as any}
                                         className={`w-3.5 h-3.5 ${v.type.toLowerCase() === 'sales' ? 'text-green-600' : 'text-slate-400'}`}
                                     />
                                     <div className="overflow-hidden">
                                         <p className="text-[13px] font-semibold text-slate-700 truncate">{v.type}</p>
                                         <p className="text-[11px] text-slate-400 truncate">
-                                            {'party' in v ? v.party : 'narration' in v ? (v as any).narration : v.date}
+                                            {'party' in v ? (v as any).party : 'narration' in v ? (v as any).narration : v.date}
                                         </p>
                                     </div>
                                 </div>
-                                <span className="text-[13px] font-semibold text-slate-800">
-                                    ₹{Number('total' in v ? v.total : 'amount' in v ? (v as any).amount : 0).toLocaleString()}
-                                </span>
+                                <div className="text-right">
+                                    <span className="text-[13px] font-semibold text-slate-800">
+                                        ₹{Number('total' in v ? (v as any).total : 'amount' in v ? (v as any).amount : 0).toLocaleString()}
+                                    </span>
+                                </div>
                             </div>
                         ))}
                     </div>
-                    <div className="p-2.5 bg-slate-50 text-center border-t border-slate-100">
+                    <div className="p-3 bg-slate-50 text-center border-t border-slate-100 mt-auto">
                         <button
                             onClick={() => onNavigate('Reports')}
                             className="text-[11px] font-bold text-indigo-600 uppercase tracking-widest hover:underline"
@@ -215,4 +280,3 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, companyName, 
 };
 
 export default DashboardPage;
-
