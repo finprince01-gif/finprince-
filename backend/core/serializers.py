@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from .models import CompanyFullInfo, Tenant, User
 
-User = get_user_model()
+# User model imported inside Meta or methods to avoid AppRegistryNotReady
 
 class UserSignupSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
@@ -14,7 +14,7 @@ class UserSignupSerializer(serializers.ModelSerializer):
     logo = serializers.ImageField(required=False, write_only=True) # Handle file upload
 
     class Meta:
-        model = User
+        model = 'core.User'
         fields = ['username', 'email', 'password', 'company_name', 'phone', 'selected_plan', 'logo']
 
     def validate_company_name(self, value):
@@ -24,6 +24,8 @@ class UserSignupSerializer(serializers.ModelSerializer):
     
     def validate_phone(self, value):
         import re
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
         # Basic phone validation
         if not re.match(r'^\+?[1-9]\d{1,14}$', value):
             raise serializers.ValidationError("Invalid phone number format. Use international format (e.g., +1234567890)")
@@ -97,12 +99,16 @@ class RegisterInitiateSerializer(serializers.Serializer):
     logo = serializers.ImageField(required=False, allow_null=True)
     
     def validate_username(self, value):
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
         if User.objects.filter(username=value).exists():
             raise serializers.ValidationError("Username already exists")
         return value
     
     def validate_phone(self, value):
         import re
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
         if not re.match(r'^\+?[1-9]\d{1,14}$', value):
             raise serializers.ValidationError("Invalid phone number format")
         if User.objects.filter(phone=value).exists():

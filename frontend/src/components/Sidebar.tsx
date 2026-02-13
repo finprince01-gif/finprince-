@@ -37,8 +37,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, co
     return hasPageAccess(item.name);
   });
 
-  const hasRBACConfigured = Object.keys(permissions).length > 0 || isSuperuser;
-  const displayItems = hasRBACConfigured ? navItems : allNavItems;
+  const displayItems = navItems;
 
   return (
     <aside className="w-[240px] bg-white border-r border-slate-300 flex flex-col fixed h-full z-40">
@@ -73,7 +72,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, co
               <div className={`flex-shrink-0 transition-colors ${isActive ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-500'}`}>
                 <Icon name={item.icon as any} className="w-[18px] h-[18px]" />
               </div>
-              <span className="text-[14px] font-medium leading-5">{item.name}</span>
+              <span className="text-[14px] font-bold leading-5">{item.name}</span>
             </button>
           );
         })}

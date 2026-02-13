@@ -23,6 +23,12 @@ interface DropdownProps {
     systemCategories?: string[];
 }
 
+const DEFAULT_SYSTEM_CATEGORIES = [
+    'Raw Material', 'Work in Progress', 'Finished Goods',
+    'Stores and Spares', 'Packing Material', 'Stock in Trade',
+    'By-product', 'Scrap'
+];
+
 const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
     onSelect,
     value = '',
@@ -33,11 +39,7 @@ const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
     staticCategories,
     colorTheme = 'teal',
     apiEndpoint = '/api/inventory/master-categories/',
-    systemCategories = [
-        'Raw Material', 'Work in Progress', 'Finished Goods',
-        'Stores and Spares', 'Packing Material', 'Stock in Trade',
-        'By-product', 'Scrap'
-    ]
+    systemCategories = DEFAULT_SYSTEM_CATEGORIES
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [categories, setCategories] = useState<Category[]>([]);
@@ -201,5 +203,3 @@ const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
 };
 
 export default CategoryHierarchicalDropdown;
-
-

@@ -9,10 +9,7 @@ from django.utils.decorators import method_decorator  # type: ignore
 from django.views.decorators.csrf import csrf_exempt  # type: ignore
 from django.utils import timezone  # type: ignore
 from datetime import timedelta
-from django.contrib.auth import get_user_model  # type: ignore
-from django.db import models
-
-User = get_user_model()
+# User model imported inside views to avoid AppRegistryNotReady
 
 from .models import CompanyFullInfo
 from .serializers import (
@@ -50,6 +47,19 @@ def health_check(request):
 @permission_classes([IsAuthenticated])
 def check_status(request):
     return Response({'isActive': True})
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def check_phone(request):
+    """Check if a phone number is already registered."""
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    phone = request.query_params.get('phone', '').strip()
+    if not phone:
+        return Response({'error': 'Phone number required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    exists = User.objects.filter(phone=phone).exists()
+    return Response({'exists': exists})
 
 from .ai_proxy import ai_service
 
@@ -180,6 +190,8 @@ class AdminSubscriptionsView(views.APIView):
 
     def get(self, request):
         # Get all users as subscriptions
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
         users = User.objects.all().order_by('-created_at')
         subscriptions = []
         for user in users:
@@ -216,6 +228,8 @@ class AdminSubscriptionsView(views.APIView):
         return Response(subscriptions)
 
     def put(self, request):
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
         user_id = request.data.get('userId')
         is_active = request.data.get('isActive')
         if user_id is None or is_active is None:
@@ -233,6 +247,8 @@ class AdminPaymentsView(views.APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
         users = User.objects.all().order_by('-created_at')
         payments = []
         for user in users:

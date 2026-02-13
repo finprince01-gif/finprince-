@@ -50,7 +50,7 @@ import PayrollPage from '../pages/Payroll';               // Employee payroll ma
 import ServicePage from '../pages/Service';               // Service management page
 import GSTPage from '../pages/GST';                        // GST Returns module
 import DashboardBuilderPage from '../pages/DashboardBuilder'; // Dashboard Builder page
-import LoginPage from '../pages/Login';                   // User login page
+import LoginPage, { ForgotPassword as ForgotPasswordPage } from '../pages/Login'; // User login page
 import SignupPage from '../pages/Register';               // New user registration
 // Additional UI Components
 import Modal from '../components/Modal';                  // Reusable modal dialog
@@ -58,6 +58,7 @@ import AIAgent from '../components/AIAgent';              // AI Agent (Kiki)
 import Icon from '../components/Icon';                    // Icon component
 import ErrorBoundary from '../components/ErrorBoundary';  // Error handling wrapper
 import MassUploadResultPage from '../pages/MassUploadResult'; // Bulk upload results page
+
 // ============================================================================
 // SERVICE IMPORTS
 // ============================================================================
@@ -159,7 +160,7 @@ const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
 
   // View state - determines whether to show login or signup page
-  const [view, setView] = useState<'login' | 'signup'>('login');
+  const [view, setView] = useState<'login' | 'signup' | 'forgot-password'>('login');
 
   // Current page - which section of the app is being displayed
   const [currentPage, setCurrentPage] = useState<Page>('Dashboard');
@@ -1113,7 +1114,13 @@ const App: React.FC = () => {
 
   if (!isLoggedIn) {
     if (view === "signup") return <SignupPage onSwitchToLogin={() => setView("login")} onBack={() => window.location.href = (import.meta as any).env.VITE_LANDING_URL || 'http://localhost:3000'} />;
-    return <LoginPage onLogin={handleLogin} onSwitchToSignup={() => setView("signup")} onBack={() => window.location.href = (import.meta as any).env.VITE_LANDING_URL || 'http://localhost:3000'} />;
+    if (view === "forgot-password") return <ForgotPasswordPage onBackToLogin={() => setView("login")} />;
+    return <LoginPage
+      onLogin={handleLogin}
+      onSwitchToSignup={() => setView("signup")}
+      onForgotPassword={() => setView("forgot-password")}
+      onBack={() => window.location.href = (import.meta as any).env.VITE_LANDING_URL || 'http://localhost:3000'}
+    />;
   }
   return (
     <div className="flex h-screen bg-white font-sans overflow-hidden">

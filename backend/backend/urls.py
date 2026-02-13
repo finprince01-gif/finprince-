@@ -36,14 +36,14 @@ urlpatterns = [
     path('api/admin/payments', AdminPaymentsView.as_view(), name='admin-payments-no-slash'),
     path('api/admin/payments/', AdminPaymentsView.as_view(), name='admin-payments'),
     
+    # Core (Company, Health, Agent, Auth recovery) - mapped to /api/
+    path('api/', include('core.urls')),
+
     # Login - NEW refactored module
     path('api/auth/', include('login.urls')),
     
     # Registration - Using registration module
     path('api/auth/', include('registration.urls')),
-    
-    # Core (Company, Health, Agent) - mapped to /api/
-    path('api/', include('core.urls')),
     
     # Masters - NEW refactored module
     path('api/masters/', include('masters.urls')),

@@ -102,8 +102,10 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
-  const handleNext = (e: React.FormEvent) => {
+  const handleNext = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+
     if (!username || !companyName || !email || !phone || !password || !confirmPassword) {
       setError('Please fill in all required fields.');
       return;
@@ -116,9 +118,25 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
       setError('Password must be at least 8 characters long.');
       return;
     }
-    setError('');
-    setStep('plan');
-    window.scrollTo(0, 0);
+
+    setLoading(true);
+    try {
+      // Check if phone already exists
+      const phoneCheck = await apiService.checkPhone(phone);
+      if (phoneCheck.exists) {
+        setError('This phone number is already registered. Please use a different number or Sign In.');
+        setLoading(false);
+        return;
+      }
+
+      setError('');
+      setStep('plan');
+      window.scrollTo(0, 0);
+    } catch (err: any) {
+      setError(err?.message || 'Validation failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleRegister = async () => {
@@ -333,7 +351,9 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
               </div>
 
               {error && <p className="text-sm text-red-600 text-center">{error}</p>}
-              <button type="submit" className="w-full flex justify-center py-3 px-4 border border-transparent rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-lg font-medium text-white bg-indigo-600 hover:bg-indigo-700">Next Step →</button>
+              <button type="submit" disabled={loading} className="w-full flex justify-center py-3 px-4 border border-transparent rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-lg font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50">
+                {loading ? 'Verifying...' : 'Next Step →'}
+              </button>
             </form>
             <div className="mt-6 text-center">
               <p className="text-sm text-gray-600 dark:text-slate-400">Already have an account? <button onClick={onSwitchToLogin} className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">Sign In</button></p>

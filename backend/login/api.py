@@ -174,3 +174,112 @@ class LogoutView(APIView):
         response.delete_cookie('access_token')
         response.delete_cookie('refresh_token')
         return response
+
+class ForgotUserIDView(APIView):
+    """Handle User ID recovery."""
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        identifier = request.data.get('identifier')
+        if not identifier:
+            return Response({'detail': 'Email or Phone is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        result, message = flow.forgot_user_id(identifier)
+        if result is None:
+            return Response({'detail': message}, status=status.HTTP_404_NOT_FOUND)
+            
+        return Response({
+            'success': True,
+            'message': message,
+            'identifiers': result
+        })
+
+class ForgotPasswordView(APIView):
+    """Handle Password recovery/reset."""
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        username = request.data.get('username')
+        identifier = request.data.get('identifier')
+        new_password = request.data.get('new_password')
+        
+        if not all([username, identifier, new_password]):
+            return Response({'detail': 'Username, Identifier (Email/Phone), and New Password are required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        success, message = flow.reset_password(username, identifier, new_password)
+        if not success:
+            return Response({'detail': message}, status=status.HTTP_404_NOT_FOUND)
+            
+        return Response({
+            'success': True,
+            'message': message
+        })
+
+from rest_framework.throttling import AnonRateThrottle
+
+class RequestOTPThrottle(AnonRateThrottle):
+    rate = '10/hour'
+
+class RequestResetOTPView(APIView):
+    """Handle OTP request for password reset."""
+    permission_classes = [AllowAny]
+    throttle_classes = [RequestOTPThrottle]
+    
+    def post(self, request):
+        email = request.data.get('email')
+        if not email:
+            return Response({'detail': 'Email is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        success, message = flow.request_reset_otp(email)
+        if not success:
+            return Response({'detail': message}, status=status.HTTP_400_BAD_REQUEST)
+            
+        return Response({'message': message})
+
+class VerifyOTPOnlyView(APIView):
+    """Verify OTP without changing password."""
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        email = request.data.get('email')
+        otp = request.data.get('otp')
+        
+        if not all([email, otp]):
+            return Response(
+                {'detail': 'Email and OTP are required.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        success, message = flow.verify_otp_only(email, otp)
+        if not success:
+            return Response({'detail': message}, status=status.HTTP_400_BAD_REQUEST)
+            
+        return Response({'success': True, 'message': message})
+
+class VerifyResetOTPView(APIView):
+    """Verify OTP and reset password."""
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        email = request.data.get('email')
+        otp = request.data.get('otp')
+        new_password = request.data.get('new_password')
+        
+        if not all([email, otp, new_password]):
+            return Response(
+                {'detail': 'Email, OTP, and new password are required.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Add strong password validation here if needed
+        if len(new_password) < 8:
+            return Response(
+                {'detail': 'Password must be at least 8 characters long.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        success, message = flow.verify_reset_otp(email, otp, new_password)
+        if not success:
+            return Response({'detail': message}, status=status.HTTP_400_BAD_REQUEST)
+            
+        return Response({'success': True, 'message': message})

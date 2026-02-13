@@ -521,6 +521,30 @@ class ApiService {
         return httpClient.get<{ isActive: boolean }>('/api/auth/check-status/');
     }
 
+    async checkPhone(phone: string) {
+        return httpClient.get<{ exists: boolean }>(`/api/auth/check-phone/?phone=${encodeURIComponent(phone)}`);
+    }
+
+    async forgotUserID(identifier: string) {
+        return httpClient.post<{ success: boolean; message: string; identifiers?: string[] }>('/api/auth/forgot-userid/', { identifier });
+    }
+
+    async forgotPassword(data: { username: string; identifier: string; new_password: string }) {
+        return httpClient.post<{ success: boolean; message: string }>('/api/auth/forgot-password/', data);
+    }
+
+    async requestResetOTP(email: string) {
+        return httpClient.post<{ message: string }>('/api/auth/request-reset-otp/', { email });
+    }
+
+    async verifyOTPOnly(email: string, otp: string) {
+        return httpClient.post<{ success: boolean; message: string }>('/api/auth/verify-otp-only/', { email, otp });
+    }
+
+    async verifyResetOTP(data: { email: string; otp: string; new_password: string }) {
+        return httpClient.post<{ success: boolean; message: string }>('/api/auth/verify-reset-otp/', data);
+    }
+
     // ============================================================================
 
 

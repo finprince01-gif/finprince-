@@ -1,3 +1,5 @@
+import logging
+from django.db import models
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -148,3 +150,67 @@ class LogoutView(APIView):
         response.delete_cookie('access_token')
         response.delete_cookie('refresh_token')
         return response
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ForgotUserIDView(APIView):
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        from .models import User
+        identifier = request.data.get('identifier') # email or phone
+        
+        if not identifier:
+            return Response({'error': 'Email or Phone is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        users = User.objects.filter(models.Q(email=identifier) | models.Q(phone=identifier))
+        
+        if not users.exists():
+            # For security, we might want to return 200 even if not found to prevent user enumeration
+            # but usually for "Forgot" it's better to be explicit.
+            return Response({'error': 'No account found with this information'}, status=status.HTTP_404_NOT_FOUND)
+            
+        # In a real app, send email/SMS. Here we return masked IDs for demo if requested.
+        user_ids = [u.username for u in users]
+        masked_ids = [uid[:2] + '*' * (len(uid)-2) for uid in user_ids]
+        
+        return Response({
+            'success': True,
+            'message': 'User ID(s) found. In a real system, they would be sent to your registered email/phone.',
+            'identifiers': masked_ids # Returning masked IDs for demo purposes
+        })
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ForgotPasswordView(APIView):
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        from .models import User
+        from django.contrib.auth.hashers import make_password
+        
+        username = request.data.get('username')
+        identifier = request.data.get('identifier') # email or phone
+        new_password = request.data.get('new_password')
+        
+        if not all([username, identifier, new_password]):
+            return Response({'error': 'Username, Identifier (Email/Phone), and New Password are required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            user = User.objects.get(
+                models.Q(username=username) & 
+                (models.Q(email=identifier) | models.Q(phone=identifier))
+            )
+        except User.DoesNotExist:
+            return Response({'error': 'No matching account found'}, status=status.HTTP_404_NOT_FOUND)
+            
+        # Simplified reset logic: Update password directly
+        user.set_password(new_password)
+        user.save()
+        
+        import logging
+        logger = logging.getLogger('core.auth_views')
+        logger.info(f"🔑 Password reset for user: {username}")
+        
+        return Response({
+            'success': True,
+            'message': 'Password has been reset successfully. You can now login with your new password.'
+        })

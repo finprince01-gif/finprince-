@@ -1,7 +1,11 @@
 from django.urls import path, include  # type: ignore
 from rest_framework import routers  # type: ignore
+from .auth_views import (
+    CookieTokenObtainPairView, CookieTokenRefreshView, LogoutView,
+    ForgotUserIDView, ForgotPasswordView
+)
 from .views import (
-    CompanySettingsViewSet, health_check, check_status,
+    CompanySettingsViewSet, health_check, check_status, check_phone,
     AgentMessageView, AIProxyView,
     ai_metrics, health_with_metrics, AdminPaymentsView
 )
@@ -20,6 +24,9 @@ urlpatterns = [
     path('auth/register/', DirectRegisterView.as_view(), name='register'),
     
     path('auth/check-status/', check_status, name='check-status'),
+    path('auth/check-phone/', check_phone, name='check-phone'),
+    path('auth/forgot-userid/', ForgotUserIDView.as_view(), name='forgot-userid'),
+    path('auth/forgot-password/', ForgotPasswordView.as_view(), name='forgot-password'),
     path('health/', health_check, name='health'), # /api/health
 
     # Reports

@@ -51,6 +51,12 @@ class DirectRegisterView(APIView):
             return Response({
                 'error': 'Company name already exists'
             }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check if phone already exists
+        if phone and User.objects.filter(phone=phone).exists():
+            return Response({
+                'error': 'Phone number already registered'
+            }, status=status.HTTP_400_BAD_REQUEST)
         
         try:
             # Build response data inside transaction, return it outside

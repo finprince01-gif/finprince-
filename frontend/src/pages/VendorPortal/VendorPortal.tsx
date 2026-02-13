@@ -15,6 +15,15 @@ type CreatePOSubTab = 'Draft PO' | 'Pending for Approval' | 'Mail PO';
 type ProcurementSubTab = 'Dashboard' | 'Raw Material' | 'Stock-in Trade' | 'Consumables' | 'Stores & Spares' | 'Services';
 
 // Category Interface (Mirrors Inventory)
+const VENDOR_SYSTEM_CATEGORIES = [
+    'Raw Material',
+    'Work in Progress',
+    'Finished Goods',
+    'Stores and Spares',
+    'Packing Material',
+    'Stock in Trade'
+];
+
 interface Category {
     id: number;
     category: string;
@@ -1577,14 +1586,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                             <InventoryCategoryWizard
                                 apiEndpoint="/api/vendors/categories/"
                                 allowCreateGroup={false}
-                                systemCategories={[
-                                    'Raw Material',
-                                    'Work in Progress',
-                                    'Finished Goods',
-                                    'Stores and Spares',
-                                    'Packing Material',
-                                    'Stock in Trade'
-                                ]}
+                                systemCategories={VENDOR_SYSTEM_CATEGORIES}
                                 onCreateCategory={async (data) => {
                                     try {
                                         await httpClient.post('/api/vendors/categories/', {
@@ -1678,14 +1680,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 </label>
                                                 <CategoryHierarchicalDropdown
                                                     apiEndpoint="/api/vendors/categories/"
-                                                    systemCategories={[
-                                                        'Raw Material',
-                                                        'Work in Progress',
-                                                        'Finished Goods',
-                                                        'Stores and Spares',
-                                                        'Packing Material',
-                                                        'Stock in Trade'
-                                                    ]}
+                                                    systemCategories={VENDOR_SYSTEM_CATEGORIES}
                                                     onSelect={(selection) => {
                                                         setPoCategoryId(selection.id);
                                                         setPoCategoryPath(selection.fullPath);
@@ -1877,14 +1872,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             </label>
                                             <CategoryHierarchicalDropdown
                                                 apiEndpoint="/api/vendors/categories/"
-                                                systemCategories={[
-                                                    'Raw Material',
-                                                    'Work in Progress',
-                                                    'Finished Goods',
-                                                    'Stores and Spares',
-                                                    'Packing Material',
-                                                    'Stock in Trade'
-                                                ]}
+                                                systemCategories={VENDOR_SYSTEM_CATEGORIES}
                                                 value={vendorCategory}
                                                 onSelect={(selection) => setVendorCategory(selection.fullPath)}
                                                 placeholder="Select Category"
@@ -3295,7 +3283,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                             </div>
                                                         )}
                                                     </div>
-                                    )
+                                                    )
 
                                                     {activePOSubTab === 'Pending PO' && (
                                                         <div className="erp-card overflow-hidden border border-slate-200">

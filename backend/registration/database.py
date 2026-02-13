@@ -6,12 +6,6 @@ Only database queries.
 
 import logging
 import uuid
-from django.contrib.auth import get_user_model
-from django.utils import timezone
-from datetime import timedelta
-from core.models import Tenant
-
-User = get_user_model()
 logger = logging.getLogger('registration.database')
 
 
@@ -21,16 +15,22 @@ logger = logging.getLogger('registration.database')
 
 def check_username_exists(username):
     """Check if username exists."""
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
     return User.objects.filter(username=username).exists()
 
 
 def check_phone_exists(phone):
     """Check if phone exists."""
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
     return User.objects.filter(phone=phone).exists()
 
 
 def create_user(username, email, password_hash, company_name, phone, selected_plan, tenant_id, logo_path=None):
     """Create a new user."""
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
     return User.objects.create(
         username=username,
         email=email,
@@ -54,6 +54,7 @@ def create_user(username, email, password_hash, company_name, phone, selected_pl
 
 def create_tenant(company_name):
     """Create a new tenant."""
+    from core.models import Tenant
     tenant_uuid = str(uuid.uuid4())
     tenant = Tenant.objects.create(id=tenant_uuid, name=company_name)
     return tenant
