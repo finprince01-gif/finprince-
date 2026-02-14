@@ -167,7 +167,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const [poCategoryPath, setPoCategoryPath] = useState('');
     const [poPrefix, setPoPrefix] = useState('');
     const [poSuffix, setPoSuffix] = useState('');
-    const [poAutoYear, setPoAutoYear] = useState(true);
+    const [poAutoYear, setPoAutoYear] = useState(false);
     const [poDigits, setPoDigits] = useState(4);
 
     // Products/Services State
@@ -1500,7 +1500,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         setPoCategoryPath('');
         setPoPrefix('');
         setPoSuffix('');
-        setPoAutoYear(true);
+        setPoAutoYear(false);
         setPoDigits(4);
         setIsEditModePO(false);
         setSelectedPOSeries(null);
@@ -1640,6 +1640,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 Category <span className="text-red-500">*</span>
                                             </label>
                                             <CategoryHierarchicalDropdown
+                                                apiEndpoint="/api/vendors/categories/"
+                                                systemCategories={VENDOR_SYSTEM_CATEGORIES}
                                                 onSelect={(selection) => {
                                                     setPoCategoryId(selection.id);
                                                     setPoCategoryPath(selection.fullPath);
@@ -1661,46 +1663,28 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                    Category <span className="text-red-500">*</span>
-                                                </label>
-                                                <CategoryHierarchicalDropdown
-                                                    apiEndpoint="/api/vendors/categories/"
-                                                    systemCategories={VENDOR_SYSTEM_CATEGORIES}
-                                                    onSelect={(selection) => {
-                                                        setPoCategoryId(selection.id);
-                                                        setPoCategoryPath(selection.fullPath);
-                                                    }}
-                                                    value={poCategoryPath}
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Suffix</label>
+                                                <input
+                                                    type="text"
+                                                    value={poSuffix}
+                                                    onChange={(e) => setPoSuffix(e.target.value)}
+                                                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                    placeholder="/23-24"
                                                 />
                                             </div>
                                         </div>
 
-                                        {/* Year & Digits */}
-                                        <div className="grid grid-cols-2 gap-4 items-center">
-                                            <div className="flex items-center mt-6">
-                                                <input
-                                                    id="poAutoYear"
-                                                    type="checkbox"
-                                                    checked={poAutoYear}
-                                                    onChange={(e) => setPoAutoYear(e.target.checked)}
-                                                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                                                />
-                                                <label htmlFor="poAutoYear" className="ml-2 block text-sm text-gray-700">
-                                                    Auto Year
-                                                </label>
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">Digits</label>
-                                                <input
-                                                    type="number"
-                                                    min="1"
-                                                    max="10"
-                                                    value={poDigits}
-                                                    onChange={(e) => setPoDigits(Number(e.target.value))}
-                                                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                />
-                                            </div>
+                                        {/* Digits Only */}
+                                        <div className="mt-4">
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Digits</label>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                max="10"
+                                                value={poDigits}
+                                                onChange={(e) => setPoDigits(Number(e.target.value))}
+                                                className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                            />
                                         </div>
 
                                         {/* Preview Box */}
