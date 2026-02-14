@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useSubscriptionUsage } from '../../hooks/useSubscriptionUsage';
 import type { VoucherType, Ledger, StockItem, Voucher, SalesPurchaseVoucher, PaymentReceiptVoucher, ContraVoucher, JournalVoucher, JournalEntry, VoucherItem, ExtractedInvoiceData, CompanyDetails } from '../../types';
@@ -46,19 +47,55 @@ interface SearchableSelectProps {
 const SearchableSelect: React.FC<SearchableSelectProps> = ({ value, onChange, options, placeholder = "Select...", className = "" }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const portalRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
+
+  const updatePosition = () => {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setPosition({
+        top: rect.bottom,
+        left: rect.left,
+        width: Math.max(rect.width, 250) // Wider dropdown for better visibility
+      });
+    }
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        containerRef.current && !containerRef.current.contains(target) &&
+        portalRef.current && !portalRef.current.contains(target)
+      ) {
         setIsOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+
+    const handleScroll = (event: Event) => {
+      // Small optimization: don't close if scrolling inside the dropdown itself
+      if (portalRef.current && portalRef.current.contains(event.target as Node)) {
+        return;
+      }
+      setIsOpen(false);
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      window.addEventListener('scroll', handleScroll, true);
+      window.addEventListener('resize', () => setIsOpen(false));
+      updatePosition();
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', () => setIsOpen(false));
+    };
+  }, [isOpen]);
 
   const filteredOptions = options.filter(opt =>
-    opt.toLowerCase().includes((value || '').toLowerCase())
+    (opt || '').toLowerCase().includes((value || '').toLowerCase())
   );
 
   return (
@@ -66,7 +103,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({ value, onChange, op
       <div className="relative">
         <input
           type="text"
-          className="form-input pr-10"
+          className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
           value={value}
           onChange={(e) => {
             onChange(e.target.value);
@@ -76,20 +113,29 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({ value, onChange, op
           placeholder={placeholder}
         />
         <div
-          className="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer"
+          className="absolute inset-y-0 right-0 flex items-center pr-2 cursor-pointer"
           onClick={() => setIsOpen(!isOpen)}
         >
           <Icon name="chevron-down" className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
         </div>
       </div>
 
-      {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 max-h-60 overflow-y-auto">
+      {isOpen && createPortal(
+        <div
+          ref={portalRef}
+          className="fixed z-[9999] bg-white border border-gray-200 rounded-[4px] shadow-xl max-h-60 overflow-y-auto"
+          style={{
+            top: position.top + 4,
+            left: position.left,
+            width: position.width,
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
           {filteredOptions.length > 0 ? (
             filteredOptions.map((opt, i) => (
               <div
                 key={i}
-                className="px-4 py-2 text-sm hover:bg-indigo-50/50 cursor-pointer"
+                className={`px-4 py-2 text-sm hover:bg-indigo-50 cursor-pointer transition-colors ${value === opt ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-gray-700'}`}
                 onClick={() => {
                   onChange(opt);
                   setIsOpen(false);
@@ -101,7 +147,8 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({ value, onChange, op
           ) : (
             <div className="px-4 py-2 text-sm text-gray-500">No results found</div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -194,6 +241,32 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [grnRefNo, setGrnRefNo] = useState('');
   const [billFrom, setBillFrom] = useState(''); // Correspond to 'billTo' in wireframe if needed, but 'From' is better for Purchase
   const [shipFrom, setShipFrom] = useState(''); // Correspond to 'shipTo' in wireframe if needed
+
+  // Rich Vendor Data
+  const [richVendors, setRichVendors] = useState<any[]>([]);
+  const [vendorGstDetails, setVendorGstDetails] = useState<any[]>([]);
+  const [pendingGRNs, setPendingGRNs] = useState<any[]>([]);
+  const [vendorAddresses, setVendorAddresses] = useState<string[]>([]);
+
+  // Fetch rich vendor data on mount
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [rv, gst, grns] = await Promise.all([
+          apiService.getRichVendors(),
+          httpClient.get<any[]>('/api/vendors/gst-details/'),
+          apiService.getPendingGRNs()
+        ]);
+        setRichVendors(rv);
+        setVendorGstDetails(gst);
+        setPendingGRNs(grns);
+      } catch (err) {
+        console.warn('Failed to fetch initial data', err);
+      }
+    };
+    fetchData();
+  }, []);
+
   const [purchaseInputType, setPurchaseInputType] = useState('Intrastate'); // Default to Same State
   const [invoiceInForeignCurrency, setInvoiceInForeignCurrency] = useState<'Yes' | 'No'>('No');
   const [purchaseSupportingDocument, setPurchaseSupportingDocument] = useState<File | null>(null);
@@ -241,6 +314,16 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
   // Document
   const [purchaseTransitDocument, setPurchaseTransitDocument] = useState<File | null>(null);
+
+  // Item Options for Dropdowns
+  const itemCodeOptions = React.useMemo(() =>
+    Array.from(new Set(stockItems.map((item: any) => item.item_code || item.code).filter(Boolean) as string[])),
+    [stockItems]
+  );
+  const itemNameOptions = React.useMemo(() =>
+    Array.from(new Set(stockItems.map((item: any) => item.name || item.item_name).filter(Boolean) as string[])),
+    [stockItems]
+  );
 
   // From PORT (Local) - Renaming or reusing variables for clarity if needed, 
   // but keeping 'FromPort' prefix for consistency with older code if referenced, 
@@ -332,7 +415,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   // Payment voucher specific state
   const [paymentMode, setPaymentMode] = useState<'single' | 'bulk'>('single');
   const [receiptMode, setReceiptMode] = useState<'single' | 'bulk'>('single');
-  const [voucherNumber, setVoucherNumber] = useState('Auto-generated');
+  const [voucherNumber, setVoucherNumber] = useState('');
   const [balance, setBalance] = useState(0);
   const [supplierInvNo, setSupplierInvNo] = useState('');
   const [paymentType, setPaymentType] = useState<'full' | 'partial'>('full');
@@ -985,13 +1068,108 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     }
   }, [party, ledgers, companyDetails]);
 
-  const { partyLedgers, accountLedgers, allLedgers } = useMemo(() => {
+  const { partyLedgers, accountLedgers, allLedgers, partyOptions } = useMemo(() => {
     const partyLedgers = [...ledgers]; // Allow all ledgers to be selected as a party across all voucher types
-    // Use cashBankLedgers from API instead of filtering
     const accountLedgers = cashBankLedgers.length > 0 ? cashBankLedgers : ledgers.filter(l => l.group === 'Bank Accounts' || l.group === 'Cash-in-Hand');
     const allLedgers = [...ledgers];
-    return { partyLedgers, accountLedgers, allLedgers };
-  }, [ledgers, cashBankLedgers]);
+
+    // Combine Ledgers with rich Vendor Reference Names for Purchase Vouchers
+    const partyOptions = [...ledgers.map(l => l.name)];
+
+    // Add reference names (branches)
+    vendorGstDetails.forEach(gst => {
+      const vendor = richVendors.find(rv => rv.id === gst.vendor_basic_detail);
+      if (vendor && gst.reference_name) {
+        const combinedName = `${vendor.vendor_name} (${gst.reference_name})`;
+        if (!partyOptions.includes(combinedName)) {
+          partyOptions.push(combinedName);
+        }
+      }
+    });
+
+    return { partyLedgers, accountLedgers, allLedgers, partyOptions };
+  }, [ledgers, cashBankLedgers, richVendors, vendorGstDetails]);
+
+  const handlePartyChange = (value: string) => {
+    setParty(value);
+
+    // Auto-population logic for Purchase Vouchers
+    if (voucherType === 'Purchase') {
+      let currentVendorId: string | undefined;
+
+      // 1. Try to match combined name: "Vendor Name (Reference Name)"
+      const match = value.match(/^(.*) \((.*)\)$/);
+      let matchedGst: any = undefined;
+
+      if (match) {
+        const vName = match[1];
+        const rName = match[2];
+
+        // Find the specific GST record
+        matchedGst = vendorGstDetails.find(g => {
+          const vendor = richVendors.find(rv => rv.id === g.vendor_basic_detail);
+          if (vendor && vendor.vendor_name === vName) {
+            currentVendorId = vendor.id;
+            return g.reference_name === rName;
+          }
+          return false;
+        });
+      } else {
+        // 2. Try to match exact vendor name from Rich Data
+        const exactVendor = richVendors.find(rv => rv.vendor_name === value);
+        if (exactVendor) {
+          currentVendorId = exactVendor.id;
+          // Find default or first GST record
+          matchedGst = vendorGstDetails.find(g => g.vendor_basic_detail === exactVendor.id);
+        }
+      }
+
+      // Collect all addresses for this vendor
+      let addresses: string[] = [];
+      if (currentVendorId) {
+        const v = richVendors.find(rv => rv.id === currentVendorId);
+        if (v?.billing_address) addresses.push(v.billing_address); // Base address
+
+        vendorGstDetails
+          .filter(g => g.vendor_basic_detail === currentVendorId)
+          .forEach(g => {
+            if (g.branch_address) addresses.push(g.branch_address);
+          });
+
+        // Deduplicate
+        addresses = Array.from(new Set(addresses.filter(Boolean)));
+      }
+      setVendorAddresses(addresses);
+
+      if (matchedGst) {
+        if (matchedGst.gstin) setGstin(matchedGst.gstin);
+        if (matchedGst.branch_address) {
+          setBillFrom(matchedGst.branch_address);
+          setShipFrom(matchedGst.branch_address);
+        }
+        return;
+      } else if (currentVendorId) {
+        // If we found a vendor but no specific GST record matched (e.g. just vendor selected, no GST details or default usage)
+        // We can still try to set a default address if available
+        const v = richVendors.find(rv => rv.id === currentVendorId);
+        if (v?.billing_address) {
+          setBillFrom(v.billing_address);
+          setShipFrom(v.billing_address);
+        }
+        return;
+      }
+
+      // 3. Try to match exact ledger name (fallback)
+      const ledger = ledgers.find(l => l.name === value);
+      if (ledger) {
+        if (ledger.gstin) setGstin(ledger.gstin);
+        if (ledger.additional_data?.address) {
+          setBillFrom(ledger.additional_data.address);
+          setShipFrom(ledger.additional_data.address);
+        }
+      }
+    }
+  };
 
   const { totalTaxableAmount, totalCgst, totalSgst, totalIgst, grandTotal } = useMemo(() => {
     return items.reduce((acc, item) => {
@@ -1220,10 +1398,32 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     // Update field
     (item as any)[field] = value;
 
+    // Auto-populate based on Item Code or Name
+    if (field === 'itemCode' || field === 'itemName') {
+      let selectedItem: any;
+      if (field === 'itemCode') {
+        selectedItem = stockItems.find((i: any) => (i.item_code || i.code) === value);
+      } else if (field === 'itemName') {
+        selectedItem = stockItems.find((i: any) => (i.name || i.item_name) === value);
+      }
+
+      if (selectedItem) {
+        item.itemCode = selectedItem.item_code || selectedItem.code || item.itemCode;
+        item.itemName = selectedItem.name || selectedItem.item_name || item.itemName;
+        item.uom = selectedItem.unit || selectedItem.uom || item.uom;
+        item.hsnSac = selectedItem.hsn_code || selectedItem.hsn || selectedItem.hsnSac || item.hsnSac;
+        // Optionally update rate if available
+        if (selectedItem.rate || selectedItem.selling_price) {
+          item.rate = Number(selectedItem.rate || selectedItem.selling_price);
+        }
+      }
+    }
+
+
     // Auto-calculate Taxable Value (Qty * Rate)
-    if (field === 'qty' || field === 'rate') {
-      const qty = parseFloat(field === 'qty' ? value as string : item.qty.toString()) || 0;
-      const rate = parseFloat(field === 'rate' ? value as string : item.rate.toString()) || 0;
+    if (field === 'qty' || field === 'rate' || field === 'itemCode' || field === 'itemName') { // Recalculate if item changes too (in case rate updated)
+      const qty = parseFloat(item.qty.toString()) || 0;
+      const rate = parseFloat(item.rate.toString()) || 0;
       item.taxableValue = qty * rate;
     }
 
@@ -1383,19 +1583,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Vendor Name <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="text"
+                  <SearchableSelect
                     value={party}
-                    onChange={(e) => setParty(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                    onChange={handlePartyChange}
+                    options={partyOptions}
                     placeholder="Select Vendor"
-                    list="party-list"
+                    className="w-full"
                   />
-                  <datalist id="party-list">
-                    {partyLedgers.map((ledger, index) => (
-                      <option key={index} value={ledger.name} />
-                    ))}
-                  </datalist>
+                  {/* datalist removed in favor of SearchableSelect */}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1450,12 +1645,15 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     Create GRN
                   </button>
                   <div className="flex-1">
-                    <input
-                      type="text"
+                    <SearchableSelect
                       value={grnRefNo}
-                      onChange={(e) => setGrnRefNo(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                      placeholder="GRN Reference"
+                      onChange={(val) => {
+                        setGrnRefNo(val);
+                        // Auto-fill logic if needed
+                      }}
+                      options={pendingGRNs.map(g => g.grn_no).filter(Boolean)}
+                      placeholder="Select Pending GRN"
+                      className="w-full"
                     />
                   </div>
                 </div>
@@ -1474,13 +1672,25 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               {/* Row 5: Address Textareas */}
               <div className="grid grid-cols-2 gap-6">
                 <div>
-                  <textarea
-                    value={billFrom}
-                    onChange={(e) => setBillFrom(e.target.value)}
-                    rows={4}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 resize-none"
-                    placeholder="Auto-populate from Vendor"
-                  />
+                  {vendorAddresses.length > 1 ? (
+                    <SearchableSelect
+                      value={billFrom}
+                      onChange={(val) => {
+                        setBillFrom(val);
+                        setShipFrom(val); // Assume Ship From matches Bill From typically, optional
+                      }}
+                      options={vendorAddresses}
+                      placeholder="Select Address"
+                      className="w-full"
+                    />
+                  ) : (
+                    <textarea
+                      value={billFrom}
+                      onChange={(e) => setBillFrom(e.target.value)}
+                      rows={4}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 resize-none"
+                    />
+                  )}
                 </div>
                 <div>
                   <textarea
@@ -1488,7 +1698,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     onChange={(e) => setShipFrom(e.target.value)}
                     rows={4}
                     className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 resize-none"
-                    placeholder="Auto-populate from Vendor"
                   />
                 </div>
               </div>
@@ -1785,21 +1994,21 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             </div>
                           </td>
                           <td className="px-2 py-2 border-r border-gray-200">
-                            <input
-                              type="text"
+                            <SearchableSelect
                               value={row.itemCode}
-                              onChange={(e) => handlePurchaseItemChange(index, 'itemCode', e.target.value)}
-                              className="w-full px-2 py-1 border border-gray-300 rounded text-sm font-mono"
+                              onChange={(val) => handlePurchaseItemChange(index, 'itemCode', val)}
+                              options={itemCodeOptions}
                               placeholder="Code"
+                              className="w-full"
                             />
                           </td>
                           <td className="px-2 py-2 border-r border-gray-200">
-                            <input
-                              type="text"
+                            <SearchableSelect
                               value={row.itemName}
-                              onChange={(e) => handlePurchaseItemChange(index, 'itemName', e.target.value)}
-                              className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                              onChange={(val) => handlePurchaseItemChange(index, 'itemName', val)}
+                              options={itemNameOptions}
                               placeholder="Item Name"
+                              className="w-full"
                             />
                           </td>
                           <td className="px-2 py-2 border-r border-gray-200">
@@ -1916,31 +2125,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   </table>
                 </div>
 
-                {/* Bottom Fields: Purchase Ledger & Description */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-[4px] border border-gray-200">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Purchase Ledger</label>
-                    <select
-                      value={purchaseLedger}
-                      onChange={(e) => setPurchaseLedger(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                    >
-                      <option value="">Select Ledger</option>
-                      <option value="Local Purchases">Local Purchases</option>
-                      <option value="Interstate Purchases">Interstate Purchases</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                    <textarea
-                      value={purchaseDescription}
-                      onChange={(e) => setPurchaseDescription(e.target.value)}
-                      rows={1}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                      placeholder="Enter remarks..."
-                    />
-                  </div>
-                </div>
+                {/* Bottom Navigation Removed (Redundant fields deleted) */}
 
                 {/* Navigation */}
 
@@ -4843,9 +5028,15 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 console.log('Creating GRN...', data);
                 const response = await apiService.createInventoryOperationGRN(data);
                 console.log('GRN Created:', response);
-                setGrnRefNo(response.grn_no);
-                showSuccess('GRN Created Successfully!');
 
+                // Add to pending list and select it
+                if (response.grn_no) {
+                  setPendingGRNs(prev => [...prev, response]);
+                  setGrnRefNo(response.grn_no);
+                }
+
+                alert('GRN Created Successfully!');
+                setIsCreateGRNModalOpen(false);
               } catch (error) {
                 console.error("Failed to create GRN", error);
                 showError("Failed to create GRN. Please check inputs.");
