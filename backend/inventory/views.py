@@ -277,5 +277,34 @@ class InventoryOperationNewGRNViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         tenant_id = get_tenant_from_request(self.request)
         serializer.save(tenant_id=tenant_id)
+
+from rest_framework import generics
+from accounting.models_voucher_purchase import VoucherPurchaseSupplierDetails
+
+class PendingGRNListView(generics.ListAPIView):
+    """
+    API endpoint to list Posted GRNs that are NOT yet linked to any Purchase Voucher.
+    """
+    serializer_class = InventoryOperationNewGRNSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
         tenant_id = get_tenant_from_request(self.request)
-        serializer.save(tenant_id=tenant_id)
+        
+        # 1. Get all Posted GRNs for this tenant
+        qs = InventoryOperationNewGRN.objects.filter(
+            tenant_id=tenant_id, 
+            status='Posted',
+            grn_type='purchases' # Explicitly fetch only Purchase-type GRNs
+        )
+        
+        # 2. Get list of GRN numbers already used in Purchase Vouchers
+        used_grns = VoucherPurchaseSupplierDetails.objects.filter(
+            tenant_id=tenant_id
+        ).values_list('grn_reference', flat=True)
+        
+        # 3. Exclude used GRNs & Empty GRN numbers
+        # Filter out empty strings/nulls from exclusion check to be safe, though usage should be strict
+        used_grns = [g for g in used_grns if g]
+        
+        return qs.exclude(grn_no__in=used_grns).exclude(grn_no__isnull=True).exclude(grn_no__exact='')
