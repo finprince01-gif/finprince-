@@ -7,6 +7,9 @@ import CategoryHierarchicalDropdown from '../../components/CategoryHierarchicalD
 import { usePermissions } from '../../hooks/usePermissions';
 import { getCountries, getStates, getCities } from '../../utils/locationData';
 import SearchableDropdown from '../../components/SearchableDropdown';
+import { showError, showSuccess, confirm } from '../../utils/toast';
+import { handleApiError } from '../../utils/errorHandler';
+
 
 // Interfaces
 interface Location {
@@ -501,9 +504,10 @@ const InventoryPage: React.FC = () => {
     e.preventDefault();
     const finalLocationType = isCustomLocationType ? customLocationTypeValue : locationType;
     if (!finalLocationType) {
-      alert('Please specify a location type');
+      showError('Please specify a location type');
       return;
     }
+
 
     try {
       const data = {
@@ -529,9 +533,9 @@ const InventoryPage: React.FC = () => {
       resetLocationForm();
       fetchLocations();
     } catch (error) {
-      console.error('Error saving location:', error);
-      alert('Error saving location. Please try again.');
+      handleApiError(error, 'Save Location');
     }
+
   };
 
   const handleEditLocation = () => {
@@ -563,15 +567,16 @@ const InventoryPage: React.FC = () => {
 
   const handleDeleteLocation = async () => {
     if (!selectedLocation) return;
-    if (!confirm(`Are you sure you want to delete "${selectedLocation.name}"?`)) return;
+    if (!await confirm(`Are you sure you want to delete "${selectedLocation.name}"?`)) return;
     try {
       await httpClient.delete(`/api/inventory/locations/${selectedLocation.id}/`);
       resetLocationForm();
       fetchLocations();
+      showSuccess('Location deleted successfully');
     } catch (error: any) {
-      console.error('Error deleting location:', error);
-      alert(error.response?.data?.error || 'Error deleting location');
+      handleApiError(error, 'Delete Location');
     }
+
   };
 
   const resetLocationForm = () => {
@@ -630,9 +635,10 @@ const InventoryPage: React.FC = () => {
   const handleItemSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!itemCategory) {
-      alert('Please select a category');
+      showError('Please select a category');
       return;
     }
+
     try {
       const data = {
         item_code: itemCode,
@@ -655,9 +661,9 @@ const InventoryPage: React.FC = () => {
       resetItemForm();
       fetchItems();
     } catch (error) {
-      console.error('Error saving item:', error);
-      alert('Error saving item. Please try again.');
+      handleApiError(error, 'Save Item');
     }
+
   };
 
   const handleEditItem = () => {
@@ -679,19 +685,20 @@ const InventoryPage: React.FC = () => {
   };
 
   const handleDeleteItem = async (itemId: number) => {
-    if (window.confirm('Are you sure you want to delete this item?')) {
+    if (await confirm('Are you sure you want to delete this item?')) {
       try {
         await httpClient.delete(`/api/inventory/items/${itemId}/`);
         fetchInventoryItems();
         if (selectedItemDetail?.id === itemId) {
           setSelectedItemDetail(null);
         }
+        showSuccess('Item deleted successfully');
       } catch (error) {
-        console.error('Error deleting item:', error);
-        alert('Error deleting item');
+        handleApiError(error, 'Delete Item');
       }
     }
   };
+
 
   const handleEditItemOpen = (item: any) => {
     // Ensure all fields are mapped correctly for editing
@@ -724,9 +731,10 @@ const InventoryPage: React.FC = () => {
   const handleSaveItem = async () => {
     try {
       if (!editFormData.itemCode || !editFormData.itemName) {
-        alert('Item Code and Item Name are required');
+        showError('Item Code and Item Name are required');
         return;
       }
+
 
       const data = {
         item_code: editFormData.itemCode,
@@ -762,22 +770,15 @@ const InventoryPage: React.FC = () => {
         await httpClient.post('/api/inventory/items/', data);
       }
 
-      alert('Item saved successfully');
+      showSuccess('Item saved successfully');
       await fetchInventoryItems();
       setSelectedItemDetail(null);
       setEditFormData(null);
       setIsVendorSpecificItemCode(false);
     } catch (error: any) {
-      console.error('Error saving item:', error);
-      // The httpClient throws the parsed error body directly, or an Error object
-      let errorMsg = 'Error saving item';
-      if (error && typeof error === 'object') {
-        errorMsg = JSON.stringify(error);
-      } else if (error instanceof Error) {
-        errorMsg = error.message;
-      }
-      alert(errorMsg);
+      handleApiError(error, 'Save Item');
     }
+
   };
 
   const handleFormChange = (field: string, value: any) => {
@@ -1332,12 +1333,12 @@ const InventoryPage: React.FC = () => {
         }
       }
 
-      alert('Operation saved successfully!');
+      showSuccess('Operation saved successfully!');
       setShowIssueSlipForm(false);
       // Optional: Reset form fields here if needed
     } catch (error) {
       console.error('Error saving operation:', error);
-      alert('Failed to save operation. Please check your inputs.');
+      showError('Failed to save operation. Please check your inputs.');
     }
   };
 
@@ -1463,12 +1464,12 @@ const InventoryPage: React.FC = () => {
       };
 
       await httpClient.post('/api/inventory/operations/new-grn/', payload);
-      alert('GRN saved successfully!');
+      showSuccess('GRN saved successfully!');
       setShowGRNForm(false);
       // Reset logic if needed
     } catch (error) {
       console.error('Error saving GRN:', error);
-      alert('Failed to save GRN. Please check your inputs.');
+      showError('Failed to save GRN. Please check your inputs.');
     }
   };
 
@@ -4464,13 +4465,13 @@ const InventoryPage: React.FC = () => {
   const handleGRNSeriesSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!grnSeriesName || !grnSeriesType || !grnRequiredDigits) {
-      alert('Please fill all required fields');
+      showError('Please fill all required fields');
       return;
     }
 
     try {
       if (parseInt(grnRequiredDigits) > 20) {
-        alert('Required digits cannot exceed 20');
+        showError('Required digits cannot exceed 20');
         return;
       }
 
@@ -4479,7 +4480,7 @@ const InventoryPage: React.FC = () => {
       const preview = (grnPrefix || '') + paddedNumber + (grnSuffix || '');
 
       if (preview.length > 255) {
-        alert('Generated preview exceeds maximum length of 255 characters. Please shorten prefix, suffix or digits.');
+        showError('Generated preview exceeds maximum length of 255 characters. Please shorten prefix, suffix or digits.');
         return;
       }
 
@@ -4495,10 +4496,10 @@ const InventoryPage: React.FC = () => {
 
       if (isEditModeGRNSeries && selectedGrnSeries) {
         await apiService.saveGRNSeries({ ...data, id: selectedGrnSeries.id });
-        alert('GRN Series updated successfully!');
+        showSuccess('GRN Series updated successfully!');
       } else {
         await apiService.saveGRNSeries(data);
-        alert('GRN Series created successfully!');
+        showSuccess('GRN Series created successfully!');
       }
 
       fetchGrnSeries();
@@ -4514,9 +4515,7 @@ const InventoryPage: React.FC = () => {
       setIsEditModeGRNSeries(false);
       setSelectedGrnSeries(null);
     } catch (error: any) {
-      console.error('Error saving GRN Series:', error);
-      const errorMsg = error.response?.data?.preview ? `Preview Error: ${error.response.data.preview[0]}` : 'Error saving GRN Series';
-      alert(errorMsg);
+      handleApiError(error, 'Save GRN Series');
       // Also reset on error to avoid getting stuck in edit mode for non-existent record
       setIsEditModeGRNSeries(false);
       setSelectedGrnSeries(null);
@@ -4676,14 +4675,13 @@ const InventoryPage: React.FC = () => {
                           </button>
                           <button
                             onClick={async () => {
-                              if (window.confirm('Are you sure you want to delete this GRN Series?')) {
+                              if (await confirm('Are you sure you want to delete this GRN Series?')) {
                                 try {
                                   await apiService.deleteGRNSeries(series.id);
-                                  alert('GRN Series deleted successfully!');
+                                  showSuccess('GRN Series deleted successfully!');
                                   fetchGrnSeries();
                                 } catch (error) {
-                                  console.error('Error deleting GRN series:', error);
-                                  alert('Error deleting GRN series');
+                                  handleApiError(error, 'Delete GRN Series');
                                 }
                               }
                             }}
@@ -4708,13 +4706,13 @@ const InventoryPage: React.FC = () => {
   const handleIssueSlipSeriesSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!issueSlipSeriesName || !issueSlipType || !issueSlipRequiredDigits) {
-      alert('Please fill all required fields');
+      showError('Please fill all required fields');
       return;
     }
 
     try {
       if (parseInt(issueSlipRequiredDigits) > 20) {
-        alert('Required digits cannot exceed 20');
+        showError('Required digits cannot exceed 20');
         return;
       }
 
@@ -4723,7 +4721,7 @@ const InventoryPage: React.FC = () => {
       const preview = (issueSlipPrefix || '') + paddedNumber + (issueSlipSuffix || '');
 
       if (preview.length > 255) {
-        alert('Generated preview exceeds maximum length of 255 characters. Please shorten prefix, suffix or digits.');
+        showError('Generated preview exceeds maximum length of 255 characters. Please shorten prefix, suffix or digits.');
         return;
       }
 
@@ -4739,10 +4737,10 @@ const InventoryPage: React.FC = () => {
 
       if (isEditModeIssueSlipSeries && selectedIssueSlipSeries) {
         await apiService.saveIssueSlipSeries({ ...data, id: selectedIssueSlipSeries.id });
-        alert('Issue Slip Series updated successfully!');
+        showSuccess('Issue Slip Series updated successfully!');
       } else {
         await apiService.saveIssueSlipSeries(data);
-        alert('Issue Slip Series created successfully!');
+        showSuccess('Issue Slip Series created successfully!');
       }
 
       fetchIssueSlipSeries();
@@ -4758,9 +4756,7 @@ const InventoryPage: React.FC = () => {
       setIsEditModeIssueSlipSeries(false);
       setSelectedIssueSlipSeries(null);
     } catch (error: any) {
-      console.error('Error saving Issue Slip Series:', error);
-      const errorMsg = error.response?.data?.preview ? `Preview Error: ${error.response.data.preview[0]}` : 'Error saving Issue Slip Series';
-      alert(errorMsg);
+      handleApiError(error, 'Save Issue Slip Series');
       // Reset on error
       setIsEditModeIssueSlipSeries(false);
       setSelectedIssueSlipSeries(null);
@@ -4925,14 +4921,13 @@ const InventoryPage: React.FC = () => {
                           </button>
                           <button
                             onClick={async () => {
-                              if (window.confirm('Are you sure you want to delete this Issue Slip Series?')) {
+                              if (await confirm('Are you sure you want to delete this Issue Slip Series?')) {
                                 try {
                                   await apiService.deleteIssueSlipSeries(series.id);
-                                  alert('Issue Slip Series deleted successfully!');
+                                  showSuccess('Issue Slip Series deleted successfully!');
                                   fetchIssueSlipSeries();
                                 } catch (error) {
-                                  console.error('Error deleting Issue Slip series:', error);
-                                  alert('Error deleting Issue Slip series');
+                                  handleApiError(error, 'Delete Issue Slip Series');
                                 }
                               }
                             }}

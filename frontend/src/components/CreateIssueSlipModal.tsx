@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { httpClient } from '../services/httpClient';
+import { showWarning } from '../utils/toast';
 import Icon from './Icon'; // Assuming Icon component exists, need to verify path or mock it
 // If Icon doesn't exist at this path, I'll use simple SVGs or adjust. 
 // Based on Vouchers.tsx, it seems Icon is at '../../components/Icon' from pages, so './Icon' is likely incorrect if this is in 'components'.
@@ -91,7 +92,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
     const handleSave = () => {
         // Validate required fields
         if (!outwardSlipNo) {
-            alert('Please enter Outward Slip No');
+            showWarning('Please enter Outward Slip No');
             return;
         }
 

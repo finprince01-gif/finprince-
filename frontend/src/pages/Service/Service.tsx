@@ -18,6 +18,8 @@ import React, { useState, useEffect } from 'react';
 import Icon from '../../components/Icon';
 import { httpClient } from '../../services/httpClient';
 import { usePermissions } from '../../hooks/usePermissions';
+import { showSuccess, showError, showWarning } from '../../utils/toast';
+import { handleApiError } from '../../utils/errorHandler';
 
 type ServiceTab = 'service-group' | 'service-list';
 
@@ -230,12 +232,17 @@ const ServicePage: React.FC<ServicePageProps> = () => {
   const fetchServiceGroups = async () => {
     setLoading(true);
     try {
+      console.log('📥 Fetching service groups from /api/services/groups/');
       const response = await httpClient.get<ServiceGroup[]>('/api/services/groups/');
+      console.log('📦 Received service groups response:', response);
       if (response && Array.isArray(response)) {
+        console.log(`✅ Setting ${response.length} service groups to apiData`);
         setApiData(response);
+      } else {
+        console.warn('⚠️ Response is not an array:', response);
       }
     } catch (error) {
-      console.error('Error fetching service groups:', error);
+      handleApiError(error, 'Fetch Service Groups');
       setApiData([]);
     } finally {
       setLoading(false);
@@ -249,7 +256,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
         setLedgers(response);
       }
     } catch (error) {
-      console.error('Error fetching ledgers:', error);
+      handleApiError(error, 'Fetch Ledgers');
       setLedgers([]);
     }
   };
@@ -262,7 +269,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
         setServices(response);
       }
     } catch (error) {
-      console.error('Error fetching services:', error);
+      handleApiError(error, 'Fetch Services');
       setServices([]);
     } finally {
       setIsLoading(false);
@@ -321,7 +328,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
         setIsEditMode(false);
       }
     } catch (error) {
-      console.error('Error updating service:', error);
+      handleApiError(error, 'Update Service');
     }
   };
 
@@ -333,7 +340,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
       setSelectedService(null);
       setShowDeleteConfirm(false);
     } catch (error) {
-      console.error('Error deleting service:', error);
+      handleApiError(error, 'Delete Service');
     }
   };
 
@@ -392,17 +399,17 @@ const ServicePage: React.FC<ServicePageProps> = () => {
         description: createFormData.description || null,
         expenseLedger: createFormData.expenseLedger
       });
-      alert('Service created successfully');
+      showSuccess('Service created successfully');
       setShowCreateForm(false);
       // Refresh services list
       fetchServices();
     } catch (error: any) {
-      console.error('Error creating service:', error);
-      alert(`Error creating service: ${error.message || error}`);
+      handleApiError(error, 'Create Service');
     }
   };
 
   const buildTree = (data: ServiceGroup[]) => {
+    console.log('🌳 Building tree with data:', data);
     const rootMap = new Map<string, TreeNode>();
 
     // Initialize System Categories
@@ -447,14 +454,20 @@ const ServicePage: React.FC<ServicePageProps> = () => {
     });
 
     // Add API data
+    console.log(`📊 Processing ${data.length} items from API`);
     data.forEach(item => {
+      console.log('📝 Processing item:', item);
       // Basic validation: skip empty categories
-      if (!item.category || !item.category.trim()) return;
+      if (!item.category || !item.category.trim()) {
+        console.warn('⚠️ Skipping item with empty category:', item);
+        return;
+      }
 
       const categoryKey = `root-${item.category}`;
       let categoryNode = rootMap.get(categoryKey);
 
       if (!categoryNode) {
+        console.log(`➕ Creating new category node: ${item.category}`);
         categoryNode = {
           id: categoryKey,
           name: item.category,
@@ -473,6 +486,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
         );
 
         if (!groupNode) {
+          console.log(`➕ Creating new group node: ${item.group} under ${item.category}`);
           groupNode = {
             id: groupKey,
             name: item.group,
@@ -494,13 +508,16 @@ const ServicePage: React.FC<ServicePageProps> = () => {
             data: { category: item.category, group: item.group, subgroup: item.subgroup }
           };
           if (!groupNode.children.find(child => child.name === item.subgroup)) {
+            console.log(`➕ Creating new subgroup node: ${item.subgroup} under ${item.group}`);
             groupNode.children.push(subgroupNode);
           }
         }
       }
     });
 
-    setTreeData(Array.from(rootMap.values()));
+    const treeArray = Array.from(rootMap.values());
+    console.log('✅ Built tree with', treeArray.length, 'root nodes');
+    setTreeData(treeArray);
   };
 
   const toggleNode = (nodeId: string) => {
@@ -533,38 +550,46 @@ const ServicePage: React.FC<ServicePageProps> = () => {
     e.preventDefault();
 
     if (!selectedNode) {
-      alert('Please select a category');
+      showWarning('Please select a category');
       return;
     }
 
     if (selectedNode.level === 0 && !formData.group) {
-      alert('Please enter a Group Name');
+      showWarning('Please enter a Group Name');
       return;
     }
 
     if (selectedNode.level === 1 && !formData.subgroup) {
-      alert('Please enter a Subgroup Name');
+      showWarning('Please enter a Subgroup Name');
       return;
     }
 
     try {
+      let payload;
       if (selectedNode.level === 0) {
-        await httpClient.post('/api/services/groups/', {
+        payload = {
           category: selectedNode.data.category,
           group: formData.group.trim() || null,
           subgroup: formData.subgroup.trim() || null
-        });
+        };
       } else if (selectedNode.level === 1) {
-        await httpClient.post('/api/services/groups/', {
+        payload = {
           category: selectedNode.data.category,
           group: selectedNode.data.group,
           subgroup: formData.subgroup.trim()
-        });
+        };
       }
 
+      console.log('📤 Creating service group with payload:', payload);
+      const response = await httpClient.post('/api/services/groups/', payload);
+      console.log('✅ Service group created successfully:', response);
+
       setFormData(prev => ({ ...prev, group: '', subgroup: '' }));
-      fetchServiceGroups();
+      console.log('🔄 Fetching updated service groups...');
+      await fetchServiceGroups();
+      showSuccess('Service Group created successfully!');
     } catch (error: any) {
+      console.error('❌ Error creating service group:', error);
       const errorMsg = error.toString();
       if (
         errorMsg.includes('Duplicate') ||
@@ -573,12 +598,11 @@ const ServicePage: React.FC<ServicePageProps> = () => {
       ) {
         const restoreKey = `${selectedNode.data.category}-${formData.group.trim() || 'null'}-${formData.subgroup.trim() || 'null'}`;
         setRestoredNodes(prev => new Set(prev).add(restoreKey));
-        alert('Service Group already exists! It has been restored to the view.');
+        showSuccess('Service Group already exists! It has been restored to the view.');
         setFormData(prev => ({ ...prev, group: '', subgroup: '' }));
         fetchServiceGroups();
       } else {
-        console.error('Error creating service group:', error);
-        alert(`Error creating service group: ${error.message || error}`);
+        handleApiError(error, 'Create Service Group');
       }
     }
   };

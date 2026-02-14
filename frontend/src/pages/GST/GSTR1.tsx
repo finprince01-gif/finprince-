@@ -47,7 +47,7 @@ export default function GSTR1Page() {
         try {
             // Fetch stats first
             let queryParams = new URLSearchParams(period as any).toString();
-            const statsRes = await httpClient.get(`/api/gst/gstr1/stats/?${queryParams}`);
+            const statsRes = await httpClient.get<Record<string, number>>(`/api/gst/gstr1/stats/?${queryParams}`);
             setStats(statsRes || {});
 
             // Mapping tab names to API endpoints
@@ -90,7 +90,7 @@ export default function GSTR1Page() {
             // In a real application, you'd pass period as query parameters
             queryParams = new URLSearchParams(period as any).toString();
             const fullUrl = `${url}?${queryParams}`;
-            const response = await httpClient.get(fullUrl);
+            const response = await httpClient.get<any[]>(fullUrl);
 
             switch (activeSubTab) {
                 case 'B2B': setB2bData(response || []); break;

@@ -4,6 +4,8 @@ import { useSubscriptionUsage } from '../../hooks/useSubscriptionUsage';
 import type { VoucherType, Ledger, StockItem, Voucher, SalesPurchaseVoucher, PaymentReceiptVoucher, ContraVoucher, JournalVoucher, JournalEntry, VoucherItem, ExtractedInvoiceData, CompanyDetails } from '../../types';
 import Icon from '../../components/Icon';
 import { apiService, httpClient } from '../../services';
+import { showError, showSuccess, showInfo, confirm } from '../../utils/toast';
+
 import MassUploadModal from '../../components/MassUploadModal';
 import InvoiceScannerModal from '../../components/InvoiceScannerModal';
 import ErrorBoundary from '../../components/ErrorBoundary';
@@ -769,7 +771,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           }
 
           setImportSummary({ success: 1, failed });
-          alert("Voucher data loaded into form. Please review and save.");
+          showInfo("Voucher data loaded into form. Please review and save.");
+
 
         } else if (allVouchers.length > 1) {
           // Multiple vouchers - Bulk Review
@@ -777,7 +780,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           setImportSummary({ success: allVouchers.length, failed });
         } else {
           setImportSummary({ success: 0, failed });
-          if (failed > 0) alert("No valid vouchers found.");
+          if (failed > 0) showError("No valid vouchers found.");
+
         }
 
       } catch (error) {
@@ -1123,7 +1127,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         console.log('Sending Purchase Voucher Data:', purchaseData);
         const response = await httpClient.post('/api/vouchers/purchase/', purchaseData);
         console.log('Purchase Voucher Saved:', response);
-        alert('Purchase Voucher Saved Successfully!');
+        showSuccess('Purchase Voucher Saved Successfully!');
+
 
         // Optional: Handle file upload separately if needed, or if we switch to FormData later.
 
@@ -1135,7 +1140,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         const errorMessage = serverError
           ? (typeof serverError === 'object' ? JSON.stringify(serverError, null, 2) : serverError)
           : error.message;
-        alert(`Failed to save Purchase Voucher.\n${errorMessage}`);
+        showError(`Failed to save Purchase Voucher.\n${errorMessage}`);
+
       }
       return;
     }
@@ -1156,7 +1162,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         if (isJournalBalanced) {
           voucher = { id: '', type: voucherType, date, entries, totalDebit, totalCredit, narration };
         } else {
-          alert("Journal entries are not balanced!");
+          showError("Journal entries are not balanced!");
+
         }
         break;
       case 'Expenses':
@@ -2610,15 +2617,18 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   // Post receipt voucher
   const handlePostReceipt = () => {
     if (!account || !party) {
-      alert('Please select Receive In and Receive From accounts');
+      showError('Please select Receive In and Receive From accounts');
+
       return;
     }
     if (totalReceipt <= 0 && !showAdvance) {
-      alert('Please enter receipt amounts');
+      showError('Please enter receipt amounts');
+
       return;
     }
     if (showAdvance && advanceAmount <= 0) {
-      alert('Please enter advance amount');
+      showError('Please enter advance amount');
+
       return;
     }
 
@@ -3137,15 +3147,18 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   // Post payment voucher
   const handlePostPayment = () => {
     if (!account || !party) {
-      alert('Please select Pay From and Pay To accounts');
+      showError('Please select Pay From and Pay To accounts');
+
       return;
     }
     if (totalPayment <= 0 && !showAdvance) {
-      alert('Please enter payment amounts');
+      showError('Please enter payment amounts');
+
       return;
     }
     if (showAdvance && advanceAmount <= 0) {
-      alert('Please enter advance amount');
+      showError('Please enter advance amount');
+
       return;
     }
 
@@ -4080,7 +4093,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     });
 
     if (hasError) {
-      alert('Please fill all mandatory fields (Expense, Post To, Amount) in all rows');
+      showError('Please fill all mandatory fields (Expense, Post To, Amount) in all rows');
+
       return;
     }
 
@@ -4111,7 +4125,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     try {
       const response = await httpClient.post('/api/vouchers/expenses/', payload);
       console.log('Expense Voucher Response:', response);
-      alert('Expense voucher saved successfully!');
+      showSuccess('Expense voucher saved successfully!');
+
       // Reset form
       setExpenseRows([{
         id: Date.now().toString(),
@@ -4131,7 +4146,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       setUploadedFiles([]);
     } catch (error) {
       console.error('Error posting expense voucher:', error);
-      alert('Failed to save expense voucher. Please try again.');
+      showError('Failed to save expense voucher. Please try again.');
+
     }
   };
 
@@ -4828,11 +4844,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 const response = await apiService.createInventoryOperationGRN(data);
                 console.log('GRN Created:', response);
                 setGrnRefNo(response.grn_no);
-                alert('GRN Created Successfully!');
+                showSuccess('GRN Created Successfully!');
+
               } catch (error) {
                 console.error("Failed to create GRN", error);
-                alert("Failed to create GRN. Please check inputs.");
+                showError("Failed to create GRN. Please check inputs.");
               }
+
             }}
           />
         )

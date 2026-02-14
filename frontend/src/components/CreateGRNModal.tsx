@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { httpClient } from '../services/httpClient';
+import { showWarning } from '../utils/toast';
 
 interface GRNItem {
     id: number;
@@ -86,7 +87,7 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
     const handleSave = () => {
         // Validate required fields
         if (!grnNo) {
-            alert('Please enter GRN No');
+            showWarning('Please enter GRN No');
             return;
         }
 

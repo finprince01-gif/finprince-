@@ -46,12 +46,21 @@ const root = ReactDOM.createRoot(rootElement);
 // - Helps identify unsafe lifecycle methods
 // Note: StrictMode only runs in development, not in production builds
 import { ThemeProvider } from '../context/ThemeContext';
+import { ToastProvider } from '../context/ToastContext';
+import ToastContainer from '../components/common/ToastContainer';
+import ConfirmDialog from '../components/common/ConfirmDialog';
 
 root.render(
   <React.StrictMode>
     <ThemeProvider>
-      <App />
+      <ToastProvider>
+        <App />
+        <ToastContainer />
+        <ConfirmDialog />
+      </ToastProvider>
     </ThemeProvider>
   </React.StrictMode>
 );
+
+
 

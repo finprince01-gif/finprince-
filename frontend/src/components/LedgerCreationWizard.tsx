@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Icon from './Icon';
 import LedgerQuestions from './LedgerQuestions';
+import { showWarning } from '../utils/toast';
 
 interface HierarchyRow {
     id: number;
@@ -422,7 +423,7 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
         }
 
         if (!finalName || !selectedNode) {
-            alert('Please enter a name in Sub Group 2, Sub Group 3 or Ledger Type fields.');
+            showWarning('Please enter a name in Sub Group 2, Sub Group 3 or Ledger Type fields.');
             return;
         }
 
@@ -487,7 +488,7 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
         <div className="bg-white rounded-[4px] border border-gray-200 space-y-4">
             <div className="p-4 border-b border-gray-200">
                 <h4 className="font-semibold text-gray-800 flex items-center gap-2">
-                    <Icon name="wand-sparkles" size={18} />
+                    <Icon name="wand-sparkles" />
                     Create Ledger
                 </h4>
             </div>

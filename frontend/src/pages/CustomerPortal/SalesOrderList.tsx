@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Eye, Pencil, Trash2, Mail, Filter } from 'lucide-react';
 import { httpClient } from '../../services/httpClient';
+import { confirm as toastConfirm } from '../../utils/toast';
 
 interface SalesOrderListProps {
     onCreateOrder: () => void;
@@ -192,8 +193,8 @@ const SalesOrderList: React.FC<SalesOrderListProps> = ({ onCreateOrder, onEditOr
                                                     <Pencil size={18} />
                                                 </button>
                                                 <button
-                                                    onClick={() => {
-                                                        if (window.confirm('Are you sure you want to cancel this Sales Order?')) {
+                                                    onClick={async () => {
+                                                        if (await toastConfirm('Are you sure you want to cancel this Sales Order?')) {
                                                             onCancelOrder(order.id);
                                                         }
                                                     }}
@@ -217,7 +218,7 @@ const SalesOrderList: React.FC<SalesOrderListProps> = ({ onCreateOrder, onEditOr
                     </table>
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 

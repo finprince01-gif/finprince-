@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Icon from '../../Icon';
+import { showInfo } from '../../../utils/toast';
 
 /**
  * ExportButton Component
@@ -50,11 +51,11 @@ const ExportButton: React.FC<ExportButtonProps> = ({ data, filename, columns }) 
         // Dependencies xlsx and jspdf are optional.
         // Uncomment the code below and install the packages to enable these features.
         // npm install xlsx jspdf jspdf-autotable
-        alert("Export to Excel is currently disabled. Please install 'xlsx' package to enable.");
+        showInfo("Export to Excel is currently disabled. Please install 'xlsx' package to enable.");
     };
 
     const exportToPDF = async () => {
-        alert("Export to PDF is currently disabled. Please install 'jspdf' and 'jspdf-autotable' packages to enable.");
+        showInfo("Export to PDF is currently disabled. Please install 'jspdf' and 'jspdf-autotable' packages to enable.");
     };
 
     return (

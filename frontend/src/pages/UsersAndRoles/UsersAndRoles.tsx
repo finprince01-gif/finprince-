@@ -11,6 +11,10 @@
 import React, { useState, useEffect } from 'react';
 import { apiService } from '../../services';
 import Icon from '../../components/Icon';
+import { showError, showSuccess, confirm } from '../../utils/toast';
+import { handleApiError } from '../../utils/errorHandler';
+
+
 
 interface UsersAndRolesPageProps {
     onNavigate: (page: string) => void;
@@ -175,29 +179,7 @@ const UsersAndRolesPage: React.FC<UsersAndRolesPageProps> = ({ onNavigate }) => 
         setShowUserModal(true);
     };
 
-    const formatErrorMessage = (error: any): string => {
-        if (typeof error === 'string') return error;
-        if (typeof error === 'object' && error !== null) {
-            if (error.detail) {
-                if (typeof error.detail === 'string') return error.detail;
-                if (typeof error.detail === 'object') return formatErrorMessage(error.detail);
-            }
-            if (error.message && typeof error.message === 'string') return error.message;
-            const messages: string[] = [];
-            Object.keys(error).forEach(key => {
-                const value = error[key];
-                if (Array.isArray(value)) {
-                    const fieldName = key.charAt(0).toUpperCase() + key.slice(1).replace('_', ' ');
-                    messages.push(`${fieldName}: ${value.join(', ')}`);
-                } else if (typeof value === 'string') {
-                    const fieldName = key.charAt(0).toUpperCase() + key.slice(1).replace('_', ' ');
-                    messages.push(`${fieldName}: ${value}`);
-                }
-            });
-            if (messages.length > 0) return messages.join('\n');
-        }
-        return 'An unexpected error occurred';
-    };
+
 
     const handleSaveUser = async () => {
         try {
@@ -211,22 +193,24 @@ const UsersAndRolesPage: React.FC<UsersAndRolesPageProps> = ({ onNavigate }) => 
             } else {
                 await apiService.createUserWithRoles(userForm);
             }
-            setShowUserModal(false);
             loadUsers();
+            showSuccess(editingUser ? 'User updated successfully' : 'User created successfully');
         } catch (error: any) {
-            alert(formatErrorMessage(error));
+            handleApiError(error, editingUser ? 'Update User' : 'Create User');
         }
     };
 
     const handleDeleteUser = async (userId: number) => {
-        if (!confirm('Are you sure you want to permanently delete this user?')) return;
+        if (!await confirm('Are you sure you want to permanently delete this user?')) return;
         try {
             await apiService.deleteUser(userId);
             loadUsers();
+            showSuccess('User deleted successfully');
         } catch (error: any) {
-            alert(formatErrorMessage(error));
+            handleApiError(error, 'Delete User');
         }
     };
+
 
     // ============================================================================
     // ROLE MANAGEMENT
@@ -264,20 +248,23 @@ const UsersAndRolesPage: React.FC<UsersAndRolesPageProps> = ({ onNavigate }) => 
             }
             setShowRoleModal(false);
             loadRoles();
+            showSuccess(editingRole ? 'Role updated successfully' : 'Role created successfully');
         } catch (error: any) {
-            alert(formatErrorMessage(error));
+            handleApiError(error, editingRole ? 'Update Role' : 'Create Role');
         }
     };
 
     const handleDeleteRole = async (roleId: number) => {
-        if (!confirm('Are you sure?')) return;
+        if (!await confirm('Are you sure?')) return;
         try {
             await apiService.deleteRole(roleId);
             loadRoles();
+            showSuccess('Role deleted successfully');
         } catch (error: any) {
-            alert(formatErrorMessage(error));
+            handleApiError(error, 'Delete Role');
         }
     };
+
 
     const togglePagePermission = (pageName: string) => {
         const newPermissions = { ...roleForm.permissions };

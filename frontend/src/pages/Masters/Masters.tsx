@@ -2,9 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { usePermissions } from '../../hooks/usePermissions';
 import type { Ledger, LedgerGroupMaster, VoucherTypeMaster } from '../../types';
 import Icon from '../../components/Icon';
+import { showError, showSuccess, showInfo, showWarning, confirm } from '../../utils/toast';
+
+import { handleApiError } from '../../utils/errorHandler';
 import { HierarchicalDropdown } from '../../components/HierarchicalDropdown';
 import { LedgerCreationWizard } from '../../components/LedgerCreationWizard.tsx';
 import { apiService, httpClient } from '../../services';
+
 
 
 
@@ -183,10 +187,11 @@ const MastersPage: React.FC<MastersPageProps> = ({
     // Require inventory fields if group is Inventories
     if (ledgerGroup === 'Inventories') {
       if (!inventoryType.trim() || !inventoryValuationMethod.trim()) {
-        alert('Please fill in all required inventory fields.');
+        showError('Please fill in all required inventory fields.');
         return;
       }
     }
+
 
     if (isEditMode && selectedLedger) {
       // Update existing ledger
@@ -384,9 +389,10 @@ const MastersPage: React.FC<MastersPageProps> = ({
 
   const handleEditLedger = () => {
     if (!selectedLedger) {
-      alert('Please select a ledger first by clicking the radio button.');
+      showError('Please select a ledger first by clicking the radio button.');
       return;
     }
+
     console.log('Editing ledger:', selectedLedger);
     setLedgerName(selectedLedger.name);
     setLedgerGroup(selectedLedger.group);
@@ -448,16 +454,18 @@ const MastersPage: React.FC<MastersPageProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleDeleteLedger = () => {
+  const handleDeleteLedger = async () => {
     if (!selectedLedger) {
-      alert('Please select a ledger first by clicking the radio button.');
+      showError('Please select a ledger first by clicking the radio button.');
       return;
     }
 
-    const confirmMessage = `Are you sure you want to delete "${selectedLedger.name}" ? `;
-    if (!window.confirm(confirmMessage)) {
+
+    const confirmMessage = `Are you sure you want to delete "${selectedLedger.name}"?`;
+    if (!await confirm(confirmMessage)) {
       return;
     }
+
 
     console.log('Deleting ledger:', selectedLedger);
 
@@ -473,14 +481,16 @@ const MastersPage: React.FC<MastersPageProps> = ({
           setLedgerGroup('Sundry Debtors');
           setIsEditMode(false);
         }
+        showSuccess('Ledger deleted successfully');
       } catch (error) {
-        console.error('Error deleting ledger:', error);
-        alert('Failed to delete ledger. Please try again.');
+        handleApiError(error, 'Delete Ledger');
       }
+
     } else {
       console.warn('Cannot delete ledger: missing delete handler');
-      alert('Delete function is not available.');
+      showError('Delete function is not available.');
     }
+
   };
 
   const handleCancelEdit = () => {
@@ -518,9 +528,10 @@ const MastersPage: React.FC<MastersPageProps> = ({
     );
 
     if (isDuplicate) {
-      alert(`Group "${trimmedGroupName}" already exists.Please use a different name.`);
+      showError(`Group "${trimmedGroupName}" already exists. Please use a different name.`);
       return;
     }
+
 
     if (isEditModeGroup && selectedGroup) {
       if (onUpdateLedgerGroup) {
@@ -542,9 +553,10 @@ const MastersPage: React.FC<MastersPageProps> = ({
 
   const handleEditGroup = () => {
     if (!selectedGroup) {
-      alert('Please select a group first by clicking the radio button.');
+      showError('Please select a group first by clicking the radio button.');
       return;
     }
+
     console.log('Editing group:', selectedGroup);
     setGroupName(selectedGroup.name);
     setGroupUnder(selectedGroup.under);
@@ -552,16 +564,18 @@ const MastersPage: React.FC<MastersPageProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleDeleteGroup = () => {
+  const handleDeleteGroup = async () => {
     if (!selectedGroup) {
-      alert('Please select a group first by clicking the radio button.');
+      showError('Please select a group first by clicking the radio button.');
       return;
     }
 
-    const confirmMessage = `Are you sure you want to delete "${selectedGroup.name}" ? `;
-    if (!window.confirm(confirmMessage)) {
+
+    const confirmMessage = `Are you sure you want to delete "${selectedGroup.name}"?`;
+    if (!await confirm(confirmMessage)) {
       return;
     }
+
 
     console.log('Deleting group:', selectedGroup);
 
@@ -575,14 +589,16 @@ const MastersPage: React.FC<MastersPageProps> = ({
           setGroupUnder('Current Assets');
           setIsEditModeGroup(false);
         }
+        showSuccess('Group deleted successfully');
       } catch (error) {
-        console.error('Error deleting group:', error);
-        alert('Failed to delete group. Please try again.');
+        handleApiError(error, 'Delete Group');
       }
+
     } else {
       console.warn('Cannot delete group: missing delete handler');
-      alert('Delete function is not available.');
+      showError('Delete function is not available.');
     }
+
   };
 
   const handleCancelEditGroup = () => {
@@ -616,7 +632,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
       const configs = await httpClient.get<any[]>(endpoint);
       setExistingVouchers(configs || []);
     } catch (error) {
-      console.error('Error fetching voucher configurations:', error);
+      handleApiError(error, 'Fetch Voucher Configurations');
       setExistingVouchers([]);
     }
   };
@@ -690,37 +706,22 @@ const MastersPage: React.FC<MastersPageProps> = ({
       // Success - refresh the list and reset form
       await fetchVoucherConfigurations();
       resetVoucherForm();
-      alert(isEditModeVoucher ? 'Voucher configuration updated successfully!' : 'Voucher configuration created successfully!');
+      showSuccess(isEditModeVoucher ? 'Voucher configuration updated successfully!' : 'Voucher configuration created successfully!');
+
     } catch (error: any) {
-      console.error('Error saving voucher configuration:', error);
-
-      // Extract error message from httpClient error
-      let errorMessage = 'Failed to save voucher configuration';
-      if (error.response?.data) {
-        const errorData = error.response.data;
-        if (errorData.detail) {
-          errorMessage = errorData.detail;
-        } else if (typeof errorData === 'object') {
-          errorMessage += ':\n';
-          Object.keys(errorData).forEach(field => {
-            const fieldErrors = Array.isArray(errorData[field]) ? errorData[field] : [errorData[field]];
-            errorMessage += `\n${field}: ${fieldErrors.join(', ')}`;
-          });
-        }
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-
-      setVoucherFormError(errorMessage);
+      handleApiError(error, 'Save Voucher Configuration');
+      // Set form error just in case we need validation feedback in UI too, 
+      // but handleApiError shows toast.
     }
   };
 
   // Handle edit voucher configuration
   const handleEditVoucherConfig = () => {
     if (!selectedVoucherConfig) {
-      alert('Please select a voucher configuration first');
+      showError('Please select a voucher configuration first');
       return;
     }
+
 
     setVoucherName(selectedVoucherConfig.voucher_name || '');
     setEnableAutoNumbering(selectedVoucherConfig.enable_auto_numbering ?? true);
@@ -735,24 +736,26 @@ const MastersPage: React.FC<MastersPageProps> = ({
   // Handle delete voucher configuration
   const handleDeleteVoucherConfig = async () => {
     if (!selectedVoucherConfig) {
-      alert('Please select a voucher configuration first');
+      showError('Please select a voucher configuration first');
       return;
     }
 
-    if (!window.confirm(`Are you sure you want to delete "${selectedVoucherConfig.voucher_name}"?`)) {
+
+    if (!await confirm(`Are you sure you want to delete "${selectedVoucherConfig.voucher_name}"?`)) {
       return;
     }
+
 
     try {
       const endpoint = getVoucherEndpoint(selectedVoucher);
       await httpClient.delete(`${endpoint}${selectedVoucherConfig.id}/`);
       await fetchVoucherConfigurations();
       resetVoucherForm();
-      alert('Voucher configuration deleted successfully!');
+      showSuccess('Voucher configuration deleted successfully!');
     } catch (error) {
-      console.error('Error deleting voucher configuration:', error);
-      alert('Failed to delete voucher configuration');
+      handleApiError(error, 'Delete Voucher Configuration');
     }
+
   };
 
   const handleAddVoucherType = (e: React.FormEvent) => {
@@ -790,9 +793,10 @@ const MastersPage: React.FC<MastersPageProps> = ({
               if (!ledgers.find(l => l.name.toLowerCase() === newLedger.name.toLowerCase())) {
                 onAddLedger(newLedger);
               } else {
-                alert('A ledger with this name already exists!');
+                showError('A ledger with this name already exists!');
               }
             }}
+
           />
 
           {/* Conditional fields for Secured Loans */}
@@ -1190,10 +1194,10 @@ const MastersPage: React.FC<MastersPageProps> = ({
 
               <button
                 type="button"
-                onClick={() => alert('Update Fixed Assets Register functionality coming soon!')}
+                onClick={() => showInfo('Update Fixed Assets Register functionality coming soon!')}
                 className="inline-flex items-center justify-center w-full px-4 py-2 border border-indigo-600 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-indigo-600 bg-white hover:bg-indigo-50/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
-                <Icon name="file-text" className="w-4 h-4 mr-2" />
+                <Icon name="document" className="w-4 h-4 mr-2" />
                 Update Fixed Assets Register
               </button>
             </>
@@ -1259,10 +1263,10 @@ const MastersPage: React.FC<MastersPageProps> = ({
 
               <button
                 type="button"
-                onClick={() => alert('Update Fixed Assets Register functionality coming soon!')}
+                onClick={() => showInfo('Update Fixed Assets Register functionality coming soon!')}
                 className="inline-flex items-center justify-center w-full px-4 py-2 border border-indigo-600 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-indigo-600 bg-white hover:bg-indigo-50/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
-                <Icon name="file-text" className="w-4 h-4 mr-2" />
+                <Icon name="document" className="w-4 h-4 mr-2" />
                 Update Fixed Assets Register
               </button>
             </>
@@ -1379,10 +1383,10 @@ const MastersPage: React.FC<MastersPageProps> = ({
             <>
               <button
                 type="button"
-                onClick={() => alert('Update Fixed Assets Register functionality coming soon!')}
+                onClick={() => showInfo('Update Fixed Assets Register functionality coming soon!')}
                 className="inline-flex items-center justify-center w-full px-4 py-2 border border-indigo-600 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-indigo-600 bg-white hover:bg-indigo-50/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
-                <Icon name="file-text" className="w-4 h-4 mr-2" />
+                <Icon name="document" className="w-4 h-4 mr-2" />
                 Update Fixed Assets Register
               </button>
             </>
