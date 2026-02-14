@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Eye, Pencil, Trash2, Mail, Filter } from 'lucide-react';
+import { Eye, Pencil, Trash2, ArrowLeft, Clock, CheckCircle } from 'lucide-react';
 import { httpClient } from '../../services/httpClient';
 
 interface SalesOrderListProps {
@@ -36,6 +36,7 @@ interface SalesOrder {
 }
 
 const SalesOrderList: React.FC<SalesOrderListProps> = ({ onCreateOrder, onEditOrder, onViewOrder, onCancelOrder }) => {
+    const [viewMode, setViewMode] = useState<'dashboard' | 'list'>('dashboard');
     const [activeTab, setActiveTab] = useState<SalesOrderSubTab>('Pending & Cancelled');
     const [orders, setOrders] = useState<SalesOrder[]>([]);
     const [loading, setLoading] = useState(true);
@@ -67,8 +68,11 @@ const SalesOrderList: React.FC<SalesOrderListProps> = ({ onCreateOrder, onEditOr
     };
 
     useEffect(() => {
-        fetchOrders();
-    }, []);
+        // Only fetch if we are in list view
+        if (viewMode === 'list') {
+            fetchOrders();
+        }
+    }, [viewMode]);
 
     const calculateTotal = (items: SalesOrderItem[]) => {
         const total = items.reduce((sum, item) => sum + (parseFloat(item.net_value as any) || 0), 0);
@@ -77,146 +81,192 @@ const SalesOrderList: React.FC<SalesOrderListProps> = ({ onCreateOrder, onEditOr
 
     const filteredOrders = orders.filter(order => {
         if (activeTab === 'Pending & Cancelled') {
-            return !order.is_deleted && order.is_active; // Placeholder logic
+            return !order.is_deleted && order.is_active;
         } else {
-            return false; // 'Executed' logic placeholder
+            return false;
         }
     });
 
+    const handleCardClick = (tab: SalesOrderSubTab) => {
+        setActiveTab(tab);
+        setViewMode('list');
+    };
+
     return (
-        <div className="text-left">
-            <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-medium text-gray-900">Sales Order</h3>
-                <button
-                    className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-[4px] hover:bg-indigo-700 transition-colors"
-                    onClick={onCreateOrder}
-                >
-                    Create Sales Order
-                </button>
-            </div>
-
-            {/* Sales Order Sub-tabs */}
-            <div className="border-b border-gray-200 mb-6">
-                <nav className="flex gap-8">
-                    {['Pending & Cancelled', 'Executed'].map((tab) => (
+        <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-100 p-6">
+            {viewMode === 'dashboard' ? (
+                <div>
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-xl font-bold text-gray-900">Sales Order</h2>
                         <button
-                            key={tab}
-                            onClick={() => setActiveTab(tab as SalesOrderSubTab)}
-                            className={`py-3 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === tab
-                                ? 'border-indigo-500 text-indigo-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-700'
-                                }`}
+                            onClick={onCreateOrder}
+                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                         >
-                            {tab.toUpperCase()}
+                            Create Sales Order
                         </button>
-                    ))}
-                </nav>
-            </div>
-
-            <div className="bg-white border border-gray-200 rounded-[4px] overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Sales Order #
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Sales Order Date
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Customer Reference Name
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Delivery Date
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Amount
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Status
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Actions
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {loading ? (
-                                <tr>
-                                    <td colSpan={7} className="px-6 py-12 text-center text-sm text-gray-500">
-                                        <div className="flex items-center justify-center gap-2">
-                                            <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-[4px] animate-spin"></div>
-                                            Fetching orders...
-                                        </div>
-                                    </td>
-                                </tr>
-                            ) : filteredOrders.length > 0 ? (
-                                filteredOrders.map((order) => (
-                                    <tr key={order.id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-indigo-600 cursor-pointer hover:underline" onClick={() => onViewOrder(order.id)}>
-                                            {order.so_number}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            {order.date}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            {order.customer_name}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            {order.delivery_terms?.delivery_date || 'N/A'}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            {calculateTotal(order.items)}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${order.is_active ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
-                                                }`}>
-                                                {order.is_active ? 'Pending' : 'Inactive'}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                            <div className="flex items-center space-x-3">
-                                                <button
-                                                    onClick={() => onViewOrder(order.id)}
-                                                    className="text-gray-400 hover:text-indigo-600 transition-colors"
-                                                    title="View"
-                                                >
-                                                    <Eye size={18} />
-                                                </button>
-                                                <button
-                                                    onClick={() => onEditOrder(order.id)}
-                                                    className="text-gray-400 hover:text-indigo-600 transition-colors"
-                                                    title="Edit"
-                                                >
-                                                    <Pencil size={18} />
-                                                </button>
-                                                <button
-                                                    onClick={() => {
-                                                        if (window.confirm('Are you sure you want to cancel this Sales Order?')) {
-                                                            onCancelOrder(order.id);
-                                                        }
-                                                    }}
-                                                    className="text-gray-400 hover:text-red-600 transition-colors"
-                                                    title="Cancel"
-                                                >
-                                                    <Trash2 size={18} />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
-                            ) : (
-                                <tr>
-                                    <td colSpan={7} className="px-6 py-12 text-center text-sm text-gray-500">
-                                        No sales orders found for this tab.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Pending & Cancelled Card */}
+                        <div
+                            onClick={() => handleCardClick('Pending & Cancelled')}
+                            className="bg-white p-6 rounded-[4px] border border-gray-200 hover:border-indigo-500 hover:shadow-md cursor-pointer transition-all group"
+                        >
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="p-3 rounded-[4px] bg-indigo-50 text-indigo-600">
+                                    <Clock className="w-6 h-6" />
+                                </div>
+                                <ArrowLeft className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transform rotate-180 transition-all opacity-0 group-hover:opacity-100" />
+                            </div>
+                            <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">Pending & Cancelled</h3>
+                            <p className="text-sm text-gray-500 mt-2">View pending and cancelled orders.</p>
+                        </div>
+                        {/* Executed Card */}
+                        <div
+                            onClick={() => handleCardClick('Executed')}
+                            className="bg-white p-6 rounded-[4px] border border-gray-200 hover:border-indigo-500 hover:shadow-md cursor-pointer transition-all group"
+                        >
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="p-3 rounded-[4px] bg-indigo-50 text-indigo-600">
+                                    <CheckCircle className="w-6 h-6" />
+                                </div>
+                                <ArrowLeft className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transform rotate-180 transition-all opacity-0 group-hover:opacity-100" />
+                            </div>
+                            <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">Executed</h3>
+                            <p className="text-sm text-gray-500 mt-2">View executed orders history.</p>
+                        </div>
+                    </div>
                 </div>
-            </div>
+            ) : (
+                <>
+                    {/* Header Section */}
+                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+                        <div className="flex items-center gap-4">
+                            <button
+                                onClick={() => setViewMode('dashboard')}
+                                className="p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
+                                title="Back to Dashboard"
+                            >
+                                <ArrowLeft className="w-5 h-5 text-gray-600" />
+                            </button>
+                            <h2 className="text-xl font-bold text-gray-900">Sales Order - {activeTab}</h2>
+                        </div>
+
+                        <div className="flex items-center">
+                            <button
+                                onClick={onCreateOrder}
+                                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            >
+                                Create Sales Order
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="overflow-hidden ring-1 ring-black ring-opacity-5 rounded-[4px]">
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Sales Order #
+                                        </th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Sales Order Date
+                                        </th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Customer Reference Name
+                                        </th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Delivery Date
+                                        </th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Amount
+                                        </th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Status
+                                        </th>
+                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Actions
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    {loading ? (
+                                        <tr>
+                                            <td colSpan={7} className="px-6 py-4 text-center text-sm text-gray-500">
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-[4px] animate-spin"></div>
+                                                    Fetching orders...
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ) : filteredOrders.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={7} className="px-6 py-4 text-center text-sm text-gray-500">
+                                                No orders found for this tab.
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        filteredOrders.map((order) => (
+                                            <tr key={order.id} className="hover:bg-gray-50">
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-indigo-600 hover:text-indigo-900 cursor-pointer" onClick={() => onViewOrder(order.id)}>
+                                                    {order.so_number}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                    {order.date}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                    {order.customer_name}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                    {order.delivery_terms?.delivery_date || '-'}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
+                                                    {calculateTotal(order.items)}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${!order.is_active ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
+                                                        }`}>
+                                                        {!order.is_active ? 'Cancelled' : 'Pending'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                    <div className="flex justify-end gap-2">
+                                                        <button
+                                                            onClick={() => onViewOrder(order.id)}
+                                                            className="text-gray-400 hover:text-gray-500"
+                                                            title="View"
+                                                        >
+                                                            <Eye className="w-4 h-4" />
+                                                        </button>
+                                                        {order.is_active && (
+                                                            <>
+                                                                <button
+                                                                    onClick={() => onEditOrder(order.id)}
+                                                                    className="text-gray-400 hover:text-indigo-600"
+                                                                    title="Edit"
+                                                                >
+                                                                    <Pencil className="w-4 h-4" />
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => onCancelOrder(order.id)}
+                                                                    className="text-gray-400 hover:text-red-600"
+                                                                    title="Cancel"
+                                                                >
+                                                                    <Trash2 className="w-4 h-4" />
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </>
+            )}
         </div>
     );
 };
