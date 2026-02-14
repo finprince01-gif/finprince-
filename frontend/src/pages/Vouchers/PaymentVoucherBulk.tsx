@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { showError, showSuccess } from '../../utils/toast';
+
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5003';
 
@@ -178,18 +180,21 @@ const PaymentVoucherBulk: React.FC = () => {
   // Handle Post
   const handlePost = () => {
     if (!payFrom) {
-      alert('Please select Pay From account');
+      showError('Please select Pay From account');
+
       return;
     }
 
     if (showAdvanceSection) {
       if (!advanceRefNo || advanceAmount <= 0) {
-        alert('Please enter advance reference number and amount');
+        showError('Please enter advance reference number and amount');
+
         return;
       }
     } else {
       if (totalPayment <= 0) {
-        alert('Please enter payment amounts');
+        showError('Please enter payment amounts');
+
         return;
       }
     }
@@ -203,7 +208,8 @@ const PaymentVoucherBulk: React.FC = () => {
       advance: showAdvanceSection ? { refNo: advanceRefNo, amount: advanceAmount } : null
     });
 
-    alert('Payment voucher posted successfully!');
+    showSuccess('Payment voucher posted successfully!');
+
     handleCancel();
   };
 

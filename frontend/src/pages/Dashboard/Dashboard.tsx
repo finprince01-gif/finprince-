@@ -9,6 +9,8 @@ import { useSubscriptionUsage } from '../../hooks/useSubscriptionUsage';
 import { formatCurrency } from '../../utils/formatting';
 import WidgetRenderer from '../DashboardBuilder/WidgetRenderer';
 import { RotateCcw, LayoutDashboard, ChevronRight, TrendingUp, Wallet, Receipt, Users, FileText } from 'lucide-react';
+import { confirm, showSuccess } from '../../utils/toast';
+
 
 interface DashboardPageProps {
     onNavigate: (page: Page) => void;
@@ -51,13 +53,15 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, companyName, 
         return () => window.removeEventListener('dashboard-layout-updated', loadWidgets);
     }, []);
 
-    const handleResetDefault = () => {
-        if (confirm("Reset to default dashboard view?")) {
+    const handleResetDefault = async () => {
+        if (await confirm("Reset to default dashboard view?")) {
             setCustomWidgets([]);
             localStorage.removeItem('bi_dashboard_config_v2');
-            window.location.reload();
+            showSuccess('Dashboard reset to default');
+            setTimeout(() => window.location.reload(), 1000);
         }
     };
+
 
     const getWidgetData = (widget: Widget) => {
         if (widget.dataset === 'Sales') return revenueData.map(d => ({ Date: d.period, Amount: d.revenue, name: d.period, value: d.revenue }));

@@ -6,6 +6,7 @@ import WidgetRenderer from './WidgetRenderer';
 import RightPanel from './RightPanel';
 import GlobalFilterBar from './GlobalFilterBar';
 import { Save, RotateCcw, Monitor, ChevronLeft, LayoutDashboard, Share2, Plus, Download, Maximize, Minimize } from 'lucide-react';
+import { showSuccess, showError, showInfo } from '../../utils/toast';
 
 interface DashboardBuilderPageProps {
     vouchers: Voucher[];
@@ -87,14 +88,14 @@ const DashboardBuilderPage: React.FC<DashboardBuilderPageProps> = ({ vouchers, l
     const handleSave = () => {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(widgets));
         window.dispatchEvent(new Event('dashboard-layout-updated'));
-        alert('BI Dashboard Configuration Saved!');
+        showSuccess('BI Dashboard Configuration Saved!');
         onNavigate?.('Dashboard');
     };
 
     const handleShare = () => {
         const config = JSON.stringify(widgets);
         navigator.clipboard.writeText(config).then(() => {
-            alert('System: BI Configuration copied to clipboard! You can share this string with others or save it as a backup.');
+            showInfo('System: BI Configuration copied to clipboard! You can share this string with others or save it as a backup.');
         });
     };
 
@@ -111,7 +112,7 @@ const DashboardBuilderPage: React.FC<DashboardBuilderPageProps> = ({ vouchers, l
     const toggleFullScreen = () => {
         if (!document.fullscreenElement) {
             containerRef.current?.requestFullscreen().catch(err => {
-                alert(`Error attempting to enable full-screen mode: ${err.message}`);
+                showError(`Error attempting to enable full-screen mode: ${err.message}`);
             });
             setIsFullScreen(true);
         } else {

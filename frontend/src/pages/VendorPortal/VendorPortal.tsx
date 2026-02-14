@@ -6,6 +6,10 @@ import { httpClient } from '../../services/httpClient';
 import CategoryHierarchicalDropdown from '../../components/CategoryHierarchicalDropdown';
 import { InventoryCategoryWizard } from '../../components/InventoryCategoryWizard';
 import SearchableDropdown from '../../components/SearchableDropdown';
+import { showError, showSuccess, showInfo, showWarning, confirm } from '../../utils/toast';
+import { handleApiError } from '../../utils/errorHandler';
+
+
 
 type VendorTab = 'Master' | 'Transaction';
 type MasterSubTab = 'Category' | 'PO Settings' | 'Vendor Creation' | 'Basic Details' | 'GST Details' | 'Products/Services' | 'TDS & Other Statutory' | 'Banking Info' | 'Terms & Conditions';
@@ -259,7 +263,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             const data = Array.isArray(response) ? response : (response.results || []);
             setVendorList(data);
         } catch (error) {
-            console.error('Error fetching vendors:', error);
+            handleApiError(error, 'Fetch Vendors');
         } finally {
             setLoadingVendors(false);
         }
@@ -280,7 +284,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             const data = Array.isArray(response) ? response : (response.results || []);
             setAvailableBranches(data);
         } catch (error) {
-            console.error('Error fetching vendor branches:', error);
+            handleApiError(error, 'Fetch Vendor Branches');
             setAvailableBranches([]);
         }
     };
@@ -295,7 +299,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             const data = Array.isArray(response) ? response : (response.results || []);
             setAvailableVendorItems(data);
         } catch (error) {
-            console.error('Error fetching vendor items:', error);
+            handleApiError(error, 'Fetch Vendor Items');
             setAvailableVendorItems([]);
         }
     };
@@ -449,24 +453,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const [showCancelPOModal, setShowCancelPOModal] = useState(false);
     const [cancelReason, setCancelReason] = useState('');
 
-    // Toast Notification State
-    const [toast, setToast] = useState<{
-        show: boolean;
-        message: string;
-        type: 'success' | 'error' | 'info' | 'warning';
-    }>({
-        show: false,
-        message: '',
-        type: 'info'
-    });
+    // Local showToast removed in favor of global toast utility
 
-    // Show toast notification
-    const showToast = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
-        setToast({ show: true, message, type });
-        setTimeout(() => {
-            setToast({ show: false, message: '', type: 'info' });
-        }, 4000); // Auto-hide after 4 seconds
-    };
 
 
 
@@ -629,7 +617,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             console.log('✅ PO created successfully:', response);
 
             const poNumber = (response as any)?.data?.data?.po_number || (response as any)?.data?.po_number || 'Generated';
-            alert(`Purchase Order created successfully! PO Number: ${poNumber}`);
+            showSuccess(`Purchase Order created successfully! PO Number: ${poNumber}`);
+
 
 
             // Reset form
@@ -672,9 +661,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             setShowCreatePOModal(false);
 
         } catch (error: any) {
-            console.error('❌ Error creating PO:', error);
-            const errorMessage = error.response?.data?.error || error.response?.data?.errors || error.message || 'Error creating Purchase Order';
-            alert(`Error: ${JSON.stringify(errorMessage)}`);
+            handleApiError(error, 'Create Purchase Order');
         }
     };
 
@@ -729,9 +716,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const handleConfirmCancelPO = () => {
         // Validate that reason is provided
         if (!cancelReason.trim()) {
-            alert('Please provide a reason for cancellation');
+            showError('Please provide a reason for cancellation');
             return;
         }
+
 
         // Remove the PO from the list (or update status to 'Cancelled')
         setPurchaseOrders(purchaseOrders.filter(po => po.id !== selectedPO.id));
@@ -1025,7 +1013,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         e.preventDefault();
         console.log('Refactored: Basic Details -> Next');
         if (!vendorName || !vendorEmail || !contactNo || !vendorCategory) {
-            alert('Please fill in all required fields (Vendor Name, Email, Contact No, Vendor Category)');
+            showError('Please fill in all required fields (Vendor Name, Email, Contact No, Vendor Category)');
             return;
         }
         setActiveMasterSubTab('GST Details');
@@ -1074,8 +1062,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const handleFileUpload = (fileType: 'msmeFile' | 'fssaiFile' | 'iecFile' | 'eouFile', file: File | null) => {
         if (file) {
             setUploadedFiles(prev => ({ ...prev, [fileType]: file }));
-            showToast(`${file.name} uploaded successfully!`, 'success');
+            showSuccess(`${file.name} uploaded successfully!`);
         }
+
     };
 
     // Handle TDS Details Form Submit (Navigation Only)
@@ -1110,7 +1099,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         console.log('=== Finishing and Saving All Vendor Data ===');
 
         if (!vendorName) {
-            alert('Vendor Name is required in Basic Details');
+            showError('Vendor Name is required in Basic Details');
             setActiveMasterSubTab('Basic Details');
             return;
         }
@@ -1228,15 +1217,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             await httpClient.post('/api/vendors/terms/', termsPayload);
             console.log('✅ Terms Saved');
 
-            alert('Vendor Onboarded Successfully!');
+            showSuccess('Vendor Onboarded Successfully!');
             // Reset and Redirect
             setCreatedVendorId(null);
             localStorage.removeItem('currentVendorId');
             window.location.reload();
 
         } catch (error: any) {
-            console.error('❌ Error saving vendor:', error);
-            alert('Error saving vendor: ' + (error.response?.data?.error || error.message));
+            handleApiError(error, 'Save Vendor');
         } finally {
             setIsSubmitting(false);
         }
@@ -1273,7 +1261,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 // Ensure unique values for dropdowns if API returns duplicates or handle in component
                 setInventoryItems(Array.isArray(response) ? response : []);
             } catch (error) {
-                console.error('Error fetching inventory items:', error);
+                handleApiError(error, 'Fetch Inventory Items');
             }
         };
 
@@ -1342,7 +1330,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const handleProductServicesSubmit = () => {
         console.log('Refactored: Product Services -> Next');
         if (items.length === 0) {
-            alert('Please add at least one item.');
+            showError('Please add at least one item.');
             return;
         }
         setActiveMasterSubTab('TDS & Other Statutory'); // Correct next tab
@@ -1356,7 +1344,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             const response = await httpClient.get('/api/inventory/master-categories/');
             setCategories(Array.isArray(response) ? response : []);
         } catch (error) {
-            console.error('Error fetching categories:', error);
+            handleApiError(error, 'Fetch Categories');
             setCategories([]);
         } finally {
             setLoadingCategories(false);
@@ -1367,7 +1355,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         e.preventDefault();
 
         if (!categoryName) {
-            alert('Category name is required');
+            showError('Category name is required');
             return;
         }
 
@@ -1381,16 +1369,15 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         try {
             if (isEditModeCategory && selectedCategory) {
                 await httpClient.put(`/api/inventory/master-categories/${selectedCategory.id}/`, payload);
-                alert('Category updated successfully!');
+                showSuccess('Category updated successfully!');
             } else {
                 await httpClient.post('/api/inventory/master-categories/', payload);
-                alert('Category created successfully!');
+                showSuccess('Category created successfully!');
             }
             fetchCategories();
             resetCategoryForm();
         } catch (error: any) {
-            console.error('Error saving category:', error);
-            alert(error.response?.data?.error || 'Error saving category');
+            handleApiError(error, 'Save Category');
         }
     };
 
@@ -1403,14 +1390,13 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     };
 
     const handleDeleteCategory = async (id: number) => {
-        if (!confirm('Are you sure you want to delete this category?')) return;
+        if (!await confirm('Are you sure you want to delete this category?')) return;
         try {
             await httpClient.delete(`/api/inventory/master-categories/${id}/`);
-            alert('Category deleted successfully!');
+            showSuccess('Category deleted successfully!');
             fetchCategories();
         } catch (error: any) {
-            console.error('Error deleting category:', error);
-            alert(error.response?.data?.error || 'Error deleting category');
+            handleApiError(error, 'Delete Category');
         }
     };
 
@@ -1431,7 +1417,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             // httpClient.get() returns the data directly, not wrapped in .data
             setPoSeriesList(Array.isArray(response) ? response : []);
         } catch (error) {
-            console.error('Error fetching PO Series:', error);
+            handleApiError(error, 'Fetch PO Series');
             setPoSeriesList([]);
         } finally {
             setLoadingPOSeries(false);
@@ -1458,7 +1444,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         e.preventDefault();
 
         if (!poCategoryId) {
-            alert('Please select a category');
+            showError('Please select a category');
             return;
         }
 
@@ -1481,18 +1467,18 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             fetchPOSeries();
             resetPOForm();
         } catch (error: any) {
-            console.error('Error saving PO Series:', error);
-            alert(error.response?.data?.error || 'Error saving PO Series');
+            handleApiError(error, 'Save PO Series');
         }
     };
 
     const handleDeletePO = async (id: number) => {
-        if (!confirm('Are you sure you want to delete this series?')) return;
+        if (!await confirm('Are you sure you want to delete this series?')) return;
         try {
             await httpClient.delete(`/api/vendors/po-settings/${id}/`);
+            showSuccess('PO Series deleted successfully!');
             fetchPOSeries();
-        } catch (error) {
-            console.error('Error deleting PO Series:', error);
+        } catch (error: any) {
+            handleApiError(error, 'Delete PO Series');
         }
     };
 
@@ -1595,9 +1581,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             subgroup: data.subgroup,
                                             is_active: true
                                         });
-                                        alert('Category created successfully!');
+                                        showSuccess('Category created successfully!');
                                     } catch (error: any) {
-                                        console.error('Error creating category:', error);
+                                        // Error propagated to component
                                         throw error;
                                     }
                                 }}
@@ -3864,8 +3850,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                             const logMessages = bill.actionLog?.map(log =>
                                                                                                 `${log.action} by ${log.user} on ${log.date}`
                                                                                             ).join('\n');
-                                                                                            showToast(`Action History:\n\n${logMessages}`, 'info');
+                                                                                            showInfo(`Action History:\n\n${logMessages}`);
                                                                                         }}
+
                                                                                         className="text-gray-500 hover:text-indigo-600 focus:outline-none transition-colors"
                                                                                         title="View Action History"
                                                                                     >
@@ -4718,57 +4705,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                     </div>
                 )}
 
-            {/* Toast Notification */}
-            {toast.show && (
-                <div className="fixed top-4 right-4 z-[9999] animate-slide-in-right">
-                    <div className={`flex items-start gap-3 px-6 py-4 rounded-[4px] shadow-none border border-slate-200 border-l-4 min-w-[320px] max-w-md backdrop-blur-sm ${toast.type === 'success' ? 'bg-slate-50/50 border-indigo-500 text-slate-700' :
-                        toast.type === 'error' ? 'bg-red-50 border-red-500 text-red-800' :
-                            toast.type === 'warning' ? 'bg-yellow-50 border-yellow-500 text-yellow-800' :
-                                'bg-slate-50/50 border-indigo-500 text-slate-700'
-                        }`}>
-                        {/* Icon */}
-                        <div className="flex-shrink-0 mt-0.5">
-                            {toast.type === 'success' && (
-                                <svg className="w-6 h-6 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                            )}
-                            {toast.type === 'error' && (
-                                <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                            )}
-                            {toast.type === 'warning' && (
-                                <svg className="w-6 h-6 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                </svg>
-                            )}
-                            {toast.type === 'info' && (
-                                <svg className="w-6 h-6 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                            )}
-                        </div>
+            {/* Toast notifications handled globally */}
 
-                        {/* Message */}
-                        <div className="flex-1">
-                            <p className="text-sm font-medium leading-relaxed whitespace-pre-line">
-                                {toast.message}
-                            </p>
-                        </div>
-
-                        {/* Close Button */}
-                        <button
-                            onClick={() => setToast({ ...toast, show: false })}
-                            className="flex-shrink-0 ml-2 text-gray-400 hover:text-gray-600 transition-colors"
-                        >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-            )}
         </div>
     )
 };

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { httpClient } from '../../services';
+import { showError, showSuccess } from '../../utils/toast';
+
 
 import { ExtractedInvoiceData } from '../../types';
 
@@ -236,7 +238,8 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                 console.log('Posting Single Receipt:', payload);
                 const response = await httpClient.post('/api/vouchers/receipt-single/', payload);
                 console.log('Single Receipt Response:', response);
-                alert('Single Receipt Voucher posted successfully!');
+                showSuccess('Single Receipt Voucher posted successfully!');
+
                 handleCancel();
             } else {
                 const payload = {
@@ -259,12 +262,14 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                 console.log('Posting Bulk Receipt:', payload);
                 const response = await httpClient.post('/api/vouchers/receipt-bulk/', payload);
                 console.log('Bulk Receipt Response:', response);
-                alert('Bulk Receipt Voucher posted successfully!');
+                showSuccess('Bulk Receipt Voucher posted successfully!');
+
                 handleCancel();
             }
         } catch (error) {
             console.error('Error posting receipt voucher:', error);
-            alert('Failed to post receipt voucher. Please try again.');
+            showError('Failed to post receipt voucher. Please try again.');
+
         }
     };
 

@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { usePermissions } from '../../hooks/usePermissions';
 import type { Ledger, Voucher, StockItem, SalesPurchaseVoucher, LedgerGroupMaster } from '../../types';
+import { showError } from '../../utils/toast';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, AreaChart, Area } from 'recharts';
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5003';
@@ -78,7 +79,7 @@ interface ReportsPageProps {
   stockItems: StockItem[];
 }
 
-type ReportType = 'DayBook' | 'LedgerReport' | 'TrialBalance' | 'BalanceSheet' | 'StockSummary' | 'GSTReports' | 'AIReport';
+type ReportType = 'DayBook' | 'LedgerReport' | 'TrialBalance' | 'BalanceSheet' | 'StockSummary' | 'GSTReports' | 'AIReport' | 'GSTR1';
 
 type GSTForm = 'GSTR-1' | 'GSTR-2' | 'GSTR-2A' | 'GSTR-2B' | 'GSTR-3B' | 'GSTR-4' | 'GSTR-5' | 'GSTR-5A' | 'GSTR-6' | 'GSTR-7' | 'GSTR-8' | 'GSTR-9' | 'GSTR-9A' | 'GSTR-9C' | 'GSTR-10';
 
@@ -107,7 +108,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
     'BalanceSheet': 'BalanceSheet',
     'StockSummary': 'StockSummary',
     'GSTReports': 'GSTReports',
-    'AIReport': 'AIReport'
+    'AIReport': 'AIReport',
+    'GSTR1': 'GSTReports'
   };
 
   // Filter Reports based on permissions
@@ -141,7 +143,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
     StockSummary: { endpoint: '/api/reports/stocksummary/excel', filename: 'StockSummary.xlsx' },
     GSTReports: { endpoint: '/api/reports/gst/excel', filename: 'GstReport.xlsx' },
     AIReport: { endpoint: '/api/reports/ai/excel', filename: 'AIReport.xlsx' },
-    BalanceSheet: { endpoint: '/api/reports/balancesheet/excel', filename: 'BalanceSheet.xlsx' }
+    BalanceSheet: { endpoint: '/api/reports/balancesheet/excel', filename: 'BalanceSheet.xlsx' },
+    GSTR1: { endpoint: '/api/reports/gst/excel', filename: 'GstReport.xlsx' }
   };
 
   // Handle Excel download
@@ -178,7 +181,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading Excel:', error);
-      alert('Failed to download Excel file. Please try again.');
+      showError('Failed to download Excel file. Please try again.');
     }
   };
 

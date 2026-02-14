@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronDown } from 'lucide-react';
 import { httpClient } from '../../services/httpClient';
+import { showSuccess, showError } from '../../utils/toast';
+import { handleApiError } from '../../utils/errorHandler';
 import CategoryHierarchicalDropdown from '../../components/CategoryHierarchicalDropdown';
 import { CUSTOMER_CATEGORIES } from '../../constants/customerPortalConstants';
 
@@ -92,7 +94,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                     setInventoryItems((response as any).results);
                 }
             } catch (error) {
-                console.error('Error fetching inventory items:', error);
+                handleApiError(error, 'Fetch Inventory Items');
             }
         };
 
@@ -103,7 +105,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                     setAllCustomers(response);
                 }
             } catch (error) {
-                console.error('Error fetching customers:', error);
+                handleApiError(error, 'Fetch Customers');
             }
         };
 
@@ -167,8 +169,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                     }
                 }
             } catch (error) {
-                console.error('Error fetching quotation for edit:', error);
-                alert('Failed to load quotation details for editing.');
+                handleApiError(error, 'Load Quotation Details');
             } finally {
                 setLoading(false);
             }
@@ -354,12 +355,10 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                     await httpClient.post('/api/customerportal/sales-quotations-specific/', payload);
                 }
             }
-            alert(`Quotation ${editId ? 'updated' : 'saved'} successfully!`);
+            showSuccess(`Quotation ${editId ? 'updated' : 'saved'} successfully!`);
             onCancel();
         } catch (error: any) {
-            console.error('Error saving quotation:', error);
-            const errorMessage = error.response?.data?.detail || error.message || 'Failed to save quotation';
-            alert(`Error: ${errorMessage}`);
+            handleApiError(error, 'Save Quotation');
         }
     };
 

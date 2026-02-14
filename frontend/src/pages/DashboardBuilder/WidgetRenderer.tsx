@@ -6,6 +6,8 @@ import {
 } from 'recharts';
 import { Widget, useDashboardStore } from '../../store/dashboardStore';
 import { MoreHorizontal, Maximize2, Filter, Info, Download, Share2, Trash2 } from 'lucide-react';
+import { confirm, showSuccess } from '../../utils/toast';
+
 
 interface WidgetRendererProps {
     widget: Widget;
@@ -187,15 +189,19 @@ const WidgetRenderer: React.FC<WidgetRendererProps> = ({ widget, data }) => {
                 </h3>
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300">
                     <button
-                        onClick={(e) => {
+                        onClick={async (e) => {
                             e.stopPropagation();
-                            if (confirm('Are you sure you want to remove this visual?')) deleteWidget(widget.id);
+                            if (await confirm('Are you sure you want to remove this visual?')) {
+                                deleteWidget(widget.id);
+                                showSuccess('Visual removed');
+                            }
                         }}
                         className="p-1.5 hover:bg-rose-50 rounded-lg text-slate-400 hover:text-rose-600 transition-colors"
                         title="Remove Visual"
                     >
                         <Trash2 size={13} strokeWidth={2.5} />
                     </button>
+
                     <button className="p-1.5 hover:bg-slate-50 rounded-lg text-slate-400 hover:text-indigo-600 transition-colors">
                         <Filter size={13} strokeWidth={2.5} />
                     </button>

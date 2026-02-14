@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { apiService } from '../../services/api';
+import { showError, showSuccess } from '../../utils/toast';
 import CreateIssueSlipModal from '../../components/CreateIssueSlipModal';
+
 import { INDIA_STATE_CODES, GST_INVOICE_TYPES, EXPORT_TYPES } from '../../utils/gstConstants';
 
 import { ExtractedInvoiceData } from '../../types';
@@ -451,12 +453,14 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
             };
 
             await apiService.createSalesVoucherNew(payload);
-            alert('Sales Voucher Saved Successfully!');
+            showSuccess('Sales Voucher Saved Successfully!');
+
             // Reset form or redirect logic here if needed
         } catch (error) {
             console.error('Failed to save sales voucher:', error);
-            alert('Failed to save voucher. Please check inputs.');
+            showError('Failed to save voucher. Please check inputs.');
         }
+
     };
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -552,9 +556,10 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
     const handleNext = () => {
         // Validation
         if (!date || !salesInvoiceNo || !customerName) {
-            alert('Please fill in all required fields');
+            showError('Please fill in all required fields');
             return;
         }
+
         // Move to next tab
         setActiveTab('item_tax');
     };
@@ -2584,10 +2589,12 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                             const response = await apiService.createInventoryOperationOutward(data);
                             console.log('Issue Slip Created:', response);
                             setOutwardSlipNo(response.outward_slip_no);
-                            alert('Issue Slip Created Successfully!');
+                            showSuccess('Issue Slip Created Successfully!');
+
                         } catch (error) {
                             console.error("Failed to create Issue Slip", error);
-                            alert("Failed to create Issue Slip. Please check inputs.");
+                            showError("Failed to create Issue Slip. Please check inputs.");
+
                         }
                     }}
                 />
