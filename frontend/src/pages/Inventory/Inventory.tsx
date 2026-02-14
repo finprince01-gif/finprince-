@@ -7,6 +7,7 @@ import CategoryHierarchicalDropdown from '../../components/CategoryHierarchicalD
 import { usePermissions } from '../../hooks/usePermissions';
 import { getCountries, getStates, getCities } from '../../utils/locationData';
 import SearchableDropdown from '../../components/SearchableDropdown';
+import MultiSelectDropdown from '../../components/MultiSelectDropdown';
 
 // Interfaces
 interface Location {
@@ -298,9 +299,13 @@ const InventoryPage: React.FC = () => {
   const [grnAddress, setGrnAddress] = useState('');
   const [grnGstin, setGrnGstin] = useState('');
   const [grnReferenceNo, setGrnReferenceNo] = useState(''); // PO No or Sales Voucher No
+  const [grnSelectedSalesVouchers, setGrnSelectedSalesVouchers] = useState<string[]>([]); // Multi-select for Sales Return
   const [grnReferenceNoOptions, setGrnReferenceNoOptions] = useState<any[]>([]);
   const [grnSecondaryRefNo, setGrnSecondaryRefNo] = useState(''); // Supplier Invoice or Debit Note
-  const [grnItems, setGrnItems] = useState<any[]>([{ itemCode: '', itemName: '', uom: '', poQty: '', invoiceQty: '', receivedQty: '', acceptedQty: '', rejectedQty: '', shortageExcess: '', remarks: '' }]);
+  const [grnSecondaryRefNoOptions, setGrnSecondaryRefNoOptions] = useState<any[]>([]);
+  const [grnItems, setGrnItems] = useState<any[]>([{
+    itemCode: '', itemName: '', uom: '', refQty: '', secondaryQty: '', receivedQty: '', acceptedQty: '', rejectedQty: '', shortExcessQty: '', remarks: ''
+  }]);
   const [grnReason, setGrnReason] = useState('');
   const [grnPostingNote, setGrnPostingNote] = useState('');
   const [postingNote, setPostingNote] = useState('');
@@ -1349,6 +1354,8 @@ const InventoryPage: React.FC = () => {
     setGrnGstin('');
     setGrnReferenceNo('');
     setGrnReferenceNoOptions([]);
+    setGrnSecondaryRefNo('');
+    setGrnSecondaryRefNoOptions([]);
 
     const vendor = vendors.find(v => v.vendor_name === selectedVendorName);
     if (vendor) {
@@ -1360,8 +1367,50 @@ const InventoryPage: React.FC = () => {
         if (poResponse && poResponse.success && Array.isArray(poResponse.data)) {
           setGrnReferenceNoOptions(poResponse.data);
         }
+
+        const invResponse = await apiService.getVendorPurchaseInvoices(selectedVendorName);
+        if (Array.isArray(invResponse)) {
+          setGrnSecondaryRefNoOptions(invResponse);
+        }
       } catch (error) {
         console.error("Error fetching vendor details:", error);
+      }
+    }
+  };
+
+  const handleGrnCustomerChange = async (selectedCustomerName: string) => {
+    setGrnCustomerName(selectedCustomerName);
+    setGrnBranch('');
+    setGrnBranchOptions([]);
+    setGrnAddress('');
+    setGrnGstin('');
+    setGrnReferenceNo('');
+    setGrnSelectedSalesVouchers([]); // Reset selected vouchers
+    setGrnReferenceNoOptions([]);
+    setGrnSecondaryRefNo('');
+    setGrnSecondaryRefNoOptions([]);
+
+    const customer = customers.find(c => c.customer_name === selectedCustomerName);
+    if (customer) {
+      // Set branches from customer object (similar to renderLocation logic)
+      if (customer.gst_details && Array.isArray(customer.gst_details.branches)) {
+        const branches = customer.gst_details.branches.map((b: any) => ({
+          id: b.id,
+          reference_name: b.defaultRef || b.branch_reference_name || 'Main',
+          branch_address: b.address || b.branch_address,
+          gstin: b.gstin
+        }));
+        setGrnBranchOptions(branches);
+      }
+
+      try {
+        // Fetch Sales Vouchers for the customer
+        const salesVouchers = await apiService.getSalesVouchers({ customer_id: customer.id });
+        if (Array.isArray(salesVouchers)) {
+          setGrnReferenceNoOptions(salesVouchers);
+        }
+      } catch (error) {
+        console.error("Error fetching sales vouchers:", error);
       }
     }
   };
@@ -1379,8 +1428,64 @@ const InventoryPage: React.FC = () => {
   };
 
 
+  const handleGrnReferenceNoChange = (poNumber: string) => {
+    setGrnReferenceNo(poNumber);
+    const selectedPO = grnReferenceNoOptions.find(po => po.po_number === poNumber);
+    if (selectedPO && selectedPO.items) {
+      const newGrnItems = selectedPO.items.map((poItem: any) => ({
+        itemCode: poItem.item_code,
+        itemName: poItem.item_name,
+        uom: poItem.uom,
+        refQty: poItem.quantity,
+        secondaryQty: '',
+        receivedQty: poItem.quantity,
+        acceptedQty: poItem.quantity,
+        rejectedQty: '0',
+        shortExcessQty: '0',
+        remarks: ''
+      }));
+      setGrnItems(newGrnItems);
+    }
+  };
+
+  const handleGrnSecondaryRefNoChange = (invNumber: string) => {
+    setGrnSecondaryRefNo(invNumber);
+    const selectedInv = grnSecondaryRefNoOptions.find(inv => inv.supplier_invoice_no === invNumber);
+    if (selectedInv) {
+      const invItems = selectedInv.supply_inr_details?.items || selectedInv.supply_foreign_details?.items || [];
+      const updatedGrnItems = [...grnItems];
+
+      invItems.forEach((invItem: any) => {
+        const itemCode = invItem.itemCode || invItem.item_code;
+        const existingItemIndex = updatedGrnItems.findIndex(i => i.itemCode === itemCode);
+
+        if (existingItemIndex > -1) {
+          updatedGrnItems[existingItemIndex].secondaryQty = invItem.qty || invItem.quantity;
+        } else {
+          updatedGrnItems.push({
+            itemCode: itemCode,
+            itemName: invItem.itemName || invItem.item_name,
+            uom: invItem.uom,
+            refQty: '',
+            secondaryQty: invItem.qty || invItem.quantity,
+            receivedQty: invItem.qty || invItem.quantity,
+            acceptedQty: invItem.qty || invItem.quantity,
+            rejectedQty: '0',
+            shortExcessQty: '0',
+            remarks: ''
+          });
+        }
+      });
+
+      if (updatedGrnItems.length > 1 && updatedGrnItems[0].itemCode === '') {
+        updatedGrnItems.shift();
+      }
+      setGrnItems(updatedGrnItems);
+    }
+  };
+
   const handleAddGrnItem = () => {
-    setGrnItems([...grnItems, { itemCode: '', itemName: '', uom: '', poQty: '', invoiceQty: '', receivedQty: '', acceptedQty: '', rejectedQty: '', shortExcess: '', remarks: '' }]);
+    setGrnItems([...grnItems, { itemCode: '', itemName: '', uom: '', refQty: '', secondaryQty: '', receivedQty: '', acceptedQty: '', rejectedQty: '', shortExcessQty: '', remarks: '' }]);
   };
 
   const handleRemoveGrnItem = (index: number) => {
@@ -1391,38 +1496,63 @@ const InventoryPage: React.FC = () => {
     const updatedItems = [...grnItems];
     updatedItems[index][field] = value;
 
-    if (field === 'itemCode') {
-      const selectedItem = items.find(i => i.item_code === value);
-      if (selectedItem) {
-        updatedItems[index].itemName = selectedItem.name;
-        updatedItems[index].uom = selectedItem.unit;
-        updatedItems[index].itemId = selectedItem.id;
+    if (field === 'itemCode' || field === 'itemName') {
+      let selectedItem;
+      if (field === 'itemCode') {
+        selectedItem = items.find(i => i.item_code === value);
+      } else {
+        selectedItem = items.find(i => (i.name || i.item_name) === value);
       }
-    } else if (field === 'itemName') {
-      const selectedItem = items.find(i => i.name === value);
+
       if (selectedItem) {
         updatedItems[index].itemCode = selectedItem.item_code;
-        updatedItems[index].uom = selectedItem.unit;
+        updatedItems[index].itemName = selectedItem.name || selectedItem.item_name;
+        updatedItems[index].uom = selectedItem.uom || selectedItem.unit;
         updatedItems[index].itemId = selectedItem.id;
+
+        // Fetch PO Qty if PO is selected
+        if (grnReferenceNo) {
+          const selectedPO = grnReferenceNoOptions.find(po => po.po_number === grnReferenceNo);
+          if (selectedPO && selectedPO.items) {
+            const poItem = selectedPO.items.find((pi: any) => pi.item_code === updatedItems[index].itemCode);
+            if (poItem) {
+              updatedItems[index].refQty = poItem.quantity;
+            }
+          }
+        }
+
+        // Fetch Invoice Qty if Invoice is selected
+        if (grnSecondaryRefNo) {
+          const selectedInv = grnSecondaryRefNoOptions.find(inv => inv.supplier_invoice_no === grnSecondaryRefNo);
+          if (selectedInv) {
+            const invItems = selectedInv.supply_inr_details?.items || selectedInv.supply_foreign_details?.items || [];
+            const invItem = invItems.find((ii: any) => (ii.itemCode || ii.item_code) === updatedItems[index].itemCode);
+            if (invItem) {
+              updatedItems[index].secondaryQty = invItem.qty || invItem.quantity;
+            }
+          }
+        }
       }
     }
 
-    // Auto-calculate shortage/excess
-    if (field === 'receivedQty' || field === 'invoiceQty') {
+    // Auto-calculate shortage/excess and rejected qty
+    if (field === 'receivedQty' || field === 'secondaryQty' || field === 'acceptedQty') {
       const received = parseFloat(updatedItems[index].receivedQty) || 0;
-      const invoice = parseFloat(updatedItems[index].invoiceQty) || 0;
-      if (received && invoice) {
-        const diff = received - invoice;
-        updatedItems[index].shortExcess = diff > 0 ? `Excess: ${diff}` : `Short: ${Math.abs(diff)}`;
-      }
+      const secondary = parseFloat(updatedItems[index].secondaryQty) || 0;
+      const accepted = parseFloat(updatedItems[index].acceptedQty) || 0;
+
+      updatedItems[index].shortExcessQty = (secondary - received).toString();
+      updatedItems[index].rejectedQty = (received - accepted).toString();
     }
 
     setGrnItems(updatedItems);
   };
 
   useEffect(() => {
-    if (showGRNForm && items.length === 0) {
-      fetchItems();
+    if (showGRNForm) {
+      if (items.length === 0) fetchItems();
+      if (vendors.length === 0) fetchVendors();
+      if (customers.length === 0) fetchCustomers();
     }
   }, [showGRNForm]);
 
@@ -1483,6 +1613,20 @@ const InventoryPage: React.FC = () => {
   const handleIssueSlipItemChange = (index: number, field: string, value: any) => {
     const updatedItems = [...issueSlipItems];
     updatedItems[index][field] = value;
+
+    if (field === 'itemCode') {
+      const selectedItem = items.find(i => i.item_code === value);
+      if (selectedItem) {
+        updatedItems[index].itemName = selectedItem.name || selectedItem.item_name;
+        updatedItems[index].uom = selectedItem.uom || selectedItem.unit;
+      }
+    } else if (field === 'itemName') {
+      const selectedItem = items.find(i => i.name === value || i.item_name === value);
+      if (selectedItem) {
+        updatedItems[index].itemCode = selectedItem.item_code;
+        updatedItems[index].uom = selectedItem.uom || selectedItem.unit;
+      }
+    }
 
     // Calculate Value (Qty * Rate)
     if (field === 'quantity' || field === 'rate') {
@@ -1978,7 +2122,28 @@ const InventoryPage: React.FC = () => {
                                 <tr key={index}>
                                   <td className="px-3 py-2"><input type="text" value={item.itemCode} onChange={(e) => handleIssueSlipItemChange(index, 'itemCode', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
                                   <td className="px-3 py-2"><input type="text" value={item.itemName} onChange={(e) => handleIssueSlipItemChange(index, 'itemName', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
-                                  <td className="px-3 py-2"><input type="text" value={item.uom} onChange={(e) => handleIssueSlipItemChange(index, 'uom', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
+                                  <td className="px-3 py-2">
+                                    <select
+                                      value={item.uom || ''}
+                                      onChange={(e) => handleIssueSlipItemChange(index, 'uom', e.target.value)}
+                                      className="w-20 px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                    >
+                                      <option value="">Select</option>
+                                      {(() => {
+                                        const selectedItem = items.find(i => i.item_code === item.itemCode);
+                                        const units = [];
+                                        if (selectedItem) {
+                                          const u1 = selectedItem.uom || selectedItem.unit;
+                                          const u2 = selectedItem.alternate_uom || selectedItem.alternative_unit;
+                                          if (u1) units.push(u1);
+                                          if (u2 && u2 !== u1) units.push(u2);
+                                        }
+                                        return units.map(u => (
+                                          <option key={u} value={u}>{u}</option>
+                                        ));
+                                      })()}
+                                    </select>
+                                  </td>
                                   <td className="px-3 py-2"><input type="number" value={item.quantity} onChange={(e) => handleIssueSlipItemChange(index, 'quantity', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
                                   <td className="px-3 py-2"><input type="number" value={item.rate} onChange={(e) => handleIssueSlipItemChange(index, 'rate', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
                                   <td className="px-3 py-2"><input type="text" value={item.value ? item.value.toFixed(2) : ''} readOnly className="w-full px-2 py-1 bg-gray-50 border border-gray-300 rounded text-sm" /></td>
@@ -2257,7 +2422,28 @@ const InventoryPage: React.FC = () => {
                                   <tr key={index}>
                                     <td className="px-3 py-2 border-r"><input type="text" value={item.itemCode} onChange={(e) => handleIssueSlipItemChange(index, 'itemCode', e.target.value)} className="w-24 px-2 py-1 border border-gray-300 rounded text-sm" /></td>
                                     <td className="px-3 py-2 border-r"><input type="text" value={item.itemName} onChange={(e) => handleIssueSlipItemChange(index, 'itemName', e.target.value)} className="w-32 px-2 py-1 border border-gray-300 rounded text-sm" /></td>
-                                    <td className="px-3 py-2 border-r"><input type="text" value={item.uom} readOnly className="w-16 px-2 py-1 bg-gray-50 border border-gray-200 rounded text-sm" /></td>
+                                    <td className="px-3 py-2 border-r">
+                                      <select
+                                        value={item.uom || ''}
+                                        onChange={(e) => handleIssueSlipItemChange(index, 'uom', e.target.value)}
+                                        className="w-16 px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                      >
+                                        <option value="">Select</option>
+                                        {(() => {
+                                          const selectedItem = items.find(i => i.item_code === item.itemCode);
+                                          const units = [];
+                                          if (selectedItem) {
+                                            const u1 = selectedItem.uom || selectedItem.unit;
+                                            const u2 = selectedItem.alternate_uom || selectedItem.alternative_unit;
+                                            if (u1) units.push(u1);
+                                            if (u2 && u2 !== u1) units.push(u2);
+                                          }
+                                          return units.map(u => (
+                                            <option key={u} value={u}>{u}</option>
+                                          ));
+                                        })()}
+                                      </select>
+                                    </td>
                                     <td className="px-3 py-2 border-r bg-indigo-50/50"><input type="number" value={item.vendorQty || ''} onChange={(e) => handleIssueSlipItemChange(index, 'vendorQty', e.target.value)} placeholder="Vendor Qty" className="w-20 px-2 py-1 border border-indigo-300 rounded text-sm" /></td>
                                     <td className="px-3 py-2 border-r bg-indigo-50/50"><input type="number" value={item.receivedQty || ''} onChange={(e) => handleIssueSlipItemChange(index, 'receivedQty', e.target.value)} placeholder="Recv Qty" className="w-20 px-2 py-1 border border-indigo-300 rounded text-sm" /></td>
                                     <td className="px-3 py-2 border-r"><input type="number" value={item.acceptedQty || ''} onChange={(e) => handleIssueSlipItemChange(index, 'acceptedQty', e.target.value)} placeholder="Accept" className="w-20 px-2 py-1 border border-gray-300 rounded text-sm" /></td>
@@ -3119,8 +3305,14 @@ const InventoryPage: React.FC = () => {
                                         type="text"
                                         value={item.itemCode}
                                         onChange={(e) => {
+                                          const val = e.target.value;
                                           const newItems = [...convertedOutputItems];
-                                          newItems[index].itemCode = e.target.value;
+                                          newItems[index].itemCode = val;
+                                          const selectedItem = items.find(i => i.item_code === val);
+                                          if (selectedItem) {
+                                            newItems[index].itemName = selectedItem.name || selectedItem.item_name;
+                                            newItems[index].uom = selectedItem.uom || selectedItem.unit;
+                                          }
                                           setConvertedOutputItems(newItems);
                                         }}
                                         className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
@@ -3131,8 +3323,14 @@ const InventoryPage: React.FC = () => {
                                         type="text"
                                         value={item.itemName}
                                         onChange={(e) => {
+                                          const val = e.target.value;
                                           const newItems = [...convertedOutputItems];
-                                          newItems[index].itemName = e.target.value;
+                                          newItems[index].itemName = val;
+                                          const selectedItem = items.find(i => (i.name || i.item_name) === val);
+                                          if (selectedItem) {
+                                            newItems[index].itemCode = selectedItem.item_code;
+                                            newItems[index].uom = selectedItem.uom || selectedItem.unit;
+                                          }
                                           setConvertedOutputItems(newItems);
                                         }}
                                         className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
@@ -3374,8 +3572,14 @@ const InventoryPage: React.FC = () => {
                                         type="text"
                                         value={item.itemCode}
                                         onChange={(e) => {
+                                          const val = e.target.value;
                                           const newItems = [...goodsProducedItems];
-                                          newItems[index].itemCode = e.target.value;
+                                          newItems[index].itemCode = val;
+                                          const selectedItem = items.find(i => i.item_code === val);
+                                          if (selectedItem) {
+                                            newItems[index].itemName = selectedItem.name || selectedItem.item_name;
+                                            newItems[index].uom = selectedItem.uom || selectedItem.unit;
+                                          }
                                           setGoodsProducedItems(newItems);
                                         }}
                                         className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
@@ -3386,8 +3590,14 @@ const InventoryPage: React.FC = () => {
                                         type="text"
                                         value={item.itemName}
                                         onChange={(e) => {
+                                          const val = e.target.value;
                                           const newItems = [...goodsProducedItems];
-                                          newItems[index].itemName = e.target.value;
+                                          newItems[index].itemName = val;
+                                          const selectedItem = items.find(i => (i.name || i.item_name) === val);
+                                          if (selectedItem) {
+                                            newItems[index].itemCode = selectedItem.item_code;
+                                            newItems[index].uom = selectedItem.uom || selectedItem.unit;
+                                          }
                                           setGoodsProducedItems(newItems);
                                         }}
                                         className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
@@ -3587,7 +3797,28 @@ const InventoryPage: React.FC = () => {
                                 <tr key={index}>
                                   <td className="px-3 py-2"><input type="text" value={item.itemCode} onChange={(e) => handleIssueSlipItemChange(index, 'itemCode', e.target.value)} placeholder="Code" className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
                                   <td className="px-3 py-2"><input type="text" value={item.itemName} onChange={(e) => handleIssueSlipItemChange(index, 'itemName', e.target.value)} placeholder="Name" className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
-                                  <td className="px-3 py-2"><input type="text" value={item.uom} onChange={(e) => handleIssueSlipItemChange(index, 'uom', e.target.value)} placeholder="UOM" className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
+                                  <td className="px-3 py-2">
+                                    <select
+                                      value={item.uom || ''}
+                                      onChange={(e) => handleIssueSlipItemChange(index, 'uom', e.target.value)}
+                                      className="w-20 px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                    >
+                                      <option value="">Select</option>
+                                      {(() => {
+                                        const selectedItem = items.find(i => i.item_code === item.itemCode);
+                                        const units = [];
+                                        if (selectedItem) {
+                                          const u1 = selectedItem.uom || selectedItem.unit;
+                                          const u2 = selectedItem.alternate_uom || selectedItem.alternative_unit;
+                                          if (u1) units.push(u1);
+                                          if (u2 && u2 !== u1) units.push(u2);
+                                        }
+                                        return units.map(u => (
+                                          <option key={u} value={u}>{u}</option>
+                                        ));
+                                      })()}
+                                    </select>
+                                  </td>
                                   <td className="px-3 py-2"><input type="number" value={item.quantity} onChange={(e) => handleIssueSlipItemChange(index, 'quantity', e.target.value)} placeholder="Qty" className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
                                   <td className="px-3 py-2"><input type="number" value={item.rate} onChange={(e) => handleIssueSlipItemChange(index, 'rate', e.target.value)} placeholder="Rate" className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
                                   <td className="px-3 py-2 text-sm font-medium">₹{item.value.toFixed(2)}</td>
@@ -3759,7 +3990,7 @@ const InventoryPage: React.FC = () => {
                       <div className="grid grid-cols-2 gap-5 mt-4">
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Purchase Order No.</label>
-                          <select value={grnReferenceNo} onChange={(e) => setGrnReferenceNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                          <select value={grnReferenceNo} onChange={(e) => handleGrnReferenceNoChange(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                             <option value="">Select PO</option>
                             {grnReferenceNoOptions.map((po: any) => (
                               <option key={po.id} value={po.po_number}>{po.po_number}</option>
@@ -3768,7 +3999,12 @@ const InventoryPage: React.FC = () => {
                         </div>
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Supplier Invoice No.</label>
-                          <input type="text" value={grnSecondaryRefNo} onChange={(e) => setGrnSecondaryRefNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                          <select value={grnSecondaryRefNo} onChange={(e) => handleGrnSecondaryRefNoChange(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <option value="">Select Invoice</option>
+                            {grnSecondaryRefNoOptions.map((inv: any) => (
+                              <option key={inv.id} value={inv.supplier_invoice_no}>{inv.supplier_invoice_no}</option>
+                            ))}
+                          </select>
                         </div>
                       </div>
                     </>
@@ -3778,16 +4014,22 @@ const InventoryPage: React.FC = () => {
                       <div className="grid grid-cols-2 gap-5 mt-4">
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Customer Name</label>
-                          <select value={grnCustomerName} onChange={(e) => setGrnCustomerName(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                          <select value={grnCustomerName} onChange={(e) => handleGrnCustomerChange(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                             <option value="">Select Customer</option>
-                            <option value="Customer A">Customer A</option>
+                            {customers.map(customer => (
+                              <option key={customer.id} value={customer.customer_name}>{customer.customer_name}</option>
+                            ))}
                           </select>
                         </div>
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Branch</label>
-                          <select value={grnBranch} onChange={(e) => setGrnBranch(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                          <select value={grnBranch} onChange={(e) => handleGrnBranchChange(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                             <option value="">Select Branch</option>
-                            <option value="Main">Main</option>
+                            {grnBranchOptions.map((branch, index) => (
+                              <option key={branch.id || index} value={branch.reference_name}>
+                                {branch.reference_name || 'Main'}
+                              </option>
+                            ))}
                           </select>
                         </div>
                       </div>
@@ -3795,21 +4037,36 @@ const InventoryPage: React.FC = () => {
                       <div className="grid grid-cols-2 gap-5 mt-4">
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Address</label>
-                          <textarea value={grnAddress} onChange={(e) => setGrnAddress(e.target.value)} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                          <textarea
+                            value={grnAddress}
+                            readOnly
+                            rows={2}
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-100 cursor-not-allowed"
+                          />
                         </div>
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">GSTIN No.</label>
-                          <input type="text" value={grnGstin} onChange={(e) => setGrnGstin(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                          <input
+                            type="text"
+                            value={grnGstin}
+                            readOnly
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-100 cursor-not-allowed"
+                          />
                         </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-5 mt-4">
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Sales Voucher No.</label>
-                          <select value={grnReferenceNo} onChange={(e) => setGrnReferenceNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                            <option value="">Select Sales Voucher</option>
-                            <option value="SV-001">SV-001</option>
-                          </select>
+                          <MultiSelectDropdown
+                            options={grnReferenceNoOptions.map((sv: any) => ({
+                              value: sv.sales_invoice_number || String(sv.id),
+                              label: sv.sales_invoice_number || `Voucher #${sv.id}`
+                            }))}
+                            selectedValues={grnSelectedSalesVouchers}
+                            onChange={setGrnSelectedSalesVouchers}
+                            placeholder="Select Sales Voucher(s)"
+                          />
                         </div>
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Debit Note No.</label>
@@ -3866,50 +4123,52 @@ const InventoryPage: React.FC = () => {
                                 </select>
                               </td>
                               <td className="px-3 py-2">
-                                <input
-                                  type="text"
+                                <select
                                   value={item.uom || ''}
                                   onChange={(e) => {
                                     const newItems = [...grnItems];
                                     newItems[index].uom = e.target.value;
                                     setGrnItems(newItems);
                                   }}
-                                  className="w-16 px-2 py-1 border border-gray-300 rounded text-xs"
-                                />
+                                  className="w-20 px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                >
+                                  <option value="">Select</option>
+                                  {(() => {
+                                    const selectedItem = items.find(i => i.item_code === item.itemCode);
+                                    const units = [];
+                                    if (selectedItem) {
+                                      const u1 = selectedItem.uom || selectedItem.unit;
+                                      const u2 = selectedItem.alternate_uom || selectedItem.alternative_unit;
+                                      if (u1) units.push(u1);
+                                      if (u2 && u2 !== u1) units.push(u2);
+                                    }
+                                    return units.map(u => (
+                                      <option key={u} value={u}>{u}</option>
+                                    ));
+                                  })()}
+                                </select>
                               </td>
                               <td className="px-3 py-2">
                                 <input
                                   type="number"
                                   value={item.refQty || ''}
-                                  onChange={(e) => {
-                                    const newItems = [...grnItems];
-                                    newItems[index].refQty = e.target.value;
-                                    setGrnItems(newItems);
-                                  }}
-                                  className="w-16 px-2 py-1 border border-gray-300 rounded text-xs bg-gray-50"
+                                  readOnly
+                                  className="w-16 px-2 py-1 border border-gray-300 rounded text-xs bg-gray-100 cursor-not-allowed"
                                 />
                               </td>
                               <td className="px-3 py-2">
                                 <input
                                   type="number"
                                   value={item.secondaryQty || ''}
-                                  onChange={(e) => {
-                                    const newItems = [...grnItems];
-                                    newItems[index].secondaryQty = e.target.value;
-                                    setGrnItems(newItems);
-                                  }}
-                                  className="w-16 px-2 py-1 border border-gray-300 rounded text-xs"
+                                  readOnly
+                                  className="w-16 px-2 py-1 border border-gray-300 rounded text-xs bg-gray-100 cursor-not-allowed"
                                 />
                               </td>
                               <td className="px-3 py-2">
                                 <input
                                   type="number"
                                   value={item.receivedQty || ''}
-                                  onChange={(e) => {
-                                    const newItems = [...grnItems];
-                                    newItems[index].receivedQty = e.target.value;
-                                    setGrnItems(newItems);
-                                  }}
+                                  onChange={(e) => handleGrnItemChange(index, 'receivedQty', e.target.value)}
                                   className="w-16 px-2 py-1 border border-gray-300 rounded text-xs"
                                 />
                               </td>
@@ -3917,11 +4176,7 @@ const InventoryPage: React.FC = () => {
                                 <input
                                   type="number"
                                   value={item.acceptedQty || ''}
-                                  onChange={(e) => {
-                                    const newItems = [...grnItems];
-                                    newItems[index].acceptedQty = e.target.value;
-                                    setGrnItems(newItems);
-                                  }}
+                                  onChange={(e) => handleGrnItemChange(index, 'acceptedQty', e.target.value)}
                                   className="w-16 px-2 py-1 border border-gray-300 rounded text-xs"
                                 />
                               </td>
@@ -3929,24 +4184,16 @@ const InventoryPage: React.FC = () => {
                                 <input
                                   type="number"
                                   value={item.rejectedQty || ''}
-                                  onChange={(e) => {
-                                    const newItems = [...grnItems];
-                                    newItems[index].rejectedQty = e.target.value;
-                                    setGrnItems(newItems);
-                                  }}
-                                  className="w-16 px-2 py-1 border border-gray-300 rounded text-xs"
+                                  readOnly
+                                  className="w-16 px-2 py-1 border border-gray-300 rounded text-xs bg-gray-100 cursor-not-allowed"
                                 />
                               </td>
                               <td className="px-3 py-2">
                                 <input
                                   type="number"
                                   value={item.shortExcessQty || ''}
-                                  onChange={(e) => {
-                                    const newItems = [...grnItems];
-                                    newItems[index].shortExcessQty = e.target.value;
-                                    setGrnItems(newItems);
-                                  }}
-                                  className="w-16 px-2 py-1 border border-gray-300 rounded text-xs"
+                                  readOnly
+                                  className="w-16 px-2 py-1 border border-gray-300 rounded text-xs bg-gray-100 cursor-not-allowed"
                                 />
                               </td>
                               <td className="px-3 py-2">
