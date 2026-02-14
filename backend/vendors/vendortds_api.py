@@ -180,14 +180,16 @@ class VendorMasterTDSViewSet(viewsets.ModelViewSet):
     def by_vendor(self, request, vendor_id=None):
         """
         Get TDS record by vendor basic detail ID.
+        Returns empty object if no record found (normal for new vendors).
         """
         try:
             result = get_vendor_tds_by_vendor(vendor_id)
             
             if not result:
+                # Return empty object instead of 404 for new vendors
                 return Response(
-                    {"message": "No TDS record found for this vendor"},
-                    status=status.HTTP_404_NOT_FOUND
+                    {},
+                    status=status.HTTP_200_OK
                 )
             
             return Response(result, status=status.HTTP_200_OK)
@@ -198,3 +200,4 @@ class VendorMasterTDSViewSet(viewsets.ModelViewSet):
                 {"error": str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
+

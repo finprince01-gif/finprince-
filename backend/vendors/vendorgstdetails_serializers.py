@@ -97,6 +97,11 @@ class VendorGSTDetailsUpdateSerializer(serializers.ModelSerializer):
             'gst_registration_type',
             'legal_name',
             'trade_name',
+            'reference_name',
+            'branch_address',
+            'branch_contact_person',
+            'branch_email',
+            'branch_contact_no',
             'is_active'
         ]
     

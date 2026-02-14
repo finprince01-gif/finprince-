@@ -340,7 +340,6 @@ MIGRATION_MODULES = {
     'core': None,
     'accounting': None,
     'inventory': None,
-    'vendors': None,
     'customerportal': None,
     'payroll': None,
     'services': None,

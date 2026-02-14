@@ -115,7 +115,7 @@ class VendorViewSet(viewsets.ModelViewSet):
         
         # Check for duplicate vendor code if provided
         vendor_code = serializer.validated_data.get('vendor_code')
-        if vendor_code and VendorDatabase.check_duplicate_vendor_code(vendor_code):
+        if vendor_code and VendorDatabase.check_duplicate_vendor_code(tenant_id, vendor_code):
             return Response(
                 {'error': f'Vendor code "{vendor_code}" already exists'},
                 status=status.HTTP_400_BAD_REQUEST

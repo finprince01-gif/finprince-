@@ -28,6 +28,25 @@ const VENDOR_SYSTEM_CATEGORIES = [
     'Stock in Trade'
 ];
 
+// TDS Rates Master Data
+const TDS_RATES_MASTER: { [key: string]: { tdsRate: string; penaltyRate: string; description: string } } = {
+    'Section 194C': { tdsRate: '1% / 2%', penaltyRate: '20%', description: 'Payment to Contractors who are Individuals or Hindu Undivided Family (HUF) / Payment to Contractors other than Individuals & HUF' },
+    'Section 194H': { tdsRate: '2%', penaltyRate: '20%', description: 'Commission and Brokerage to agents' },
+    'Section 194-I': { tdsRate: '2% / 10%', penaltyRate: '20%', description: 'Rent on Land, Building, or Furniture & fitting / Rent on Plant & Machinery, or Equipment' },
+    'Section 194J': { tdsRate: '2% / 10%', penaltyRate: '20%', description: 'Fees for Technical Services, Call Center Operations, Royalty on sale & distribution of films / Professional Services, Royalty from other than films, Non-Compete Fees, etc. / Director\'s Remuneration' },
+    'Section 194Q': { tdsRate: '0.10%', penaltyRate: '5%', description: 'Purchase of Goods of aggregate value exceeding Rs. 50 Lakhs' },
+    'Section 194A': { tdsRate: '10%', penaltyRate: '20%', description: 'Interest payments made on loans, FDs, advances, etc., other than interest on securities' },
+    'Section 194R': { tdsRate: '10%', penaltyRate: '20%', description: 'Benefit or Perquisite given by a business or professional exceeding Rs 20,000' },
+    'Section 194-IA': { tdsRate: '1%', penaltyRate: '20%', description: 'Transfer of immovable property valuing Rs 50 lakhs or more' },
+    'Section 194-IB': { tdsRate: '2%', penaltyRate: '20%', description: 'Rent exceeding Rs 50,000 per month paid by Individual & HUFs who are not subject to tax audit' },
+    'Section 194-IC': { tdsRate: '10%', penaltyRate: '20%', description: 'Payment of monetary consideration under a specified Joint Development Agreements' },
+    'Section 194M': { tdsRate: '5%', penaltyRate: '20%', description: 'Payment exceeding Rs 50 Lakhs to contractors or professionals by Individuals & HUFs who are not subject to tax audit' },
+    'Section 194-O': { tdsRate: '1%', penaltyRate: '5%', description: 'Facilitating sales or services by an E-commerce operator for an E-commerce participant' },
+    'Section 195': { tdsRate: 'Specify "Rate" & "Nature"', penaltyRate: '-', description: 'Any payment subject to tax made to a Non-Resident or Foreign Company' }
+};
+
+const getTDSRateInfo = (section: string) => TDS_RATES_MASTER[section] || { tdsRate: '-', penaltyRate: '-', description: 'No info available' };
+
 interface Category {
     id: number;
     category: string;
@@ -327,6 +346,13 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 if (field === 'registrationType' && value === 'Unregistered') {
                     return { ...record, [field]: value, gstin: '', placesOfBusiness: [] };
                 }
+
+                // Enforce GSTIN max length and uppercase
+                if (field === 'gstin') {
+                    const formattedValue = typeof value === 'string' ? value.slice(0, 15).toUpperCase() : value;
+                    return { ...record, [field]: formattedValue };
+                }
+
                 return { ...record, [field]: value };
             }
             return record;
@@ -440,7 +466,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
     const handleSubmitGST = (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         setActiveMasterSubTab('Products/Services');
     };
 
@@ -569,9 +595,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
     const handleSubmitPO = async () => {
         try {
-            
-            
-            
+
+
+
 
             // Prepare items data
             const items = poItems.map(item => ({
@@ -609,12 +635,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 items: items
             };
 
-            
+
 
             // Send to API
             const response = await httpClient.post('/api/vendors/purchase-orders/', payload);
 
-            
+
 
             const poNumber = (response as any)?.data?.data?.po_number || (response as any)?.data?.po_number || 'Generated';
             showSuccess(`Purchase Order created successfully! PO Number: ${poNumber}`);
@@ -677,7 +703,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
     const handleSavePODetails = () => {
         // Handle save logic here
-        
+
 
         // Update the purchaseOrders list with the modified PO
         setPurchaseOrders(purchaseOrders.map(po => po.id === selectedPO.id ? selectedPO : po));
@@ -724,7 +750,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         // Remove the PO from the list (or update status to 'Cancelled')
         setPurchaseOrders(purchaseOrders.filter(po => po.id !== selectedPO.id));
 
-        
+
 
         // Close both modals and reset state
         setShowCancelPOModal(false);
@@ -1011,7 +1037,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     // Handle Basic Details Form Submit (Navigation Only)
     const handleBasicDetailsSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         if (!vendorName || !vendorEmail || !contactNo || !vendorCategory) {
             showError('Please fill in all required fields (Vendor Name, Email, Contact No, Vendor Category)');
             return;
@@ -1070,7 +1096,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     // Handle TDS Details Form Submit (Navigation Only)
     const handleTDSDetailsSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         setActiveMasterSubTab('Banking Info');
     };
 
@@ -1079,7 +1105,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     // Handle Banking Details Submit (Navigation Only)
     const handleBankingDetailsSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         setActiveMasterSubTab('Terms & Conditions');
     };
 
@@ -1096,7 +1122,6 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     // Handle Finish (Total Save)
     const handleFinish = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
-        
 
         if (!vendorName) {
             showError('Vendor Name is required in Basic Details');
@@ -1106,8 +1131,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
         if (isSubmitting) return;
         setIsSubmitting(true);
+
         try {
-            // 1. Basic Details
+            // 1. Save / Update Basic Details
             const basicPayload = {
                 vendor_code: vendorCode || undefined,
                 vendor_name: vendorName,
@@ -1116,114 +1142,303 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 email: vendorEmail,
                 contact_no: contactNo,
                 vendor_category: vendorCategory || null,
-                is_also_customer: isAlsoCustomer
+                is_also_customer: isAlsoCustomer,
+                tcs_applicable: tcsApplicable
             };
-            const basicRes: any = await httpClient.post('/api/vendors/basic-details/', basicPayload);
-            const newId = basicRes.id;
-            
 
-            // 2. GST Details
+            let newId = createdVendorId;
+            if (!newId) {
+                console.log('Creating new vendor basic details...');
+                const basicRes: any = await httpClient.post('/api/vendors/basic-details/', basicPayload);
+                newId = basicRes.id;
+                setCreatedVendorId(newId);
+                localStorage.setItem('currentVendorId', newId.toString());
+                console.log('✅ Basic details created. Vendor ID:', newId);
+            } else {
+                console.log('Updating existing vendor basic details for ID:', newId);
+                await httpClient.patch(`/api/vendors/basic-details/${newId}/`, basicPayload);
+                console.log('✅ Basic details updated.');
+            }
+
+            // 2. GST Details - Check existing to avoid duplicates
+            console.log('Saving GST details...');
+            const existingGst: any = await httpClient.get(`/api/vendors/gst-details/?vendor_basic_detail=${newId}`);
+            const existingGstList = Array.isArray(existingGst) ? existingGst : (existingGst.results || []);
+
             for (const gst of gstRecords) {
                 if (!gst.gstin) continue;
-                const firstBranch: PlaceOfBusiness = (gst.placesOfBusiness && gst.placesOfBusiness[0]) || {
-                    id: '',
-                    referenceName: '',
-                    address: '',
-                    contactPerson: '',
-                    email: '',
-                    contactNumber: ''
-                };
 
-                const gstPayload = {
+                // Loop through all branches/places of business for this GSTIN
+                const branches = gst.placesOfBusiness && gst.placesOfBusiness.length > 0
+                    ? gst.placesOfBusiness
+                    : [{ referenceName: '', address: '', contactPerson: '', email: '', contactNumber: '' }];
+
+                for (const branch of branches) {
+                    // Map frontend registration type to backend keys
+                    const mapRegistrationType = (type: string) => {
+                        const mapping: Record<string, string> = {
+                            'Regular': 'regular',
+                            'Composition': 'composition',
+                            'SEZ': 'special_economic_zone',
+                            'Special Economic Zone (SEZ)': 'special_economic_zone',
+                            'Unregistered': 'unregistered',
+                            'Consumer': 'consumer',
+                            'Overseas': 'overseas',
+                            'Deemed Export': 'deemed_export'
+                        };
+                        return mapping[type] || type.toLowerCase();
+                    };
+
+                    const gstPayload = {
+                        vendor_basic_detail: newId,
+                        gstin: gst.gstin,
+                        gst_registration_type: mapRegistrationType(gst.registrationType),
+                        legal_name: gst.legalName || 'N/A',
+                        trade_name: gst.tradeName || gst.legalName || 'N/A',
+                        reference_name: branch.referenceName || '',
+                        branch_address: branch.address || '',
+                        branch_contact_person: branch.contactPerson || '',
+                        branch_email: branch.email || '',
+                        branch_contact_no: branch.contactNumber || ''
+                    };
+
+                    const existingRecord = existingGstList.find((g: any) =>
+                        g.gstin === gst.gstin && g.reference_name === (branch.referenceName || '')
+                    );
+
+                    if (existingRecord) {
+                        await httpClient.patch(`/api/vendors/gst-details/${existingRecord.id}/`, gstPayload);
+                        console.log(`✅ GST details updated for: ${gst.gstin} (${branch.referenceName || 'Default'})`);
+                    } else {
+                        await httpClient.post('/api/vendors/gst-details/', gstPayload);
+                        console.log(`✅ GST details created for: ${gst.gstin} (${branch.referenceName || 'Default'})`);
+                    }
+                }
+            }
+
+            // 3. Products/Services - Check existing
+            console.log('Saving products/services...');
+            try {
+                const existingProducts: any = await httpClient.get(`/api/vendors/product-services/?vendor_basic_detail=${newId}`);
+                const existingProductList = Array.isArray(existingProducts) ? existingProducts : (existingProducts.results || []);
+                const existingItemCodes = existingProductList.map((p: any) => p.item_code);
+
+                const prodPayload = items.filter(i => i.itemName && i.itemName.trim() !== '').map(item => ({
                     vendor_basic_detail: newId,
-                    gstin: gst.gstin,
-                    gst_registration_type: gst.registrationType,
-                    legal_name: gst.legalName || 'N/A',
-                    trade_name: gst.tradeName || gst.legalName || 'N/A',
-                    reference_name: firstBranch.referenceName || '',
-                    branch_address: firstBranch.address || '',
-                    branch_contact_person: firstBranch.contactPerson || '',
-                    branch_email: firstBranch.email || '',
-                    branch_contact_no: firstBranch.contactNumber || ''
+                    hsn_sac_code: item.hsnSacCode || '',
+                    item_code: item.itemCode || '',
+                    item_name: item.itemName,
+                    supplier_item_code: item.supplierItemCode || '',
+                    supplier_item_name: item.supplierItemName || '',
+                    is_active: true
+                }));
+
+                if (prodPayload.length > 0) {
+                    const newProducts = prodPayload.filter(p => !existingItemCodes.includes(p.item_code));
+                    if (newProducts.length > 0) {
+                        await httpClient.post('/api/vendors/product-services/', newProducts);
+                        console.log(`✅ ${newProducts.length} new product(s) added.`);
+                    } else {
+                        console.log('ℹ️  No new products to add (all already exist)');
+                    }
+                } else {
+                    console.log('ℹ️  No products/services data to save');
+                }
+            } catch (error) {
+                console.error('❌ Error saving products/services:', error);
+                // Don't throw - continue with other sections
+            }
+
+            // 4. TDS - Always save (even if empty)
+            console.log('Saving TDS details...');
+            try {
+                let existingTdsRecord = null;
+                try {
+                    const existingTds: any = await httpClient.get(`/api/vendors/tds-details/by-vendor/${newId}/`);
+                    existingTdsRecord = existingTds.data && existingTds.data.length > 0 ? existingTds.data[0] : (existingTds.id ? existingTds : null);
+                } catch (e) {
+                    // Ignore 404
+                }
+
+                const tdsFormData = new FormData();
+                tdsFormData.append('vendor_basic_detail', newId.toString());
+
+                // Map TDS section to backend keys - Send exact value as requested
+                const mappedTdsSection = tdsSectionApplicable || '';
+                const rateInfo = getTDSRateInfo(mappedTdsSection);
+
+                tdsFormData.append('msme_udyam_no', msmeUdyamNo || '');
+                tdsFormData.append('fssai_license_no', fssaiLicenseNo || '');
+                tdsFormData.append('import_export_code', importExportCode || '');
+                tdsFormData.append('eou_status', eouStatus || '');
+                tdsFormData.append('tds_section_applicable', mappedTdsSection);
+                tdsFormData.append('tds_section', mappedTdsSection); // Also send as tds_section
+                tdsFormData.append('tds_rate', rateInfo.tdsRate);
+                tdsFormData.append('penalty_rate', rateInfo.penaltyRate);
+                tdsFormData.append('pan_number', panNo || '');
+                tdsFormData.append('enable_automatic_tds_posting', enableAutomaticTdsPosting ? 'true' : 'false');
+
+                if (uploadedFiles.msmeFile) tdsFormData.append('msme_file', uploadedFiles.msmeFile);
+                if (uploadedFiles.fssaiFile) tdsFormData.append('fssai_file', uploadedFiles.fssaiFile);
+                if (uploadedFiles.iecFile) tdsFormData.append('import_export_file', uploadedFiles.iecFile);
+                if (uploadedFiles.eouFile) tdsFormData.append('eou_file', uploadedFiles.eouFile);
+
+                if (existingTdsRecord) {
+                    await httpClient.patchFormData(`/api/vendors/tds-details/${existingTdsRecord.id}/`, tdsFormData);
+                    console.log('✅ TDS details updated');
+                } else {
+                    await httpClient.postFormData('/api/vendors/tds-details/', tdsFormData);
+                    console.log('✅ TDS details created');
+                }
+            } catch (error) {
+                console.error('❌ Error saving TDS details:', error);
+                // Don't throw - continue with other sections
+            }
+
+            // 5. Banking - Always save (even if empty)
+            console.log('Saving banking info...');
+            try {
+                const existingBanking: any = await httpClient.get(`/api/vendors/banking-details/by-vendor/${newId}/`);
+                const existingBankingList = Array.isArray(existingBanking) ? existingBanking : (existingBanking.results || []);
+
+                // Filter out empty rows from frontend state
+                const validBanks = bankAccounts.filter(b => b.accountNumber && b.accountNumber.trim() !== '');
+
+                for (const bank of validBanks) {
+                    const bankPayload = {
+                        vendor_basic_detail: newId,
+                        bank_account_no: bank.accountNumber,
+                        bank_name: bank.bankName || '',
+                        ifsc_code: bank.ifscCode || '',
+                        branch_name: bank.branchName || '',
+                        swift_code: bank.swiftCode || '',
+                        vendor_branch: Array.isArray(bank.vendorBranch) ? bank.vendorBranch.join(',') : (bank.vendorBranch || ''),
+                        account_type: bank.accountType ? bank.accountType.toLowerCase().replace(' ', '_') : 'savings',
+                        is_active: true
+                    };
+
+                    // Check if this account number already exists for this vendor
+                    const existingRecord = existingBankingList.find((b: any) => b.bank_account_no === bank.accountNumber);
+
+                    if (existingRecord) {
+                        // Update existing
+                        await httpClient.patch(`/api/vendors/banking-details/${existingRecord.id}/`, bankPayload);
+                        console.log(`✅ Bank account updated: ${bank.accountNumber}`);
+                    } else {
+                        // Create new
+                        await httpClient.post('/api/vendors/banking-details/', bankPayload);
+                        console.log(`✅ Bank account created: ${bank.accountNumber}`);
+                    }
+                }
+
+                if (validBanks.length === 0) {
+                    console.log('ℹ️  No banking details data to save');
+                }
+
+            } catch (error) {
+                console.error('❌ Error saving banking details:', error);
+                // Don't throw - continue with other sections
+            }
+
+            // 6. Terms - Always save (even if empty)
+            console.log('Saving terms & conditions...');
+            try {
+                let existingTermsId = null;
+                try {
+                    const termsRes: any = await httpClient.get(`/api/vendors/terms/by_vendor/${newId}/`);
+                    // Backend returns { success: true, data: [...], count: X }
+                    const termsArray = termsRes.data || (Array.isArray(termsRes) ? termsRes : []);
+                    if (termsArray.length > 0 && termsArray[0].id) {
+                        existingTermsId = termsArray[0].id;
+                    }
+                } catch (e) {
+                    // Ignore 404
+                }
+
+                const termsPayload = {
+                    vendor_basic_detail: newId,
+                    credit_limit: creditLimit && !isNaN(parseFloat(creditLimit)) ? parseFloat(creditLimit) : null,
+                    credit_period: creditPeriod || null,
+                    credit_terms: creditTerms || null,
+                    penalty_terms: penaltyTerms || null,
+                    delivery_terms: deliveryTerms || null,
+                    warranty_guarantee_details: warrantyGuaranteeDetails || null,
+                    force_majeure: forceMajeure || null,
+                    dispute_redressal_terms: disputeRedressalTerms || null
                 };
-                await httpClient.post('/api/vendors/gst-details/', gstPayload);
+
+                if (existingTermsId) {
+                    await httpClient.patch(`/api/vendors/terms/${existingTermsId}/`, termsPayload);
+                    console.log('✅ Terms updated');
+                } else {
+                    await httpClient.post('/api/vendors/terms/', termsPayload);
+                    console.log('✅ Terms created');
+                }
+            } catch (error) {
+                console.error('❌ Error saving terms & conditions:', error);
+                // Don't throw - continue
             }
-            
-
-            // 3. Products/Services
-            const prodPayload = items.filter(i => i.itemName && i.itemName.trim() !== '').map(item => ({
-                vendor_basic_detail: newId,
-                hsn_sac_code: item.hsnSacCode,
-                item_code: item.itemCode,
-                item_name: item.itemName,
-                supplier_item_code: item.supplierItemCode,
-                supplier_item_name: item.supplierItemName,
-                is_active: true
-            }));
-            if (prodPayload.length > 0) {
-                await httpClient.post('/api/vendors/product-services/', prodPayload);
-                
-            }
-
-            // 4. TDS
-            const tdsFormData = new FormData();
-            tdsFormData.append('vendor_basic_detail', newId.toString());
-            if (tdsSectionApplicable) tdsFormData.append('tds_section_applicable', tdsSectionApplicable);
-            tdsFormData.append('enable_automatic_tds_posting', enableAutomaticTdsPosting ? 'true' : 'false');
-            if (msmeUdyamNo) tdsFormData.append('msme_udyam_no', msmeUdyamNo);
-            if (fssaiLicenseNo) tdsFormData.append('fssai_license_no', fssaiLicenseNo);
-            if (importExportCode) tdsFormData.append('import_export_code', importExportCode);
-            if (eouStatus) tdsFormData.append('eou_status', eouStatus);
-
-            // Append Files
-            if (uploadedFiles.msmeFile) tdsFormData.append('msme_file', uploadedFiles.msmeFile);
-            if (uploadedFiles.fssaiFile) tdsFormData.append('fssai_file', uploadedFiles.fssaiFile);
-            if (uploadedFiles.iecFile) tdsFormData.append('import_export_file', uploadedFiles.iecFile);
-            if (uploadedFiles.eouFile) tdsFormData.append('eou_file', uploadedFiles.eouFile);
-
-            // Use postFormData which handles multipart automatically
-            await httpClient.postFormData('/api/vendors/tds-details/', tdsFormData);
-            
-
-            // 5. Banking
-            const bankPayload = bankAccounts.filter(b => b.accountNumber).map(bank => ({
-                vendor_basic_detail: newId,
-                bank_account_no: bank.accountNumber,
-                bank_name: bank.bankName,
-                ifsc_code: bank.ifscCode,
-                branch_name: bank.branchName,
-                swift_code: bank.swiftCode,
-                vendor_branch: Array.isArray(bank.vendorBranch) ? bank.vendorBranch.join(',') : bank.vendorBranch,
-                account_type: bank.accountType ? bank.accountType.toLowerCase().replace(' ', '_') : 'savings',
-                is_active: true
-            }));
-            if (bankPayload.length > 0) {
-                await httpClient.post('/api/vendors/banking-details/', bankPayload);
-                
-            }
-
-            // 6. Terms
-            const termsPayload = {
-                vendor_basic_detail: newId,
-                credit_limit: creditLimit ? parseFloat(creditLimit) : undefined,
-                credit_period: creditPeriod || undefined,
-                credit_terms: creditTerms || undefined,
-                penalty_terms: penaltyTerms || undefined,
-                delivery_terms: deliveryTerms || undefined,
-                warranty_guarantee_details: warrantyGuaranteeDetails || undefined,
-                force_majeure: forceMajeure || undefined,
-                dispute_redressal_terms: disputeRedressalTerms || undefined
-            };
-            await httpClient.post('/api/vendors/terms/', termsPayload);
-            
 
             showSuccess('Vendor Onboarded Successfully!');
-            // Reset and Redirect
+
+            // Cleanup on full success
             setCreatedVendorId(null);
             localStorage.removeItem('currentVendorId');
-            window.location.reload();
+
+            // Reset all form states
+            setVendorCode('');
+            setVendorName('');
+            setPanNo('');
+            setContactPerson('');
+            setVendorEmail('');
+            setContactNo('');
+            setVendorCategory('');
+            setIsAlsoCustomer(false);
+            setTcsApplicable(false);
+
+            setGstRecords([
+                { id: '1', gstin: '', registrationType: 'Regular', placesOfBusiness: [], isExpanded: true }
+            ]);
+
+            setItems([
+                { id: 1, hsnSacCode: '', itemCode: '', itemName: '', supplierItemCode: '', supplierItemName: '' },
+                { id: 2, hsnSacCode: '', itemCode: '', itemName: '', supplierItemCode: '', supplierItemName: '' },
+            ]);
+
+            setBankAccounts([
+                { id: 1, accountNumber: '', bankName: '', ifscCode: '', branchName: '', swiftCode: '', vendorBranch: [], accountType: 'Savings' }
+            ]);
+
+            setMsmeUdyamNo('');
+            setFssaiLicenseNo('');
+            setImportExportCode('');
+            setEouStatus('');
+            setTdsSectionApplicable('');
+            setEnableAutomaticTdsPosting(false);
+            setUploadedFiles({
+                msmeFile: null,
+                fssaiFile: null,
+                iecFile: null,
+                eouFile: null
+            });
+
+            setCreditLimit('');
+            setCreditPeriod('');
+            setCreditTerms('');
+            setPenaltyTerms('');
+            setDeliveryTerms('');
+            setWarrantyGuaranteeDetails('');
+            setForceMajeure('');
+            setDisputeRedressalTerms('');
+
+            // Back to first tab
+            setActiveMasterSubTab('Basic Details');
+
+            // Refresh vendor list
+            fetchVendors();
 
         } catch (error: any) {
+            console.error('❌ Error during vendor onboarding:', error);
             handleApiError(error, 'Save Vendor');
         } finally {
             setIsSubmitting(false);
@@ -1258,7 +1473,6 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         const fetchItems = async () => {
             try {
                 const response = await httpClient.get<SimplifiedInventoryItem[]>('/api/inventory/items/');
-                // Ensure unique values for dropdowns if API returns duplicates or handle in component
                 setInventoryItems(Array.isArray(response) ? response : []);
             } catch (error) {
                 handleApiError(error, 'Fetch Inventory Items');
@@ -1321,14 +1535,25 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     // Handle GST Details Form Submit (Navigation Only)
     const handleGSTDetailsSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        
-        // Add basic validation if needed using gstRecords
+
+        // Validate that if GSTIN is provided, it is exactly 15 chars
+        const invalidRecord = gstRecords.find(r =>
+            r.registrationType !== 'Unregistered' &&
+            r.gstin &&
+            r.gstin.length !== 15
+        );
+
+        if (invalidRecord) {
+            showError(`Invalid GSTIN format for record ${gstRecords.indexOf(invalidRecord) + 1}. Must be exactly 15 characters.`);
+            return;
+        }
+
         setActiveMasterSubTab('Products/Services');
     };
 
     // Handle Product Services Submit (Navigation Only)
     const handleProductServicesSubmit = () => {
-        
+
         if (items.length === 0) {
             showError('Please add at least one item.');
             return;
@@ -2082,6 +2307,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                     className="flex-1 px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100"
                                                                     placeholder="22AAAAA0000A1Z5"
                                                                     disabled={record.registrationType === 'Unregistered'}
+                                                                    maxLength={15}
                                                                 />
                                                                 <button
                                                                     type="button"
@@ -2415,25 +2641,6 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
                                         {/* TDS Rate Information */}
                                         {tdsSectionApplicable && (() => {
-                                            const getTDSRateInfo = (section: string) => {
-                                                const rates: { [key: string]: { tdsRate: string; penaltyRate: string; description: string } } = {
-                                                    'Section 194C': { tdsRate: '1% / 2%', penaltyRate: '20%', description: 'Payment to Contractors who are Individuals or Hindu Undivided Family (HUF) / Payment to Contractors other than Individuals & HUF' },
-                                                    'Section 194H': { tdsRate: '2%', penaltyRate: '20%', description: 'Commission and Brokerage to agents' },
-                                                    'Section 194-I': { tdsRate: '2% / 10%', penaltyRate: '20%', description: 'Rent on Land, Building, or Furniture & fitting / Rent on Plant & Machinery, or Equipment' },
-                                                    'Section 194J': { tdsRate: '2% / 10%', penaltyRate: '20%', description: 'Fees for Technical Services, Call Center Operations, Royalty on sale & distribution of films / Professional Services, Royalty from other than films, Non-Compete Fees, etc. / Director\'s Remuneration' },
-                                                    'Section 194Q': { tdsRate: '0.10%', penaltyRate: '5%', description: 'Purchase of Goods of aggregate value exceeding Rs. 50 Lakhs' },
-                                                    'Section 194A': { tdsRate: '10%', penaltyRate: '20%', description: 'Interest payments made on loans, FDs, advances, etc., other than interest on securities' },
-                                                    'Section 194R': { tdsRate: '10%', penaltyRate: '20%', description: 'Benefit or Perquisite given by a business or professional exceeding Rs 20,000' },
-                                                    'Section 194-IA': { tdsRate: '1%', penaltyRate: '20%', description: 'Transfer of immovable property valuing Rs 50 lakhs or more' },
-                                                    'Section 194-IB': { tdsRate: '2%', penaltyRate: '20%', description: 'Rent exceeding Rs 50,000 per month paid by Individual & HUFs who are not subject to tax audit' },
-                                                    'Section 194-IC': { tdsRate: '10%', penaltyRate: '20%', description: 'Payment of monetary consideration under a specified Joint Development Agreements' },
-                                                    'Section 194M': { tdsRate: '5%', penaltyRate: '20%', description: 'Payment exceeding Rs 50 Lakhs to contractors or professionals by Individuals & HUFs who are not subject to tax audit' },
-                                                    'Section 194-O': { tdsRate: '1%', penaltyRate: '5%', description: 'Facilitating sales or services by an E-commerce operator for an E-commerce participant' },
-                                                    'Section 195': { tdsRate: 'Specify "Rate" & "Nature"', penaltyRate: '-', description: 'Any payment subject to tax made to a Non-Resident or Foreign Company' }
-                                                };
-                                                return rates[section] || null;
-                                            };
-
                                             const rateInfo = getTDSRateInfo(tdsSectionApplicable);
 
                                             return rateInfo ? (
@@ -2559,33 +2766,21 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                     onChange={(e) => handleItemChange(item.id, 'hsnSacCode', e.target.value)}
                                                                 />
                                                             </td>
-                                                            <td className="px-4 py-3 border-r border-gray-200">
-                                                                <select
-                                                                    className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                                            <td className="px-4 py-3 border-r border-gray-200 min-w-[200px]">
+                                                                <SearchableDropdown
+                                                                    options={inventoryItems.map(i => i.item_code)}
                                                                     value={item.itemCode}
-                                                                    onChange={(e) => handleItemChange(item.id, 'itemCode', e.target.value)}
-                                                                >
-                                                                    <option value="">Select Item Code</option>
-                                                                    {inventoryItems.map((invItem) => (
-                                                                        <option key={invItem.id} value={invItem.item_code}>
-                                                                            {invItem.item_code}
-                                                                        </option>
-                                                                    ))}
-                                                                </select>
+                                                                    onChange={(val) => handleItemChange(item.id, 'itemCode', val)}
+                                                                    placeholder="Select Item Code"
+                                                                />
                                                             </td>
-                                                            <td className="px-4 py-3 border-r border-gray-200">
-                                                                <select
-                                                                    className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                                            <td className="px-4 py-3 border-r border-gray-200 min-w-[250px]">
+                                                                <SearchableDropdown
+                                                                    options={inventoryItems.map(i => i.item_name)}
                                                                     value={item.itemName}
-                                                                    onChange={(e) => handleItemChange(item.id, 'itemName', e.target.value)}
-                                                                >
-                                                                    <option value="">Select Item Name</option>
-                                                                    {inventoryItems.map((invItem) => (
-                                                                        <option key={invItem.id} value={invItem.item_name}>
-                                                                            {invItem.item_name}
-                                                                        </option>
-                                                                    ))}
-                                                                </select>
+                                                                    onChange={(val) => handleItemChange(item.id, 'itemName', val)}
+                                                                    placeholder="Select Item Name"
+                                                                />
                                                             </td>
                                                             <td className="px-4 py-3 border-r border-gray-200">
                                                                 <input
@@ -4678,7 +4873,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 <button
                                                     onClick={() => {
                                                         // Handle post payment logic here
-                                                        
+
                                                         // Update bill status to Posted
                                                         setPaymentBills(paymentBills.map(bill =>
                                                             bill.id === selectedBillForPayment.id ? { ...bill, status: 'Posted' as const } : bill

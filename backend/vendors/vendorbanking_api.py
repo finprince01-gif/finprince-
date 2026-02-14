@@ -34,11 +34,22 @@ class VendorMasterBankingViewSet(viewsets.ModelViewSet):
     serializer_class = VendorMasterBankingSerializer
     permission_classes = [IsAuthenticated]
     
+    def get_tenant_id(self):
+        """Extract tenant_id from authenticated user"""
+        user = self.request.user
+        if hasattr(user, 'tenant_id') and user.tenant_id:
+            return user.tenant_id
+        elif hasattr(user, 'tenant') and hasattr(user.tenant, 'tenant_id'):
+            return user.tenant.tenant_id
+        return None
+
+    def get_username(self):
+        """Get username from request"""
+        return self.request.user.username if hasattr(self.request.user, 'username') else 'system'
+
     def get_queryset(self):
         """Filter queryset by tenant_id from the authenticated user"""
-        user = self.request.user
-        tenant_id = getattr(user, 'tenant_id', None)
-        
+        tenant_id = self.get_tenant_id()
         if tenant_id:
             return VendorMasterBanking.objects.filter(tenant_id=tenant_id)
         return VendorMasterBanking.objects.none()
@@ -49,8 +60,8 @@ class VendorMasterBankingViewSet(viewsets.ModelViewSet):
         Supports bulk creation for multiple bank accounts.
         """
         try:
-            user = request.user
-            tenant_id = getattr(user, 'tenant_id', None)
+            tenant_id = self.get_tenant_id()
+            username = self.get_username()
             
             if not tenant_id:
                 return Response(
@@ -67,8 +78,8 @@ class VendorMasterBankingViewSet(viewsets.ModelViewSet):
             for data in data_list:
                 data_copy = data.copy() if isinstance(data, dict) else data
                 data_copy['tenant_id'] = tenant_id
-                data_copy['created_by'] = user.username
-                data_copy['updated_by'] = user.username
+                data_copy['created_by'] = username
+                data_copy['updated_by'] = username
                 
                 # Validate data using serializer
                 serializer = self.get_serializer(data=data_copy)
@@ -96,10 +107,10 @@ class VendorMasterBankingViewSet(viewsets.ModelViewSet):
         """
         try:
             banking_id = kwargs.get('pk')
-            user = request.user
+            username = self.get_username()
             
             data = request.data.copy()
-            data['updated_by'] = user.username
+            data['updated_by'] = username
             
             # Validate data using serializer
             instance = self.get_object()
@@ -147,8 +158,7 @@ class VendorMasterBankingViewSet(viewsets.ModelViewSet):
         List all vendor banking records for the tenant.
         """
         try:
-            user = request.user
-            tenant_id = getattr(user, 'tenant_id', None)
+            tenant_id = self.get_tenant_id()
             
             if not tenant_id:
                 return Response(
@@ -192,10 +202,19 @@ class VendorMasterBankingViewSet(viewsets.ModelViewSet):
     def by_vendor(self, request, vendor_id=None):
         """
         Get all banking records for a specific vendor.
+        Ensures the vendor belongs to the tenant.
         """
         try:
+            tenant_id = self.get_tenant_id()
+            if not tenant_id:
+                return Response({"error": "No tenant ID found"}, status=status.HTTP_403_FORBIDDEN)
+                
             results = get_vendor_banking_by_vendor(vendor_id)
-            return Response(results, status=status.HTTP_200_OK)
+            
+            # Filter results by tenant_id to ensure isolation
+            filtered_results = [r for r in results if r.get('tenant_id') == tenant_id]
+            
+            return Response(filtered_results, status=status.HTTP_200_OK)
             
         except Exception as e:
             logger.error(f"Error getting vendor banking by vendor: {str(e)}")

@@ -284,6 +284,7 @@ class VendorMasterBasicDetail(models.Model):
     )
     vendor_category = models.CharField(max_length=200, blank=True, null=True, help_text="Vendor category")
     is_also_customer = models.BooleanField(default=False, help_text="Is this vendor also a customer?")
+    tcs_applicable = models.BooleanField(default=False, help_text="Is TCS applicable for this vendor?")
     
     # Metadata
     is_active = models.BooleanField(default=True)
@@ -394,7 +395,7 @@ class VendorMasterGSTDetails(models.Model):
             models.Index(fields=['gstin']),
             models.Index(fields=['tenant_id', 'gstin']),
         ]
-        unique_together = [['tenant_id', 'gstin']]
+        unique_together = [['tenant_id', 'gstin', 'reference_name']]
 
     def __str__(self):
         return f"{self.gstin} - {self.legal_name}"
@@ -482,6 +483,14 @@ class VendorMasterTDS(models.Model):
     # Import/Export
     import_export_code = models.CharField(max_length=50, blank=True, null=True, help_text="Import Export Code (IEC)")
     eou_status = models.CharField(max_length=100, blank=True, null=True, help_text="Export Oriented Unit Status")
+    
+    # Additional Statutory & TDS Fields
+    pan_number = models.CharField(max_length=10, blank=True, null=True, help_text="PAN Number")
+    tan_number = models.CharField(max_length=10, blank=True, null=True, help_text="TAN Number")
+    tds_section = models.CharField(max_length=100, blank=True, null=True, help_text="TDS Section (alternate)")
+    tds_rate = models.CharField(max_length=50, blank=True, null=True, help_text="TDS Rate")
+    penalty_rate = models.CharField(max_length=50, blank=True, null=True, help_text="Penalty Rate")
+    cin_number = models.CharField(max_length=21, blank=True, null=True, help_text="CIN Number")
     
     # File Uploads
     msme_file = models.FileField(upload_to='vendors/msme/', blank=True, null=True, help_text="MSME Certificate")

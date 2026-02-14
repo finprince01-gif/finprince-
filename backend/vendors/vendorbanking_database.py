@@ -12,13 +12,25 @@ logger = logging.getLogger(__name__)
 def create_vendor_banking(data: Dict) -> Dict:
     """
     Create a new vendor banking record in the database.
-    
-    Args:
-        data: Dictionary containing banking details
-        
-    Returns:
-        Dictionary with created banking record details
     """
+    
+    # Resolve vendor_id - handle different possible formats
+    vendor_id = data.get('vendor_basic_detail_id') or data.get('vendor_basic_detail')
+    if hasattr(vendor_id, 'id'):
+        vendor_id = vendor_id.id
+    
+    tenant_id = data.get('tenant_id')
+    bank_account_no = data.get('bank_account_no')
+    bank_name = data.get('bank_name', '')
+    ifsc_code = data.get('ifsc_code', '')
+    branch_name = data.get('branch_name', '')
+    swift_code = data.get('swift_code', '')
+    vendor_branch = data.get('vendor_branch', '')
+    account_type = data.get('account_type', 'current')
+    is_active = data.get('is_active', True)
+    created_by = data.get('created_by', 'system')
+    updated_by = data.get('updated_by', 'system')
+
     query = """
         INSERT INTO vendor_master_banking (
             tenant_id, vendor_basic_detail_id, bank_account_no, bank_name,
@@ -30,18 +42,18 @@ def create_vendor_banking(data: Dict) -> Dict:
     """
     
     params = [
-        data.get('tenant_id'),
-        data.get('vendor_basic_detail_id'),
-        data.get('bank_account_no'),
-        data.get('bank_name'),
-        data.get('ifsc_code'),
-        data.get('branch_name'),
-        data.get('swift_code'),
-        data.get('vendor_branch'),
-        data.get('account_type', 'current'),
-        data.get('is_active', True),
-        data.get('created_by'),
-        data.get('updated_by'),
+        tenant_id,
+        vendor_id,
+        bank_account_no,
+        bank_name,
+        ifsc_code,
+        branch_name,
+        swift_code,
+        vendor_branch,
+        account_type,
+        is_active,
+        created_by,
+        updated_by,
     ]
     
     try:
@@ -59,20 +71,19 @@ def create_vendor_banking(data: Dict) -> Dict:
 def update_vendor_banking(banking_id: int, data: Dict) -> Dict:
     """
     Update an existing vendor banking record.
-    
-    Args:
-        banking_id: ID of the banking record to update
-        data: Dictionary containing updated banking details
-        
-    Returns:
-        Dictionary with updated banking record details
     """
+    # Resolve vendor_id - handle different possible formats
+    vendor_id = data.get('vendor_basic_detail_id') or data.get('vendor_basic_detail')
+    if hasattr(vendor_id, 'id'):
+        vendor_id = vendor_id.id
+
     query = """
         UPDATE vendor_master_banking
         SET bank_account_no = %s, bank_name = %s, ifsc_code = %s,
             branch_name = %s, swift_code = %s, vendor_branch = %s,
             account_type = %s, is_active = %s,
-            updated_at = NOW(), updated_by = %s
+            updated_at = NOW(), updated_by = %s,
+            vendor_basic_detail_id = COALESCE(%s, vendor_basic_detail_id)
         WHERE id = %s
     """
     
@@ -86,6 +97,7 @@ def update_vendor_banking(banking_id: int, data: Dict) -> Dict:
         data.get('account_type', 'current'),
         data.get('is_active', True),
         data.get('updated_by'),
+        vendor_id,
         banking_id,
     ]
     

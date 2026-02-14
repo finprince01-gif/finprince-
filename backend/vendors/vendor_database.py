@@ -297,18 +297,19 @@ class VendorDatabase:
         ).select_related('category').order_by('-current_balance')
     
     @staticmethod
-    def check_duplicate_vendor_code(vendor_code, exclude_id=None):
+    def check_duplicate_vendor_code(tenant_id, vendor_code, exclude_id=None):
         """
-        Check if a vendor code already exists.
+        Check if a vendor code already exists for a tenant.
         
         Args:
+            tenant_id: Tenant identifier
             vendor_code: Vendor code to check
             exclude_id: Optional ID to exclude from check (for updates)
             
         Returns:
             True if duplicate exists, False otherwise
         """
-        queryset = Vendor.objects.filter(vendor_code=vendor_code)
+        queryset = Vendor.objects.filter(tenant_id=tenant_id, vendor_code=vendor_code)
         if exclude_id:
             queryset = queryset.exclude(id=exclude_id)
         return queryset.exists()
