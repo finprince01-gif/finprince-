@@ -242,6 +242,15 @@ class ApiService {
         return httpClient.get<{ success: boolean; data: any[] }>(url);
     }
 
+    /**
+     * Get Purchase Invoices (Vouchers) for a specific vendor
+     * @param vendorName - Vendor name to filter by
+     */
+    async getVendorPurchaseInvoices(vendorName: string) {
+        let url = `/api/accounting/vouchers/purchase/?vendor_name=${encodeURIComponent(vendorName)}`;
+        return httpClient.get<any[]>(url);
+    }
+
     // ============================================================================
     // MASTERS - VOUCHER CONFIG
     // ============================================================================

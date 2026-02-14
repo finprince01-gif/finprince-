@@ -13,7 +13,7 @@ import SalesQuotationList from './SalesQuotationList';
 import CreateSalesOrder from './CreateSalesOrder';
 import SalesOrderList from './SalesOrderList';
 import SalesOrderViewModal from './SalesOrderViewModal';
-import { Eye, Mail, Filter, ChevronLeft, X, Calendar, Pencil, Trash2 } from 'lucide-react';
+import { Eye, Mail, Filter, ChevronLeft, ChevronDown, X, Calendar, Pencil, Trash2, Search } from 'lucide-react';
 import CustomerViewModal from './CustomerViewModal';
 
 type MainTab = 'Master' | 'Transaction';
@@ -3710,6 +3710,16 @@ const ReceiptContent: React.FC = () => {
         bankAccount: '',
         bankReferenceNo: ''
     });
+
+    // Filter States
+    const [activeFilter, setActiveFilter] = useState<string | null>(null);
+    const [dateFilter, setDateFilter] = useState<{ start: string; end: string }>({ start: '', end: '' });
+    const [customerFilter, setCustomerFilter] = useState('');
+    const [amountFilter, setAmountFilter] = useState<{ min: string; max: string }>({ min: '', max: '' });
+
+    const toggleFilter = (filterName: string) => {
+        setActiveFilter(activeFilter === filterName ? null : filterName);
+    };
     // Mock receipt data - sorted by most recent first
     const receipts = [
         {
@@ -3748,6 +3758,23 @@ const ReceiptContent: React.FC = () => {
             amount: 29800.00
         }
     ];
+
+    const filteredReceipts = useMemo(() => {
+        return receipts.filter(receipt => {
+            // Date Filter
+            if (dateFilter.start && receipt.date < dateFilter.start) return false;
+            if (dateFilter.end && receipt.date > dateFilter.end) return false;
+
+            // Customer Name Filter
+            if (customerFilter && !receipt.customerRefName.toLowerCase().includes(customerFilter.toLowerCase())) return false;
+
+            // Amount Filter
+            if (amountFilter.min && receipt.amount !== 0 && receipt.amount < parseFloat(amountFilter.min)) return false;
+            if (amountFilter.max && receipt.amount !== 0 && receipt.amount > parseFloat(amountFilter.max)) return false;
+
+            return true;
+        });
+    }, [receipts, dateFilter, customerFilter, amountFilter]);
 
     // Mock bank accounts - includes both Bank accounts and Bank OD/CC accounts
     const bankAccounts = [
@@ -3829,16 +3856,89 @@ const ReceiptContent: React.FC = () => {
                         <thead className="bg-gray-50">
                             <tr>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Date
+                                    <div className="flex items-center justify-between relative">
+                                        <span>Date</span>
+                                        <div className="ml-2">
+                                            <Filter
+                                                className={`w-4 h-4 cursor-pointer ${activeFilter === 'date' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
+                                                onClick={() => toggleFilter('date')}
+                                            />
+                                            {activeFilter === 'date' && (
+                                                <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-52">
+                                                    <div className="flex justify-between items-center mb-2">
+                                                        <span className="text-xs font-semibold">Filter Date</span>
+                                                        <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <div>
+                                                            <label className="text-[10px] text-gray-500 block mb-1">Start Date</label>
+                                                            <input type="date" value={dateFilter.start} onChange={(e) => setDateFilter({ ...dateFilter, start: e.target.value })} className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500" />
+                                                        </div>
+                                                        <div>
+                                                            <label className="text-[10px] text-gray-500 block mb-1">End Date</label>
+                                                            <input type="date" value={dateFilter.end} onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })} className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Customer Reference Name
+                                    <div className="flex items-center justify-between relative">
+                                        <span>Customer Reference Name</span>
+                                        <div className="ml-2">
+                                            <Filter
+                                                className={`w-4 h-4 cursor-pointer ${activeFilter === 'customer' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
+                                                onClick={() => toggleFilter('customer')}
+                                            />
+                                            {activeFilter === 'customer' && (
+                                                <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-60">
+                                                    <div className="flex justify-between items-center mb-2">
+                                                        <span className="text-xs font-semibold">Filter Customer</span>
+                                                        <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
+                                                    </div>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Search Customer..."
+                                                        value={customerFilter}
+                                                        onChange={(e) => setCustomerFilter(e.target.value)}
+                                                        className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500"
+                                                        autoFocus
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Voucher No
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Amount
+                                    <div className="flex items-center justify-between relative">
+                                        <span>Amount</span>
+                                        <div className="ml-2">
+                                            <Filter
+                                                className={`w-4 h-4 cursor-pointer ${activeFilter === 'amount' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
+                                                onClick={() => toggleFilter('amount')}
+                                            />
+                                            {activeFilter === 'amount' && (
+                                                <div className="absolute z-50 top-8 right-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-52">
+                                                    <div className="flex justify-between items-center mb-2">
+                                                        <span className="text-xs font-semibold">Filter Amount</span>
+                                                        <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <input type="number" placeholder="Min" value={amountFilter.min} onChange={(e) => setAmountFilter({ ...amountFilter, min: e.target.value })} className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500" />
+                                                            <span className="text-gray-500">-</span>
+                                                            <input type="number" placeholder="Max" value={amountFilter.max} onChange={(e) => setAmountFilter({ ...amountFilter, max: e.target.value })} className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Action
@@ -3846,7 +3946,7 @@ const ReceiptContent: React.FC = () => {
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                            {receipts.map((receipt) => (
+                            {filteredReceipts.map((receipt) => (
                                 <tr key={receipt.id} className="hover:bg-gray-50">
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                         {receipt.date}
@@ -3870,10 +3970,10 @@ const ReceiptContent: React.FC = () => {
                                     </td>
                                 </tr>
                             ))}
-                            {receipts.length === 0 && (
+                            {filteredReceipts.length === 0 && (
                                 <tr>
                                     <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
-                                        No receipts found.
+                                        No receipts found matching the selected filters.
                                     </td>
                                 </tr>
                             )}
@@ -4849,7 +4949,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
 
                 {/* Footer Actions - Only show on Invoices under Dispute tab */}
                 {activeTab === 'Invoices under Dispute' && (
-                    <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                    <div className="px-6 py-4 border-t border-gray-200 flex justify-start gap-3">
                         <button
                             onClick={onClose}
                             className="px-5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors"
@@ -4891,6 +4991,14 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
     // View state
     const [viewMode, setViewMode] = useState<'invoice-wise' | 'month-wise'>('invoice-wise');
     const [showNetOffModal, setShowNetOffModal] = useState(false);
+    const [monthFilter, setMonthFilter] = useState('');
+
+    // Filter visibility state
+    const [activeFilter, setActiveFilter] = useState<string | null>(null);
+
+    const toggleFilter = (filterName: string) => {
+        setActiveFilter(prev => prev === filterName ? null : filterName);
+    };
 
     // Mock ledger data
     const mockLedgerData: LedgerEntry[] = [
@@ -4923,8 +5031,12 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
     ];
 
     const MonthLedgerView: React.FC = () => {
-        const totalDebit = mockMonthLedgerData.reduce((sum, item) => sum + item.debit, 0);
-        const totalCredit = mockMonthLedgerData.reduce((sum, item) => sum + item.credit, 0);
+        const filteredMonthData = mockMonthLedgerData.filter(entry =>
+            entry.month.toLowerCase().includes(monthFilter.toLowerCase())
+        );
+
+        const totalDebit = filteredMonthData.reduce((sum, item) => sum + item.debit, 0);
+        const totalCredit = filteredMonthData.reduce((sum, item) => sum + item.credit, 0);
 
         return (
             <div className="bg-white border border-gray-200 rounded-[4px] overflow-hidden shadow-none border border-slate-200-none border border-slate-200">
@@ -4939,7 +5051,7 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-100">
-                            {mockMonthLedgerData.map((entry, index) => (
+                            {filteredMonthData.map((entry, index) => (
                                 <tr key={index} className="hover:bg-gray-50 transition-colors group">
                                     <td className="px-6 py-5 whitespace-nowrap text-sm font-bold text-gray-700">{entry.month}</td>
                                     <td className="px-6 py-5 whitespace-nowrap text-sm text-right text-gray-600 font-medium">₹{entry.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
@@ -4947,6 +5059,11 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
                                     <td className="px-6 py-5 whitespace-nowrap text-sm text-right font-bold text-gray-900">₹{entry.closingBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                 </tr>
                             ))}
+                            {filteredMonthData.length === 0 && (
+                                <tr>
+                                    <td colSpan={4} className="px-6 py-8 text-center text-gray-500 text-sm">No matching months found</td>
+                                </tr>
+                            )}
                         </tbody>
                         <tfoot className="bg-[#F8F9FA]">
                             <tr>
@@ -5012,6 +5129,23 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
                     <span className="text-lg font-medium">{customer.name}</span>
                 </button>
                 <div className="flex gap-3">
+                    {viewMode === 'month-wise' && (
+                        <div className="relative">
+                            <select
+                                value={monthFilter}
+                                onChange={(e) => setMonthFilter(e.target.value)}
+                                className="pl-3 pr-8 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-48 appearance-none bg-white cursor-pointer"
+                            >
+                                <option value="">Select Month</option>
+                                {mockMonthLedgerData.map((entry, index) => (
+                                    <option key={index} value={entry.month}>
+                                        {entry.month}
+                                    </option>
+                                ))}
+                            </select>
+                            <ChevronDown className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none" />
+                        </div>
+                    )}
                     <button
                         onClick={() => setShowNetOffModal(true)}
                         className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-[4px] hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
@@ -5038,75 +5172,146 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
                             <thead className="bg-gray-50 sticky top-0">
                                 <tr>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
-                                        <div className="flex items-center justify-between">
+                                        <div className="flex items-center justify-between relative">
                                             <span>Date</span>
-                                            <div className="ml-2 relative group">
-                                                <Filter className="w-4 h-4 cursor-pointer text-gray-400 hover:text-gray-600" />
-                                                <div className="hidden group-hover:block absolute z-10 top-6 right-0 bg-white shadow-none border border-slate-200-none border border-slate-200 rounded-[4px] p-3 w-48">
-                                                    <input type="date" value={dateFilter.start} onChange={(e) => setDateFilter({ ...dateFilter, start: e.target.value })} className="w-full px-2 py-1 text-xs border rounded mb-2" placeholder="Start" />
-                                                    <input type="date" value={dateFilter.end} onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })} className="w-full px-2 py-1 text-xs border rounded" placeholder="End" />
-                                                </div>
+                                            <div className="ml-2">
+                                                <Filter
+                                                    className={`w-4 h-4 cursor-pointer ${activeFilter === 'date' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
+                                                    onClick={() => toggleFilter('date')}
+                                                />
+                                                {activeFilter === 'date' && (
+                                                    <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-52">
+                                                        <div className="flex justify-between items-center mb-2">
+                                                            <span className="text-xs font-semibold">Filter Date</span>
+                                                            <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <div>
+                                                                <label className="text-[10px] text-gray-500 block mb-1">Start Date</label>
+                                                                <input type="date" value={dateFilter.start} onChange={(e) => setDateFilter({ ...dateFilter, start: e.target.value })} className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500" />
+                                                            </div>
+                                                            <div>
+                                                                <label className="text-[10px] text-gray-500 block mb-1">End Date</label>
+                                                                <input type="date" value={dateFilter.end} onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })} className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500" />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
-                                        <div className="flex items-center justify-between">
+                                        <div className="flex items-center justify-between relative">
                                             <span>Post From</span>
-                                            <div className="ml-2 relative group">
-                                                <Filter className="w-4 h-4 cursor-pointer text-gray-400 hover:text-gray-600" />
-                                                <div className="hidden group-hover:block absolute z-10 top-6 right-0 bg-white shadow-none border border-slate-200-none border border-slate-200 rounded-[4px] p-2 w-40">
-                                                    <select value={postFromFilter} onChange={(e) => setPostFromFilter(e.target.value as TransactionType | '')} className="w-full px-2 py-1 text-xs border rounded">
-                                                        <option value="">All</option>
-                                                        {postFromOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                                    </select>
-                                                </div>
+                                            <div className="ml-2">
+                                                <Filter
+                                                    className={`w-4 h-4 cursor-pointer ${activeFilter === 'postFrom' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
+                                                    onClick={() => toggleFilter('postFrom')}
+                                                />
+                                                {activeFilter === 'postFrom' && (
+                                                    <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-48">
+                                                        <div className="flex justify-between items-center mb-2">
+                                                            <span className="text-xs font-semibold">Filter Type</span>
+                                                            <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
+                                                        </div>
+                                                        <select value={postFromFilter} onChange={(e) => setPostFromFilter(e.target.value as TransactionType | '')} className="w-full px-2 py-1.5 text-xs border rounded focus:ring-1 focus:ring-indigo-500">
+                                                            <option value="">All Types</option>
+                                                            {postFromOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                                        </select>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
-                                        <div className="flex items-center justify-between">
+                                        <div className="flex items-center justify-between relative">
                                             <span>Ledger</span>
-                                            <div className="ml-2 relative group">
-                                                <Filter className="w-4 h-4 cursor-pointer text-gray-400 hover:text-gray-600" />
-                                                <div className="hidden group-hover:block absolute z-10 top-6 right-0 bg-white shadow-none border border-slate-200-none border border-slate-200 rounded-[4px] p-2 w-40">
-                                                    <input type="text" value={ledgerFilter} onChange={(e) => setLedgerFilter(e.target.value)} placeholder="Search..." className="w-full px-2 py-1 text-xs border rounded" />
-                                                </div>
+                                            <div className="ml-2">
+                                                <Filter
+                                                    className={`w-4 h-4 cursor-pointer ${activeFilter === 'ledger' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
+                                                    onClick={() => toggleFilter('ledger')}
+                                                />
+                                                {activeFilter === 'ledger' && (
+                                                    <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-52">
+                                                        <div className="flex justify-between items-center mb-2">
+                                                            <span className="text-xs font-semibold">Search Ledger</span>
+                                                            <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
+                                                        </div>
+                                                        <div className="relative">
+                                                            <input type="text" value={ledgerFilter} onChange={(e) => setLedgerFilter(e.target.value)} placeholder="Search..." className="w-full pl-7 pr-2 py-1.5 text-xs border rounded focus:ring-1 focus:ring-indigo-500" autoFocus />
+                                                            <Search className="w-3 h-3 text-gray-400 absolute left-2 top-1/2 transform -translate-y-1/2" />
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
-                                        <div className="flex items-center justify-between">
+                                        <div className="flex items-center justify-between relative">
                                             <span>Status</span>
-                                            <div className="ml-2 relative group">
-                                                <Filter className="w-4 h-4 cursor-pointer text-gray-400 hover:text-gray-600" />
-                                                <div className="hidden group-hover:block absolute z-10 top-6 right-0 bg-white shadow-none border border-slate-200-none border border-slate-200 rounded-[4px] p-2 w-40 max-h-60 overflow-y-auto">
-                                                    <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as PurchaseStatus | SalesStatus | '')} className="w-full px-2 py-1 text-xs border rounded">
-                                                        <option value="">All</option>
-                                                        {statusOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                                    </select>
-                                                </div>
+                                            <div className="ml-2">
+                                                <Filter
+                                                    className={`w-4 h-4 cursor-pointer ${activeFilter === 'status' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
+                                                    onClick={() => toggleFilter('status')}
+                                                />
+                                                {activeFilter === 'status' && (
+                                                    <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-48">
+                                                        <div className="flex justify-between items-center mb-2">
+                                                            <span className="text-xs font-semibold">Filter Status</span>
+                                                            <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
+                                                        </div>
+                                                        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as PurchaseStatus | SalesStatus | '')} className="w-full px-2 py-1.5 text-xs border rounded focus:ring-1 focus:ring-indigo-500">
+                                                            <option value="">All Statuses</option>
+                                                            {statusOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                                        </select>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </th>
                                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
-                                        <div className="flex items-center justify-end">
+                                        <div className="flex items-center justify-end relative">
                                             <span>Debit</span>
-                                            <div className="ml-2 relative group">
-                                                <Filter className="w-4 h-4 cursor-pointer text-gray-400 hover:text-gray-600" />
-                                                <div className="hidden group-hover:block absolute z-10 top-6 right-0 bg-white shadow-none border border-slate-200-none border border-slate-200 rounded-[4px] p-2 w-32">
-                                                    <label className="flex items-center text-xs"><input type="checkbox" checked={!!debitFilter} onChange={(e) => setDebitFilter(e.target.checked ? 'show' : '')} className="mr-1" />Show only</label>
-                                                </div>
+                                            <div className="ml-2">
+                                                <Filter
+                                                    className={`w-4 h-4 cursor-pointer ${activeFilter === 'debit' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
+                                                    onClick={() => toggleFilter('debit')}
+                                                />
+                                                {activeFilter === 'debit' && (
+                                                    <div className="absolute z-50 top-8 right-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-40">
+                                                        <div className="flex justify-between items-center mb-2">
+                                                            <span className="text-xs font-semibold">Filter Debit</span>
+                                                            <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
+                                                        </div>
+                                                        <label className="flex items-center text-xs cursor-pointer p-1 hover:bg-gray-50 rounded">
+                                                            <input type="checkbox" checked={!!debitFilter} onChange={(e) => setDebitFilter(e.target.checked ? 'show' : '')} className="mr-2 rounded text-indigo-600 focus:ring-indigo-500" />
+                                                            Show Debits Only
+                                                        </label>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </th>
                                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
-                                        <div className="flex items-center justify-end">
+                                        <div className="flex items-center justify-end relative">
                                             <span>Credit</span>
-                                            <div className="ml-2 relative group">
-                                                <Filter className="w-4 h-4 cursor-pointer text-gray-400 hover:text-gray-600" />
-                                                <div className="hidden group-hover:block absolute z-10 top-6 right-0 bg-white shadow-none border border-slate-200-none border border-slate-200 rounded-[4px] p-2 w-32">
-                                                    <label className="flex items-center text-xs"><input type="checkbox" checked={!!creditFilter} onChange={(e) => setCreditFilter(e.target.checked ? 'show' : '')} className="mr-1" />Show only</label>
-                                                </div>
+                                            <div className="ml-2">
+                                                <Filter
+                                                    className={`w-4 h-4 cursor-pointer ${activeFilter === 'credit' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
+                                                    onClick={() => toggleFilter('credit')}
+                                                />
+                                                {activeFilter === 'credit' && (
+                                                    <div className="absolute z-50 top-8 right-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-40">
+                                                        <div className="flex justify-between items-center mb-2">
+                                                            <span className="text-xs font-semibold">Filter Credit</span>
+                                                            <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
+                                                        </div>
+                                                        <label className="flex items-center text-xs cursor-pointer p-1 hover:bg-gray-50 rounded">
+                                                            <input type="checkbox" checked={!!creditFilter} onChange={(e) => setCreditFilter(e.target.checked ? 'show' : '')} className="mr-2 rounded text-indigo-600 focus:ring-indigo-500" />
+                                                            Show Credits Only
+                                                        </label>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </th>
@@ -5124,7 +5329,16 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100 font-medium">{formatCurrency(entry.debit)}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100 font-medium">{formatCurrency(entry.credit)}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-semibold">{formatCurrency(entry.runningBalance)}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-semibold">
+                                            {entry.runningBalance === 0 ? '-' : (
+                                                <span>
+                                                    {formatCurrency(Math.abs(entry.runningBalance))}
+                                                    <span className="ml-1 text-gray-500 text-xs font-normal">
+                                                        {entry.credit > 0 ? 'Cr' : 'Dr'}
+                                                    </span>
+                                                </span>
+                                            )}
+                                        </td>
                                     </tr>
                                 ))}
                                 {filteredData.length === 0 && (
@@ -5144,22 +5358,7 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
                 </div>
             )}
 
-            {/* Info */}
-            {/* Info */}
-            <div className="mt-4 text-xs text-gray-500 space-y-1">
-                {viewMode === 'invoice-wise' ? (
-                    <>
-                        <p>• Running Balance values remain unchanged when filters are applied - they reflect the true sequential ledger balance.</p>
-                        <p>• Totals (Debit and Credit) update based on filtered visible rows.</p>
-                        <p>• All columns are filterable except Running Balance.</p>
-                    </>
-                ) : (
-                    <>
-                        <p>• Month View aggregates all transactions by month.</p>
-                        <p>• Closing Balance represents the balance at the end of each month.</p>
-                    </>
-                )}
-            </div>
+
 
             {/* Net Off Modal */}
             <NetOffModal
@@ -5173,9 +5372,12 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
 
 // Sales Content Component with Aging Buckets
 const SalesContent: React.FC = () => {
+    const [viewMode, setViewMode] = useState<'dashboard' | 'list'>('dashboard');
     const [activeCategory, setActiveCategory] = useState<SalesCategory>('Stock-in-Trade');
     const [showLedgerView, setShowLedgerView] = useState(false);
     const [selectedCustomer, setSelectedCustomer] = useState<{ id: string, name: string } | null>(null);
+
+    const [searchTerm, setSearchTerm] = useState('');
 
     // Mock data for demonstration - same structure for all categories
     const getMockData = (category: SalesCategory): AgingData[] => {
@@ -5267,8 +5469,19 @@ const SalesContent: React.FC = () => {
         );
     };
 
+    const handleCardClick = (category: SalesCategory) => {
+        setActiveCategory(category);
+        setViewMode('list');
+    };
+
     const categories: SalesCategory[] = ['Stock-in-Trade', 'Finished Goods', 'Services'];
     const currentData = getMockData(activeCategory);
+
+    // Filter data based on search term
+    const filteredData = currentData.filter(customer =>
+        customer.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        customer.customerCode.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
     // Show ledger view if customer is selected
     if (showLedgerView && selectedCustomer) {
@@ -5277,137 +5490,190 @@ const SalesContent: React.FC = () => {
 
     return (
         <div className="text-left">
-            <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-medium text-gray-900">Sales - Customer Aging</h3>
-            </div>
-
-            {/* Category Tabs */}
-            <div className="mb-6 bg-gray-50 p-2 rounded-[4px] inline-block border border-gray-200">
-                <div className="flex space-x-2">
-                    {categories.map((category) => (
-                        <button
-                            key={category}
-                            onClick={() => setActiveCategory(category)}
-                            className={`px-4 py-2 rounded-[4px] text-sm font-medium transition-colors ${activeCategory === category
-                                ? 'bg-white text-indigo-700 shadow-none border border-slate-200-none border border-slate-200'
-                                : 'text-gray-600 hover:bg-white/50'
-                                }`}
+            {viewMode === 'dashboard' ? (
+                <div>
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-xl font-bold text-gray-900">Sales - Customer Aging</h3>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {/* Stock-in-Trade Card */}
+                        <div
+                            onClick={() => handleCardClick('Stock-in-Trade')}
+                            className="bg-white p-6 rounded-[4px] border border-gray-200 hover:border-indigo-500 hover:shadow-md cursor-pointer transition-all group"
                         >
-                            {category}
-                        </button>
-                    ))}
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="p-3 rounded-[4px] bg-indigo-50 text-indigo-600">
+                                    {/* Ideally use a Package icon here if available, fallback to default */}
+                                    <Filter className="w-6 h-6" />
+                                </div>
+                                <ChevronLeft className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transform rotate-180 transition-all opacity-0 group-hover:opacity-100" />
+                            </div>
+                            <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">Stock-in-Trade</h3>
+                            <p className="text-sm text-gray-500 mt-2">View stock-in-trade aging.</p>
+                        </div>
+
+                        {/* Finished Goods Card */}
+                        <div
+                            onClick={() => handleCardClick('Finished Goods')}
+                            className="bg-white p-6 rounded-[4px] border border-gray-200 hover:border-indigo-500 hover:shadow-md cursor-pointer transition-all group"
+                        >
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="p-3 rounded-[4px] bg-indigo-50 text-indigo-600">
+                                    <Filter className="w-6 h-6" />
+                                </div>
+                                <ChevronLeft className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transform rotate-180 transition-all opacity-0 group-hover:opacity-100" />
+                            </div>
+                            <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">Finished Goods</h3>
+                            <p className="text-sm text-gray-500 mt-2">View finished goods aging.</p>
+                        </div>
+
+                        {/* Services Card */}
+                        <div
+                            onClick={() => handleCardClick('Services')}
+                            className="bg-white p-6 rounded-[4px] border border-gray-200 hover:border-indigo-500 hover:shadow-md cursor-pointer transition-all group"
+                        >
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="p-3 rounded-[4px] bg-indigo-50 text-indigo-600">
+                                    <Filter className="w-6 h-6" />
+                                </div>
+                                <ChevronLeft className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transform rotate-180 transition-all opacity-0 group-hover:opacity-100" />
+                            </div>
+                            <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">Services</h3>
+                            <p className="text-sm text-gray-500 mt-2">View services aging.</p>
+                        </div>
+                    </div>
                 </div>
-            </div>
+            ) : (
+                <>
+                    {/* Header Section */}
+                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+                        <div className="flex items-center gap-4">
+                            <button
+                                onClick={() => setViewMode('dashboard')}
+                                className="p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
+                                title="Back to Dashboard"
+                            >
+                                <ChevronLeft className="w-5 h-5 text-gray-600" />
+                            </button>
+                            <h3 className="text-xl font-bold text-gray-900">Sales - {activeCategory}</h3>
+                        </div>
 
+                        {/* Search Field */}
+                        <div className="relative">
+                            <input
+                                type="text"
+                                placeholder="Search Customer..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="pl-10 pr-4 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64"
+                            />
+                            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
+                        </div>
+                    </div>
 
+                    {/* Aging Table */}
+                    <div className="bg-white border border-gray-200 rounded-[4px] overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        {/* Customer Information */}
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
+                                            Customer Code
+                                        </th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
+                                            Customer Name
+                                        </th>
 
-            {/* Aging Table */}
-            <div className="bg-white border border-gray-200 rounded-[4px] overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                {/* Customer Information */}
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
-                                    Customer Code
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
-                                    Customer Name
-                                </th>
-
-                                {/* Aging Buckets */}
-                                <th colSpan={5} className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-indigo-50 border-b border-gray-200">
-                                    Amount - Due For
-                                </th>
-                                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-l border-gray-200">
-                                    Actions
-                                </th>
-                            </tr>
-                            <tr>
-                                <th className="border-r border-gray-200"></th>
-                                <th className="border-r border-gray-200"></th>
-                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-indigo-50 border-r border-gray-200">
-                                    Not Due
-                                </th>
-                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-indigo-50 border-r border-gray-200">
-                                    0-45 Days
-                                </th>
-                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-indigo-50 border-r border-gray-200">
-                                    45-90 Days
-                                </th>
-                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-indigo-50 border-r border-gray-200">
-                                    &gt; 6 Months
-                                </th>
-                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-indigo-50 border-r border-gray-200">
-                                    &gt; 1 Year
-                                </th>
-                                <th className="border-l border-gray-200"></th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {currentData.map((customer) => (
-                                <tr key={customer.customerId} className="hover:bg-gray-50 transition-colors">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 border-r border-gray-100">
-                                        {customer.customerCode}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-100">
-                                        {customer.customerName}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100">
-                                        {customer.notDue > 0 ? formatCurrency(customer.notDue) : '-'}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100">
-                                        {customer.days0to45 > 0 ? formatCurrency(customer.days0to45) : '-'}
-                                    </td>
-                                    <td
-                                        className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100">
-                                        {customer.days45to90 > 0 ? formatCurrency(customer.days45to90) : '-'}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100">
-                                        {customer.months6 > 0 ? formatCurrency(customer.months6) : '-'}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100">
-                                        {customer.year1 > 0 ? formatCurrency(customer.year1) : '-'}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium border-l border-gray-100">
-                                        <div className="flex items-center justify-center space-x-4">
-                                            <button
-                                                onClick={() => handleViewCustomer(customer.customerId, customer.customerName)}
-                                                className="text-indigo-600 hover:text-indigo-900 transition-colors"
-                                                title="View Customer Ledger"
-                                            >
-                                                <Eye className="w-5 h-5" />
-                                            </button>
-                                            <button
-                                                onClick={() => handleSendMail(customer)}
-                                                className="text-indigo-600 hover:text-teal-900 transition-colors"
-                                                title="Send Reminder Email"
-                                            >
-                                                <Mail className="w-5 h-5" />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-
-                            {/* Empty State */}
-                            {currentData.length === 0 && (
-                                <tr>
-                                    <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
-                                        No sales aging data available for {activeCategory}.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-
+                                        {/* Aging Buckets */}
+                                        <th colSpan={5} className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-indigo-50 border-b border-gray-200">
+                                            Amount - Due For
+                                        </th>
+                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-l border-gray-200">
+                                            Actions
+                                        </th>
+                                    </tr>
+                                    <tr>
+                                        <th className="border-r border-gray-200"></th>
+                                        <th className="border-r border-gray-200"></th>
+                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-indigo-50 border-r border-gray-200">
+                                            Not Due
+                                        </th>
+                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-indigo-50 border-r border-gray-200">
+                                            0-45 Days
+                                        </th>
+                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-indigo-50 border-r border-gray-200">
+                                            45-90 Days
+                                        </th>
+                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-indigo-50 border-r border-gray-200">
+                                            {'>'} 6 Months
+                                        </th>
+                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-indigo-50">
+                                            {'>'} 1 Year
+                                        </th>
+                                        <th className="border-l border-gray-200"></th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    {filteredData.map((customer) => (
+                                        <tr key={customer.customerId} className="hover:bg-gray-50">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 border-r border-gray-100">
+                                                {customer.customerCode}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-100">
+                                                {customer.customerName}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-600 border-r border-gray-100">
+                                                {customer.notDue > 0 ? formatCurrency(customer.notDue) : '-'}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-600 border-r border-gray-100">
+                                                {customer.days0to45 > 0 ? formatCurrency(customer.days0to45) : '-'}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-600 border-r border-gray-100">
+                                                {customer.days45to90 > 0 ? formatCurrency(customer.days45to90) : '-'}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-600 border-r border-gray-100">
+                                                {customer.months6 > 0 ? formatCurrency(customer.months6) : '-'}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-600 bg-indigo-50/30">
+                                                {customer.year1 > 0 ? formatCurrency(customer.year1) : '-'}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium border-l border-gray-100">
+                                                <div className="flex items-center justify-center space-x-3">
+                                                    <button
+                                                        onClick={() => handleViewCustomer(customer.customerId, customer.customerName)}
+                                                        className="text-indigo-600 hover:text-indigo-900"
+                                                        title="View Ledger"
+                                                    >
+                                                        <Eye className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleSendMail(customer)}
+                                                        className="text-gray-400 hover:text-indigo-600 transition-colors"
+                                                        title="Send Reminder Email"
+                                                    >
+                                                        <Mail className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {filteredData.length === 0 && (
+                                        <tr>
+                                            <td colSpan={8} className="px-6 py-12 text-center text-gray-500 text-sm">
+                                                No customers found matching your search.
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </>
+            )}
         </div>
     );
 };
 
 export default CustomerPortalPage;
-
 
