@@ -9,6 +9,8 @@ import { getCountries, getStates, getCities } from '../../utils/locationData';
 import SearchableDropdown from '../../components/SearchableDropdown';
 import { showError, showSuccess, confirm } from '../../utils/toast';
 import { handleApiError } from '../../utils/errorHandler';
+import MultiSelectDropdown from '../../components/MultiSelectDropdown';
+
 
 
 // Interfaces
@@ -1373,8 +1375,9 @@ const InventoryPage: React.FC = () => {
           setGrnSecondaryRefNoOptions(invResponse);
         }
       } catch (error) {
-        console.error("Error fetching vendor details:", error);
+        handleApiError(error, "Fetching vendor details");
       }
+
     }
   };
 
@@ -1410,8 +1413,9 @@ const InventoryPage: React.FC = () => {
           setGrnReferenceNoOptions(salesVouchers);
         }
       } catch (error) {
-        console.error("Error fetching sales vouchers:", error);
+        handleApiError(error, "Fetching sales vouchers");
       }
+
     }
   };
 

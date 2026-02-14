@@ -58,6 +58,20 @@ class SalesVoucherDocumentSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'uploaded_at']
 
 
+class SalesVoucherListSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for Sales Voucher list/dropdowns"""
+    customer_name = serializers.CharField(source='customer.name', read_only=True)
+    voucher_type_name = serializers.CharField(source='voucher_type.name', read_only=True)
+
+    class Meta:
+        model = SalesVoucher
+        fields = [
+            'id', 'date', 'sales_invoice_number', 'customer', 'customer_name', 
+            'voucher_type', 'voucher_type_name', 'grand_total', 'status'
+        ]
+        read_only_fields = fields
+
+
 class SalesVoucherSerializer(serializers.ModelSerializer):
     """Serializer for Sales Voucher"""
     

@@ -22,6 +22,7 @@ from accounting.models import (
 )
 from accounting.sales_serializers import (
     SalesVoucherSerializer,
+    SalesVoucherListSerializer,
     SalesVoucherCreateSerializer,
     SalesVoucherItemSerializer,
     SalesVoucherDocumentSerializer,
@@ -87,21 +88,43 @@ class SalesVoucherViewSet(viewsets.ModelViewSet):
     serializer_class = SalesVoucherSerializer
     permission_classes = [IsAuthenticated]
     
+    def get_serializer_class(self):
+        """Use lightweight serializer for list view"""
+        if self.action == 'list':
+            return SalesVoucherListSerializer
+        return SalesVoucherSerializer
+
     def get_queryset(self):
         tenant_id = get_tenant_from_request(self.request)
-        
+        if not tenant_id:
+            return SalesVoucher.objects.none()
+
         # Get filter parameters
         filters = {}
         if self.request.query_params.get('date_from'):
             filters['date_from'] = self.request.query_params['date_from']
         if self.request.query_params.get('date_to'):
             filters['date_to'] = self.request.query_params['date_to']
-        if self.request.query_params.get('customer_id'):
-            filters['customer_id'] = self.request.query_params['customer_id']
+            
+        # Ensure customer_id is a valid integer if provided
+        customer_id = self.request.query_params.get('customer_id')
+        if customer_id and customer_id.isdigit():
+            filters['customer_id'] = int(customer_id)
+        elif customer_id:
+            # If invalid ID format, return empty to avoid slow queries or errors
+            return SalesVoucher.objects.none()
+
         if self.request.query_params.get('status'):
             filters['status'] = self.request.query_params['status']
         
-        return sales_database.get_sales_vouchers(tenant_id, filters)
+        prefetch = (self.action != 'list')
+        queryset = sales_database.get_sales_vouchers(tenant_id, filters, prefetch=prefetch)
+        
+        # Security/Performance: Always limit list results to prevent timeouts
+        if self.action == 'list':
+            return queryset[:1000]
+            
+        return queryset
     
     def create(self, request, *args, **kwargs):
         """Create a new sales voucher"""

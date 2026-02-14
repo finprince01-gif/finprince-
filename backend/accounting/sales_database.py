@@ -95,13 +95,14 @@ def get_sales_voucher(voucher_id: int, tenant_id: str) -> Optional['SalesVoucher
         return None
 
 
-def get_sales_vouchers(tenant_id: str, filters: Optional[Dict] = None) -> QuerySet:
+def get_sales_vouchers(tenant_id: str, filters: Optional[Dict] = None, prefetch: bool = True) -> QuerySet:
     """
     Fetch all sales vouchers for a tenant with optional filters.
     
     Args:
         tenant_id: Tenant ID
         filters: Optional filters (date_from, date_to, customer_id, status)
+        prefetch: Whether to prefetch related items/documents
         
     Returns:
         QuerySet: Sales vouchers
@@ -120,7 +121,13 @@ def get_sales_vouchers(tenant_id: str, filters: Optional[Dict] = None) -> QueryS
         if filters.get('status'):
             queryset = queryset.filter(status=filters['status'])
     
-    return queryset.prefetch_related('items', 'documents').order_by('-date', '-created_at')
+    if prefetch:
+        queryset = queryset.prefetch_related('items', 'documents')
+    
+    # Always join customer and voucher_type as they are in all serializers
+    queryset = queryset.select_related('customer', 'voucher_type')
+        
+    return queryset.order_by('-date', '-id')
 
 
 def save_voucher_document(voucher_id: int, tenant_id: str, file_data: Dict) -> 'SalesVoucherDocument':
