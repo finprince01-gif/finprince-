@@ -22,21 +22,22 @@ def create_vendor_tds(data: Dict) -> Dict:
     query = """
         INSERT INTO vendor_master_tds (
             tenant_id, vendor_basic_detail_id, pan_number, tan_number,
-            tds_section, tds_rate, tds_section_applicable, enable_automatic_tds_posting,
+            tds_section, tds_rate, penalty_rate, tds_section_applicable, enable_automatic_tds_posting,
             msme_udyam_no, fssai_license_no, import_export_code, eou_status,
             cin_number, is_active, created_at, updated_at, created_by, updated_by
         ) VALUES (
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW(), %s, %s
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW(), %s, %s
         )
     """
     
     params = [
         data.get('tenant_id'),
-        data.get('vendor_basic_detail_id'),
+        data.get('vendor_basic_detail_id') or data.get('vendor_basic_detail'),
         data.get('pan_number'),
         data.get('tan_number'),
         data.get('tds_section'),
         data.get('tds_rate'),
+        data.get('penalty_rate'),
         data.get('tds_section_applicable'),
         data.get('enable_automatic_tds_posting', False),
         data.get('msme_udyam_no'),
@@ -75,7 +76,7 @@ def update_vendor_tds(tds_id: int, data: Dict) -> Dict:
     query = """
         UPDATE vendor_master_tds
         SET pan_number = %s, tan_number = %s, tds_section = %s, tds_rate = %s,
-            tds_section_applicable = %s, enable_automatic_tds_posting = %s,
+            penalty_rate = %s, tds_section_applicable = %s, enable_automatic_tds_posting = %s,
             msme_udyam_no = %s, fssai_license_no = %s, import_export_code = %s,
             eou_status = %s, cin_number = %s, is_active = %s,
             updated_at = NOW(), updated_by = %s
@@ -87,6 +88,7 @@ def update_vendor_tds(tds_id: int, data: Dict) -> Dict:
         data.get('tan_number'),
         data.get('tds_section'),
         data.get('tds_rate'),
+        data.get('penalty_rate'),
         data.get('tds_section_applicable'),
         data.get('enable_automatic_tds_posting', False),
         data.get('msme_udyam_no'),
@@ -122,7 +124,7 @@ def get_vendor_tds_by_id(tds_id: int) -> Optional[Dict]:
     """
     query = """
         SELECT id, tenant_id, vendor_basic_detail_id, pan_number, tan_number,
-               tds_section, tds_rate, tds_section_applicable, enable_automatic_tds_posting,
+               tds_section, tds_rate, penalty_rate, tds_section_applicable, enable_automatic_tds_posting,
                msme_udyam_no, fssai_license_no, import_export_code, eou_status,
                cin_number, is_active, created_at, updated_at, created_by, updated_by
         FROM vendor_master_tds
@@ -142,19 +144,20 @@ def get_vendor_tds_by_id(tds_id: int) -> Optional[Dict]:
                     'pan_number': row[3],
                     'tan_number': row[4],
                     'tds_section': row[5],
-                    'tds_rate': float(row[6]) if row[6] else None,
-                    'tds_section_applicable': row[7],
-                    'enable_automatic_tds_posting': bool(row[8]),
-                    'msme_udyam_no': row[9],
-                    'fssai_license_no': row[10],
-                    'import_export_code': row[11],
-                    'eou_status': row[12],
-                    'cin_number': row[13],
-                    'is_active': bool(row[14]),
-                    'created_at': row[15],
-                    'updated_at': row[16],
-                    'created_by': row[17],
-                    'updated_by': row[18],
+                    'tds_rate': row[6],
+                    'penalty_rate': row[7],
+                    'tds_section_applicable': row[8],
+                    'enable_automatic_tds_posting': bool(row[9]),
+                    'msme_udyam_no': row[10],
+                    'fssai_license_no': row[11],
+                    'import_export_code': row[12],
+                    'eou_status': row[13],
+                    'cin_number': row[14],
+                    'is_active': bool(row[15]),
+                    'created_at': row[16],
+                    'updated_at': row[17],
+                    'created_by': row[18],
+                    'updated_by': row[19],
                 }
             return None
     except Exception as e:
@@ -174,7 +177,7 @@ def get_vendor_tds_by_vendor(vendor_basic_detail_id: int) -> Optional[Dict]:
     """
     query = """
         SELECT id, tenant_id, vendor_basic_detail_id, pan_number, tan_number,
-               tds_section, tds_rate, tds_section_applicable, enable_automatic_tds_posting,
+               tds_section, tds_rate, penalty_rate, tds_section_applicable, enable_automatic_tds_posting,
                msme_udyam_no, fssai_license_no, import_export_code, eou_status,
                cin_number, is_active, created_at, updated_at, created_by, updated_by
         FROM vendor_master_tds
@@ -196,19 +199,20 @@ def get_vendor_tds_by_vendor(vendor_basic_detail_id: int) -> Optional[Dict]:
                     'pan_number': row[3],
                     'tan_number': row[4],
                     'tds_section': row[5],
-                    'tds_rate': float(row[6]) if row[6] else None,
-                    'tds_section_applicable': row[7],
-                    'enable_automatic_tds_posting': bool(row[8]),
-                    'msme_udyam_no': row[9],
-                    'fssai_license_no': row[10],
-                    'import_export_code': row[11],
-                    'eou_status': row[12],
-                    'cin_number': row[13],
-                    'is_active': bool(row[14]),
-                    'created_at': row[15],
-                    'updated_at': row[16],
-                    'created_by': row[17],
-                    'updated_by': row[18],
+                    'tds_rate': row[6],
+                    'penalty_rate': row[7],
+                    'tds_section_applicable': row[8],
+                    'enable_automatic_tds_posting': bool(row[9]),
+                    'msme_udyam_no': row[10],
+                    'fssai_license_no': row[11],
+                    'import_export_code': row[12],
+                    'eou_status': row[13],
+                    'cin_number': row[14],
+                    'is_active': bool(row[15]),
+                    'created_at': row[16],
+                    'updated_at': row[17],
+                    'created_by': row[18],
+                    'updated_by': row[19],
                 }
             return None
     except Exception as e:
@@ -228,7 +232,7 @@ def list_vendor_tds_by_tenant(tenant_id: str) -> List[Dict]:
     """
     query = """
         SELECT id, tenant_id, vendor_basic_detail_id, pan_number, tan_number,
-               tds_section, tds_rate, tds_section_applicable, enable_automatic_tds_posting,
+               tds_section, tds_rate, penalty_rate, tds_section_applicable, enable_automatic_tds_posting,
                msme_udyam_no, fssai_license_no, import_export_code, eou_status,
                cin_number, is_active, created_at, updated_at, created_by, updated_by
         FROM vendor_master_tds
@@ -250,19 +254,20 @@ def list_vendor_tds_by_tenant(tenant_id: str) -> List[Dict]:
                     'pan_number': row[3],
                     'tan_number': row[4],
                     'tds_section': row[5],
-                    'tds_rate': float(row[6]) if row[6] else None,
-                    'tds_section_applicable': row[7],
-                    'enable_automatic_tds_posting': bool(row[8]),
-                    'msme_udyam_no': row[9],
-                    'fssai_license_no': row[10],
-                    'import_export_code': row[11],
-                    'eou_status': row[12],
-                    'cin_number': row[13],
-                    'is_active': bool(row[14]),
-                    'created_at': row[15],
-                    'updated_at': row[16],
-                    'created_by': row[17],
-                    'updated_by': row[18],
+                    'tds_rate': row[6],
+                    'penalty_rate': row[7],
+                    'tds_section_applicable': row[8],
+                    'enable_automatic_tds_posting': bool(row[9]),
+                    'msme_udyam_no': row[10],
+                    'fssai_license_no': row[11],
+                    'import_export_code': row[12],
+                    'eou_status': row[13],
+                    'cin_number': row[14],
+                    'is_active': bool(row[15]),
+                    'created_at': row[16],
+                    'updated_at': row[17],
+                    'created_by': row[18],
+                    'updated_by': row[19],
                 })
             
             return results

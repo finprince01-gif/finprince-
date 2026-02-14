@@ -79,12 +79,13 @@ class VendorGSTDetailsViewSet(viewsets.ModelViewSet):
             logger.error(f"Serializer validation failed: {serializer.errors}")
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
-        # Check for duplicate GSTIN
+        # Check for duplicate GSTIN + Reference Name
         gstin = serializer.validated_data.get('gstin')
-        if VendorGSTDetailsDatabase.check_duplicate_gstin(tenant_id, gstin):
-            logger.warning(f"Duplicate GSTIN detected: {gstin}")
+        reference_name = serializer.validated_data.get('reference_name')
+        if VendorGSTDetailsDatabase.check_duplicate_gstin(tenant_id, gstin, reference_name):
+            logger.warning(f"Duplicate GSTIN/Reference Name detected: {gstin} / {reference_name}")
             return Response(
-                {'error': f'GSTIN "{gstin}" is already registered'},
+                {'error': f'GSTIN "{gstin}" with branch "{reference_name}" is already registered'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         

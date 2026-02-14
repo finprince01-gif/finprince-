@@ -100,12 +100,15 @@ class VendorGSTDetailsDatabase:
             return False
     
     @staticmethod
-    def check_duplicate_gstin(tenant_id, gstin, exclude_id=None):
-        """Check if a GSTIN already exists for a tenant"""
+    def check_duplicate_gstin(tenant_id, gstin, reference_name=None, exclude_id=None):
+        """Check if a GSTIN already exists for a tenant, optionally with a specific reference name"""
         queryset = VendorMasterGSTDetails.objects.filter(
             tenant_id=tenant_id,
             gstin=gstin.upper()
         )
+        if reference_name:
+            queryset = queryset.filter(reference_name=reference_name)
+        
         if exclude_id:
             queryset = queryset.exclude(id=exclude_id)
         return queryset.exists()
