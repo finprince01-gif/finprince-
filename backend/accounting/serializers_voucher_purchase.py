@@ -16,6 +16,21 @@ class VoucherPurchaseSupplyForeignDetailsSerializer(serializers.ModelSerializer)
         model = VoucherPurchaseSupplyForeignDetails
         fields = ['purchase_order_no', 'exchange_rate', 'description', 'items']
 
+    def validate_items(self, value):
+        if not isinstance(value, list):
+            return value
+        
+        for item in value:
+            for field in ['qty', 'rate', 'igst', 'cgst', 'sgst', 'cess']:
+                if field in item:
+                    try:
+                        val = float(item[field])
+                        if val < 0:
+                            raise serializers.ValidationError(f"{field} cannot be negative.")
+                    except (ValueError, TypeError):
+                        continue
+        return value
+
 class VoucherPurchaseSupplyINRDetailsSerializer(serializers.ModelSerializer):
     purchase_order_no = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     purchase_ledger = serializers.CharField(required=False, allow_blank=True, allow_null=True)
@@ -24,6 +39,21 @@ class VoucherPurchaseSupplyINRDetailsSerializer(serializers.ModelSerializer):
     class Meta:
         model = VoucherPurchaseSupplyINRDetails
         fields = ['purchase_order_no', 'purchase_ledger', 'items']
+
+    def validate_items(self, value):
+        if not isinstance(value, list):
+            return value
+        
+        for item in value:
+            for field in ['qty', 'rate', 'igst', 'cgst', 'sgst', 'cess']:
+                if field in item:
+                    try:
+                        val = float(item[field])
+                        if val < 0:
+                            raise serializers.ValidationError(f"{field} cannot be negative.")
+                    except (ValueError, TypeError):
+                        continue
+        return value
 
 class VoucherPurchaseDueDetailsSerializer(serializers.ModelSerializer):
     class Meta:

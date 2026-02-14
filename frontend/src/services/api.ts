@@ -230,10 +230,10 @@ class ApiService {
     }
 
     /**
-     * Get all POSTED GRNs that are not yet linked to a Purchase Voucher
+     * Get Job Work Outward Slips (for reference in Receipt)
      */
-    async getPendingGRNs() {
-        return httpClient.get<any[]>('/api/inventory/operations/pending-grns/');
+    async getJobWorkOutwardSlips() {
+        return httpClient.get<any[]>('/api/inventory/operations/job-work/?operation_type=outward');
     }
 
     /**
