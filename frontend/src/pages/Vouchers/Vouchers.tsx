@@ -293,7 +293,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     date: string;
     refNo: string;
     amount: string;
-    appliedNow: boolean;
+    appliedNow: string;
   }>>([]);
 
   // Purchase Transit Details State
@@ -403,6 +403,15 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   useEffect(() => {
     if (purchaseOrderNo && mockPurchaseOrders[purchaseOrderNo]) {
       setPurchaseItems(mockPurchaseOrders[purchaseOrderNo]);
+
+      // Auto-populate mock advance references
+      const mockRefs = [
+        { id: 1, date: '2026-01-10', refNo: `ADV/${purchaseOrderNo}/01`, amount: '5000.00', appliedNow: '0.00' },
+        { id: 2, date: '2026-01-25', refNo: `ADV/${purchaseOrderNo}/02`, amount: '3500.00', appliedNow: '0.00' }
+      ];
+      setPurchaseAdvanceRefs(mockRefs);
+    } else {
+      setPurchaseAdvanceRefs([]);
     }
   }, [purchaseOrderNo]);
 
@@ -1396,7 +1405,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     const item = { ...newItems[index] };
 
     // Update field
-    (item as any)[field] = value;
+    if (['qty', 'rate', 'igst', 'cgst', 'sgst', 'cess'].includes(field)) {
+      (item as any)[field] = Math.max(0, typeof value === 'string' ? parseFloat(value) || 0 : value);
+    } else {
+      (item as any)[field] = value;
+    }
 
     // Auto-populate based on Item Code or Name
     if (field === 'itemCode' || field === 'itemName') {
@@ -1420,11 +1433,30 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     }
 
 
-    // Auto-calculate Taxable Value (Qty * Rate)
+    // Auto-calculate Taxable Value (Qty * Rate) and Taxes
     if (field === 'qty' || field === 'rate' || field === 'itemCode' || field === 'itemName') { // Recalculate if item changes too (in case rate updated)
       const qty = parseFloat(item.qty.toString()) || 0;
       const rate = parseFloat(item.rate.toString()) || 0;
       item.taxableValue = qty * rate;
+
+      // Fetch GST Rate from stock items
+      const selectedStockItem = stockItems.find((si: any) =>
+        (si.item_code || si.code) === item.itemCode ||
+        (si.name || si.item_name) === item.itemName
+      );
+
+      const gstRate = selectedStockItem?.gstRate || 0;
+      const totalTax = item.taxableValue * (gstRate / 100);
+
+      if (isInterState) {
+        item.igst = totalTax;
+        item.cgst = 0;
+        item.sgst = 0;
+      } else {
+        item.igst = 0;
+        item.cgst = totalTax / 2;
+        item.sgst = totalTax / 2;
+      }
     }
 
     // Auto-calculate Invoice Value (Taxable + Taxes)
@@ -1440,6 +1472,23 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     newItems[index] = item;
     setPurchaseItems(newItems);
   };
+
+  const handlePurchaseAdvanceRefChange = (index: number, field: string, value: string) => {
+    const newRefs = [...purchaseAdvanceRefs];
+    const ref = { ...newRefs[index] };
+    (ref as any)[field] = value;
+    newRefs[index] = ref;
+    setPurchaseAdvanceRefs(newRefs);
+  };
+
+  // Auto-calculate Advance Paid from Advance References
+  useEffect(() => {
+    const totalAppliedNow = purchaseAdvanceRefs.reduce((sum, ref) => {
+      const val = parseFloat(ref.appliedNow) || 0;
+      return sum + val;
+    }, 0);
+    setPurchaseAdvancePaid(totalAppliedNow.toFixed(2));
+  }, [purchaseAdvanceRefs]);
 
   const handleAddPurchaseItem = () => {
     setPurchaseItems([...purchaseItems, {
@@ -1852,7 +1901,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         </td>
                         <td className="px-3 py-2 border-r border-gray-200">
                           <input
-                            type="text"
+                            type="number"
+                            min="0"
                             value={row.qty}
                             onChange={(e) => handlePurchaseItemChange(index, 'qty', e.target.value)}
                             className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent"
@@ -1870,7 +1920,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         </td>
                         <td className="px-3 py-2 border-r border-gray-200">
                           <input
-                            type="text"
+                            type="number"
+                            min="0"
                             value={row.rate}
                             onChange={(e) => handlePurchaseItemChange(index, 'rate', e.target.value)}
                             className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent"
@@ -1971,14 +2022,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">UQC</th>
                         <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">Item Rate</th>
                         <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">Taxable Value</th>
-                        {isInterState ? (
-                          <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">IGST</th>
-                        ) : (
-                          <>
-                            <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">CGST</th>
-                            <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">SGST</th>
-                          </>
-                        )}
+                        <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">IGST</th>
                         <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">CESS</th>
                         <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">Invoice Value</th>
                         <th className="px-3 py-3 text-xs font-semibold text-center">Delete</th>
@@ -2023,6 +2067,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           <td className="px-2 py-2 border-r border-gray-200">
                             <input
                               type="number"
+                              min="0"
                               value={row.qty}
                               onChange={(e) => handlePurchaseItemChange(index, 'qty', e.target.value)}
                               className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm"
@@ -2040,6 +2085,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           <td className="px-2 py-2 border-r border-gray-200">
                             <input
                               type="number"
+                              min="0"
                               value={row.rate}
                               onChange={(e) => handlePurchaseItemChange(index, 'rate', e.target.value)}
                               className="w-20 px-2 py-1 border border-gray-300 rounded text-right text-sm"
@@ -2053,40 +2099,21 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               className="w-24 px-2 py-1 bg-transparent border-0 text-right text-sm font-medium"
                             />
                           </td>
-                          {isInterState ? (
-                            <td className="px-2 py-2 border-r border-gray-200">
-                              <input
-                                type="number"
-                                value={row.igst}
-                                onChange={(e) => handlePurchaseItemChange(index, 'igst', e.target.value)}
-                                className="w-20 px-2 py-1 border border-gray-300 rounded text-right text-sm"
-                              />
-                            </td>
-                          ) : (
-                            <>
-                              <td className="px-2 py-2 border-r border-gray-200">
-                                <input
-                                  type="number"
-                                  value={row.cgst}
-                                  onChange={(e) => handlePurchaseItemChange(index, 'cgst', e.target.value)}
-                                  className="w-20 px-2 py-1 border border-gray-300 rounded text-right text-sm"
-                                />
-                              </td>
-                              <td className="px-2 py-2 border-r border-gray-200">
-                                <input
-                                  type="number"
-                                  value={row.sgst}
-                                  onChange={(e) => handlePurchaseItemChange(index, 'sgst', e.target.value)}
-                                  className="w-20 px-2 py-1 border border-gray-300 rounded text-right text-sm"
-                                />
-                              </td>
-                            </>
-                          )}
+                          <td className="px-2 py-2 border-r border-gray-200">
+                            <input
+                              type="number"
+                              min="0"
+                              value={row.igst}
+                              onChange={(e) => handlePurchaseItemChange(index, 'igst', e.target.value)}
+                              className="w-20 px-2 py-1 border border-gray-300 rounded text-right text-sm"
+                            />
+                          </td>
 
 
                           <td className="px-2 py-2 border-r border-gray-200">
                             <input
                               type="number"
+                              min="0"
                               value={row.cess}
                               onChange={(e) => handlePurchaseItemChange(index, 'cess', e.target.value)}
                               className="w-20 px-2 py-1 border border-gray-300 rounded text-right text-sm"
@@ -2209,9 +2236,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       <label className="block text-sm font-medium text-gray-700 mb-1">Advance Paid</label>
                       <input
                         type="text"
+                        readOnly
                         value={purchaseAdvancePaid}
-                        onChange={(e) => setPurchaseAdvancePaid(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-right"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-semibold"
                         placeholder="0.00"
                       />
                     </div>
@@ -2238,16 +2265,39 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   {/* Middle Column: Advance Reference Grid */}
                   <div className="border border-gray-300 rounded-[4px] p-4 bg-indigo-50/50">
                     <div className="space-y-3">
-                      <div className="grid grid-cols-4 gap-2 text-xs font-semibold text-gray-700">
+                      <div className="grid grid-cols-4 gap-2 text-xs font-semibold text-gray-700 border-b border-gray-200 pb-2">
                         <div className="text-center">Date</div>
                         <div className="text-center">Advance Ref. No.</div>
-                        <div className="text-center">Amount</div>
+                        <div className="text-center text-right pr-4">Amount</div>
                         <div className="text-center">Applied Now</div>
                       </div>
-                      {/* Placeholder for Advance Refs - Empty State for now as logic is complex */}
-                      <div className="text-center py-8 text-gray-500 text-sm">
-                        No advance references available for selected Purchase Order.
-                      </div>
+
+                      {purchaseAdvanceRefs.length > 0 ? (
+                        <div className="max-h-[250px] overflow-y-auto space-y-2">
+                          {purchaseAdvanceRefs.map((ref, idx) => (
+                            <div key={ref.id || idx} className="grid grid-cols-4 gap-2 items-center text-sm py-1 border-b border-indigo-100/50">
+                              <div className="text-center text-gray-600">{ref.date}</div>
+                              <div className="text-center font-medium text-indigo-900">{ref.refNo}</div>
+                              <div className="text-right pr-4 text-gray-700">{Number(ref.amount).toFixed(2)}</div>
+                              <div className="px-2">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max={ref.amount}
+                                  value={ref.appliedNow}
+                                  onChange={(e) => handlePurchaseAdvanceRefChange(idx, 'appliedNow', e.target.value)}
+                                  className="w-full px-2 py-1 border border-gray-300 rounded text-right focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                  placeholder="0.00"
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-gray-500 text-sm italic">
+                          No advance references available for selected Purchase Order.
+                        </div>
+                      )}
                     </div>
                   </div>
 
