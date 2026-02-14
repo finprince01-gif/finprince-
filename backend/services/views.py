@@ -7,8 +7,8 @@ from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from .models import Service
-from .serializers import ServiceSerializer
+from .models import Service, ServiceGroup
+from .serializers import ServiceSerializer, ServiceGroupSerializer
 import logging
 
 logger = logging.getLogger('services.views')
@@ -26,14 +26,20 @@ class ServiceViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """
-        Optionally filter services by status or group.
+        Optionally filter services by status or group for the user's tenant.
         """
-        queryset = Service.objects.all()
+        # Get tenant_id from authenticated user
+        tenant_id = getattr(self.request.user, 'tenant_id', None)
+        if not tenant_id:
+            logger.warning("⚠️ No tenant_id found for user, returning empty queryset")
+            return Service.objects.none()
+
+        queryset = Service.objects.filter(tenant_id=tenant_id)
         
         # Filter by active status
         is_active = self.request.query_params.get('is_active', None)
         if is_active is not None:
-            queryset = queryset.filter(is_active=is_active.lower() == 'true')
+            queryset = queryset.filter(is_active=str(is_active).lower() == 'true')
         
         # Filter by service group
         service_group = self.request.query_params.get('service_group', None)
@@ -163,16 +169,91 @@ class ServiceViewSet(viewsets.ModelViewSet):
                 {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class ServiceGroupViewSet(viewsets.ModelViewSet):
+    """
+    API ViewSet for Service Group CRUD operations.
+    """
+    queryset = ServiceGroup.objects.all()
+    serializer_class = ServiceGroupSerializer
+    permission_classes = [IsAuthenticated]
     
-    @action(detail=False, methods=['get'])
-    def groups(self, request):
-        """Get distinct service groups"""
+    def get_queryset(self):
+        """Get only active service groups for the user's tenant"""
+        # Get tenant_id from authenticated user
+        tenant_id = getattr(self.request.user, 'tenant_id', None)
+        logger.info(f"🔍 Filtering service groups for tenant: {tenant_id}")
+        
+        if not tenant_id:
+            logger.warning("⚠️ No tenant_id found, returning empty queryset")
+            return ServiceGroup.objects.none()
+        
+        queryset = ServiceGroup.objects.filter(
+            tenant_id=tenant_id,
+            is_active=True
+        ).order_by('category', 'group', 'subgroup')
+        
+        logger.info(f"📊 Found {queryset.count()} service groups for tenant {tenant_id}")
+        return queryset
+
+    def list(self, request, *args, **kwargs):
+        """List all service groups"""
         try:
-            groups = Service.objects.values_list('service_group', flat=True).distinct()
-            return Response(list(groups))
+            queryset = self.get_queryset()
+            serializer = self.get_serializer(queryset, many=True)
+            logger.info(f"📋 Listing {len(serializer.data)} service groups")
+            return Response(serializer.data)
         except Exception as e:
-            logger.error(f"❌ Error getting service groups: {str(e)}", exc_info=True)
+            logger.error(f"❌ Error listing service groups: {type(e).__name__}: {str(e)}", exc_info=True)
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+    def create(self, request, *args, **kwargs):
+        """Create a new service group"""
+        try:
+            logger.info(f"📥 Received service group creation request: {request.data}")
+            
+            # Get tenant_id from authenticated user
+            tenant_id = getattr(request.user, 'tenant_id', None)
+            logger.info(f"🔑 Tenant ID: {tenant_id}")
+            
+            if not tenant_id:
+                logger.error("❌ No tenant_id found for user")
+                return Response(
+                    {'error': 'Tenant ID not found for user'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            logger.info(f"📝 Creating serializer with data: {request.data}")
+            serializer = self.get_serializer(data=request.data)
+            
+            logger.info(f"✔️ Validating serializer...")
+            serializer.is_valid(raise_exception=True)
+            
+            logger.info(f"💾 Saving service group with tenant_id: {tenant_id}")
+            group = serializer.save(tenant_id=tenant_id)
+            
+            logger.info(f"✅ Created service group: {group} (ID: {group.id})")
+            
+            return Response(
+                serializer.data,
+                status=status.HTTP_201_CREATED
+            )
+        except serializers.ValidationError as e:
+            logger.warning(f"⚠️ Validation error creating service group: {e.detail}")
+            return Response(
+                {'error': e.detail},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"❌ Error creating service group: {type(e).__name__}: {str(e)}", exc_info=True)
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+

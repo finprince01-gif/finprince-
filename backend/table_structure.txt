@@ -1,0 +1,20 @@
+CREATE TABLE `service_list` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(36) NOT NULL,
+  `service_code` varchar(50) NOT NULL,
+  `service_name` varchar(255) NOT NULL,
+  `service_group_id` bigint NOT NULL,
+  `sac_code` varchar(20) DEFAULT NULL,
+  `gst_rate` decimal(5,2) DEFAULT '0.00',
+  `expense_ledger` varchar(255) DEFAULT NULL,
+  `uom` varchar(50) DEFAULT NULL,
+  `description` longtext,
+  `is_active` tinyint(1) DEFAULT '1',
+  `created_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  KEY `fk_service_group` (`service_group_id`),
+  KEY `idx_tenant` (`tenant_id`),
+  KEY `idx_service_code` (`service_code`),
+  CONSTRAINT `fk_service_group` FOREIGN KEY (`service_group_id`) REFERENCES `service_group` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci

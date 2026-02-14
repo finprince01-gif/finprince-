@@ -145,15 +145,27 @@ class HttpClient {
             // 4. Handle Standard Errors
             if (!response.ok) {
                 const errorText = await response.text();
-                // Parse JSON error if possible
+                let errorData: any = {};
+
                 try {
-                    throw JSON.parse(errorText);
+                    errorData = JSON.parse(errorText);
                 } catch (e) {
-                    if (e instanceof SyntaxError) {
-                        throw new Error(errorText || `HTTP ${response.status}`);
-                    }
-                    throw e;
+                    errorData = { message: errorText || `HTTP ${response.status}` };
                 }
+
+                // Throw structured error container
+                throw {
+                    status: response.status,
+                    data: errorData,
+                    // valid backend error might have 'detail' or 'message'
+                    message: errorData.detail || errorData.message || 'Request failed',
+                    // Mimic axios structure for backward compatibility
+                    response: {
+                        status: response.status,
+                        statusText: response.statusText,
+                        data: errorData
+                    }
+                };
             }
 
             // 5. Parse Success Response
@@ -179,7 +191,10 @@ class HttpClient {
 
             return (await response.text()) as unknown as T;
 
-        } catch (error) {
+        } catch (error: any) {
+            // Propagate error without adding sensitive context like endpoint/URL
+            // The status and data are already attached if it came from above.
+            // If it's a network error (TypeError), it handles naturally.
             throw error;
         }
     }

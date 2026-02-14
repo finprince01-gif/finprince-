@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { httpClient } from '../services/httpClient';
+import { showError } from '../utils/toast';
 declare const XLSX: any;
 
 // Icon component inline
@@ -156,7 +157,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose }) =>
         } catch (error) {
             console.error('OCR Global Error:', error);
             // alert('❌ OCR Failed: ' + (error as Error).message); // Use a more user-friendly message or keep detailed if needed for debug
-            alert(`❌ Extraction Failed: ${(error as Error).message}. Please try again.`);
+            showError(`❌ Extraction Failed: ${(error as Error).message}. Please try again.`);
         } finally {
             setIsExtracting(false);
             if (fileInputRef.current) fileInputRef.current.value = '';

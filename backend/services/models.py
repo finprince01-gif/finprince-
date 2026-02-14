@@ -5,8 +5,51 @@ Handles service listings with SAC codes, GST rates, and service groups.
 
 from django.db import models
 from django.contrib.auth import get_user_model
+from core.models import BaseModel
 
 User = get_user_model()
+
+
+class ServiceGroup(BaseModel):
+    """
+    Service Group Model
+    Stores the service category hierarchy (Category -> Group -> Subgroup)
+    Similar to InventoryMasterCategory but for Services.
+    """
+    category = models.CharField(
+        max_length=100, 
+        help_text="Top-level category"
+    )
+    group = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        help_text="Group under category (optional)"
+    )
+    subgroup = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        help_text="Subgroup under group (optional)"
+    )
+    is_active = models.BooleanField(default=True)
+    
+    class Meta:
+        db_table = 'service_group'
+        unique_together = ('tenant_id', 'category', 'group', 'subgroup')
+        ordering = ['category', 'group', 'subgroup']
+        indexes = [
+            models.Index(fields=['tenant_id', 'is_active']),
+            models.Index(fields=['category']),
+        ]
+    
+    def __str__(self):
+        parts = [self.category]
+        if self.group:
+            parts.append(self.group)
+        if self.subgroup:
+            parts.append(self.subgroup)
+        return " > ".join(parts)
 
 
 class Service(models.Model):

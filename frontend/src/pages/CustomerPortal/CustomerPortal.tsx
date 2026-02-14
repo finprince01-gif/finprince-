@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { httpClient } from '../../services/httpClient';
+import { showSuccess, showError, showInfo, confirm } from '../../utils/toast';
+import { handleApiError } from '../../utils/errorHandler';
 import { usePermissions } from '../../hooks/usePermissions';
 
 import { InventoryCategoryWizard } from '../../components/InventoryCategoryWizard';
@@ -118,11 +120,10 @@ const CustomerPortalPage: React.FC = () => {
     const handleCancelSalesOrder = async (id: string) => {
         try {
             await httpClient.delete(`/api/customerportal/sales-orders/${id}/`);
-            alert('Sales Order cancelled successfully!');
+            showSuccess('Sales Order cancelled successfully!');
             setRefreshOrders(prev => prev + 1);
         } catch (error) {
-            console.error('Error cancelling sales order:', error);
-            alert('Failed to cancel sales order');
+            handleApiError(error, 'Cancel Sales Order');
         }
     };
 
@@ -295,13 +296,12 @@ const CategoryContent: React.FC = () => {
                         subgroup: data.subgroup,
                         is_active: true
                     });
-                    alert('Category created successfully!');
+                    showSuccess('Category created successfully!');
                     // Wizard will auto-refresh its tree
                 } catch (error: any) {
-                    console.error('Error creating category:', error);
-                    // Checking for specific error message structure from backend
-                    const errorMsg = error.response?.data?.error || error.response?.data?.detail || error.message;
-                    throw new Error(errorMsg);
+                    // Specific duplicate check might be needed if wizard relies on string matching
+                    // But generally wizard handles re-thrown errors.
+                    throw error;
                 }
             }}
             onEditCategory={async (data) => {
@@ -313,7 +313,6 @@ const CategoryContent: React.FC = () => {
                         is_active: true
                     });
                 } catch (error: any) {
-                    console.error('Error updating category:', error);
                     throw error;
                 }
             }}
@@ -321,7 +320,6 @@ const CategoryContent: React.FC = () => {
                 try {
                     await httpClient.delete(`/api/customerportal/categories/${id}/`);
                 } catch (error: any) {
-                    console.error('Error deleting category:', error);
                     throw error;
                 }
             }}
@@ -354,7 +352,7 @@ const CustomerContent: React.FC = () => {
             const response = await httpClient.get<any[]>('/api/customerportal/customer-master/');
             setCustomers(response);
         } catch (error) {
-            console.error('Error fetching customers:', error);
+            handleApiError(error, 'Fetch Customers');
         }
     };
 
@@ -370,7 +368,7 @@ const CustomerContent: React.FC = () => {
             console.log('Mapped stock items with UOM:', mappedItems);
             setStockItems(mappedItems);
         } catch (error) {
-            console.error('Error fetching stock items:', error);
+            handleApiError(error, 'Fetch Stock Items');
         }
     };
 
@@ -379,7 +377,7 @@ const CustomerContent: React.FC = () => {
             const response = await httpClient.get<any[]>('/api/inventory/units/');
             setUnits(response);
         } catch (error) {
-            console.error('Error fetching units:', error);
+            handleApiError(error, 'Fetch Units');
         }
     };
 
@@ -399,7 +397,7 @@ const CustomerContent: React.FC = () => {
                 }));
                 setCategories(processed);
             } catch (error) {
-                console.error('Error fetching categories:', error);
+                handleApiError(error, 'Fetch Categories');
             }
         };
 
@@ -571,7 +569,7 @@ const CustomerContent: React.FC = () => {
     const handleSaveCustomer = async (options: { exit: boolean } = { exit: true }): Promise<boolean> => {
         // Validation - Basic Details are required for first save
         if (!customerFormData.customer_name.trim()) {
-            alert('Please enter customer name');
+            showError('Please enter customer name');
             return false;
         }
 
@@ -651,7 +649,7 @@ const CustomerContent: React.FC = () => {
                 console.log('Updating existing customer:', createdCustomerId);
                 response = await httpClient.patch(`/api/customerportal/customer-master/${createdCustomerId}/`, payload);
                 await fetchCustomers(); // Refresh the list
-                if (options.exit) alert('Customer updated successfully!');
+                if (options.exit) showSuccess('Customer updated successfully!');
             } else {
                 // Create new customer
                 console.log('Creating new customer...');
@@ -659,7 +657,7 @@ const CustomerContent: React.FC = () => {
                 console.log('Customer created! Response:', response);
                 setCreatedCustomerId(response.id);
                 await fetchCustomers(); // Refresh the list
-                if (options.exit) alert('Customer created successfully!');
+                if (options.exit) showSuccess('Customer created successfully!');
             }
 
             if (options.exit) {
@@ -678,33 +676,7 @@ const CustomerContent: React.FC = () => {
             }
             return true;
         } catch (error: any) {
-            console.error('Error saving customer:', error);
-            let errorMessage = 'Failed to save customer';
-
-            // Check if it's a duplicate entry error
-            if (error.response?.status === 500 && error.response?.data) {
-                const errorText = typeof error.response.data === 'string' ? error.response.data : '';
-                if (errorText.includes('Duplicate entry') || errorText.includes('unique_tenant_customer_code')) {
-                    errorMessage = 'This customer code already exists. Please try again with a new customer.';
-                    // Generate a new customer code
-                    setCustomerFormData(prev => ({
-                        ...prev,
-                        customer_code: `CUST-${Date.now().toString().slice(-6)}`
-                    }));
-                }
-            } else if (error.response?.data) {
-                const errorData = error.response.data;
-                if (errorData.detail) {
-                    errorMessage = errorData.detail;
-                } else if (typeof errorData === 'object') {
-                    errorMessage += ':\n';
-                    Object.keys(errorData).forEach(field => {
-                        const fieldErrors = Array.isArray(errorData[field]) ? errorData[field] : [errorData[field]];
-                        errorMessage += `\n${field}: ${fieldErrors.join(', ')}`;
-                    });
-                }
-            }
-            alert(errorMessage);
+            handleApiError(error, 'Save Customer');
             return false;
         }
     };
@@ -727,8 +699,8 @@ const CustomerContent: React.FC = () => {
     };
 
 
-    const handleRemoveBank = (id: number) => {
-        if (window.confirm('Are you sure you want to remove this bank account? This action cannot be undone.')) {
+    const handleRemoveBank = async (id: number) => {
+        if (await confirm('Are you sure you want to remove this bank account? This action cannot be undone.')) {
             setBankAccounts(prev => prev.filter(acc => acc.id !== id));
             if (bankAccounts.length === 1) setIsAddingBank(false);
         }
@@ -2628,7 +2600,7 @@ const SalesOrderContent: React.FC = () => {
             const response = await httpClient.get<any[]>('/api/customerportal/sales-quotation-series/');
             setSqList(response || []);
         } catch (error) {
-            console.error('Error fetching sales quotation series:', error);
+            handleApiError(error, 'Fetch Sales Quotation Series');
             setSqList([]);
         } finally {
             setSqLoading(false);
@@ -2642,7 +2614,7 @@ const SalesOrderContent: React.FC = () => {
             const response = await httpClient.get<any[]>('/api/customerportal/sales-order-series/');
             setSoList(response || []);
         } catch (error) {
-            console.error('Error fetching sales order series:', error);
+            handleApiError(error, 'Fetch Sales Order Series');
             setSoList([]);
         } finally {
             setSoLoading(false);
@@ -2670,11 +2642,11 @@ const SalesOrderContent: React.FC = () => {
     // Save Sales Quotation/Order Series
     const handleSaveSeries = async () => {
         if (!form.name.trim()) {
-            alert('Please enter a series name');
+            showError('Please enter a series name');
             return;
         }
         if (!form.category) {
-            alert('Please select a customer category');
+            showError('Please select a customer category');
             return;
         }
 
@@ -2695,10 +2667,10 @@ const SalesOrderContent: React.FC = () => {
 
             if (editingId) {
                 await httpClient.put(`${endpoint}${editingId}/`, payload);
-                alert('Series updated successfully!');
+                showSuccess('Series updated successfully!');
             } else {
                 await httpClient.post(endpoint, payload);
-                alert('Series saved successfully!');
+                showSuccess('Series saved successfully!');
             }
 
             if (subTab === 'Sales Quotation') {
@@ -2718,33 +2690,19 @@ const SalesOrderContent: React.FC = () => {
             }));
             setEditingId(null);
         } catch (error: any) {
-            console.error('Error saving series:', error);
-            let errorMessage = 'Failed to save series';
-            if (error.response?.data) {
-                const errorData = error.response.data;
-                if (errorData.detail) {
-                    errorMessage = errorData.detail;
-                } else if (typeof errorData === 'object') {
-                    errorMessage += ':\n';
-                    Object.keys(errorData).forEach(field => {
-                        const fieldErrors = Array.isArray(errorData[field]) ? errorData[field] : [errorData[field]];
-                        errorMessage += `\n${field}: ${fieldErrors.join(', ')}`;
-                    });
-                }
-            }
-            alert(errorMessage);
+            handleApiError(error, 'Save Series');
         }
     };
 
     const handleDeleteSeries = async (id: number) => {
-        if (!window.confirm('Are you sure you want to delete this series?')) return;
+        if (!await confirm('Are you sure you want to delete this series?')) return;
         try {
             const endpoint = subTab === 'Sales Quotation'
                 ? `/api/customerportal/sales-quotation-series/${id}/`
                 : `/api/customerportal/sales-order-series/${id}/`;
 
             await httpClient.delete(endpoint);
-            alert('Series deleted successfully!');
+            showSuccess('Series deleted successfully!');
 
             if (subTab === 'Sales Quotation') {
                 await fetchSalesQuotationSeries();
@@ -2752,8 +2710,7 @@ const SalesOrderContent: React.FC = () => {
                 await fetchSalesOrderSeries();
             }
         } catch (error) {
-            console.error('Error deleting series:', error);
-            alert('Failed to delete series');
+            handleApiError(error, 'Delete Series');
         }
     };
 
@@ -3126,11 +3083,11 @@ const LongTermContractsContent: React.FC = () => {
             if (isEditing && editingId) {
                 response = await httpClient.put(`/api/customerportal/long-term-contracts/${editingId}/`, contractData);
                 console.log('Contract updated successfully:', (response as any).data);
-                alert('Contract Updated Successfully!');
+                showSuccess('Contract Updated Successfully!');
             } else {
                 response = await httpClient.post('/api/customerportal/long-term-contracts/', contractData);
                 console.log('Contract created successfully:', (response as any).data);
-                alert('Contract Created Successfully!');
+                showSuccess('Contract Created Successfully!');
             }
 
             // Reset form
@@ -3139,7 +3096,7 @@ const LongTermContractsContent: React.FC = () => {
         } catch (error: any) {
             console.error('Error saving contract:', error);
             const errorMessage = error.response?.data?.error || error.message || `Failed to ${isEditing ? 'update' : 'create'} contract`;
-            alert(`Error: ${errorMessage}`);
+            showError(`Error: ${errorMessage}`);
         } finally {
             setLoading(false);
         }
@@ -3867,12 +3824,12 @@ const ReceiptContent: React.FC = () => {
 
         // Basic validation
         if (!postFormData.dateOfReceipt || !postFormData.methodOfReceipt) {
-            alert('Please fill in all required fields');
+            showError('Please fill in all required fields');
             return;
         }
 
         if (postFormData.methodOfReceipt === 'Bank' && (!postFormData.bankAccount || !postFormData.bankReferenceNo)) {
-            alert('Please fill in Bank Account and Bank Reference No for Bank payment method');
+            showError('Please fill in Bank Account and Bank Reference No for Bank payment method');
             return;
         }
 
@@ -3882,7 +3839,7 @@ const ReceiptContent: React.FC = () => {
             postData: postFormData
         });
 
-        alert('Receipt posted successfully!');
+        showSuccess('Receipt posted successfully!');
         handleCloseModal();
     };
 
@@ -4490,7 +4447,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
             .sort((a, b) => a.date.localeCompare(b.date)); // Oldest first
 
         if (selectedPurVouchers.length === 0 && selectedSalVouchers.length === 0) {
-            alert('Please select at least one invoice to proceed with net-off.');
+            showError('Please select at least one invoice to proceed with net-off.');
             return;
         }
 
@@ -4586,7 +4543,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
         message += `\n✨ FIFO Logic Applied:\n`;
         message += `Oldest invoices were matched first\n`;
 
-        alert(message);
+        showInfo(message);
 
         // In a real application, you would:
         // 1. Create net-off entry in the database
@@ -4977,7 +4934,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
                                     </button>
                                     <button
                                         onClick={() => {
-                                            alert('Net-off saved successfully!');
+                                            showSuccess('Net-off saved successfully!');
                                             onClose();
                                         }}
                                         className="px-5 py-2 text-sm font-medium text-white bg-indigo-600 rounded hover:bg-indigo-700 transition-colors"
@@ -5499,7 +5456,7 @@ const SalesContent: React.FC = () => {
     const handleSendMail = (customer: AgingData) => {
         // TODO: Auto-draft reminder email
         const totalDue = customer.days0to45 + customer.days45to90 + customer.months6 + customer.year1;
-        alert(
+        showInfo(
             `Draft Reminder Email for ${customer.customerName}\n\n` +
             `Customer Code: ${customer.customerCode}\n` +
             `Total Outstanding: ${formatCurrency(totalDue)}\n\n` +

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { httpClient } from '../../services/httpClient';
+import { showSuccess, showError, showInfo } from '../../utils/toast';
+import { handleApiError } from '../../utils/errorHandler';
 import { Country, State, City } from 'country-state-city';
 
 interface ItemRow {
@@ -137,8 +139,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
                 }
 
             } catch (error) {
-                console.error('Error fetching order for edit:', error);
-                alert('Failed to load order details for editing');
+                handleApiError(error, 'Fetch Order for Edit');
             }
         };
 
@@ -169,7 +170,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
                 ];
                 setSalesQuotations(combined);
             } catch (error) {
-                console.error('Error fetching sales quotations:', error);
+                handleApiError(error, 'Fetch Sales Quotations');
             }
         };
 
@@ -178,7 +179,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
                 const response = await httpClient.get<any[]>('/api/customerportal/long-term-contracts/');
                 setContracts(Array.isArray(response) ? response : (response as any).results || []);
             } catch (error) {
-                console.error('Error fetching contracts:', error);
+                handleApiError(error, 'Fetch Contracts');
             }
         };
 
@@ -188,7 +189,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
                 const itemsList = Array.isArray(response) ? response : (response as any).results || [];
                 setInventoryItems(itemsList);
             } catch (error) {
-                console.error('Error fetching inventory items:', error);
+                handleApiError(error, 'Fetch Inventory Items');
             }
         };
 
@@ -198,7 +199,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
                 const customerList = Array.isArray(response) ? response : (response as any).results || [];
                 setCustomers(customerList);
             } catch (error) {
-                console.error('Error fetching customers:', error);
+                handleApiError(error, 'Fetch Customers');
             }
         };
 
@@ -344,30 +345,30 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
         try {
             // Validate required fields
             if (!soSeries) {
-                alert('Please select SO Series Name');
+                showError('Please select SO Series Name');
                 return;
             }
             if (!customerName) {
-                alert('Please select Customer Name');
+                showError('Please select Customer Name');
                 return;
             }
             if (!branch) {
-                alert('Please select Branch');
+                showError('Please select Branch');
                 return;
             }
             if (!date) {
-                alert('Please select Date');
+                showError('Please select Date');
                 return;
             }
             // detailed item validation
             if (items.length === 0) {
-                alert('Please add at least one item');
+                showError('Please add at least one item');
                 return;
             }
 
             const invalidItem = items.find(i => !i.itemCode || !i.quantity || !i.price);
             if (invalidItem) {
-                alert(`Please fill in all details for item #${invalidItem.id} (Code, Qty, Price)`);
+                showError(`Please fill in all details for item #${invalidItem.id} (Code, Qty, Price)`);
                 return;
             }
 
@@ -436,17 +437,16 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
             if (editId) {
                 result = await httpClient.patch(`/api/customerportal/sales-orders/${editId}/`, salesOrderData);
                 console.log('Sales order updated successfully:', result);
-                alert('Sales Order updated successfully!');
+                showSuccess('Sales Order updated successfully!');
             } else {
                 result = await httpClient.post('/api/customerportal/sales-orders/', salesOrderData);
                 console.log('Sales order saved successfully:', result);
-                alert('Sales Order saved successfully!');
+                showSuccess('Sales Order saved successfully!');
             }
 
             onCancel();
         } catch (error: any) {
-            console.error('Error saving sales order:', error);
-            alert(`Error saving sales order: ${error.message || 'Unknown error'}`);
+            handleApiError(error, 'Save Sales Order');
         }
     };
 
@@ -543,7 +543,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
                             <div className="flex items-end">
                                 <button
                                     className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-[4px] hover:bg-indigo-700 transition-colors"
-                                    onClick={() => alert('Import Customer PO functionality')}
+                                    onClick={() => showInfo('Import Customer PO functionality')}
                                 >
                                     Import Customer PO
                                 </button>

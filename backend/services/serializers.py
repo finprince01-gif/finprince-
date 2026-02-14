@@ -3,7 +3,17 @@ Serializers for Service models.
 """
 
 from rest_framework import serializers
-from .models import Service
+from .models import Service, ServiceGroup
+
+
+class ServiceGroupSerializer(serializers.ModelSerializer):
+    """
+    Serializer for Service Group
+    """
+    class Meta:
+        model = ServiceGroup
+        fields = ['id', 'tenant_id', 'category', 'group', 'subgroup', 'is_active']
+        read_only_fields = ['id', 'tenant_id']
 
 
 class ServiceSerializer(serializers.ModelSerializer):

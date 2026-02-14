@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { httpClient } from '../../services';
+import { showError, showSuccess } from '../../utils/toast';
+
 
 import { ExtractedInvoiceData } from '../../types';
 
@@ -246,7 +248,8 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                 console.log('Posting Single Payment:', payload);
                 const response = await httpClient.post('/api/vouchers/payment-single/', payload);
                 console.log('Single Payment Response:', response);
-                alert('Single Payment Voucher posted successfully!');
+                showSuccess('Single Payment Voucher posted successfully!');
+
                 handleCancel();
             } else {
                 const payload = {
@@ -269,12 +272,14 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                 console.log('Posting Bulk Payment:', payload);
                 const response = await httpClient.post('/api/vouchers/payment-bulk/', payload);
                 console.log('Bulk Payment Response:', response);
-                alert('Bulk Payment Voucher posted successfully!');
+                showSuccess('Bulk Payment Voucher posted successfully!');
+
                 handleCancel();
             }
         } catch (error) {
             console.error('Error posting payment voucher:', error);
-            alert('Failed to post payment voucher. Please try again.');
+            showError('Failed to post payment voucher. Please try again.');
+
         }
     };
 

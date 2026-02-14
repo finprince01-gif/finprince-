@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Icon from '../../components/Icon';
 import { httpClient } from '../../services/httpClient';
 import { usePermissions } from '../../hooks/usePermissions';
+import { showSuccess, showError } from '../../utils/toast';
 
 type PayrollTab = 'EMPLOYEES' | 'PAY RUNS' | 'SALARY TEMPLATES' | 'STATUTORY' | 'REPORTS';
 
@@ -375,7 +376,7 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
         try {
             // Validate required fields
             if (!formData.employee_name || !formData.email) {
-                alert('Please fill in all required fields (Employee Name and Email)');
+                showError('Please fill in all required fields (Employee Name and Email)');
                 return;
             }
 
@@ -404,12 +405,12 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
             };
 
             await httpClient.post('/api/payroll/employees/', payload);
-            alert('Employee added successfully!');
+            showSuccess('Employee added successfully!');
             onSuccess();
             onClose();
         } catch (error) {
             console.error('Error adding employee:', error);
-            alert('Failed to add employee. Please check the form data.');
+            showError('Failed to add employee. Please check the form data.');
         }
     };
 
@@ -722,7 +723,7 @@ const ProcessPayRunModal: React.FC<{ onClose: () => void; onSuccess: () => void 
 
     const handleCreateAndProcess = async () => {
         if (!formData.pay_period || !formData.start_date || !formData.end_date) {
-            alert('Please fill all required fields');
+            showError('Please fill all required fields');
             return;
         }
 
@@ -735,11 +736,11 @@ const ProcessPayRunModal: React.FC<{ onClose: () => void; onSuccess: () => void 
             const tenantId = payRun.tenant_id || localStorage.getItem('tenantId');
             await httpClient.post(`/api/payroll/pay-runs/${payRun.id}/process/?tenant_id=${tenantId}`);
 
-            alert('Pay run created and processed successfully!');
+            showSuccess('Pay run created and processed successfully!');
             onSuccess();
         } catch (error) {
             console.error('Error processing pay run:', error);
-            alert('Failed to process pay run');
+            showError('Failed to process pay run');
         } finally {
             setIsProcessing(false);
         }
@@ -829,22 +830,22 @@ const PayRunsContent: React.FC<{ payRuns: PayRun[]; onRefresh: () => void }> = (
     const handleProcess = async (payRunId: number) => {
         try {
             await httpClient.post(`/api/payroll/pay-runs/${payRunId}/process/`);
-            alert('Pay run processed successfully!');
+            showSuccess('Pay run processed successfully!');
             onRefresh();
         } catch (error) {
             console.error('Error processing pay run:', error);
-            alert('Failed to process pay run');
+            showError('Failed to process pay run');
         }
     };
 
     const handleApprove = async (payRunId: number) => {
         try {
             await httpClient.post(`/api/payroll/pay-runs/${payRunId}/approve/`);
-            alert('Pay run approved successfully!');
+            showSuccess('Pay run approved successfully!');
             onRefresh();
         } catch (error) {
             console.error('Error approving pay run:', error);
-            alert('Failed to approve pay run');
+            showError('Failed to approve pay run');
         }
     };
 
@@ -1017,17 +1018,17 @@ const CreateTemplateModal: React.FC<{ onClose: () => void; onSuccess: () => void
 
     const handleSubmit = async () => {
         if (!formData.template_name) {
-            alert('Please enter template name');
+            showError('Please enter template name');
             return;
         }
 
         try {
             await httpClient.post('/api/payroll/salary-templates/', formData);
-            alert('Template created successfully!');
+            showSuccess('Template created successfully!');
             onSuccess();
         } catch (error) {
             console.error('Error creating template:', error);
-            alert('Failed to create template');
+            showError('Failed to create template');
         }
     };
 

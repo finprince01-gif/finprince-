@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import Icon from './Icon';
 import { httpClient } from '../services/httpClient';
+import { showSuccess, showError, showWarning, showInfo, confirm as toastConfirm } from '../utils/toast';
+import { handleApiError } from '../utils/errorHandler';
 
 interface MasterCategory {
     id: number;
@@ -118,7 +120,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                 // buildTree(response); // buildTree is now called by the useEffect hook
             }
         } catch (error) {
-            console.error('Error fetching categories:', error);
+            handleApiError(error, 'Fetch Categories');
             // Fallback to system categories + manual build if API fails?
             // For now, just show system categories by passing empty array to buildTree
             setApiData([]); // Clear API data on error
@@ -327,7 +329,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
         console.log('handleSubmit called, isEditing:', isEditing);
 
         if (!selectedNode) {
-            alert('Please select a category or group.');
+            showWarning('Please select a category or group.');
             return;
         }
 
@@ -340,7 +342,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                 if (!showSubgroup) {
                     // Case 1: Updating Group (e.g. Customer Portal)
                     if (!formData.group.trim()) {
-                        alert('Please enter a Group Name');
+                        showWarning('Please enter a Group Name');
                         return;
                     }
 
@@ -353,7 +355,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                 } else {
                     // Case 2: Updating Subgroup (e.g. Inventory Portal)
                     if (!formData.subgroup.trim()) {
-                        alert('Please enter a Subgroup Name');
+                        showWarning('Please enter a Subgroup Name');
                         return;
                     }
 
@@ -365,13 +367,12 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                     });
                 }
 
-                alert('Category updated successfully!');
+                showSuccess('Category updated successfully!');
                 setIsEditing(false);
                 fetchMasterCategories(); // Refresh tree
                 return;
             } catch (error: any) {
-                console.error("Error updating category:", error);
-                alert(`Error updating category: ${error.message || error}`);
+                handleApiError(error, 'Update Category');
                 return;
             }
         }
@@ -379,7 +380,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
         // Validations
         if (selectedNode.level === 0) {
             if (!formData.group.trim()) {
-                alert('Please enter a Group Name');
+                showWarning('Please enter a Group Name');
                 return;
             }
         }
@@ -390,7 +391,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                 // It is a subgroup, we are updating it?
             } else {
                 // If selected Group, user MUST enter Subgroup
-                alert('Please enter a Subgroup Name');
+                showWarning('Please enter a Subgroup Name');
                 return;
             }
         }
@@ -404,7 +405,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                     subgroup: null
                 });
                 setFormData(prev => ({ ...prev, group: '', subgroup: '' })); // Clear inputs
-                alert('Group created successfully!');
+                showSuccess('Group created successfully!');
             }
             // 2. Create Subgroup (under Group)
             else if (showSubgroup && selectedNode.level === 1 && !selectedNode.data.subgroup) {
@@ -414,7 +415,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                     subgroup: formData.subgroup.trim()
                 });
                 setFormData(prev => ({ ...prev, group: '', subgroup: '' })); // Clear inputs
-                alert('Subgroup created successfully!');
+                showSuccess('Subgroup created successfully!');
             }
 
             // Success
@@ -430,12 +431,11 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                 // Add to restored set
                 setRestoredNodes(prev => new Set(prev).add(restoreKey));
 
-                alert("Category already exists! It has been restored to the view.");
+                showInfo("Category already exists! It has been restored to the view.");
                 setFormData(prev => ({ ...prev, group: '', subgroup: '' })); // Clear inputs
                 fetchMasterCategories(); // Re-fetch to ensure the restored item is visible
             } else {
-                console.error("Error creating/updating category:", error);
-                alert(`Error: ${error.message || error}`);
+                handleApiError(error, 'Create/Update Category');
             }
         }
     };
@@ -444,15 +444,14 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
         if (!selectedNode || !selectedNode.data.id || !onDeleteCategory) return;
 
         const itemType = showSubgroup ? "subgroup" : "group";
-        if (confirm(`Are you sure you want to delete ${itemType} "${selectedNode.name}"?`)) {
+        if (await toastConfirm(`Are you sure you want to delete ${itemType} "${selectedNode.name}"?`)) {
             try {
                 await onDeleteCategory(selectedNode.data.id);
                 setSelectedNode(null);
                 setFormData({ category: '', group: '', subgroup: '' });
                 fetchMasterCategories();
             } catch (error: any) {
-                console.error("Error deleting category:", error);
-                alert(`Error deleting category: ${error.message || error}`);
+                handleApiError(error, 'Delete Category');
             }
         }
     };
@@ -712,10 +711,10 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                                         type="submit"
                                         disabled={!selectedNode || (selectedNode.level === 0 ? !formData.group.trim() : (showSubgroup && selectedNode.level === 1 ? !formData.subgroup.trim() : true))}
                                         className={`w-full py-2.5 px-4 rounded font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm ${selectedNode && ((selectedNode.level === 0 && formData.group.trim()) || (showSubgroup && selectedNode.level === 1 && formData.subgroup.trim()))
-                                                ? 'bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer focus:ring-indigo-500'
-                                                : selectedNode
-                                                    ? 'bg-gray-300 text-gray-700 hover:bg-gray-400 cursor-pointer focus:ring-gray-400'
-                                                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                            ? 'bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer focus:ring-indigo-500'
+                                            : selectedNode
+                                                ? 'bg-gray-300 text-gray-700 hover:bg-gray-400 cursor-pointer focus:ring-gray-400'
+                                                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                                             }`}
                                     >
                                         {selectedNode ? (selectedNode.level === 0 ? "Create Group" : "Create Subgroup") : "Create"}

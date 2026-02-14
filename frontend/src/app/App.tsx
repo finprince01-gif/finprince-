@@ -58,6 +58,7 @@ import AIAgent from '../components/AIAgent';              // AI Agent (Kiki)
 import Icon from '../components/Icon';                    // Icon component
 import ErrorBoundary from '../components/ErrorBoundary';  // Error handling wrapper
 import MassUploadResultPage from '../pages/MassUploadResult'; // Bulk upload results page
+import { showError, showSuccess } from '../utils/toast';
 
 // ============================================================================
 // SERVICE IMPORTS
@@ -595,7 +596,7 @@ const App: React.FC = () => {
       }
     } catch (err) {
       console.error(`Error updating ledger ${idOrName}:`, err);
-      alert('Failed to update ledger. Please try again.');
+      showError('Failed to update ledger. Please try again.');
     }
   }, [ledgers]);
 
@@ -615,7 +616,7 @@ const App: React.FC = () => {
       }
     } catch (err) {
       console.error(`Error deleting ledger ${idOrName}:`, err);
-      alert('Failed to delete ledger. Please try again.');
+      showError('Failed to delete ledger. Please try again.');
     }
   }, [ledgers]);
 
@@ -651,7 +652,7 @@ const App: React.FC = () => {
       }
     } catch (err) {
       console.error(`Error updating ledger group ${idOrName}:`, err);
-      alert('Failed to update group. Please try again.');
+      showError('Failed to update group. Please try again.');
     }
   }, [ledgerGroups]);
 
@@ -669,7 +670,7 @@ const App: React.FC = () => {
       }
     } catch (err) {
       console.error(`Error deleting ledger group ${idOrName}:`, err);
-      alert('Failed to delete group. Please try again.');
+      showError('Failed to delete group. Please try again.');
     }
   }, [ledgerGroups]);
 

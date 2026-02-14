@@ -14,13 +14,13 @@
     "country-state-city": "^3.2.1",
     "flowbite": "^4.0.1",
     "flowbite-react": "^0.12.16",
-    "lucide-react": "^0.555.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-is": "^19.2.4",
     "recharts": "^3.4.1",
     "xlsx": "^0.18.5",
-    "zustand": "^5.0.11"
+    "zustand": "^5.0.11",
+    "lucide-react": "^0.454.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

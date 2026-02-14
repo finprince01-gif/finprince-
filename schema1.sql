@@ -1134,12 +1134,11 @@ CREATE TABLE `customer_master_customer_productservice` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) DEFAULT NULL,
   `customer_basic_detail_id` bigint DEFAULT NULL,
-  `item_code` varchar(50) DEFAULT NULL,
-  `item_name` varchar(200) DEFAULT NULL,
-  `customer_item_code` varchar(50) DEFAULT NULL,
-  `customer_item_name` varchar(200) DEFAULT NULL,
-  `uom` varchar(50) DEFAULT NULL,
-  `customer_uom` varchar(50) DEFAULT NULL,
+  `item_code` varchar(50) DEFAULT NULL COMMENT 'Our Item Code',
+  `item_name` varchar(200) DEFAULT NULL COMMENT 'Our Item Name',
+  `uom` varchar(50) DEFAULT NULL COMMENT 'Unit of Measure',
+  `customer_item_code` varchar(50) DEFAULT NULL COMMENT 'Customer Item Code',
+  `customer_item_name` varchar(200) DEFAULT NULL COMMENT 'Customer Item Name',
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   `created_by` varchar(100) DEFAULT NULL,
@@ -2359,3 +2358,46 @@ COMMENT='User-to-Role assignments for RBAC';
 -- End of RBAC Tables
 -- ============================================================================
 
+CREATE TABLE service_group (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id VARCHAR(36) NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    `group` VARCHAR(100) NOT NULL,
+    subgroup VARCHAR(100),
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+
+    INDEX idx_tenant (tenant_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE service_list (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id VARCHAR(36) NOT NULL,
+
+    service_code VARCHAR(50) NOT NULL,
+    service_name VARCHAR(255) NOT NULL,
+
+    service_group_id BIGINT UNSIGNED NOT NULL,
+
+    sac_code VARCHAR(20),
+    gst_rate DECIMAL(5,2) DEFAULT 0.00,
+    expense_ledger VARCHAR(255),
+    uom VARCHAR(50),
+    description LONGTEXT,
+
+    is_active BOOLEAN DEFAULT TRUE,
+
+    created_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+
+    CONSTRAINT fk_service_group
+        FOREIGN KEY (service_group_id)
+        REFERENCES service_group(id)
+        ON DELETE RESTRICT
+        ON UPDATE CASCADE,
+
+    INDEX idx_tenant (tenant_id),
+    INDEX idx_service_code (service_code),
+    INDEX idx_service_group (service_group_id)
+) ENGINE=InnoDB;

@@ -5,6 +5,8 @@ import { usePermissions } from '../../hooks/usePermissions';
 import { useTheme } from '../../context/ThemeContext';
 import { useSubscriptionUsage } from '../../hooks/useSubscriptionUsage';
 import Icon from '../../components/Icon';
+import { showSuccess, showError } from '../../utils/toast';
+import { handleApiError } from '../../utils/errorHandler';
 
 interface SettingsPageProps {
   companyDetails: CompanyDetails;
@@ -54,11 +56,11 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
       // Refresh usage
       await refetchUsage();
 
-      alert(`Successfully upgraded to ${plan} plan!`);
-      window.location.reload(); // Reload to update all components (Sidebar, etc)
+      showSuccess(`Successfully upgraded to ${plan} plan!`);
+      // Use setTimeout to allow toast to be seen before reload
+      setTimeout(() => window.location.reload(), 1500);
     } catch (error) {
-      console.error("Upgrade failed", error);
-      alert("Upgrade failed. Please try again.");
+      handleApiError(error, 'Upgrade Failed');
     } finally {
       setIsUpgrading(false);
     }
@@ -150,7 +152,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
       setIsEditMode(false);
       setTimeout(() => setIsSaved(false), 3000);
     } catch (error) {
-      console.error('Failed to save settings:', error);
+      handleApiError(error, 'Save Settings');
     }
   };
 
