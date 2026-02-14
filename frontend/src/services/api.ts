@@ -230,6 +230,13 @@ class ApiService {
     }
 
     /**
+     * Get Job Work Outward Slips (for reference in Receipt)
+     */
+    async getJobWorkOutwardSlips() {
+        return httpClient.get<any[]>('/api/inventory/operations/job-work/?operation_type=outward');
+    }
+
+    /**
      * Get Purchase Orders for a specific vendor
      * @param vendorName - Vendor name to filter by
      * @param status - Optional status filter (e.g. 'Draft', 'Pending', 'Closed')

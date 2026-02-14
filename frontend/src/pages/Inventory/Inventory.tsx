@@ -29,6 +29,7 @@ interface Location {
   gstin: string | null;
   vendor_name?: string | null;
   customer_name?: string | null;
+  state_code?: string | null;
 }
 
 interface Item {
@@ -50,6 +51,7 @@ interface Item {
   rate: string;
   location: number | null;
   location_name: string | null;
+  standard_rate?: string | number | null;
   is_active: boolean;
 }
 
@@ -268,8 +270,10 @@ const InventoryPage: React.FC = () => {
   const [goodsFromLocation, setGoodsFromLocation] = useState('');
   const [goodsToLocation, setGoodsToLocation] = useState('');
   const [jobWorkOrderNo, setJobWorkOrderNo] = useState('');
+  const [jobWorkOrderNoOptions, setJobWorkOrderNoOptions] = useState<any[]>([]); // Options for Job Work POs
   const [jobWorkReceiptNo, setJobWorkReceiptNo] = useState('');
   const [jobWorkOutwardRefNo, setJobWorkOutwardRefNo] = useState('');
+  const [jobWorkOutwardOptions, setJobWorkOutwardOptions] = useState<any[]>([]);
   const [vendorDeliveryChallan, setVendorDeliveryChallan] = useState('');
   const [jwItemTab, setJwItemTab] = useState<'outward' | 'received'>('outward');
   const [outwardSalesOrder, setOutwardSalesOrder] = useState('');
@@ -280,6 +284,7 @@ const InventoryPage: React.FC = () => {
   const [outwardTotalBoxes, setOutwardTotalBoxes] = useState('');
   const [outwardSupplierInvoice, setOutwardSupplierInvoice] = useState('');
   const [outwardVendorName, setOutwardVendorName] = useState('');
+  const [outwardBranchOptions, setOutwardBranchOptions] = useState<any[]>([]); // Added for dynamic branches
   const [materialIssueSlipNo, setMaterialIssueSlipNo] = useState('');
   const [processTransferSlipNo, setProcessTransferSlipNo] = useState('');
   const [prodItemTab, setProdItemTab] = useState<'materials_issued' | 'converted_output'>('materials_issued');
@@ -318,8 +323,87 @@ const InventoryPage: React.FC = () => {
   const [deliveryChallanDate, setDeliveryChallanDate] = useState('');
 
   const [showEWayBill, setShowEWayBill] = useState(false);
-  const [ewayBillVehicleNo, setEwayBillVehicleNo] = useState('');
-  const [ewayBillValidTill, setEwayBillValidTill] = useState('');
+
+  // E-Invoice & E-way Bill Details State
+  interface EwayBillEntry {
+    id: number;
+    available: string;
+    ewayBillNo: string;
+    date: string;
+    validityPeriod: string;
+    distance: string;
+    // Extended details
+    extensionDate: string;
+    extendedEwbNo: string;
+    extensionReason: string;
+    fromPlace: string;
+    remainingDistance: string;
+    newValidity: string;
+    updatedVehicleNo: string;
+  }
+
+  const [ewayValidationEntries, setEwayValidationEntries] = useState<EwayBillEntry[]>([{
+    id: 1,
+    available: 'Yes',
+    ewayBillNo: '',
+    date: '',
+    validityPeriod: '',
+    distance: '',
+    extensionDate: '',
+    extendedEwbNo: '',
+    extensionReason: '',
+    fromPlace: '',
+    remainingDistance: '',
+    newValidity: '',
+    updatedVehicleNo: ''
+  }]);
+
+  const handleEwayEntryChange = (id: number, field: keyof EwayBillEntry, value: string) => {
+    setEwayValidationEntries(prev => prev.map(entry =>
+      entry.id === id ? { ...entry, [field]: value } : entry
+    ));
+  };
+
+  const handleAddEwayEntry = () => {
+    setEwayValidationEntries(prev => [...prev, {
+      id: Date.now(),
+      available: 'Yes',
+      ewayBillNo: '',
+      date: '',
+      validityPeriod: '',
+      distance: '',
+      extensionDate: '',
+      extendedEwbNo: '',
+      extensionReason: '',
+      fromPlace: '',
+      remainingDistance: '',
+      newValidity: '',
+      updatedVehicleNo: ''
+    }]);
+  };
+
+  const handleRemoveEwayEntry = (id: number) => {
+    if (ewayValidationEntries.length > 1) {
+      setEwayValidationEntries(prev => prev.filter(entry => entry.id !== id));
+    }
+  };
+
+
+  // Dispatch Details State
+  const [dispatchFrom, setDispatchFrom] = useState('');
+  const [modeOfTransport, setModeOfTransport] = useState('');
+  const [dispatchDate, setDispatchDate] = useState('');
+  const [dispatchTime, setDispatchTime] = useState('');
+  const [dispatchDocument, setDispatchDocument] = useState<File | null>(null);
+  const [deliveryType, setDeliveryType] = useState('');
+  const [transporterId, setTransporterId] = useState('');
+  const [transporterName, setTransporterName] = useState('');
+  const [vehicleNo, setVehicleNo] = useState('');
+  const [lrGrConsignment, setLrGrConsignment] = useState('');
+  const [uptoPortShippingBillNo, setUptoPortShippingBillNo] = useState('');
+  const [uptoPortShipPortCode, setUptoPortShipPortCode] = useState('');
+  const [uptoPortShippingBillDate, setUptoPortShippingBillDate] = useState('');
+  const [uptoPortOrigin, setUptoPortOrigin] = useState('');
   const [operationsStockData, setOperationsStockData] = useState<any[]>([
     { id: 1, category: 'Electronics', subCategory: 'Mobile', itemCode: 'IT001', itemName: 'Product A', uom: 'Nos', openingQty: 100, openingValue: 150000, inwardQty: 50, inwardValue: 75000, outwardQty: 30, outwardValue: 45000, closingQty: 120, closingValue: 180000 },
     { id: 2, category: 'Furniture', subCategory: 'Chairs', itemCode: 'IT002', itemName: 'Product B', uom: 'Nos', openingQty: 200, openingValue: 1000000, inwardQty: 100, inwardValue: 500000, outwardQty: 50, outwardValue: 250000, closingQty: 250, closingValue: 1250000 },
@@ -428,6 +512,18 @@ const InventoryPage: React.FC = () => {
       setCustomers(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching customers:', error);
+    }
+  };
+
+  const fetchJobWorkOutwardOptions = async () => {
+    try {
+      // Mock or use endpoint if available. Assume getJobWorkOutwardSlips exists in apiService (added previously).
+      const response = await apiService.getJobWorkOutwardSlips();
+      if (Array.isArray(response)) {
+        setJobWorkOutwardOptions(response);
+      }
+    } catch (error) {
+      console.error('Error fetching job work outward slips:', error);
     }
   };
 
@@ -636,6 +732,15 @@ const InventoryPage: React.FC = () => {
   useEffect(() => {
     fetchInventoryItems();
   }, []);
+
+  useEffect(() => {
+    if (issueSlipTab === 'job-work' && jobWorkSubTab === 'sent' && jobWorkSentType === 'receipt') {
+      fetchJobWorkOutwardOptions();
+      // Also ensure vendors/locations are loaded if needed
+      if (vendors.length === 0) fetchVendors();
+      if (locations.length === 0) fetchLocations();
+    }
+  }, [issueSlipTab, jobWorkSubTab, jobWorkSentType]);
 
   // Handlers - Items
   const handleItemSubmit = async (e: React.FormEvent) => {
@@ -1146,14 +1251,15 @@ const InventoryPage: React.FC = () => {
             dispatch_address: deliveryChallanAddress,
             dispatch_date: deliveryChallanDate || null
           } : null,
-          eway_bill: (ewayBillVehicleNo || ewayBillValidTill) ? {
-            vehicle_number: ewayBillVehicleNo,
-            valid_till: ewayBillValidTill || null
-          } : null
+          eway_bill: (ewayValidationEntries.length > 0 && (ewayValidationEntries[0].updatedVehicleNo || ewayValidationEntries[0].date)) ? {
+            vehicle_number: ewayValidationEntries[0].updatedVehicleNo || null,
+            valid_till: ewayValidationEntries[0].date || null
+          } : null,
+          eway_bill_details: ewayValidationEntries // Pass full details
         };
         await httpClient.post('/api/inventory/operations/outward/', outwardPayload);
+
       } else if (issueSlipTab === 'job-work') {
-        // Job Work Payload
         const jobWorkPayload = {
           operation_type: jobWorkSentType, // 'outward' or 'receipt'
           transaction_date: issueSlipDate || new Date().toISOString().split('T')[0],
@@ -1201,14 +1307,15 @@ const InventoryPage: React.FC = () => {
             dispatch_address: deliveryChallanAddress,
             dispatch_date: deliveryChallanDate || null
           } : null,
-          eway_bill: (ewayBillVehicleNo || ewayBillValidTill) ? {
-            vehicle_number: ewayBillVehicleNo,
-            valid_till: ewayBillValidTill || null
-          } : null
+
+          eway_bill: (ewayValidationEntries.length > 0 && (ewayValidationEntries[0].updatedVehicleNo || ewayValidationEntries[0].date)) ? {
+            vehicle_number: ewayValidationEntries[0].updatedVehicleNo || null,
+            valid_till: ewayValidationEntries[0].date || null
+          } : null,
+          eway_bill_details: ewayValidationEntries // Pass as details for future backend updates
         };
         await httpClient.post('/api/inventory/operations/job-work/', jobWorkPayload);
       } else if (issueSlipTab === 'production') {
-        // Production Payload
         let productionItems = [];
 
         if (productionType === 'materials_issued') {
@@ -1289,15 +1396,57 @@ const InventoryPage: React.FC = () => {
             dispatch_address: deliveryChallanAddress,
             dispatch_date: deliveryChallanDate || null
           } : null,
-          eway_bill: (ewayBillVehicleNo || ewayBillValidTill) ? {
-            vehicle_number: ewayBillVehicleNo,
-            valid_till: ewayBillValidTill || null
-          } : null
+          eway_bill: (ewayValidationEntries.length > 0 && (ewayValidationEntries[0].updatedVehicleNo || ewayValidationEntries[0].date)) ? {
+            vehicle_number: ewayValidationEntries[0].updatedVehicleNo || null,
+            valid_till: ewayValidationEntries[0].date || null
+          } : null,
+          eway_bill_details: ewayValidationEntries
         };
         await httpClient.post('/api/inventory/operations/production/', productionPayload);
 
+      } else if (issueSlipTab === 'inter-unit') {
+        const interUnitPayload = {
+          issue_slip_no: issueSlipNumber,
+          date: issueSlipDate || null,
+          time: issueSlipTime || null,
+          status: 'Posted',
+          goods_from_location: goodsFromLocation,
+          goods_to_location: goodsToLocation,
+          posting_note: postingNote,
+          items: issueSlipItems.map(item => ({
+            item_code: item.itemCode,
+            item_name: item.itemName,
+            uom: item.uom,
+            quantity: item.quantity || 0,
+            rate: item.rate || 0,
+            value: item.value || 0
+          })),
+          delivery_challan: {
+            dispatch_from: dispatchFrom,
+            mode_of_transport: modeOfTransport,
+            dispatch_date: dispatchDate,
+            dispatch_time: dispatchTime,
+            delivery_type: deliveryType,
+            transporter_id: transporterId,
+            transporter_name: transporterName,
+            vehicle_no: vehicleNo,
+            lr_gr_consignment: lrGrConsignment,
+            shipping_bill_no: uptoPortShippingBillNo,
+            ship_port_code: uptoPortShipPortCode,
+            shipping_bill_date: uptoPortShippingBillDate,
+            origin: uptoPortOrigin,
+            // Maintained for compatibility if backend expects these keys
+            dispatch_address: dispatchFrom,
+          },
+          eway_bill: (ewayValidationEntries.length > 0 && (ewayValidationEntries[0].updatedVehicleNo || ewayValidationEntries[0].date)) ? {
+            vehicle_number: ewayValidationEntries[0].updatedVehicleNo || null,
+            valid_till: ewayValidationEntries[0].date || null
+          } : null,
+          eway_bill_details: ewayValidationEntries
+        };
+        await httpClient.post('/api/inventory/operations/inter-unit/', interUnitPayload);
       } else {
-        // Common payload for other tabs (Inter-unit, etc.)
+        // Common payload for remaining tabs 
         const commonPayload = {
           issue_slip_no: issueSlipNumber,
           date: issueSlipDate || null,
@@ -1318,17 +1467,17 @@ const InventoryPage: React.FC = () => {
             dispatch_address: deliveryChallanAddress,
             dispatch_date: deliveryChallanDate || null
           } : null,
-          eway_bill: (ewayBillVehicleNo || ewayBillValidTill) ? {
-            vehicle_number: ewayBillVehicleNo,
-            valid_till: ewayBillValidTill || null
-          } : null
+          eway_bill: (ewayValidationEntries.length > 0 && (ewayValidationEntries[0].updatedVehicleNo || ewayValidationEntries[0].date)) ? {
+            vehicle_number: ewayValidationEntries[0].updatedVehicleNo || null,
+            valid_till: ewayValidationEntries[0].date || null
+          } : null,
+          eway_bill_details: ewayValidationEntries
         };
 
         const endpoints: { [key: string]: string } = {
-          // 'job-work': '/api/inventory/operations/job-work/', // Handled above
-          'inter-unit': '/api/inventory/operations/inter-unit/',
+          // 'inter-unit': handled above
           'location-change': '/api/inventory/operations/location-change/',
-          'production': '/api/inventory/operations/production/',
+          'production': '/api/inventory/operations/production/', // If not handled in earlier if-block? production IS handled in earlier if-block
           'consumption': '/api/inventory/operations/consumption/',
           'scrap': '/api/inventory/operations/scrap/'
         };
@@ -1345,6 +1494,99 @@ const InventoryPage: React.FC = () => {
     } catch (error) {
       console.error('Error saving operation:', error);
       showError('Failed to save operation. Please check your inputs.');
+    }
+  };
+
+  const handleOutwardVendorChange = async (selectedVendorName: string) => {
+    setOutwardVendorName(selectedVendorName);
+    setOutwardBranch('');
+    setOutwardBranchOptions([]);
+    setOutwardAddress('');
+    setOutwardGstin('');
+    setJobWorkOrderNo('');
+    setJobWorkOrderNoOptions([]);
+
+    const vendor = vendors.find(v => v.vendor_name === selectedVendorName);
+    if (vendor) {
+      try {
+        const branchResponse = await apiService.getVendorGSTDetails(vendor.id);
+        const mappedBranches = Array.isArray(branchResponse) ? branchResponse.map((b: any) => ({
+          ...b,
+          reference_name: b.reference_name || b.defaultRef || b.branch_name || b.name || b.gstin || `Branch ${b.id}` || 'Main',
+          branch_address: b.branch_address || b.address
+        })) : [];
+        setOutwardBranchOptions(mappedBranches);
+
+        // Auto-select first branch if available
+        if (mappedBranches.length > 0) {
+          const defaultBranch = mappedBranches[0];
+          setOutwardBranch(defaultBranch.reference_name);
+          setOutwardAddress(defaultBranch.branch_address || '');
+          setOutwardGstin(defaultBranch.gstin || '');
+        }
+
+        // Fetch Pending POs for this vendor
+        const poResponse = await apiService.getVendorPurchaseOrders(selectedVendorName, 'Pending');
+        if (poResponse && poResponse.success && Array.isArray(poResponse.data)) {
+          setJobWorkOrderNoOptions(poResponse.data);
+        }
+      } catch (error) {
+        handleApiError(error, "Fetching vendor details");
+      }
+    }
+  };
+
+  const handleOutwardBranchChange = (branchReferenceName: string) => {
+    setOutwardBranch(branchReferenceName);
+    const branchDetails = outwardBranchOptions.find(b => b.reference_name === branchReferenceName);
+    if (branchDetails) {
+      // Robustly check for address fields as backend serialization might vary
+      setOutwardAddress(branchDetails.branch_address || branchDetails.address || '');
+      setOutwardGstin(branchDetails.gstin || '');
+    } else {
+      setOutwardAddress('');
+      setOutwardGstin('');
+    }
+  };
+
+  const handleJobWorkOutwardChange = async (outwardNo: string) => {
+    setJobWorkOutwardRefNo(outwardNo);
+    const selectedSlip = jobWorkOutwardOptions.find(o => o.outward_no === outwardNo || o.issue_slip_no === outwardNo || o.job_work_outward_no === outwardNo);
+
+    if (selectedSlip) {
+      // Auto-populate
+      const loc = selectedSlip.issue_from_location || selectedSlip.location_id || selectedSlip.location;
+      setGoodsFromLocation(typeof loc === 'object' && loc ? String(loc.id) : String(loc || ''));
+
+      const vName = selectedSlip.vendor_name || selectedSlip.vendorName;
+      if (vName) {
+        setOutwardVendorName(vName);
+
+        // Trigger vendor change logic to fetch branches
+        await handleOutwardVendorChange(vName);
+
+        // Then set specific values from outward slip if available
+        // Backend payload uses vendor_branch, vendor_address, vendor_gstin
+        const branch = selectedSlip.vendor_branch || selectedSlip.branch || selectedSlip.vendorBranch;
+        const address = selectedSlip.vendor_address || selectedSlip.address || selectedSlip.vendorAddress;
+        const gstin = selectedSlip.vendor_gstin || selectedSlip.gstin || selectedSlip.vendorGstin;
+
+        if (branch) setOutwardBranch(branch);
+        if (address) setOutwardAddress(address);
+        if (gstin) setOutwardGstin(gstin);
+
+        // Also fetch items if possible? (User didn't explicitly ask for items but "System must fetch the details...").
+        // Usually selecting the outward ref should load items into "Outward Items" tab.
+        // That logic might fit here too. 
+        if (Array.isArray(selectedSlip.items)) {
+          // Map items to outward items view...
+          // Logic for that can be added later if needed, user prioritized vendor details.
+          // But let's check if we can populate it.
+          // setOutwardItems(...) or similar?
+          // The form uses 'items' state for both input and output tabs, heavily dependent on 'jwItemTab'.
+          // I'll leave items for now unless requested, as it might conflict with current state structure if not careful.
+        }
+      }
     }
   };
 
@@ -1552,6 +1794,7 @@ const InventoryPage: React.FC = () => {
     setGrnItems(updatedItems);
   };
 
+
   useEffect(() => {
     if (showGRNForm) {
       if (items.length === 0) fetchItems();
@@ -1559,6 +1802,15 @@ const InventoryPage: React.FC = () => {
       if (customers.length === 0) fetchCustomers();
     }
   }, [showGRNForm]);
+
+  useEffect(() => {
+    if (showIssueSlipForm) {
+      if (locations.length === 0) fetchLocations();
+      if (items.length === 0) fetchItems();
+      if (vendors.length === 0) fetchVendors();
+      if (customers.length === 0) fetchCustomers();
+    }
+  }, [showIssueSlipForm]);
 
   const handleGRNSubmit = async () => {
     try {
@@ -1623,12 +1875,22 @@ const InventoryPage: React.FC = () => {
       if (selectedItem) {
         updatedItems[index].itemName = selectedItem.name || selectedItem.item_name;
         updatedItems[index].uom = selectedItem.uom || selectedItem.unit;
+        // Fetch Rate
+        updatedItems[index].rate = selectedItem.standard_rate || selectedItem.rate || 0;
+        // Recalculate Value immediately as rate changed
+        const qty = parseFloat(updatedItems[index].quantity) || 0;
+        updatedItems[index].value = qty * updatedItems[index].rate;
       }
     } else if (field === 'itemName') {
       const selectedItem = items.find(i => i.name === value || i.item_name === value);
       if (selectedItem) {
         updatedItems[index].itemCode = selectedItem.item_code;
         updatedItems[index].uom = selectedItem.uom || selectedItem.unit;
+        // Fetch Rate
+        updatedItems[index].rate = selectedItem.standard_rate || selectedItem.rate || 0;
+        // Recalculate Value immediately as rate changed
+        const qty = parseFloat(updatedItems[index].quantity) || 0;
+        updatedItems[index].value = qty * updatedItems[index].rate;
       }
     }
 
@@ -1639,11 +1901,14 @@ const InventoryPage: React.FC = () => {
       updatedItems[index].value = qty * rate;
     }
 
-    // Calculate Shortage/Excess for Receipt (Received - Vendor)
-    if (field === 'vendorQty' || field === 'receivedQty') {
+    // Calculate Shortage/Excess for Receipt (Received - Vendor) & Rejected (Received - Accepted)
+    if (field === 'vendorQty' || field === 'receivedQty' || field === 'acceptedQty') {
       const vendorQty = parseFloat(updatedItems[index].vendorQty) || 0;
       const receivedQty = parseFloat(updatedItems[index].receivedQty) || 0;
+      const acceptedQty = parseFloat(updatedItems[index].acceptedQty) || 0;
+
       updatedItems[index].shortageExcessQty = receivedQty - vendorQty;
+      updatedItems[index].rejectedQty = receivedQty - acceptedQty;
     }
 
     // Calculate Remaining for Outward (Total - Consumed - Scrapped)
@@ -2014,7 +2279,7 @@ const InventoryPage: React.FC = () => {
                       {/* Issued From & To */}
                       <div className="grid grid-cols-2 gap-6">
                         <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-1">Issued From (Company Premise)</label>
+                          <label className="block text-sm font-semibold text-gray-700 mb-1">Issued From</label>
                           <select
                             value={goodsFromLocation}
                             onChange={(e) => setGoodsFromLocation(e.target.value)}
@@ -2037,7 +2302,7 @@ const InventoryPage: React.FC = () => {
                             <label className="block text-sm font-semibold text-gray-700 mb-1">Vendor Name</label>
                             <select
                               value={outwardVendorName}
-                              onChange={(e) => setOutwardVendorName(e.target.value)}
+                              onChange={(e) => handleOutwardVendorChange(e.target.value)}
                               className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             >
                               <option value="">Select Vendor</option>
@@ -2050,11 +2315,13 @@ const InventoryPage: React.FC = () => {
                             <label className="block text-sm font-semibold text-gray-700 mb-1">Branch</label>
                             <select
                               value={outwardBranch}
-                              onChange={(e) => setOutwardBranch(e.target.value)}
+                              onChange={(e) => handleOutwardBranchChange(e.target.value)}
                               className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             >
                               <option value="">Select Branch</option>
-                              <option value="Main">Main</option>
+                              {outwardBranchOptions.map((branch, idx) => (
+                                <option key={branch.id || idx} value={branch.reference_name}>{branch.reference_name}</option>
+                              ))}
                             </select>
                           </div>
                         </div>
@@ -2064,10 +2331,9 @@ const InventoryPage: React.FC = () => {
                             <label className="block text-sm font-semibold text-gray-700 mb-1">Address</label>
                             <textarea
                               value={outwardAddress}
-                              onChange={(e) => setOutwardAddress(e.target.value)}
+                              readOnly
                               rows={3}
-                              placeholder="Cross-check with Job worker location in inventory masters"
-                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-100 cursor-not-allowed"
                             />
                           </div>
                           <div className="space-y-4">
@@ -2076,9 +2342,8 @@ const InventoryPage: React.FC = () => {
                               <input
                                 type="text"
                                 value={outwardGstin}
-                                onChange={(e) => setOutwardGstin(e.target.value)}
-                                placeholder="Fetched from vendor master"
-                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                readOnly
+                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-100 cursor-not-allowed"
                               />
                             </div>
                             <div>
@@ -2089,8 +2354,9 @@ const InventoryPage: React.FC = () => {
                                 className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                               >
                                 <option value="">Select PO</option>
-                                <option value="PO-001">PO-001</option>
-                                <option value="PO-002">PO-002</option>
+                                {jobWorkOrderNoOptions.map((po: any) => (
+                                  <option key={po.id} value={po.po_number}>{po.po_number}</option>
+                                ))}
                               </select>
                             </div>
                           </div>
@@ -2122,40 +2388,64 @@ const InventoryPage: React.FC = () => {
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                              {issueSlipItems.map((item, index) => (
-                                <tr key={index}>
-                                  <td className="px-3 py-2"><input type="text" value={item.itemCode} onChange={(e) => handleIssueSlipItemChange(index, 'itemCode', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
-                                  <td className="px-3 py-2"><input type="text" value={item.itemName} onChange={(e) => handleIssueSlipItemChange(index, 'itemName', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
-                                  <td className="px-3 py-2">
-                                    <select
-                                      value={item.uom || ''}
-                                      onChange={(e) => handleIssueSlipItemChange(index, 'uom', e.target.value)}
-                                      className="w-20 px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                    >
-                                      <option value="">Select</option>
-                                      {(() => {
-                                        const selectedItem = items.find(i => i.item_code === item.itemCode);
-                                        const units = [];
-                                        if (selectedItem) {
-                                          const u1 = selectedItem.uom || selectedItem.unit;
-                                          const u2 = selectedItem.alternate_uom || selectedItem.alternative_unit;
-                                          if (u1) units.push(u1);
-                                          if (u2 && u2 !== u1) units.push(u2);
-                                        }
-                                        return units.map(u => (
+                              {issueSlipItems.map((slipItem, index) => {
+                                // Find selected item for this row to populate UOM options
+                                const selectedItemForUom = items.find(i => i.item_code === slipItem.itemCode);
+                                const uomOptions = [];
+                                if (selectedItemForUom) {
+                                  const u1 = selectedItemForUom.uom || selectedItemForUom.unit;
+                                  const u2 = selectedItemForUom.alternate_uom || selectedItemForUom.alternative_unit;
+                                  if (u1) uomOptions.push(u1);
+                                  if (u2 && u2 !== u1) uomOptions.push(u2);
+                                }
+
+                                return (
+                                  <tr key={index}>
+                                    <td className="px-3 py-2">
+                                      <select
+                                        value={slipItem.itemCode}
+                                        onChange={(e) => handleIssueSlipItemChange(index, 'itemCode', e.target.value)}
+                                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                      >
+                                        <option value="">Select Code</option>
+                                        {items.map(i => (
+                                          <option key={i.id} value={i.item_code}>{i.item_code}</option>
+                                        ))}
+                                      </select>
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <select
+                                        value={slipItem.itemName}
+                                        onChange={(e) => handleIssueSlipItemChange(index, 'itemName', e.target.value)}
+                                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                      >
+                                        <option value="">Select Item</option>
+                                        {items.map(i => (
+                                          <option key={i.id} value={i.item_name || i.name}>{i.item_name || i.name}</option>
+                                        ))}
+                                      </select>
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <select
+                                        value={slipItem.uom || ''}
+                                        onChange={(e) => handleIssueSlipItemChange(index, 'uom', e.target.value)}
+                                        className="w-20 px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                      >
+                                        <option value="">Select</option>
+                                        {uomOptions.map(u => (
                                           <option key={u} value={u}>{u}</option>
-                                        ));
-                                      })()}
-                                    </select>
-                                  </td>
-                                  <td className="px-3 py-2"><input type="number" value={item.quantity} onChange={(e) => handleIssueSlipItemChange(index, 'quantity', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
-                                  <td className="px-3 py-2"><input type="number" value={item.rate} onChange={(e) => handleIssueSlipItemChange(index, 'rate', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
-                                  <td className="px-3 py-2"><input type="text" value={item.value ? item.value.toFixed(2) : ''} readOnly className="w-full px-2 py-1 bg-gray-50 border border-gray-300 rounded text-sm" /></td>
-                                  <td className="px-3 py-2 text-center">
-                                    <button onClick={() => handleRemoveIssueSlipItem(index)} className="text-red-600 hover:text-red-800 text-sm font-medium">Remove</button>
-                                  </td>
-                                </tr>
-                              ))}
+                                        ))}
+                                      </select>
+                                    </td>
+                                    <td className="px-3 py-2"><input type="number" value={slipItem.quantity} onChange={(e) => handleIssueSlipItemChange(index, 'quantity', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
+                                    <td className="px-3 py-2"><input type="number" value={slipItem.rate} readOnly className="w-full px-2 py-1 bg-gray-50 border border-gray-300 rounded text-sm cursor-not-allowed" /></td>
+                                    <td className="px-3 py-2"><input type="text" value={slipItem.value ? slipItem.value.toFixed(2) : ''} readOnly className="w-full px-2 py-1 bg-gray-50 border border-gray-300 rounded text-sm" /></td>
+                                    <td className="px-3 py-2 text-center">
+                                      <button onClick={() => handleRemoveIssueSlipItem(index)} className="text-red-600 hover:text-red-800 text-sm font-medium">Remove</button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>
@@ -2180,8 +2470,248 @@ const InventoryPage: React.FC = () => {
                       <div className="border shadow-none border border-slate-200-none border border-slate-200 rounded-[4px] p-4 bg-gray-50">
                         <h4 className="text-sm font-bold text-gray-800 mb-3 border-b border-gray-200 pb-2">Dispatch Details</h4>
                         {/* This would ideally be a collapsible section or a set of fields matching Sales Voucher dispatch details. For now, we use a placeholder or partial fields as per sketches often implying standard dispatch fields */}
-                        <div className="grid grid-cols-2 gap-4 text-sm text-gray-500">
-                          <p>Dispatch details fields (Transporter, Vehicle No, etc.) would appear here, same as Sales Voucher.</p>
+                        <div className="space-y-6">
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {/* Left Column */}
+                            <div className="space-y-4">
+                              {/* Dispatch From */}
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Dispatch From
+                                </label>
+                                <textarea
+                                  value={dispatchFrom}
+                                  onChange={(e) => setDispatchFrom(e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 resize-none"
+                                  rows={3}
+                                />
+                              </div>
+
+                              {/* Mode of Transport */}
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Mode of Transport
+                                </label>
+                                <select
+                                  value={modeOfTransport}
+                                  onChange={(e) => setModeOfTransport(e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                >
+                                  <option value="">Select</option>
+                                  <option value="Road">Road</option>
+                                  <option value="Air">Air</option>
+                                  <option value="Sea">Sea</option>
+                                  <option value="Rail">Rail</option>
+                                  <option value="Courier">Courier</option>
+                                </select>
+                              </div>
+
+                              {/* Dispatch Date */}
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Dispatch Date
+                                </label>
+                                <input
+                                  type="date"
+                                  value={dispatchDate}
+                                  onChange={(e) => setDispatchDate(e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                />
+                              </div>
+
+                              {/* Dispatch Time */}
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Dispatch Time
+                                </label>
+                                <input
+                                  type="time"
+                                  value={dispatchTime}
+                                  onChange={(e) => setDispatchTime(e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                />
+                              </div>
+
+                              {/* Upload Document */}
+                              <div className="mt-6">
+                                <input
+                                  type="file"
+                                  id="dispatch-doc"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) setDispatchDocument(file);
+                                  }}
+                                  className="hidden"
+                                  accept=".jpg,.jpeg,.pdf"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => document.getElementById('dispatch-doc')?.click()}
+                                  className="w-full h-40 border-2 border-dashed border-gray-300 hover:border-indigo-500 bg-gray-50 hover:bg-indigo-50/50 text-gray-600 rounded-[4px] transition-colors flex flex-col items-center justify-center gap-2"
+                                >
+                                  <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                  </svg>
+                                  <span className="text-sm font-medium">UPLOAD DOCUMENT</span>
+                                  {dispatchDocument && (
+                                    <span className="text-xs mt-2 text-indigo-600 font-medium">✓ {dispatchDocument.name}</span>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Right Column */}
+                            <div className="space-y-4">
+                              {/* Delivery Type */}
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Delivery Type
+                                </label>
+                                <select
+                                  value={deliveryType}
+                                  onChange={(e) => {
+                                    setDeliveryType(e.target.value);
+                                    if (e.target.value === 'Courier') {
+                                      setTransporterId('');
+                                      setTransporterName('');
+                                      setVehicleNo('');
+                                      setLrGrConsignment('');
+                                    }
+                                  }}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                >
+                                  <option value="">Select</option>
+                                  <option value="Self">Self</option>
+                                  <option value="Third Party">Third Party</option>
+                                  <option value="Courier">Courier</option>
+                                </select>
+                              </div>
+
+                              {/* Transporter ID/GSTIN */}
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Transporter ID/GSTIN
+                                </label>
+                                <input
+                                  type="text"
+                                  value={transporterId}
+                                  onChange={(e) => setTransporterId(e.target.value)}
+                                  disabled={deliveryType === 'Courier'}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                  placeholder="Editable with numerics and alphabet"
+                                />
+                              </div>
+
+                              {/* Transporter Name */}
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Transporter Name
+                                </label>
+                                <input
+                                  type="text"
+                                  value={transporterName}
+                                  onChange={(e) => setTransporterName(e.target.value)}
+                                  disabled={deliveryType === 'Courier'}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                  placeholder="Editable with numerics and alphabet"
+                                />
+                              </div>
+
+                              {/* Vehicle No. */}
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Vehicle No.
+                                </label>
+                                <input
+                                  type="text"
+                                  value={vehicleNo}
+                                  onChange={(e) => setVehicleNo(e.target.value)}
+                                  disabled={deliveryType === 'Courier'}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                  placeholder="Editable with numerics and alphabet"
+                                />
+                              </div>
+
+                              {/* LR/GR/Consignment */}
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  LR/GR/Consignment
+                                </label>
+                                <input
+                                  type="text"
+                                  value={lrGrConsignment}
+                                  onChange={(e) => setLrGrConsignment(e.target.value)}
+                                  disabled={deliveryType === 'Courier'}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                  placeholder="Editable with numerics and alphabet"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Conditional Port Details for Air/Sea */}
+                          {(modeOfTransport === 'Air' || modeOfTransport === 'Sea') && (
+                            <div className="space-y-6 mt-6 border-t border-gray-200 pt-4">
+                              {/* UPTO PORT Section */}
+                              <div>
+                                <h3 className="text-sm font-bold text-gray-800 mb-4">UPTO PORT</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                  <div className="space-y-4">
+                                    <div>
+                                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Shipping Bill No.
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={uptoPortShippingBillNo}
+                                        onChange={(e) => setUptoPortShippingBillNo(e.target.value)}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                      />
+                                    </div>
+
+                                    <div>
+                                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Ship/Port Code
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={uptoPortShipPortCode}
+                                        onChange={(e) => setUptoPortShipPortCode(e.target.value)}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-4">
+                                    <div>
+                                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Shipping Bill Date
+                                      </label>
+                                      <input
+                                        type="date"
+                                        value={uptoPortShippingBillDate}
+                                        onChange={(e) => setUptoPortShippingBillDate(e.target.value)}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                      />
+                                    </div>
+
+                                    <div>
+                                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Origin
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={uptoPortOrigin}
+                                        onChange={(e) => setUptoPortOrigin(e.target.value)}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="City"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                         <div className="flex gap-4 mt-4">
                           <button
@@ -2259,7 +2789,7 @@ const InventoryPage: React.FC = () => {
                       {/* Issued From & Outward Ref */}
                       <div className="grid grid-cols-2 gap-6">
                         <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-1">Issued From (Company Premise)</label>
+                          <label className="block text-sm font-semibold text-gray-700 mb-1">Issued From</label>
                           <select
                             value={goodsFromLocation}
                             onChange={(e) => setGoodsFromLocation(e.target.value)}
@@ -2275,24 +2805,26 @@ const InventoryPage: React.FC = () => {
                           <label className="block text-sm font-semibold text-gray-700 mb-1">Job work Outward No.</label>
                           <select
                             value={jobWorkOutwardRefNo}
-                            onChange={(e) => setJobWorkOutwardRefNo(e.target.value)}
+                            onChange={(e) => handleJobWorkOutwardChange(e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select Outward No</option>
-                            <option value="JWO-001">JWO-001</option>
+                            {jobWorkOutwardOptions.map((opt: any) => (
+                              <option key={opt.id} value={opt.issue_slip_no}>{opt.issue_slip_no}</option>
+                            ))}
                           </select>
                         </div>
                       </div>
 
                       {/* Vendor Details */}
                       <div>
-                        <h4 className="text-sm font-bold text-gray-800 mb-3 border-b border-gray-200 pb-1">Vendor Details (Fetched)</h4>
+                        <h4 className="text-sm font-bold text-gray-800 mb-3 border-b border-gray-200 pb-1">Vendor Details</h4>
                         <div className="grid grid-cols-2 gap-6">
                           <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-1">Vendor Name</label>
                             <select
                               value={outwardVendorName}
-                              onChange={(e) => setOutwardVendorName(e.target.value)}
+                              onChange={(e) => handleOutwardVendorChange(e.target.value)}
                               className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             >
                               <option value="">Select Vendor</option>
@@ -2305,11 +2837,13 @@ const InventoryPage: React.FC = () => {
                             <label className="block text-sm font-semibold text-gray-700 mb-1">Branch</label>
                             <select
                               value={outwardBranch}
-                              onChange={(e) => setOutwardBranch(e.target.value)}
+                              onChange={(e) => handleOutwardBranchChange(e.target.value)}
                               className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             >
                               <option value="">Select Branch</option>
-                              <option value="Main">Main</option>
+                              {outwardBranchOptions.map((branch, idx) => (
+                                <option key={branch.id || idx} value={branch.reference_name}>{branch.reference_name}</option>
+                              ))}
                             </select>
                           </div>
                         </div>
@@ -2319,9 +2853,9 @@ const InventoryPage: React.FC = () => {
                             <label className="block text-sm font-semibold text-gray-700 mb-1">Address</label>
                             <textarea
                               value={outwardAddress}
-                              onChange={(e) => setOutwardAddress(e.target.value)}
+                              readOnly
                               rows={3}
-                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-100 cursor-not-allowed"
                             />
                           </div>
                           <div>
@@ -2329,8 +2863,8 @@ const InventoryPage: React.FC = () => {
                             <input
                               type="text"
                               value={outwardGstin}
-                              onChange={(e) => setOutwardGstin(e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              readOnly
+                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-100 cursor-not-allowed"
                             />
                           </div>
                         </div>
@@ -2344,7 +2878,7 @@ const InventoryPage: React.FC = () => {
                             type="text"
                             value={vendorDeliveryChallan}
                             onChange={(e) => setVendorDeliveryChallan(e.target.value)}
-                            placeholder="Pull from scan or enter"
+                            placeholder=""
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
@@ -2354,7 +2888,7 @@ const InventoryPage: React.FC = () => {
                             type="text"
                             value={outwardSupplierInvoice}
                             onChange={(e) => setOutwardSupplierInvoice(e.target.value)}
-                            placeholder="Pull from scan or enter"
+                            placeholder=""
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
@@ -2451,7 +2985,7 @@ const InventoryPage: React.FC = () => {
                                     <td className="px-3 py-2 border-r bg-indigo-50/50"><input type="number" value={item.vendorQty || ''} onChange={(e) => handleIssueSlipItemChange(index, 'vendorQty', e.target.value)} placeholder="Vendor Qty" className="w-20 px-2 py-1 border border-indigo-300 rounded text-sm" /></td>
                                     <td className="px-3 py-2 border-r bg-indigo-50/50"><input type="number" value={item.receivedQty || ''} onChange={(e) => handleIssueSlipItemChange(index, 'receivedQty', e.target.value)} placeholder="Recv Qty" className="w-20 px-2 py-1 border border-indigo-300 rounded text-sm" /></td>
                                     <td className="px-3 py-2 border-r"><input type="number" value={item.acceptedQty || ''} onChange={(e) => handleIssueSlipItemChange(index, 'acceptedQty', e.target.value)} placeholder="Accept" className="w-20 px-2 py-1 border border-gray-300 rounded text-sm" /></td>
-                                    <td className="px-3 py-2 border-r"><input type="number" value={item.rejectedQty || ''} onChange={(e) => handleIssueSlipItemChange(index, 'rejectedQty', e.target.value)} placeholder="Reject" className="w-20 px-2 py-1 border border-gray-300 rounded text-sm" /></td>
+                                    <td className="px-3 py-2 border-r"><input type="number" value={item.rejectedQty || ''} onChange={(e) => handleIssueSlipItemChange(index, 'rejectedQty', e.target.value)} placeholder="Reject" readOnly className="w-20 px-2 py-1 bg-gray-50 border border-gray-200 rounded text-sm" /></td>
                                     <td className="px-3 py-2 border-r"><input type="number" value={item.shortageExcessQty || ''} onChange={(e) => handleIssueSlipItemChange(index, 'shortageExcessQty', e.target.value)} readOnly className="w-20 px-2 py-1 bg-gray-50 border border-gray-200 rounded text-sm" /></td>
                                     <td className="px-3 py-2 border-r"><input type="text" value={item.remarks || ''} onChange={(e) => handleIssueSlipItemChange(index, 'remarks', e.target.value)} placeholder="Remarks" className="w-32 px-2 py-1 border border-gray-300 rounded text-sm" /></td>
                                     <td className="px-3 py-2 text-center">
@@ -2472,11 +3006,7 @@ const InventoryPage: React.FC = () => {
                             </table>
                           )}
                         </div>
-                        <div className="mt-2 text-sm text-indigo-600 italic">
-                          {jwItemTab === 'outward'
-                            ? '* Items fetched from Job Work Outward.'
-                            : '* Verify received quantities against Vendor Delivery Challan.'}
-                        </div>
+
                       </div>
 
                       {/* Posting Note */}
@@ -3739,26 +4269,23 @@ const InventoryPage: React.FC = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
-                        <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-2">Status</label>
-                          <select className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                            <option>Draft</option>
-                            <option>Posted</option>
-                          </select>
-                        </div>
+
                       </div>
 
                       {/* Location Details */}
                       <div className="grid grid-cols-2 gap-5">
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Goods Sent From</label>
-                          <input
-                            type="text"
+                          <select
                             value={goodsFromLocation}
                             onChange={(e) => setGoodsFromLocation(e.target.value)}
-                            placeholder="Select location"
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          />
+                          >
+                            <option value="">Select location</option>
+                            {locations.filter(l => l.location_type === 'company_premises').map(loc => (
+                              <option key={loc.id} value={loc.id}>{loc.name}</option>
+                            ))}
+                          </select>
                         </div>
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Goods Sent To</label>
@@ -3799,8 +4326,30 @@ const InventoryPage: React.FC = () => {
                             <tbody className="divide-y divide-gray-200">
                               {issueSlipItems.map((item, index) => (
                                 <tr key={index}>
-                                  <td className="px-3 py-2"><input type="text" value={item.itemCode} onChange={(e) => handleIssueSlipItemChange(index, 'itemCode', e.target.value)} placeholder="Code" className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
-                                  <td className="px-3 py-2"><input type="text" value={item.itemName} onChange={(e) => handleIssueSlipItemChange(index, 'itemName', e.target.value)} placeholder="Name" className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
+                                  <td className="px-3 py-2">
+                                    <select
+                                      value={item.itemCode}
+                                      onChange={(e) => handleIssueSlipItemChange(index, 'itemCode', e.target.value)}
+                                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                    >
+                                      <option value="">Select Code</option>
+                                      {items.map(i => (
+                                        <option key={i.id} value={i.item_code}>{i.item_code}</option>
+                                      ))}
+                                    </select>
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <select
+                                      value={item.itemName}
+                                      onChange={(e) => handleIssueSlipItemChange(index, 'itemName', e.target.value)}
+                                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                    >
+                                      <option value="">Select Item</option>
+                                      {items.map(i => (
+                                        <option key={i.id} value={i.item_name || i.name}>{i.item_name || i.name}</option>
+                                      ))}
+                                    </select>
+                                  </td>
                                   <td className="px-3 py-2">
                                     <select
                                       value={item.uom || ''}
@@ -3824,7 +4373,7 @@ const InventoryPage: React.FC = () => {
                                     </select>
                                   </td>
                                   <td className="px-3 py-2"><input type="number" value={item.quantity} onChange={(e) => handleIssueSlipItemChange(index, 'quantity', e.target.value)} placeholder="Qty" className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
-                                  <td className="px-3 py-2"><input type="number" value={item.rate} onChange={(e) => handleIssueSlipItemChange(index, 'rate', e.target.value)} placeholder="Rate" className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
+                                  <td className="px-3 py-2"><input type="number" value={item.rate} readOnly className="w-full px-2 py-1 bg-gray-50 border border-gray-300 rounded text-sm cursor-not-allowed" /></td>
                                   <td className="px-3 py-2 text-sm font-medium">₹{item.value.toFixed(2)}</td>
                                   <td className="px-3 py-2 text-center">
                                     <button
@@ -3855,6 +4404,249 @@ const InventoryPage: React.FC = () => {
                           className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                         />
                       </div>
+
+                      {/* Delivery Challan Details - Only for Inter-unit */}
+                      {issueSlipTab === 'inter-unit' && (
+                        <div className="mt-8 pt-6 border-t border-gray-200">
+                          <h3 className="text-lg font-bold text-gray-800 mb-4">Delivery Challan Details</h3>
+
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {/* Left Column */}
+                            <div className="space-y-4">
+                              {/* Dispatch From */}
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Dispatch From
+                                </label>
+                                <textarea
+                                  value={dispatchFrom}
+                                  onChange={(e) => setDispatchFrom(e.target.value)}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                                  rows={3}
+                                />
+                              </div>
+
+                              {/* Mode of Transport */}
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Mode of Transport
+                                </label>
+                                <select
+                                  value={modeOfTransport}
+                                  onChange={(e) => setModeOfTransport(e.target.value)}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                                >
+                                  <option value="">Select Mode</option>
+                                  <option value="Road">Road</option>
+                                  <option value="Air">Air</option>
+                                  <option value="Sea">Sea</option>
+                                  <option value="Rail">Rail</option>
+                                  <option value="Courier">Courier</option>
+                                </select>
+                              </div>
+
+                              {/* Dispatch Date & Time */}
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Dispatch Date
+                                  </label>
+                                  <input
+                                    type="date"
+                                    value={dispatchDate}
+                                    onChange={(e) => setDispatchDate(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Dispatch Time
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={dispatchTime}
+                                    onChange={(e) => setDispatchTime(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Upload Document */}
+                              <div className="mt-2">
+                                <input
+                                  type="file"
+                                  id="dispatch-doc-inventory"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) setDispatchDocument(file);
+                                  }}
+                                  className="hidden"
+                                  accept=".jpg,.jpeg,.pdf"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => document.getElementById('dispatch-doc-inventory')?.click()}
+                                  className="w-full h-32 border-2 border-dashed border-gray-300 hover:border-indigo-500 bg-gray-50 hover:bg-indigo-50/50 text-gray-600 rounded transition-colors flex flex-col items-center justify-center gap-2"
+                                >
+                                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                  </svg>
+                                  <span className="text-xs font-medium">UPLOAD DOCUMENT</span>
+                                  {dispatchDocument && (
+                                    <span className="text-xs mt-1 text-indigo-600 font-medium">✓ {dispatchDocument.name}</span>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Right Column */}
+                            <div className="space-y-4">
+                              {/* Delivery Type */}
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Delivery Type
+                                </label>
+                                <select
+                                  value={deliveryType}
+                                  onChange={(e) => {
+                                    setDeliveryType(e.target.value);
+                                    if (e.target.value === 'Courier') {
+                                      setTransporterId('');
+                                      setTransporterName('');
+                                      setVehicleNo('');
+                                      setLrGrConsignment('');
+                                    }
+                                  }}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                                >
+                                  <option value="">Select</option>
+                                  <option value="Self">Self</option>
+                                  <option value="Third Party">Third Party</option>
+                                  <option value="Courier">Courier</option>
+                                </select>
+                              </div>
+
+                              {/* Transporter ID/GSTIN */}
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Transporter ID/GSTIN
+                                </label>
+                                <input
+                                  type="text"
+                                  value={transporterId}
+                                  onChange={(e) => setTransporterId(e.target.value)}
+                                  disabled={deliveryType === 'Courier'}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                  placeholder="Editable with numerics and alphabet"
+                                />
+                              </div>
+
+                              {/* Transporter Name */}
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Transporter Name
+                                </label>
+                                <input
+                                  type="text"
+                                  value={transporterName}
+                                  onChange={(e) => setTransporterName(e.target.value)}
+                                  disabled={deliveryType === 'Courier'}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                  placeholder="Editable with numerics and alphabet"
+                                />
+                              </div>
+
+                              {/* Vehicle No. */}
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Vehicle No.
+                                </label>
+                                <input
+                                  type="text"
+                                  value={vehicleNo}
+                                  onChange={(e) => setVehicleNo(e.target.value)}
+                                  disabled={deliveryType === 'Courier'}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                  placeholder="Editable with numerics and alphabet"
+                                />
+                              </div>
+
+                              {/* LR/GR/Consignment */}
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  LR/GR/Consignment
+                                </label>
+                                <input
+                                  type="text"
+                                  value={lrGrConsignment}
+                                  onChange={(e) => setLrGrConsignment(e.target.value)}
+                                  disabled={deliveryType === 'Courier'}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                  placeholder="Editable with numerics and alphabet"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Conditional Port Details for Air/Sea */}
+                          {(modeOfTransport === 'Air' || modeOfTransport === 'Sea') && (
+                            <div className="space-y-6 mt-6 border-t border-gray-200 pt-4">
+                              <h3 className="text-md font-semibold text-gray-800">UPTO PORT</h3>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-4">
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Shipping Bill No.
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={uptoPortShippingBillNo}
+                                      onChange={(e) => setUptoPortShippingBillNo(e.target.value)}
+                                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Ship/Port Code
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={uptoPortShipPortCode}
+                                      onChange={(e) => setUptoPortShipPortCode(e.target.value)}
+                                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="space-y-4">
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Shipping Bill Date
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={uptoPortShippingBillDate}
+                                      onChange={(e) => setUptoPortShippingBillDate(e.target.value)}
+                                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Origin
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={uptoPortOrigin}
+                                      onChange={(e) => setUptoPortOrigin(e.target.value)}
+                                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                      placeholder="City"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {/* Action Buttons */}
                       <div className="flex gap-3 justify-end border-t border-gray-200 pt-5">
@@ -4257,58 +5049,205 @@ const InventoryPage: React.FC = () => {
           )
         }
 
-        {/* Delivery Challan Modal */}
+        {/* Delivery Challan Modal - Printable Preview */}
         {
-          showDeliveryChallan && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 w-full max-w-2xl max-h-96 overflow-y-auto">
-                <div className="sticky top-0 bg-white border-b border-gray-200 p-6 flex justify-between items-center">
-                  <h3 className="text-xl font-bold text-gray-900">Delivery Challan Details</h3>
-                  <button
-                    onClick={() => setShowDeliveryChallan(false)}
-                    className="text-gray-400 hover:text-gray-600 text-2xl"
-                  >
-                    ✕
-                  </button>
-                </div>
-                <div className="p-6 space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Dispatch Address</label>
-                      <input type="text" value={deliveryChallanAddress} onChange={(e) => setDeliveryChallanAddress(e.target.value)} placeholder="Address" className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Dispatch Date</label>
-                      <input type="date" value={deliveryChallanDate} onChange={(e) => setDeliveryChallanDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm" />
+          showDeliveryChallan && (() => {
+            const consignorLocation = locations.find(loc => loc.id === itemLocation || loc.id === Number(goodsFromLocation));
+            const consignorName = consignorLocation?.name || "YOUR COMPANY NAME";
+            const consignorAddress = consignorLocation ?
+              [consignorLocation.address_line1, consignorLocation.address_line2, consignorLocation.city, consignorLocation.pincode]
+                .filter(Boolean).join(', ') : "Company Address Not Available";
+            const consignorGstin = consignorLocation?.gstin || "N/A";
+            const consignorState = consignorLocation?.state || "N/A";
+            const consignorStateCode = consignorLocation?.state_code || "";
+
+            const consigneeName = issueSlipTab === 'job-work' ? outwardVendorName :
+              (outwardType === 'sales' ? outwardCustomerName : outwardVendorName) || "N/A";
+            const consigneeAddress = outwardAddress || "Address Not Available";
+            const consigneeGstin = outwardGstin || "N/A";
+            const consigneeState = "N/A";
+            const consigneeStateCode = outwardGstin ? outwardGstin.substring(0, 2) : "";
+
+            return (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 print:p-0">
+                <div className="bg-white rounded shadow-lg w-full max-w-4xl max-h-[95vh] flex flex-col print:max-w-none print:max-h-none print:w-full print:h-full print:shadow-none print:rounded-none">
+
+                  {/* Modal Header - Hidden in Print */}
+                  <div className="flex justify-between items-center p-4 border-b border-gray-200 print:hidden">
+                    <h3 className="text-xl font-bold text-gray-800">Delivery Challan Preview</h3>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => window.print()}
+                        className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 font-medium text-sm flex items-center gap-2"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                        </svg>
+                        Print
+                      </button>
+                      <button
+                        onClick={() => setShowDeliveryChallan(false)}
+                        className="text-gray-500 hover:text-gray-700 text-2xl leading-none"
+                      >
+                        &times;
+                      </button>
                     </div>
                   </div>
-                  <div className="flex gap-3 justify-end border-t border-gray-200 pt-4">
+
+                  {/* Printable Content */}
+                  <div className="p-8 overflow-y-auto print:p-0 print:overflow-visible flex-1 bg-white text-black" id="delivery-challan-print">
+
+                    {/* Header Section */}
+                    <div className="text-center mb-8">
+                      <h1 className="text-2xl font-bold uppercase underline mb-2 tracking-wide">Delivery Challan</h1>
+                      <p className="text-sm text-gray-600">(See Rule 55 of CGST Rules, 2017)</p>
+                    </div>
+
+                    {/* Company & Consignee Info */}
+                    <div className="grid grid-cols-2 gap-0 border border-black mb-6">
+                      {/* Left: Consignor (Sender) */}
+                      <div className="p-4 border-r border-black">
+                        <h4 className="font-bold text-sm text-gray-600 mb-1 uppercase">Consignor (Issued From)</h4>
+                        <p className="font-bold text-lg">{consignorName}</p>
+                        <p className="whitespace-pre-wrap text-sm">{consignorAddress}</p>
+                        <p className="text-sm mt-2"><span className="font-semibold">GSTIN:</span> {consignorGstin}</p>
+                        <p className="text-sm"><span className="font-semibold">State:</span> {consignorState} {consignorStateCode ? `(${consignorStateCode})` : ''}</p>
+                      </div>
+
+                      {/* Right: Consignee (Receiver) */}
+                      <div className="p-4">
+                        <h4 className="font-bold text-sm text-gray-600 mb-1 uppercase">Consignee (Issued To)</h4>
+                        <p className="font-bold text-lg">{consigneeName}</p>
+                        <p className="whitespace-pre-wrap text-sm">{consigneeAddress}</p>
+                        <p className="text-sm mt-2"><span className="font-semibold">GSTIN:</span> {consigneeGstin}</p>
+                        <p className="text-sm"><span className="font-semibold">State:</span> {consigneeState} {consigneeStateCode ? `(${consigneeStateCode})` : ''}</p>
+                      </div>
+                    </div>
+
+                    {/* Document Details grid */}
+                    <div className="grid grid-cols-2 gap-0 border border-black border-t-0 mb-6 -mt-6">
+                      <div className="grid grid-cols-2">
+                        <div className="p-2 border-r border-b border-black">
+                          <span className="block text-xs font-semibold text-gray-500 uppercase">Challan No.</span>
+                          <span className="font-bold">{issueSlipNumber || "-"}</span>
+                        </div>
+                        <div className="p-2 border-r border-b border-black">
+                          <span className="block text-xs font-semibold text-gray-500 uppercase">Date</span>
+                          <span className="font-bold">{dispatchDate || issueSlipDate || "-"}</span>
+                        </div>
+                        <div className="p-2 border-r border-black">
+                          <span className="block text-xs font-semibold text-gray-500 uppercase">Dispatch Doc No.</span>
+                          <span className="font-bold">-</span>
+                        </div>
+                        <div className="p-2 border-r border-black">
+                          <span className="block text-xs font-semibold text-gray-500 uppercase">Mode of Transport</span>
+                          <span className="font-bold">{modeOfTransport || "-"}</span>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2">
+                        <div className="p-2 border-r border-b border-black">
+                          <span className="block text-xs font-semibold text-gray-500 uppercase">Transporter Name</span>
+                          <span className="font-bold">{transporterName || "-"}</span>
+                        </div>
+                        <div className="p-2 border-b border-black">
+                          <span className="block text-xs font-semibold text-gray-500 uppercase">Vehicle No.</span>
+                          <span className="font-bold">{vehicleNo || "-"}</span>
+                        </div>
+                        <div className="p-2 border-r border-black">
+                          <span className="block text-xs font-semibold text-gray-500 uppercase">LR/GR No.</span>
+                          <span className="font-bold">{lrGrConsignment || "-"}</span>
+                        </div>
+                        <div className="p-2 border-black">
+                          <span className="block text-xs font-semibold text-gray-500 uppercase">Total Boxes</span>
+                          <span className="font-bold">{outwardTotalBoxes || "-"}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Items Table */}
+                    <div className="mb-6">
+                      <table className="w-full border-collapse border border-black text-sm">
+                        <thead>
+                          <tr className="bg-gray-100 print:bg-gray-200">
+                            <th className="border border-black px-2 py-2 w-12 text-center">S.No</th>
+                            <th className="border border-black px-2 py-2 text-left">Description of Goods</th>
+                            <th className="border border-black px-2 py-2 w-24 text-center">HSN/SAC</th>
+                            <th className="border border-black px-2 py-2 w-20 text-center">Qty</th>
+                            <th className="border border-black px-2 py-2 w-16 text-center">Unit</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {issueSlipItems.map((item, index) => (
+                            <tr key={index}>
+                              <td className="border border-black px-2 py-2 text-center">{index + 1}</td>
+                              <td className="border border-black px-2 py-2">
+                                {item.itemName}
+                                {item.itemCode && <div className="text-xs text-gray-500 mt-1">Code: {item.itemCode}</div>}
+                              </td>
+                              <td className="border border-black px-2 py-2 text-center">{item.hsnCode || "-"}</td>
+                              <td className="border border-black px-2 py-2 text-center font-bold">{item.quantity}</td>
+                              <td className="border border-black px-2 py-2 text-center">{item.uom}</td>
+                            </tr>
+                          ))}
+                          {/* Empty rows filler if needed */}
+                          {issueSlipItems.length === 0 && (
+                            <tr><td colSpan={5} className="border border-black py-8 text-center text-gray-500">No items added</td></tr>
+                          )}
+                          {/* Total Row */}
+                          <tr className="font-bold bg-gray-50 print:bg-white">
+                            <td colSpan={3} className="border border-black px-2 py-2 text-right">Total</td>
+                            <td className="border border-black px-2 py-2 text-center">
+                              {issueSlipItems.reduce((acc, curr) => acc + (parseFloat(curr.quantity as any) || 0), 0)}
+                            </td>
+                            <td className="border border-black px-2 py-2"></td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Footer Signatures */}
+                    <div className="grid grid-cols-2 gap-8 mt-12 page-break-inside-avoid">
+                      <div className="text-center pt-16">
+                        <div className="border-t border-black w-3/4 mx-auto"></div>
+                        <p className="font-semibold text-sm mt-2">Receiver's Signature</p>
+                      </div>
+                      <div className="text-center pt-16">
+                        <div className="border-t border-black w-3/4 mx-auto"></div>
+                        <p className="font-semibold text-sm mt-2">Authorized Signatory</p>
+                        <p className="text-xs text-gray-500">(For {consignorName})</p>
+                      </div>
+                    </div>
+
+                  </div>
+
+                  {/* Modal Footer - Hidden in Print */}
+                  <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-3 print:hidden">
                     <button
                       onClick={() => setShowDeliveryChallan(false)}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-[4px] hover:bg-indigo-700 font-medium text-sm"
+                      className="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-100 font-medium text-sm"
                     >
-                      Save & Close
+                      Close
                     </button>
                     <button
-                      onClick={() => setShowDeliveryChallan(false)}
-                      className="px-4 py-2 border border-gray-300 text-gray-700 rounded-[4px] hover:bg-gray-50 font-medium text-sm"
+                      onClick={() => window.print()}
+                      className="px-6 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 font-medium text-sm"
                     >
-                      Cancel
+                      Print Challan
                     </button>
                   </div>
                 </div>
-              </div>
-            </div>
-          )
+              </div >
+            );
+          })()
         }
 
         {/* E-Way Bill Modal */}
         {
           showEWayBill && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 w-full max-w-2xl max-h-96 overflow-y-auto">
-                <div className="sticky top-0 bg-white border-b border-gray-200 p-6 flex justify-between items-center">
-                  <h3 className="text-xl font-bold text-gray-900">E-Way Bill Details</h3>
+              <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+                <div className="sticky top-0 bg-white border-b border-gray-200 p-6 flex justify-between items-center z-10">
+                  <h3 className="text-xl font-bold text-gray-900">E-Invoice & E-Way Bill Details</h3>
                   <button
                     onClick={() => setShowEWayBill(false)}
                     className="text-gray-400 hover:text-gray-600 text-2xl"
@@ -4316,18 +5255,209 @@ const InventoryPage: React.FC = () => {
                     ✕
                   </button>
                 </div>
-                <div className="p-6 space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Vehicle Number</label>
-                      <input type="text" value={ewayBillVehicleNo} onChange={(e) => setEwayBillVehicleNo(e.target.value)} placeholder="Vehicle No" className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm" />
+                <div className="p-6 space-y-8">
+                  {ewayValidationEntries.map((entry, index) => (
+                    <div key={entry.id} className="bg-gray-50 p-6 rounded-[4px] relative">
+                      {ewayValidationEntries.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveEwayEntry(entry.id)}
+                          className="absolute top-4 right-4 text-red-500 hover:text-red-700"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      )}
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Left Column */}
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Availability</label>
+                            <div className="flex gap-4">
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  checked={entry.available === 'Yes'}
+                                  onChange={() => handleEwayEntryChange(entry.id, 'available', 'Yes')}
+                                  className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
+                                />
+                                <span className="text-sm text-gray-700">Yes</span>
+                              </label>
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  checked={entry.available === 'No'}
+                                  onChange={() => handleEwayEntryChange(entry.id, 'available', 'No')}
+                                  className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
+                                />
+                                <span className="text-sm text-gray-700">No</span>
+                              </label>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              E-Way Bill No.
+                            </label>
+                            <input
+                              type="text"
+                              value={entry.ewayBillNo}
+                              onChange={(e) => handleEwayEntryChange(entry.id, 'ewayBillNo', e.target.value)}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Date
+                            </label>
+                            <input
+                              type="date"
+                              value={entry.date}
+                              onChange={(e) => handleEwayEntryChange(entry.id, 'date', e.target.value)}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Right Column */}
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Validity Period
+                            </label>
+                            <input
+                              type="text"
+                              value={entry.validityPeriod}
+                              onChange={(e) => handleEwayEntryChange(entry.id, 'validityPeriod', e.target.value)}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Distance
+                            </label>
+                            <input
+                              type="text"
+                              value={entry.distance}
+                              onChange={(e) => handleEwayEntryChange(entry.id, 'distance', e.target.value)}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <h3 className="text-lg font-semibold text-gray-800 mb-4 mt-6">Extended E-way Bill</h3>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Left Column */}
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Extension Date
+                            </label>
+                            <input
+                              type="date"
+                              value={entry.extensionDate}
+                              onChange={(e) => handleEwayEntryChange(entry.id, 'extensionDate', e.target.value)}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Extended EWB No.
+                            </label>
+                            <input
+                              type="text"
+                              value={entry.extendedEwbNo}
+                              onChange={(e) => handleEwayEntryChange(entry.id, 'extendedEwbNo', e.target.value)}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Extension Reason
+                            </label>
+                            <input
+                              type="text"
+                              value={entry.extensionReason}
+                              onChange={(e) => handleEwayEntryChange(entry.id, 'extensionReason', e.target.value)}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              From Place
+                            </label>
+                            <input
+                              type="text"
+                              value={entry.fromPlace}
+                              onChange={(e) => handleEwayEntryChange(entry.id, 'fromPlace', e.target.value)}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Right Column */}
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Remaining Distance
+                            </label>
+                            <input
+                              type="text"
+                              value={entry.remainingDistance}
+                              onChange={(e) => handleEwayEntryChange(entry.id, 'remainingDistance', e.target.value)}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              New Validity
+                            </label>
+                            <input
+                              type="text"
+                              value={entry.newValidity}
+                              onChange={(e) => handleEwayEntryChange(entry.id, 'newValidity', e.target.value)}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Updated Vehicle No.
+                            </label>
+                            <input
+                              type="text"
+                              value={entry.updatedVehicleNo}
+                              onChange={(e) => handleEwayEntryChange(entry.id, 'updatedVehicleNo', e.target.value)}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                            />
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Valid Till</label>
-                      <input type="date" value={ewayBillValidTill} onChange={(e) => setEwayBillValidTill(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm" />
-                    </div>
-                  </div>
+                  ))}
+
                   <div className="flex gap-3 justify-end border-t border-gray-200 pt-4">
+                    <button
+                      type="button"
+                      onClick={handleAddEwayEntry}
+                      className="mr-auto px-4 py-2 bg-blue-50 text-indigo-600 hover:bg-blue-100 rounded-[4px] font-medium flex items-center gap-2 border border-blue-200"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      Add E-way Bill
+                    </button>
+
                     <button
                       onClick={() => setShowEWayBill(false)}
                       className="px-4 py-2 bg-indigo-600 text-white rounded-[4px] hover:bg-indigo-700 font-medium text-sm"
