@@ -75,7 +75,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
     // Populate from AI Extraction
     useEffect(() => {
         if (prefilledData) {
-            console.log('PaymentVoucherSingle received data:', prefilledData);
+            
             // Assuming prefilledData.invoiceDate is YYYY-MM-DD
             if (prefilledData.invoiceDate) {
                 setDate(prefilledData.invoiceDate);
@@ -105,19 +105,19 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
     useEffect(() => {
         const fetchPaymentConfigs = async () => {
             try {
-                console.log('Fetching payment voucher configurations...');
+                
                 const data = await httpClient.get<any[]>('/api/masters/voucher-configurations/?voucher_type=payments');
-                console.log('All payment configs fetched:', data);
+                
 
                 const paymentConfigs = data?.filter(config => config.voucher_type === 'payments') || [];
-                console.log('Filtered payment configs:', paymentConfigs);
+                
 
                 setPaymentVoucherConfigs(paymentConfigs);
                 if (paymentConfigs && paymentConfigs.length === 1) {
                     setSelectedPaymentConfig(paymentConfigs[0].voucher_name);
                 }
             } catch (error) {
-                console.error('Error fetching payment voucher configurations:', error);
+                console.error('Error fetching payment voucher configurations:');
                 setPaymentVoucherConfigs([]);
             }
         };
@@ -245,9 +245,9 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                     }))
                 };
 
-                console.log('Posting Single Payment:', payload);
+                
                 const response = await httpClient.post('/api/vouchers/payment-single/', payload);
-                console.log('Single Payment Response:', response);
+                
                 showSuccess('Single Payment Voucher posted successfully!');
 
                 handleCancel();
@@ -269,15 +269,15 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                         }))
                 };
 
-                console.log('Posting Bulk Payment:', payload);
+                
                 const response = await httpClient.post('/api/vouchers/payment-bulk/', payload);
-                console.log('Bulk Payment Response:', response);
+                
                 showSuccess('Bulk Payment Voucher posted successfully!');
 
                 handleCancel();
             }
         } catch (error) {
-            console.error('Error posting payment voucher:', error);
+            console.error('Error posting payment voucher:');
             showError('Failed to post payment voucher. Please try again.');
 
         }

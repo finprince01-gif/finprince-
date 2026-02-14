@@ -19,7 +19,7 @@ export const useSubscriptionUsage = () => {
             const usage = await apiService.getSubscriptionUsage();
             setSubscriptionUsage(usage);
         } catch (e) {
-            console.error("Failed to fetch subscription usage", e);
+            console.error("Failed to fetch subscription usage");
         } finally {
             setIsLoading(false);
         }

@@ -38,7 +38,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
     // Populate from AI Extraction
     React.useEffect(() => {
         if (prefilledData) {
-            console.log('SalesVoucher received data:', prefilledData);
+            
             setDate(prefilledData.invoiceDate || new Date().toISOString().split('T')[0]);
             setSalesInvoiceNo(prefilledData.invoiceNumber || '');
             setCustomerName(prefilledData.sellerName || ''); // Maps Seller/Party -> Customer Name
@@ -457,7 +457,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
 
             // Reset form or redirect logic here if needed
         } catch (error) {
-            console.error('Failed to save sales voucher:', error);
+            console.error('Failed to save sales voucher:');
             showError('Failed to save voucher. Please check inputs.');
         }
 
@@ -2585,14 +2585,14 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                     onClose={() => setIsIssueSlipModalOpen(false)}
                     onSave={async (data) => {
                         try {
-                            console.log('Creating Issue Slip...', data);
+                            
                             const response = await apiService.createInventoryOperationOutward(data);
-                            console.log('Issue Slip Created:', response);
+                            
                             setOutwardSlipNo(response.outward_slip_no);
                             showSuccess('Issue Slip Created Successfully!');
 
                         } catch (error) {
-                            console.error("Failed to create Issue Slip", error);
+                            console.error("Failed to create Issue Slip");
                             showError("Failed to create Issue Slip. Please check inputs.");
 
                         }

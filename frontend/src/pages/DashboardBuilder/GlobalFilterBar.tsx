@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Filter, X, Calendar, User, ShoppingBag, RotateCcw, ChevronDown, Check } from 'lucide-react';
+import { Filter, X, Calendar, User, Users, RotateCcw, ChevronDown, Check } from 'lucide-react';
 import { useDashboardStore } from '../../store/dashboardStore';
 
 interface GlobalFilterBarProps {
@@ -37,7 +37,7 @@ const GlobalFilterBar: React.FC<GlobalFilterBarProps> = ({ customers, vendors })
     const slicers = [
         { id: 'dateRange', label: 'All Dates', icon: Calendar, options: ['This Month', 'Last Month', 'This Quarter', 'This Year'] },
         { id: 'customer', label: 'All Customers', icon: User, options: customers },
-        { id: 'vendor', label: 'All Vendors', icon: ShoppingBag, options: vendors }
+        { id: 'vendor', label: 'All Vendors', icon: Users, options: vendors }
     ];
 
     return (
@@ -59,8 +59,8 @@ const GlobalFilterBar: React.FC<GlobalFilterBarProps> = ({ customers, vendors })
                             <button
                                 onClick={() => toggleDropdown(f.id)}
                                 className={`flex items-center gap-2.5 px-4 py-1.5 rounded-xl text-[11px] font-bold border-2 transition-all ${(globalFilters as any)[f.id]
-                                        ? 'bg-indigo-50 border-indigo-200 text-indigo-700 shadow-md shadow-indigo-50'
-                                        : 'bg-white border-slate-100 text-slate-500 hover:border-slate-300'
+                                    ? 'bg-indigo-50 border-indigo-200 text-indigo-700 shadow-md shadow-indigo-50'
+                                    : 'bg-white border-slate-100 text-slate-500 hover:border-slate-300'
                                     }`}
                             >
                                 <f.icon size={12} strokeWidth={2.5} />

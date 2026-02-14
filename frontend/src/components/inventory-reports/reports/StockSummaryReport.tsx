@@ -28,7 +28,7 @@ const StockSummaryReport: React.FC = () => {
             const response = await fetchStockSummary(filters);
             setData(response.data || []);
         } catch (error) {
-            console.error('Failed to load stock summary:', error);
+            console.error('Failed to load stock summary:');
             setData([]);
         } finally {
             setLoading(false);

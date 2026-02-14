@@ -40,14 +40,14 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, co
   const displayItems = navItems;
 
   return (
-    <aside className="w-[240px] bg-white border-r border-slate-300 flex flex-col fixed h-full z-40">
+    <aside className="w-[240px] bg-white dark:bg-black border-r border-slate-300 dark:border-slate-800 flex flex-col fixed h-full z-40">
       {/* Brand Section */}
-      <div className="h-[56px] flex items-center px-4 border-b border-slate-300 bg-slate-50/30">
+      <div className="h-[56px] flex items-center px-4 border-b border-slate-300 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/30">
         <div className="flex items-center gap-2.5 overflow-hidden">
           <div className="w-7 h-7 bg-indigo-600 rounded flex-shrink-0 flex items-center justify-center text-white text-[13px] font-bold">
             {companyName?.charAt(0) || 'A'}
           </div>
-          <span className="text-[15px] font-semibold text-slate-800 truncate">
+          <span className="text-[15px] font-semibold text-slate-800 dark:text-slate-100 truncate">
             {companyName || 'Ai Accounting'}
           </span>
         </div>
@@ -62,14 +62,14 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, co
               key={item.name}
               onClick={() => onNavigate(item.name)}
               className={`w-full flex items-center gap-3 px-4 py-[10px] transition-colors relative group ${isActive
-                ? 'bg-indigo-50 text-indigo-700'
-                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                ? 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400'
+                : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900 hover:text-slate-700 dark:hover:text-slate-200'
                 }`}
             >
               {isActive && (
                 <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-indigo-600" />
               )}
-              <div className={`flex-shrink-0 transition-colors ${isActive ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-500'}`}>
+              <div className={`flex-shrink-0 transition-colors ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 group-hover:text-slate-500'}`}>
                 <Icon name={item.icon as any} className="w-[18px] h-[18px]" />
               </div>
               <span className="text-[14px] font-bold leading-5">{item.name}</span>
@@ -79,10 +79,10 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, co
       </nav>
 
       {/* Footer / User Section */}
-      <div className="mt-auto border-t border-slate-300 p-2">
+      <div className="mt-auto border-t border-slate-300 dark:border-slate-800 p-2">
         <button
           onClick={onLogout}
-          className="w-full flex items-center gap-3 px-3 py-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-[4px] transition-colors group"
+          className="w-full flex items-center gap-3 px-3 py-2 text-slate-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-[4px] transition-colors group"
         >
           <div className="flex-shrink-0 text-slate-400 group-hover:text-red-500">
             <Icon name="logout" className="w-[18px] h-[18px]" />
@@ -90,32 +90,32 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, co
           <span className="text-[14px] font-medium leading-none">Logout</span>
         </button>
 
-        <div className="mt-2 p-3 bg-slate-50 border border-slate-300 rounded-[4px]">
+        <div className="mt-2 p-3 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-[4px]">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Active Plan</span>
-            <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">{subscriptionUsage?.plan || 'Loading...'}</span>
+            <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Active Plan</span>
+            <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">{subscriptionUsage?.plan || 'Loading...'}</span>
           </div>
 
           {subscriptionUsage && subscriptionUsage.limit !== 'Unlimited' ? (
             <div className="space-y-1.5">
-              <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+              <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
                 <div
                   className={`h-full transition-all duration-500 ${(subscriptionUsage.used / (subscriptionUsage.limit as number)) > 0.9 ? 'bg-amber-500' : 'bg-indigo-600'
                     }`}
                   style={{ width: `${Math.min(100, (subscriptionUsage.used / (subscriptionUsage.limit as number)) * 100)}%` }}
                 />
               </div>
-              <div className="flex justify-between items-center text-[10px] font-medium text-slate-500">
+              <div className="flex justify-between items-center text-[10px] font-medium text-slate-500 dark:text-slate-400">
                 <span>Usage</span>
                 <span>{subscriptionUsage.used} / {subscriptionUsage.limit}</span>
               </div>
             </div>
           ) : subscriptionUsage?.limit === 'Unlimited' ? (
-            <div className="text-[11px] font-medium text-slate-600 italic">
+            <div className="text-[11px] font-medium text-slate-600 dark:text-slate-400 italic">
               Unlimited Access
             </div>
           ) : (
-            <div className="h-4 bg-slate-100 animate-pulse rounded w-full" />
+            <div className="h-4 bg-slate-100 dark:bg-slate-800 animate-pulse rounded w-full" />
           )}
         </div>
       </div>

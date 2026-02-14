@@ -30,28 +30,29 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, icon, trend, trendLab
     return (
         <div
             onClick={onClick}
-            className={`bg-white rounded-xl border-2 ${theme.border} ${theme.shadow} ${theme.bg} p-6 flex flex-col justify-between hover:shadow-lg hover:scale-[1.02] transition-all duration-300 cursor-default ${className}`}
+            className={`bg-white dark:bg-slate-900 rounded-xl border-2 ${theme.border} dark:border-slate-800 shadow-sm dark:shadow-none ${theme.bg} p-6 flex flex-col justify-between hover:shadow-lg dark:hover:bg-slate-800 transition-all duration-300 cursor-default ${className}`}
         >
             <div className="flex justify-between items-start">
                 <div>
-
-                    <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
-                    <h3 className="text-2xl font-bold text-slate-800 tracking-tight">{value}</h3>
-                    {subValue && <p className="text-[11px] font-semibold text-slate-400 mt-1 uppercase tracking-wider">{subValue}</p>}
+                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">{title}</p>
+                    <h3 className="text-2xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">{value}</h3>
+                    {subValue && <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mt-1 uppercase tracking-wider">{subValue}</p>}
                 </div>
                 {icon && (
-                    <div className={`p-2 rounded-lg ${theme.iconBg}`}>
-                        <Icon name={icon as any} className={`w-5 h-5 ${theme.text}`} />
+                    <div className={`p-2 rounded-lg ${theme.iconBg} dark:bg-slate-800`}>
+                        <Icon name={icon as any} className={`w-5 h-5 ${theme.text} dark:text-indigo-400`} />
                     </div>
                 )}
             </div>
 
             {(trend) && (
                 <div className="flex items-center mt-4">
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${trend.startsWith('+') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${trend.startsWith('+')
+                        ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                        : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'}`}>
                         {trend}
                     </span>
-                    <span className="text-xs text-slate-400 ml-2 font-medium">{trendLabel}</span>
+                    <span className="text-xs text-slate-400 dark:text-slate-500 ml-2 font-medium">{trendLabel}</span>
                 </div>
             )}
         </div>

@@ -5,7 +5,6 @@ import Icon from '../../components/Icon';
 import { useDashboardData } from '../../hooks/useDashboardData';
 import RevenueChart from '../../components/charts/RevenueChart';
 import StatCard from '../../components/StatCard';
-import { useSubscriptionUsage } from '../../hooks/useSubscriptionUsage';
 import { formatCurrency } from '../../utils/formatting';
 import WidgetRenderer from '../DashboardBuilder/WidgetRenderer';
 import { RotateCcw, LayoutDashboard, ChevronRight, TrendingUp, Wallet, Receipt, Users, FileText } from 'lucide-react';
@@ -22,7 +21,6 @@ interface DashboardPageProps {
 
 const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, companyName, vouchers, ledgers, isAdmin = false }) => {
     const [customWidgets, setCustomWidgets] = useState<Widget[]>([]);
-    const { subscriptionUsage, isLimitReached } = useSubscriptionUsage();
 
     const {
         revenueData,
@@ -43,7 +41,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, companyName, 
                     const parsed = JSON.parse(saved);
                     if (Array.isArray(parsed)) setCustomWidgets(parsed);
                 } catch (e) {
-                    console.error("Failed to load dashboard layout", e);
+                    console.error("Failed to load dashboard layout");
                 }
             }
         };
@@ -96,11 +94,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, companyName, 
             </div>
 
             <div className="space-y-1.5 mb-2">
-                <p className="text-sm font-bold text-slate-600">Welcome back, here is what's happening today.</p>
+                <p className="text-sm font-bold text-slate-600 dark:text-slate-400">Welcome back, here is what's happening today.</p>
             </div>
 
             {/* Row 1: The 5 StatCards as per screenshot */}
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-5">
                 <StatCard
                     title="Total Sales"
                     value={formatCurrency(totalSales)}
@@ -129,13 +127,6 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, companyName, 
                     icon="wallet"
                     color="amber"
                 />
-                <StatCard
-                    title="Invoice Usage"
-                    value={`${subscriptionUsage?.used ?? 12}/${subscriptionUsage?.limit ?? 5}`}
-                    icon="document"
-                    color={isLimitReached ? "rose" : "rose"} // Keeping it rose based on screenshot (free limit warning style)
-                    subValue={subscriptionUsage?.plan || "FREE"}
-                />
             </div>
 
             {/* Row 2: Hybrid Content - Revenue Box (BI) + Activity */}
@@ -158,11 +149,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, companyName, 
                             )}
                         </div>
 
-                        <div className="flex-1 relative bg-slate-50/30"
-                            style={{
-                                backgroundImage: 'radial-gradient(#e2e8f0 1px, transparent 1px)',
-                                backgroundSize: '24px 24px'
-                            }}>
+                        <div className="flex-1 relative bg-slate-50/30 dark:bg-slate-900/50 bg-grid-pattern">
 
                             {customWidgets.length > 0 ? (
                                 <div className="absolute inset-0 p-6 overflow-auto custom-scrollbar">
@@ -223,10 +210,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, companyName, 
                         })}
                     </div>
 
-                    <div className="p-6 bg-slate-50/50 border-t border-slate-100">
+                    <div className="p-6 bg-slate-50/50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800">
                         <button
                             onClick={() => onNavigate('Reports')}
-                            className="w-full py-3 text-[10px] font-black uppercase tracking-widest text-indigo-600 border-2 border-dashed border-indigo-100 rounded-xl hover:bg-indigo-50 hover:border-indigo-200 transition-all"
+                            className="w-full py-3 text-[10px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400 border-2 border-dashed border-indigo-100 dark:border-indigo-900 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-950/30 hover:border-indigo-200 transition-all"
                         >
                             View All Transactions
                         </button>

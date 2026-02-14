@@ -212,9 +212,9 @@ export const handleApiError = (error: any, context?: string): void => {
     // Log full error for debugging (only in console, never shown to user)
     if (process.env.NODE_ENV === 'development') {
         console.group('🔴 API Error');
-        console.error('Context:', context || 'Unknown');
-        console.error('User Message:', userMessage);
-        console.error('Full Error:', error);
+        console.error('Context:');
+        console.error('User Message:');
+        console.error('Full Error:');
         console.groupEnd();
     }
 
@@ -261,7 +261,7 @@ if (typeof window !== 'undefined') {
     window.addEventListener('unhandledrejection', (event) => {
         event.preventDefault(); // Prevent default browser error display
 
-        console.error('Unhandled promise rejection:', event.reason);
+        console.error('Unhandled promise rejection:');
 
         // Show sanitized error to user
         handleApiError(event.reason, 'System Error');
@@ -271,7 +271,7 @@ if (typeof window !== 'undefined') {
     window.addEventListener('error', (event) => {
         event.preventDefault(); // Prevent default browser error display
 
-        console.error('Global error:', event.error);
+        console.error('Global error:');
 
         // Only show generic message for global errors
         showError('An unexpected error occurred. Please refresh the page.', 'System Error');

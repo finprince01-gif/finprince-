@@ -146,7 +146,7 @@ const MassUploadModal: React.FC<MassUploadModalProps> = ({ onClose, onComplete, 
                                     }
                                     if (isVoucher(voucher)) allVouchers.push(voucher as Voucher);
                                 } catch (error) {
-                                    console.error('Error processing row:', error);
+                                    console.error('Error processing row:');
                                 }
                             });
                         }
@@ -163,7 +163,7 @@ const MassUploadModal: React.FC<MassUploadModalProps> = ({ onClose, onComplete, 
                     }
                     resolve(allVouchers);
                 } catch (error) {
-                    console.error('Error processing Excel:', error);
+                    console.error('Error processing Excel:');
                     resolve([]);
                 }
             };

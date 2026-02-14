@@ -73,7 +73,7 @@ const UsersAndRolesPage: React.FC<UsersAndRolesPageProps> = ({ onNavigate }) => 
             const data = await apiService.getUsersWithRoles();
             setUsers(data);
         } catch (error) {
-            console.error('Failed to load users:', error);
+            console.error('Failed to load users:');
         } finally {
             setLoadingUsers(false);
         }
@@ -85,7 +85,7 @@ const UsersAndRolesPage: React.FC<UsersAndRolesPageProps> = ({ onNavigate }) => 
             const data = await apiService.getRoles();
             setRoles(data);
         } catch (error) {
-            console.error('Failed to load roles:', error);
+            console.error('Failed to load roles:');
         } finally {
             setLoadingRoles(false);
         }

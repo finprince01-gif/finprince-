@@ -52,7 +52,7 @@ const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
             showSuccess('Service Group already exists!');
             fetchServiceGroups();
         } else {
-            console.error('Error creating service group:', error);
+            console.error('Error creating service group:');
             showError(\`Error creating service group: \${error.message || error}\`);
         }
     }
@@ -107,7 +107,7 @@ const fetchServiceGroups = async () => {
             setApiData(response);
         }
     } catch (error) {
-        console.error('Error fetching service groups:', error);
+        console.error('Error fetching service groups:');
         setApiData([]);
         // ❌ No user feedback on error
     } finally {
@@ -154,7 +154,7 @@ const handleDelete = async (id: number) => {
         showSuccess('Deleted successfully');
         fetchServiceGroups();
     } catch (error) {
-        console.error('Delete error:', error);
+        console.error('Delete error:');
         showError('Failed to delete item');
     }
 };

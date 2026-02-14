@@ -97,7 +97,7 @@ class HttpClient {
                 this.isRefreshing = true;
 
                 try {
-                    console.log('🔄 Access token expired. Refreshing...');
+                    
 
                     // Call backend refresh endpoint
                     // Note: Backend reads refresh token from HTTP-only cookie, 
@@ -120,7 +120,7 @@ class HttpClient {
                     // 4. Update Token Storage
                     if (data.access) {
                         localStorage.setItem('token', data.access);
-                        console.log('✅ Token refreshed successfully');
+                        
                     }
                     if (data.refresh) {
                         localStorage.setItem('refreshToken', data.refresh); // Optional if using cookies

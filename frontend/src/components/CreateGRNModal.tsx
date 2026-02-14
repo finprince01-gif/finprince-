@@ -100,7 +100,7 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
                 setItemsList(itemsResponse || []);
 
             } catch (error) {
-                console.error('Failed to fetch initial data:', error);
+                console.error('Failed to fetch locations:');
             }
         };
         fetchInitialData();
@@ -265,7 +265,7 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
             }))
         };
 
-        console.log('GRN Payload:', JSON.stringify(payload, null, 2));
+        
         onSave(payload);
         onClose();
     };

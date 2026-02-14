@@ -627,7 +627,7 @@ class GSTR1ViewSet(viewsets.ViewSet):
             return FileResponse(output, as_attachment=True, filename=filename, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
         except Exception as e:
-            print(f"ERROR in download_excel: {e}")
+
             import traceback
             traceback.print_exc()
             return Response({'error': str(e)}, status=500)

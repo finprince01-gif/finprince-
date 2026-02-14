@@ -91,8 +91,8 @@ class VendorPOViewSet(viewsets.ModelViewSet):
             
             # Create PO
             try:
-                print(f"=== Creating PO with data: {validated_data}")
-                print(f"=== Items count: {len(items_data)}")
+
+
                 
                 po_id = db.create_purchase_order(
                     tenant_id=tenant_id,
@@ -101,12 +101,12 @@ class VendorPOViewSet(viewsets.ModelViewSet):
                     created_by=request.user.username if hasattr(request.user, 'username') else None
                 )
                 
-                print(f"=== PO created with ID: {po_id}")
+
                 
             except Exception as e:
                 import traceback
-                print(f"=== Error in create_purchase_order:")
-                print(traceback.format_exc())
+
+
                 raise
             
             # Fetch the created PO

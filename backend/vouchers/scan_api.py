@@ -160,5 +160,5 @@ def extract_invoice(request):
         })
 
     except Exception as e:
-        print(f"Error in extract_invoice: {str(e)}")
+
         return JsonResponse({'error': str(e)}, status=500)

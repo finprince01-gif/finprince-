@@ -20,11 +20,11 @@ class CustomJWTAuthentication(JWTAuthentication):
         except AuthenticationFailed as e:
             # If authentication fails (e.g., user not found, invalid token),
             # return None to allow AllowAny views to work
-            print(f"[AUTH FAILED] {e}")
+
             return None
         except Exception as e:
             # Catch any other exceptions and return None
-            print(f"[AUTH ERROR] {e}")
+
             import traceback
             traceback.print_exc()
             return None

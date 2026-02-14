@@ -79,7 +79,7 @@ const PaymentVoucherBulk: React.FC = () => {
         setCashBankLedgers(data);
       }
     } catch (error) {
-      console.error('Error fetching cash/bank ledgers:', error);
+      console.error('Error fetching cash/bank ledgers:');
     }
   };
 
@@ -98,7 +98,7 @@ const PaymentVoucherBulk: React.FC = () => {
         setAllLedgers(data);
       }
     } catch (error) {
-      console.error('Error fetching ledgers:', error);
+      console.error('Error fetching ledgers:');
     }
   };
 

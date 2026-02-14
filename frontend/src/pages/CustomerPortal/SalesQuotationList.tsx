@@ -60,7 +60,7 @@ const SalesQuotationList: React.FC<SalesQuotationListProps> = ({ onCreateQuotati
             }));
             setGeneralQuotations(mappedData);
         } catch (error) {
-            console.error('Error fetching general quotations:', error);
+            console.error('Error fetching general quotations:');
         }
     };
 
@@ -87,7 +87,7 @@ const SalesQuotationList: React.FC<SalesQuotationListProps> = ({ onCreateQuotati
             });
             setSpecificQuotations(mappedData);
         } catch (error) {
-            console.error('Error fetching specific quotations:', error);
+            console.error('Error fetching specific quotations:');
         }
     };
 

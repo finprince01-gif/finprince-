@@ -27,7 +27,7 @@ const PBI_PALETTE = [
 ];
 
 const WidgetRenderer: React.FC<WidgetRendererProps> = ({ widget, data }) => {
-    const { setGlobalFilters, selectedWidgetId, deleteWidget } = useDashboardStore();
+    const { setGlobalFilters, selectedWidgetId, deleteWidget, selectWidget } = useDashboardStore();
     const isSelected = selectedWidgetId === widget.id;
 
     const handleChartClick = (entry: any) => {
@@ -181,7 +181,13 @@ const WidgetRenderer: React.FC<WidgetRendererProps> = ({ widget, data }) => {
     };
 
     return (
-        <div className={`w-full h-full bg-white flex flex-col group transition-all duration-500 rounded-2xl ${isSelected ? 'shadow-[0_25px_60px_rgba(17,141,255,0.2)]' : 'shadow-sm'}`}>
+        <div
+            onClick={(e) => {
+                e.stopPropagation();
+                selectWidget(widget.id);
+            }}
+            className={`w-full h-full bg-white flex flex-col group transition-all duration-500 rounded-2xl ${isSelected ? 'shadow-[0_25px_60px_rgba(17,141,255,0.2)] ring-2 ring-indigo-600' : 'shadow-sm border border-slate-100 hover:border-slate-300'} cursor-pointer`}
+        >
             {/* Power BI Header Refined */}
             <div className="h-11 px-5 flex items-center justify-between border-b border-slate-50 bg-white select-none rounded-t-2xl">
                 <h3 className="text-[10px] font-black text-slate-800 uppercase tracking-[0.2em] truncate flex-1 leading-tight">
