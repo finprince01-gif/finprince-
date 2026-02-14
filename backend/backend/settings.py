@@ -332,3 +332,24 @@ EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True") == "True"
 EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL") or EMAIL_HOST_USER or 'webmaster@localhost'
+
+# ============================================================================
+# DISABLE MIGRATIONS
+# ============================================================================
+MIGRATION_MODULES = {
+    'core': None,
+    'accounting': None,
+    'inventory': None,
+    'vendors': None,
+    'customerportal': None,
+    'payroll': None,
+    'services': None,
+    'rbac': None,
+    'reports': None,
+    'registration': None,
+    'login': None,
+    'masters': None,
+    'settings': None,
+    'vouchers': None,
+    'dashboard': None,
+}

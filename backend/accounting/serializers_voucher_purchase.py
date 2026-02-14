@@ -57,26 +57,20 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):
         ]
 
     def create(self, validated_data):
-        print("-" * 50)
-        print("DEBUG: create called.")
-        print(f"DEBUG: initial_data keys: {self.initial_data.keys()}")
-        if 'supply_inr_details' in self.initial_data:
-             print(f"DEBUG: initial_data['supply_inr_details']: {self.initial_data['supply_inr_details']}")
-        else:
-             print("DEBUG: 'supply_inr_details' NOT in initial_data")
 
-        print("DEBUG: validated_data keys:", validated_data.keys())
-        
+
+
+
         supply_foreign_data = validated_data.pop('supply_foreign_details', None)
         supply_inr_data = validated_data.pop('supply_inr_details', None)
         due_data = validated_data.pop('due_details', None)
         transit_data = validated_data.pop('transit_details', None)
         
-        print(f"DEBUG: supply_inr_data extracted from validated_data: {supply_inr_data}")
+
         
         # FALLBACK: If Validated Token dropped it, check initial_data
         if supply_inr_data is None and 'supply_inr_details' in self.initial_data:
-             print("DEBUG: supply_inr_data missing in validated_data but found in initial_data. Using initial_data.")
+
              supply_inr_data = self.initial_data['supply_inr_details']
 
         supplier_instance = VoucherPurchaseSupplierDetails.objects.create(**validated_data)
@@ -85,7 +79,7 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):
         tenant_id = supplier_instance.tenant_id
 
         if supply_foreign_data is not None:
-            print("DEBUG: Creating supply_foreign_details entry")
+
             VoucherPurchaseSupplyForeignDetails.objects.create(
                 supplier_details=supplier_instance, 
                 tenant_id=tenant_id,
@@ -93,7 +87,7 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):
             )
         
         if supply_inr_data is not None:
-            print("DEBUG: Creating supply_inr_details entry")
+
             # Ensure we only pass valid model fields if using raw data
             valid_fields = {'purchase_order_no', 'purchase_ledger', 'items'}
             filtered_data = {k: v for k, v in supply_inr_data.items() if k in valid_fields}
@@ -103,9 +97,7 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):
                 tenant_id=tenant_id,
                 **filtered_data
             )
-        else:
-            print("DEBUG: skipping supply_inr_details creation because data is None")
-        
+
         if due_data is not None:
             VoucherPurchaseDueDetails.objects.create(
                 supplier_details=supplier_instance, 

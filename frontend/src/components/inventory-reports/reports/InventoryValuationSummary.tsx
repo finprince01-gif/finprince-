@@ -30,7 +30,7 @@ const InventoryValuationSummary: React.FC = () => {
             const response = await fetchInventoryValuationSummary(filters);
             setData(response.data || []);
         } catch (error) {
-            console.error('Failed to load inventory valuation summary:', error);
+            console.error('Failed to load inventory valuation summary:');
             // In production, show error toast/notification
             setData([]);
         } finally {

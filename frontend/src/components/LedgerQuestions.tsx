@@ -51,10 +51,10 @@ export const LedgerQuestions: React.FC<LedgerQuestionsProps> = ({
             setQuestions(fetchedQuestions);
             setAnswers({}); // Reset answers when questions change
 
-            console.log(`Loaded ${fetchedQuestions.length} questions for ${selectedLedgerType}`);
+            
         } catch (err: any) {
             setError(err.message || 'Failed to fetch questions');
-            console.error('Error fetching questions:', err);
+            console.error('Error fetching questions:');
         } finally {
             setLoading(false);
         }

@@ -180,7 +180,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Error downloading Excel:', error);
+      console.error('Error downloading Excel:');
       showError('Failed to download Excel file. Please try again.');
     }
   };
@@ -901,7 +901,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
 
       return { result, totals };
     } catch (error) {
-      console.error('Error calculating trial balance:', error);
+      console.error('Error calculating trial balance:');
       return { result: [], totals: { debit: 0, credit: 0 } };
     }
   }, [reportType, vouchers, ledgers]);
@@ -1823,7 +1823,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
             {currentReport && (
               <div className="space-y-5">
                 {/* Clean Professional Header */}
-                <div className="bg-[#0d9488] rounded-[4px] p-5 shadow-none border border-slate-200-none border border-slate-200">
+                <div className="bg-indigo-600 rounded-[4px] p-5 shadow-none border border-slate-200">
                   <div className="flex items-center justify-between flex-wrap gap-4">
                     <div>
                       <h4 className="text-xl font-semibold text-white">{currentReport.title}</h4>
@@ -1848,7 +1848,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
                     <button
                       onClick={() => setReportView('table')}
                       className={`px-4 py-2 rounded-[4px] text-sm font-medium transition-colors ${reportView === 'table'
-                        ? 'bg-white text-[#0d9488] shadow-none border border-slate-200-none border border-slate-200'
+                        ? 'bg-white text-indigo-600 shadow-none border border-slate-200'
                         : 'text-gray-600 hover:text-gray-900'
                         }`}
                     >
@@ -1862,7 +1862,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
                     <button
                       onClick={() => setReportView('chart')}
                       className={`px-4 py-2 rounded-[4px] text-sm font-medium transition-colors ${reportView === 'chart'
-                        ? 'bg-white text-[#0d9488] shadow-none border border-slate-200-none border border-slate-200'
+                        ? 'bg-white text-indigo-600 shadow-none border border-slate-200'
                         : 'text-gray-600 hover:text-gray-900'
                         }`}
                     >
@@ -1885,7 +1885,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
                     </div>
                     <div className="overflow-auto max-h-[500px]">
                       <table className="w-full">
-                        <thead className="bg-[#0d9488] sticky top-0">
+                        <thead className="bg-indigo-600 sticky top-0">
                           <tr>{Object.keys(currentReport.tableData[0] || {}).map((h, i) => (<th key={i} className="px-4 py-2.5 text-left text-xs font-semibold text-white uppercase">{h}</th>))}</tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">{currentReport.tableData.map((row, ri) => (<tr key={ri} className="hover:bg-gray-50">{Object.values(row).map((c, ci) => (<td key={ci} className="px-4 py-3 text-sm text-gray-700">{c}</td>))}</tr>))}</tbody>
@@ -1902,11 +1902,11 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
                       <div className="h-[400px]">
                         <ResponsiveContainer width="100%" height="100%">
                           {currentReport.chartType === 'pie' ? (
-                            <PieChart><Pie data={currentReport.chartData} cx="50%" cy="50%" innerRadius={60} outerRadius={120} dataKey="value" label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}>{currentReport.chartData.map((_, index) => (<Cell key={`cell-${index}`} fill={index === 0 ? '#0d9488' : index === 1 ? '#14b8a6' : index === 2 ? '#2dd4bf' : index === 3 ? '#5eead4' : '#99f6e4'} />))}</Pie><Tooltip formatter={(value: number) => `₹${value.toLocaleString('en-IN')}`} /></PieChart>
+                            <PieChart><Pie data={currentReport.chartData} cx="50%" cy="50%" innerRadius={60} outerRadius={120} dataKey="value" label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}>{currentReport.chartData.map((_, index) => (<Cell key={`cell-${index}`} fill={index === 0 ? '#4f46e5' : index === 1 ? '#6366f1' : index === 2 ? '#818cf8' : index === 3 ? '#a5b4fc' : '#c7d2fe'} />))}</Pie><Tooltip formatter={(value: number) => `₹${value.toLocaleString('en-IN')}`} /></PieChart>
                           ) : currentReport.chartType === 'area' ? (
-                            <AreaChart data={currentReport.chartData}><CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" /><XAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} /><YAxis tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} /><Tooltip formatter={(value: number) => `₹${value.toLocaleString('en-IN')}`} /><Area type="monotone" dataKey="value" stroke="#0d9488" fill="#0d9488" fillOpacity={0.2} strokeWidth={2} /></AreaChart>
+                            <AreaChart data={currentReport.chartData}><CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" /><XAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} /><YAxis tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} /><Tooltip formatter={(value: number) => `₹${value.toLocaleString('en-IN')}`} /><Area type="monotone" dataKey="value" stroke="#4f46e5" fill="#4f46e5" fillOpacity={0.2} strokeWidth={2} /></AreaChart>
                           ) : (
-                            <BarChart data={currentReport.chartData} barSize={50}><CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" /><XAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} /><YAxis tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} /><Tooltip formatter={(value: number) => `₹${value.toLocaleString('en-IN')}`} cursor={{ fill: 'rgba(13, 148, 136, 0.05)' }} /><Bar dataKey="value" fill="#0d9488" radius={[4, 4, 0, 0]} /></BarChart>
+                            <BarChart data={currentReport.chartData} barSize={50}><CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" /><XAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} /><YAxis tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} /><Tooltip formatter={(value: number) => `₹${value.toLocaleString('en-IN')}`} cursor={{ fill: 'rgba(79, 70, 229, 0.05)' }} /><Bar dataKey="value" fill="#4f46e5" radius={[4, 4, 0, 0]} /></BarChart>
                           )}
                         </ResponsiveContainer>
                       </div>

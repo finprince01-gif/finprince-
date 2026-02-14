@@ -11,10 +11,10 @@ django.setup()
 from core.models import User
 from inventory.models import InventoryMasterGRN
 
-print("--- Users ---")
-for user in User.objects.all():
-    print(f"User: {user.username}, Tenant ID: {user.tenant_id}")
 
-print("\n--- InventoryMasterGRN ---")
+for user in User.objects.all():
+
+
+
 for grn in InventoryMasterGRN.objects.all():
-    print(f"ID: {grn.id}, Name: {grn.name}, Tenant ID: {grn.tenant_id}, Is Active: {grn.is_active}")
+

@@ -276,7 +276,7 @@ const App: React.FC = () => {
       // Remove all tenant cache keys
       tenantKeys.forEach(key => localStorage.removeItem(key));
     } catch (error) {
-      console.warn('Failed to clear tenant cache:', error);
+
     }
   }, []);
 
@@ -329,7 +329,7 @@ const App: React.FC = () => {
       }
 
     } catch (error) {
-      console.error('❌ Failed to load tenant data:', error);
+      console.error('❌ Failed to load tenant data:');
       // Keep cached data on error if available
     } finally {
       setIsDataLoaded(true);
@@ -365,32 +365,34 @@ const App: React.FC = () => {
   useEffect(() => {
     const loadInitialData = async () => {
       try {
-
         const savedCompanyName = localStorage.getItem('companyName');
         const savedTenantId = localStorage.getItem('tenantId');
-
-        // Load permissions - RBAC removed
-        // (Logic removed)
 
         // Set initial company details
         const initialCompanyDetails = { ...defaultCompanyDetails, name: savedCompanyName || 'Your Company Name' };
         setCompanyDetails(initialCompanyDetails);
 
-        // If user is logged in and has a tenant ID, try to load cached data first
         if (isLoggedIn && savedTenantId) {
           // Refresh user plan in background
-          apiService.getSubscriptionUsage().then(usage => {
+          try {
+            const usage = await apiService.getSubscriptionUsage();
             if (usage && usage.plan) {
               localStorage.setItem('userPlan', usage.plan);
             }
-          }).catch(err => console.warn('Failed to refresh user plan on startup:', err));
+          } catch (err) {
+            console.error('Failed to refresh user plan:', err);
+          }
 
           const hasCachedData = loadCachedData(savedTenantId);
 
           if (hasCachedData) {
             // Cached data loaded, now refresh from backend in background
             setIsDataLoaded(true);
-            loadTenantData(savedTenantId).catch(err => console.warn('Background data refresh failed:', err));
+            try {
+              await loadTenantData(savedTenantId);
+            } catch (err) {
+              console.error('Failed to refresh tenant data:', err);
+            }
           } else {
             // No cached data, load from backend
             await loadTenantData(savedTenantId);
@@ -407,7 +409,7 @@ const App: React.FC = () => {
             setRichCustomers(rc);
             setUserTables(ut);
           } catch (e) {
-            console.warn('Failed to load rich AI data', e);
+            console.error('Failed to load rich metadata:', e);
           }
           // Fallback to empty state
           setLedgers([]);
@@ -427,7 +429,7 @@ const App: React.FC = () => {
     };
 
     loadInitialData();
-  }, [isLoggedIn]); // re-run when login state changes
+  }, [isLoggedIn, loadTenantData, loadCachedData]);
 
 
 
@@ -471,7 +473,7 @@ const App: React.FC = () => {
       await loadTenantData(tenantId);
 
     } catch (err) {
-      console.warn('handleLogin: unexpected payload', payload, err);
+
       setIsLoggedIn(true);
     }
   };
@@ -487,7 +489,7 @@ const App: React.FC = () => {
         credentials: 'include' // Send cookies
       });
     } catch (error) {
-      console.warn('Failed to update logout status on server:', error);
+
     }
 
     // Clear authentication data (cookies cleared by server)
@@ -534,7 +536,7 @@ const App: React.FC = () => {
         const statusResponse = await apiService.checkUserStatus();
         if (!statusResponse.isActive) {
           // User has been deactivated
-          console.log('🔒 User account deactivated, showing modal and logging out');
+          
           setShowDeactivationModal(true);
           setTimeout(() => {
             handleLogout();
@@ -544,10 +546,10 @@ const App: React.FC = () => {
       } catch (error: any) {
         // Silently ignore 401 errors (user not authenticated)
         if (error?.message?.includes('401') || error?.message?.includes('Authentication')) {
-          console.log('User not authenticated, skipping status check');
+          
           return;
         }
-        console.warn('Failed to check user status:', error);
+        
         // Don't logout on API errors, just log the warning
       }
     };
@@ -566,14 +568,14 @@ const App: React.FC = () => {
     try {
       const response = await apiService.saveLedger(ledger);
       if (response && response.id) {
-        console.log(`✅ Saved ledger ${ledger.name}`);
+
         setLedgers(prev => [...prev, response].sort((a, b) => a.name.localeCompare(b.name)));
       } else {
         console.error(`Failed to save ledger ${ledger.name}`);
         setLedgers(prev => [...prev, ledger].sort((a, b) => a.name.localeCompare(b.name)));
       }
     } catch (err: any) {
-      console.error(`Error saving ledger ${ledger.name}:`, err);
+      console.error(`Error saving ledger ${ledger.name}:`);
       setLedgers(prev => [...prev, ledger].sort((a, b) => a.name.localeCompare(b.name)));
     }
   }, []);
@@ -586,16 +588,16 @@ const App: React.FC = () => {
       if (ledgerId) {
         const response = await apiService.updateLedger(ledgerId, ledger);
         if (response.success) {
-          console.log(`✅ Updated ledger ${ledgerId}`);
+
           setLedgers(prev => prev.map(l => l.id === ledgerId ? { ...l, ...ledger } : l).sort((a, b) => a.name.localeCompare(b.name)));
         }
       } else {
         // Fallback: update by name if no ID available
-        console.log(`⚠️ Updating ledger by name: ${idOrName}`);
+
         setLedgers(prev => prev.map(l => l.name === idOrName ? { ...l, ...ledger } : l).sort((a, b) => a.name.localeCompare(b.name)));
       }
     } catch (err) {
-      console.error(`Error updating ledger ${idOrName}:`, err);
+      console.error(`Error updating ledger ${idOrName}:`);
       showError('Failed to update ledger. Please try again.');
     }
   }, [ledgers]);
@@ -607,15 +609,15 @@ const App: React.FC = () => {
 
       if (ledgerId) {
         await apiService.deleteLedger(ledgerId);
-        console.log(`✅ Deleted ledger ${ledgerId}`);
+
         setLedgers(prev => prev.filter(l => l.id !== ledgerId));
       } else {
         // Fallback: delete by name if no ID available
-        console.log(`⚠️ Deleting ledger by name: ${idOrName}`);
+
         setLedgers(prev => prev.filter(l => l.name !== idOrName));
       }
     } catch (err) {
-      console.error(`Error deleting ledger ${idOrName}:`, err);
+      console.error(`Error deleting ledger ${idOrName}:`);
       showError('Failed to delete ledger. Please try again.');
     }
   }, [ledgers]);
@@ -624,14 +626,14 @@ const App: React.FC = () => {
     try {
       const response = await apiService.saveLedgerGroup(group);
       if (response && response.id) {
-        console.log(`✅ Saved ledger group ${group.name}`);
+
         setLedgerGroups(prev => [...prev, response].sort((a, b) => a.name.localeCompare(b.name)));
       } else {
         console.error(`Failed to save ledger group ${group.name}`);
         setLedgerGroups(prev => [...prev, group].sort((a, b) => a.name.localeCompare(b.name)));
       }
     } catch (err) {
-      console.error(`Error saving ledger group ${group.name}:`, err);
+      console.error(`Error saving ledger group ${group.name}:`);
       setLedgerGroups(prev => [...prev, group].sort((a, b) => a.name.localeCompare(b.name)));
     }
   }, []);
@@ -643,15 +645,15 @@ const App: React.FC = () => {
       if (groupId) {
         const response = await apiService.updateLedgerGroup(groupId, group);
         if (response.success) {
-          console.log(`✅ Updated ledger group ${groupId}`);
+
           setLedgerGroups(prev => prev.map(g => g.id === groupId ? { ...g, ...group } : g).sort((a, b) => a.name.localeCompare(b.name)));
         }
       } else {
-        console.log(`⚠️ Updating ledger group by name: ${idOrName}`);
+
         setLedgerGroups(prev => prev.map(g => g.name === idOrName ? { ...g, ...group } : g).sort((a, b) => a.name.localeCompare(b.name)));
       }
     } catch (err) {
-      console.error(`Error updating ledger group ${idOrName}:`, err);
+      console.error(`Error updating ledger group ${idOrName}:`);
       showError('Failed to update group. Please try again.');
     }
   }, [ledgerGroups]);
@@ -662,14 +664,14 @@ const App: React.FC = () => {
 
       if (groupId) {
         await apiService.deleteLedgerGroup(groupId);
-        console.log(`✅ Deleted ledger group ${groupId}`);
+
         setLedgerGroups(prev => prev.filter(g => g.id !== groupId));
       } else {
-        console.log(`⚠️ Deleting ledger group by name: ${idOrName}`);
+
         setLedgerGroups(prev => prev.filter(g => g.name !== idOrName));
       }
     } catch (err) {
-      console.error(`Error deleting ledger group ${idOrName}:`, err);
+      console.error(`Error deleting ledger group ${idOrName}:`);
       showError('Failed to delete group. Please try again.');
     }
   }, [ledgerGroups]);
@@ -700,15 +702,15 @@ const App: React.FC = () => {
     if (detailsChanged) setCompanyDetails(newCompanyDetails);
 
     if (saveToMySQL) {
-      console.log('Saving vouchers to backend MySQL...');
+
       try {
         await apiService.saveVouchers(newVouchers);
-        console.log(`✅ Saved ${newVouchers.length} voucher(s) to backend MySQL`);
+
       } catch (err) {
-        console.error(`Error saving vouchers to backend:`, err);
+        console.error(`Error saving vouchers to backend:`);
       }
     } else {
-      console.log('Skipping MySQL save - voucher will be saved when user clicks Save button');
+
     }
 
     setVouchers(prev => [...prev, ...newVouchers].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
@@ -717,9 +719,9 @@ const App: React.FC = () => {
   const handleUpdateVoucher = useCallback(async (updatedVoucher: Voucher) => {
     try {
       await apiService.saveVouchers([updatedVoucher]);
-      console.log(`✅ Updated voucher ${updatedVoucher.id} in backend MySQL`);
+
     } catch (err) {
-      console.error(`Error updating voucher ${updatedVoucher.id} in backend:`, err);
+      console.error(`Error updating voucher ${updatedVoucher.id} in backend:`);
     }
 
     setVouchers(prevVouchers => prevVouchers.map(v => v.id === updatedVoucher.id ? updatedVoucher : v));
@@ -728,15 +730,15 @@ const App: React.FC = () => {
 
   const handleMassUploadComplete = useCallback(async (vouchersToCreate: Voucher[]) => {
     try {
-      console.log('Starting mass upload save...');
+
       const createdVouchers = vouchersToCreate.map(v => ({ ...v, id: v.id || new Date().toISOString() + Math.random() }));
-      console.log('Saving vouchers to backend MySQL...');
+
 
       try {
         await apiService.saveVouchers(createdVouchers);
-        console.log(`✅ Saved ${createdVouchers.length} voucher(s) to backend MySQL`);
+
       } catch (err) {
-        console.error(`Error saving vouchers to backend:`, err);
+        console.error(`Error saving vouchers to backend:`);
       }
 
       setVouchers(prev => [...prev, ...createdVouchers].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
@@ -744,7 +746,7 @@ const App: React.FC = () => {
       setImportSummary({ success: createdVouchers.length, failed: 0 });
       setCurrentPage('MassUploadResult');
     } catch (err) {
-      console.error('Mass upload save error:', err);
+      console.error('Mass upload save error:');
       setError('Failed to save mass uploaded vouchers');
     }
   }, []);
@@ -760,7 +762,7 @@ const App: React.FC = () => {
       // setImportSummary({ success: 1, failed: 0 });
       setCurrentPage('Vouchers');
     } catch (err) {
-      console.error('Invoice upload error:', err);
+      console.error('Invoice upload error:');
       setError(err instanceof Error ? err.message : 'An unknown error occurred during AI extraction.');
     } finally {
       setIsLoading(false);
@@ -772,7 +774,7 @@ const App: React.FC = () => {
 
   // --- AI AGENT ACTION DISPATCHER ---
   const handleAgentAction = async (action: any) => {
-    console.log("🤖 AI Agent Action:", action);
+
     const { tool_use, parameters } = action;
 
     try {
@@ -924,7 +926,7 @@ const App: React.FC = () => {
           return `Unknown action: ${tool_use}`;
       }
     } catch (error: any) {
-      console.error("Action Execution Failed:", error);
+      console.error("Action Execution Failed:");
       return `❌ Action failed: ${error.message || 'Unknown error'}`;
     }
   };
@@ -999,7 +1001,7 @@ const App: React.FC = () => {
             }
           }
         } catch (e) {
-          console.log("No valid tool call found in response", e);
+
         }
         // -------------------------------------
 
@@ -1042,14 +1044,14 @@ const App: React.FC = () => {
 
       // apiService now returns the object (or throws on error)
       if (response) {
-        console.log('✅ Company settings saved');
+
         // Update local state with the details we saved
         // (Response might be snake_case from backend, so safer to keep using 'details' 
         // which matches frontend model, relying on success)
         setCompanyDetails(details);
       }
     } catch (err) {
-      console.error('Error saving company settings:', err);
+      console.error('Error saving company settings:');
     }
   }, []);
 

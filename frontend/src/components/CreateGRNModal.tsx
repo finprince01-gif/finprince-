@@ -51,7 +51,7 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
                 const response = await httpClient.get<Location[]>('/api/inventory/locations/');
                 setLocations(response || []);
             } catch (error) {
-                console.error('Failed to fetch locations:', error);
+                console.error('Failed to fetch locations:');
             }
         };
         fetchLocations();
@@ -116,7 +116,7 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
             }))
         };
 
-        console.log('GRN Payload:', JSON.stringify(payload, null, 2));
+        
         onSave(payload);
         onClose();
     };

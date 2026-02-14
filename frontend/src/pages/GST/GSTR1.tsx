@@ -120,7 +120,7 @@ export default function GSTR1Page() {
                     break;
             }
         } catch (error) {
-            console.error('Failed to fetch GSTR1 data:', error);
+            console.error('Failed to fetch GSTR1 data:');
             // Clear data on error
             switch (activeSubTab) {
                 case 'B2B': setB2bData([]); break;
@@ -153,7 +153,7 @@ export default function GSTR1Page() {
             link.click();
             link.remove();
         } catch (error) {
-            console.error('Download failed', error);
+            console.error('Download failed');
         }
     };
 
@@ -171,7 +171,7 @@ export default function GSTR1Page() {
             link.click();
             link.remove();
         } catch (error) {
-            console.error('Download failed', error);
+            console.error('Download failed');
         }
     };
 

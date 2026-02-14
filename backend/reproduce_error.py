@@ -15,7 +15,7 @@ def test_list_services():
     factory = APIRequestFactory()
     user = User.objects.filter(is_superuser=True).first()
     if not user:
-        print("No user found")
+
         return
 
     view = ServiceViewSet.as_view({'get': 'list'})
@@ -23,8 +23,8 @@ def test_list_services():
     force_authenticate(request, user=user)
     
     response = view(request)
-    print(f"Status: {response.status_code}")
-    print(f"Data: {response.data}")
+
+
 
 if __name__ == "__main__":
     test_list_services()

@@ -75,7 +75,7 @@ const PayrollPage: React.FC = () => {
                 setPayRuns(response);
             }
         } catch (error) {
-            console.error('Error fetching data:', error);
+            console.error('Error fetching data:');
         } finally {
             setIsLoading(false);
         }
@@ -171,7 +171,7 @@ const DashboardContent: React.FC = () => {
                 complianceStatus: 'Up to Date'
             });
         } catch (error) {
-            console.error('Error fetching stats:', error);
+            console.error('Error fetching stats:');
         }
     };
 
@@ -409,7 +409,7 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
             onSuccess();
             onClose();
         } catch (error) {
-            console.error('Error adding employee:', error);
+            console.error('Error adding employee:');
             showError('Failed to add employee. Please check the form data.');
         }
     };
@@ -739,7 +739,7 @@ const ProcessPayRunModal: React.FC<{ onClose: () => void; onSuccess: () => void 
             showSuccess('Pay run created and processed successfully!');
             onSuccess();
         } catch (error) {
-            console.error('Error processing pay run:', error);
+            console.error('Error processing pay run:');
             showError('Failed to process pay run');
         } finally {
             setIsProcessing(false);
@@ -833,7 +833,7 @@ const PayRunsContent: React.FC<{ payRuns: PayRun[]; onRefresh: () => void }> = (
             showSuccess('Pay run processed successfully!');
             onRefresh();
         } catch (error) {
-            console.error('Error processing pay run:', error);
+            console.error('Error processing pay run:');
             showError('Failed to process pay run');
         }
     };
@@ -844,7 +844,7 @@ const PayRunsContent: React.FC<{ payRuns: PayRun[]; onRefresh: () => void }> = (
             showSuccess('Pay run approved successfully!');
             onRefresh();
         } catch (error) {
-            console.error('Error approving pay run:', error);
+            console.error('Error approving pay run:');
             showError('Failed to approve pay run');
         }
     };
@@ -957,7 +957,7 @@ const SalaryTemplatesContent: React.FC = () => {
             const response = await httpClient.get<any[]>(`/api/payroll/salary-templates/?tenant_id=${tenantId}`);
             setTemplates(response);
         } catch (error) {
-            console.error('Error fetching templates:', error);
+            console.error('Error fetching templates:');
         }
     };
 
@@ -1027,7 +1027,7 @@ const CreateTemplateModal: React.FC<{ onClose: () => void; onSuccess: () => void
             showSuccess('Template created successfully!');
             onSuccess();
         } catch (error) {
-            console.error('Error creating template:', error);
+            console.error('Error creating template:');
             showError('Failed to create template');
         }
     };

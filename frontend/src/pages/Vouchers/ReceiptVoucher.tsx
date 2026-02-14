@@ -80,7 +80,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
     // Populate from AI Extraction
     useEffect(() => {
         if (prefilledData) {
-            console.log('ReceiptVoucher received data:', prefilledData);
+            
             if (prefilledData.invoiceDate) {
                 setDate(prefilledData.invoiceDate);
             }
@@ -96,9 +96,9 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
     useEffect(() => {
         const fetchReceiptConfigs = async () => {
             try {
-                console.log('Fetching receipt voucher configurations...');
+                
                 const data = await httpClient.get<any[]>('/api/masters/voucher-configurations/?voucher_type=receipts');
-                console.log('All receipt configs fetched:', data);
+                
 
                 const receiptConfigs = data?.filter(config => config.voucher_type === 'receipts') || [];
 
@@ -107,7 +107,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                     setSelectedReceiptConfig(receiptConfigs[0].voucher_name);
                 }
             } catch (error) {
-                console.error('Error fetching receipt voucher configurations:', error);
+                console.error('Error fetching receipt voucher configurations:');
                 setReceiptVoucherConfigs([]);
             }
         };
@@ -235,9 +235,9 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                     }))
                 };
 
-                console.log('Posting Single Receipt:', payload);
+                
                 const response = await httpClient.post('/api/vouchers/receipt-single/', payload);
-                console.log('Single Receipt Response:', response);
+                
                 showSuccess('Single Receipt Voucher posted successfully!');
 
                 handleCancel();
@@ -259,15 +259,15 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                         }))
                 };
 
-                console.log('Posting Bulk Receipt:', payload);
+                
                 const response = await httpClient.post('/api/vouchers/receipt-bulk/', payload);
-                console.log('Bulk Receipt Response:', response);
+                
                 showSuccess('Bulk Receipt Voucher posted successfully!');
 
                 handleCancel();
             }
         } catch (error) {
-            console.error('Error posting receipt voucher:', error);
+            console.error('Error posting receipt voucher:');
             showError('Failed to post receipt voucher. Please try again.');
 
         }

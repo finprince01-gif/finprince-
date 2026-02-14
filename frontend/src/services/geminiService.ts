@@ -179,7 +179,7 @@ export const extractInvoiceDataWithRetry = async (
  * ```typescript
  * const contextData = JSON.stringify({ vouchers, ledgers, stockItems });
  * const response = await getAgentResponse(contextData, "What are my total sales?");
- * console.log(response.reply); // AI's answer
+ *  // AI's answer
  * ```
  * 
  * @param contextData - JSON string of company data (vouchers, ledgers, etc.)
@@ -290,8 +290,8 @@ export const getAgentResponse = async (
  * USAGE:
  * ```typescript
  * const response = await getGroundedAgentResponse("What is the current GST rate for electronics?");
- * console.log(response.text);    // AI's answer
- * console.log(response.sources); // Array of source URLs
+ *     // AI's answer
+ *  // Array of source URLs
  * ```
  * 
  * @param userQuery - User's question

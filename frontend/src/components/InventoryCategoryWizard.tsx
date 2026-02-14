@@ -326,7 +326,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        console.log('handleSubmit called, isEditing:', isEditing);
+        
 
         if (!selectedNode) {
             showWarning('Please select a category or group.');
@@ -335,7 +335,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
 
         // If we're in edit mode, handle the edit
         if (isEditing && selectedNode.data.id && onEditCategory) {
-            console.log('Processing edit mode update');
+            
 
             try {
                 // Determine if we are updating a Group or Subgroup based on showSubgroup prop
@@ -655,7 +655,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                                             onClick={(e) => {
                                                 e.preventDefault();
                                                 e.stopPropagation();
-                                                console.log('Edit button clicked, setting isEditing to true');
+                                                
                                                 setIsEditing(true);
                                             }}
                                             className="flex-1 py-2.5 px-4 rounded font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm bg-blue-600 text-white hover:bg-blue-700 cursor-pointer focus:ring-blue-500"

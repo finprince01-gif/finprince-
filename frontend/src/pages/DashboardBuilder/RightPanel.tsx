@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useDashboardStore, Widget } from '../../store/dashboardStore';
 import {
-    BarChart3, LineChart, PieChart, Hash, Layout, Database,
-    Settings2, Trash2, ChevronRight, Check, Grid3X3, Palette
+    BarChart, TrendingUp, PieChart, FileText,
+    Settings, Trash2, ChevronRight, Check, LayoutDashboard
 } from 'lucide-react';
 
 const RightPanel: React.FC = () => {
@@ -19,8 +19,8 @@ const RightPanel: React.FC = () => {
     const selectedWidget = widgets.find(w => w.id === selectedWidgetId);
 
     return (
-        <div className="w-[320px] bg-white border-l border-slate-200 flex flex-col h-full shadow-2xl z-40">
-            {/* Power BI Styled Tabs */}
+        <div className="w-[320px] bg-white border-l border-slate-200 flex flex-col h-full shadow-2xl z-40 relative">
+            {/* Nav Tabs */}
             <div className="flex border-b border-slate-100 bg-slate-50/50 p-1">
                 {(['Visuals', 'Data', 'Format'] as const).map(tab => (
                     <button
@@ -31,9 +31,9 @@ const RightPanel: React.FC = () => {
                             : 'text-slate-400 hover:text-slate-600'
                             }`}
                     >
-                        {tab === 'Visuals' && <Layout size={14} strokeWidth={2.5} />}
-                        {tab === 'Data' && <Database size={14} strokeWidth={2.5} />}
-                        {tab === 'Format' && <Settings2 size={14} strokeWidth={2.5} />}
+                        {tab === 'Visuals' && <LayoutDashboard size={14} strokeWidth={2.5} />}
+                        {tab === 'Data' && <FileText size={14} strokeWidth={2.5} />}
+                        {tab === 'Format' && <Settings size={14} strokeWidth={2.5} />}
                         <span className="text-[9px] font-black uppercase tracking-[0.1em] mt-1">{tab}</span>
                     </button>
                 ))}
@@ -48,10 +48,10 @@ const RightPanel: React.FC = () => {
                         </div>
                         <div className="grid grid-cols-4 gap-2">
                             {[
-                                { type: 'line', icon: LineChart },
-                                { type: 'bar', icon: BarChart3 },
-                                { type: 'pie', icon: PieChart },
-                                { type: 'kpi', icon: Hash },
+                                { type: 'line', icon: TrendingUp, label: 'LINE' },
+                                { type: 'bar', icon: BarChart, label: 'BAR' },
+                                { type: 'pie', icon: PieChart, label: 'PIE' },
+                                { type: 'kpi', icon: FileText, label: 'CARD' },
                             ].map(v => (
                                 <button
                                     key={v.type}
@@ -63,10 +63,10 @@ const RightPanel: React.FC = () => {
                                         }
                                     }}
                                     className={`group aspect-square flex items-center justify-center border-2 rounded-xl transition-all active:scale-90 ${selectedWidget?.type === v.type
-                                            ? 'border-indigo-600 bg-indigo-50 shadow-inner'
-                                            : 'border-slate-50 hover:border-indigo-500 hover:bg-indigo-50'
+                                        ? 'border-indigo-600 bg-indigo-50 shadow-inner'
+                                        : 'border-slate-50 hover:border-indigo-500 hover:bg-indigo-50'
                                         }`}
-                                    title={v.type.toUpperCase()}
+                                    title={v.label}
                                 >
                                     <v.icon
                                         size={20}
@@ -83,7 +83,7 @@ const RightPanel: React.FC = () => {
                     <div className="space-y-6">
                         {!selectedWidget ? (
                             <div className="py-20 text-center text-slate-300">
-                                <Database size={40} className="mx-auto mb-4 opacity-20" />
+                                <FileText size={40} className="mx-auto mb-4 opacity-20" />
                                 <p className="text-[10px] font-black uppercase tracking-widest leading-loose">Select a visual to<br />configure data fields</p>
                             </div>
                         ) : (
@@ -104,7 +104,7 @@ const RightPanel: React.FC = () => {
                                         <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                                             {field === 'xField' ? 'Axis / Dimension' : 'Values / Measures'}
                                         </label>
-                                        <div className="space-y-1.5">
+                                        <div className="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar pr-2">
                                             {datasetSchema[selectedWidget.dataset]?.map(f => (
                                                 <button
                                                     key={f}
@@ -146,7 +146,7 @@ const RightPanel: React.FC = () => {
                     <div className="space-y-6">
                         {!selectedWidget ? (
                             <div className="py-20 text-center text-slate-300">
-                                <Settings2 size={40} className="mx-auto mb-4 opacity-20" />
+                                <Settings size={40} className="mx-auto mb-4 opacity-20" />
                                 <p className="text-[10px] font-black uppercase tracking-widest leading-loose">Select a visual to<br />format properties</p>
                             </div>
                         ) : (
@@ -157,13 +157,13 @@ const RightPanel: React.FC = () => {
                                         type="text"
                                         value={selectedWidget.title}
                                         onChange={(e) => updateWidget(selectedWidget.id, { title: e.target.value })}
-                                        className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-700 outline-none focus:border-indigo-500 transition-all"
+                                        className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-700 outline-none focus:border-indigo-500 transition-all font-mono"
                                     />
                                 </div>
 
                                 <div className="space-y-4">
                                     <div className="flex items-center justify-between">
-                                        <span className="text-[11px] font-bold text-slate-700">Show Legend</span>
+                                        <span className="text-[11px] font-bold text-slate-700 uppercase tracking-tight">Show Legend</span>
                                         <button
                                             onClick={() => updateWidget(selectedWidget.id, { properties: { ...selectedWidget.properties, showLegend: !selectedWidget.properties.showLegend } })}
                                             className={`w-10 h-5 rounded-full transition-all flex items-center px-1 ${selectedWidget.properties.showLegend ? 'bg-indigo-600 justify-end' : 'bg-slate-300 justify-start'}`}
@@ -172,7 +172,7 @@ const RightPanel: React.FC = () => {
                                         </button>
                                     </div>
                                     <div className="flex items-center justify-between">
-                                        <span className="text-[11px] font-bold text-slate-700">Gridlines</span>
+                                        <span className="text-[11px] font-bold text-slate-700 uppercase tracking-tight">Gridlines</span>
                                         <button
                                             onClick={() => updateWidget(selectedWidget.id, { properties: { ...selectedWidget.properties, showGridlines: !selectedWidget.properties.showGridlines } })}
                                             className={`w-10 h-5 rounded-full transition-all flex items-center px-1 ${selectedWidget.properties.showGridlines ? 'bg-indigo-600 justify-end' : 'bg-slate-300 justify-start'}`}
@@ -184,7 +184,7 @@ const RightPanel: React.FC = () => {
 
                                 <div className="space-y-3">
                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
-                                        <Palette size={10} /> Color Theme
+                                        <Settings size={10} /> Color Theme
                                     </label>
                                     <div className="grid grid-cols-4 gap-3 text-white">
                                         {['#118DFF', '#12239E', '#E66C37', '#6B007B', '#E044A7', '#744EC2', '#D9B300', '#065A82'].map(c => (
@@ -211,17 +211,18 @@ const RightPanel: React.FC = () => {
                 )}
             </div>
 
-            {/* Bottom Selection Hint */}
+            {/* Selection Status Bar */}
             {selectedWidget && (
-                <div className="p-4 bg-indigo-50 border-t border-indigo-100">
+                <div className="p-4 bg-indigo-600 text-white rounded-t-2xl shadow-2xl animate-in slide-in-from-bottom-5">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
-                            <Hash size={18} className="text-white" />
+                        <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+                            <LayoutDashboard size={14} className="text-white" />
                         </div>
-                        <div>
-                            <p className="text-[10px] font-black text-indigo-900 uppercase tracking-wider">{selectedWidget.type} ACTIVE</p>
-                            <p className="text-[9px] font-bold text-indigo-400 truncate w-40">{selectedWidget.id}</p>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-[9px] font-black uppercase tracking-wider opacity-60">Editing {selectedWidget.type}</p>
+                            <p className="text-[11px] font-bold truncate">{selectedWidget.title}</p>
                         </div>
+                        <ChevronRight size={14} className="opacity-40" />
                     </div>
                 </div>
             )}

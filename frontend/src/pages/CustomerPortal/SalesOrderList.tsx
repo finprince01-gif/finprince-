@@ -62,7 +62,7 @@ const SalesOrderList: React.FC<SalesOrderListProps> = ({ onCreateOrder, onEditOr
 
             setOrders(mappedOrders);
         } catch (error) {
-            console.error('Error fetching sales orders:', error);
+            console.error('Error fetching sales orders:');
         } finally {
             setLoading(false);
         }

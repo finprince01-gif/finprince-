@@ -74,7 +74,7 @@ export const PaymentVoucherEntry: React.FC<PaymentVoucherEntryProps> = ({ onCanc
 
                 setLoading(false);
             } catch (error) {
-                console.error('Error fetching data:', error);
+                console.error('Error fetching data:');
                 setLoading(false);
             }
         };
@@ -126,7 +126,7 @@ export const PaymentVoucherEntry: React.FC<PaymentVoucherEntryProps> = ({ onCanc
                 setTransactions(data.map((t: any) => ({ ...t, payment: 0 })));
             }
         } catch (error) {
-            console.error('Error fetching transactions:', error);
+            console.error('Error fetching transactions:');
             // Mock data for development
             setTransactions([
                 { id: 1, date: '2026-01-05', reference_number: 'INV-001', amount: 5000, payment: 0 },
