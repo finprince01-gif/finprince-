@@ -230,6 +230,13 @@ class ApiService {
     }
 
     /**
+     * Get all POSTED GRNs that are not yet linked to a Purchase Voucher
+     */
+    async getPendingGRNs() {
+        return httpClient.get<any[]>('/api/inventory/operations/pending-grns/');
+    }
+
+    /**
      * Get Purchase Orders for a specific vendor
      * @param vendorName - Vendor name to filter by
      * @param status - Optional status filter (e.g. 'Draft', 'Pending', 'Closed')
