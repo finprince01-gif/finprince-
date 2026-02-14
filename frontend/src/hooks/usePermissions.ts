@@ -61,7 +61,7 @@ export const usePermissions = (): UsePermissionsReturn => {
             setIsSuperuser(response.is_superuser || false);
             setPermissions(response.permissions || {});
         } catch (err: any) {
-            console.error('Failed to load permissions:', err);
+            console.error('Failed to load permissions:');
             setError(err.message || 'Failed to load permissions');
             setPermissions({});
             setIsSuperuser(false);

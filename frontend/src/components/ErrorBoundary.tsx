@@ -79,7 +79,7 @@ export default class ErrorBoundary extends Component<Props, State> {
    * Used for logging error details
    */
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Uncaught error:', error, errorInfo);
+    console.error('Uncaught error:');
   }
 
   render() {

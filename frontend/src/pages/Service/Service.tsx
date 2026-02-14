@@ -232,14 +232,14 @@ const ServicePage: React.FC<ServicePageProps> = () => {
   const fetchServiceGroups = async () => {
     setLoading(true);
     try {
-      console.log('📥 Fetching service groups from /api/services/groups/');
+      
       const response = await httpClient.get<ServiceGroup[]>('/api/services/groups/');
-      console.log('📦 Received service groups response:', response);
+      
       if (response && Array.isArray(response)) {
-        console.log(`✅ Setting ${response.length} service groups to apiData`);
+        
         setApiData(response);
       } else {
-        console.warn('⚠️ Response is not an array:', response);
+        
       }
     } catch (error) {
       handleApiError(error, 'Fetch Service Groups');
@@ -409,7 +409,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
   };
 
   const buildTree = (data: ServiceGroup[]) => {
-    console.log('🌳 Building tree with data:', data);
+    
     const rootMap = new Map<string, TreeNode>();
 
     // Initialize System Categories
@@ -454,12 +454,12 @@ const ServicePage: React.FC<ServicePageProps> = () => {
     });
 
     // Add API data
-    console.log(`📊 Processing ${data.length} items from API`);
+    
     data.forEach(item => {
-      console.log('📝 Processing item:', item);
+      
       // Basic validation: skip empty categories
       if (!item.category || !item.category.trim()) {
-        console.warn('⚠️ Skipping item with empty category:', item);
+        
         return;
       }
 
@@ -467,7 +467,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
       let categoryNode = rootMap.get(categoryKey);
 
       if (!categoryNode) {
-        console.log(`➕ Creating new category node: ${item.category}`);
+        
         categoryNode = {
           id: categoryKey,
           name: item.category,
@@ -486,7 +486,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
         );
 
         if (!groupNode) {
-          console.log(`➕ Creating new group node: ${item.group} under ${item.category}`);
+          
           groupNode = {
             id: groupKey,
             name: item.group,
@@ -508,7 +508,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
             data: { category: item.category, group: item.group, subgroup: item.subgroup }
           };
           if (!groupNode.children.find(child => child.name === item.subgroup)) {
-            console.log(`➕ Creating new subgroup node: ${item.subgroup} under ${item.group}`);
+            
             groupNode.children.push(subgroupNode);
           }
         }
@@ -516,7 +516,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
     });
 
     const treeArray = Array.from(rootMap.values());
-    console.log('✅ Built tree with', treeArray.length, 'root nodes');
+    
     setTreeData(treeArray);
   };
 
@@ -580,16 +580,16 @@ const ServicePage: React.FC<ServicePageProps> = () => {
         };
       }
 
-      console.log('📤 Creating service group with payload:', payload);
+      
       const response = await httpClient.post('/api/services/groups/', payload);
-      console.log('✅ Service group created successfully:', response);
+      
 
       setFormData(prev => ({ ...prev, group: '', subgroup: '' }));
-      console.log('🔄 Fetching updated service groups...');
+      
       await fetchServiceGroups();
       showSuccess('Service Group created successfully!');
     } catch (error: any) {
-      console.error('❌ Error creating service group:', error);
+      console.error('❌ Error creating service group:');
       const errorMsg = error.toString();
       if (
         errorMsg.includes('Duplicate') ||

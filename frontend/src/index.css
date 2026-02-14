@@ -9,6 +9,10 @@
   /* Global Font Application - Outfit for Premium Enterprise ERP */
   html {
     font-family: 'Outfit', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    --chart-grid: #e2e8f0;
+    --chart-text: #64748b;
+    --tooltip-bg: #ffffff;
+    --tooltip-border: #e2e8f0;
   }
 
   body {
@@ -213,34 +217,39 @@
 /* These overrides allow dark mode to work without refactoring the entire codebase to use dark: prefixes */
 
 /* Base overrides */
-.dark html {
+html.dark {
   color-scheme: dark;
+  --chart-grid: #1e293b;
+  --chart-text: #94a3b8;
+  --tooltip-bg: #0f172a;
+  --tooltip-border: #1e293b;
 }
 
-.dark body {
-  @apply bg-slate-950 text-slate-100;
+html.dark body {
+  background-color: #000000 !important;
+  color: #f1f5f9 !important;
 }
 
-.dark #root {
-  @apply bg-slate-950 text-slate-100;
+html.dark #root {
+  background-color: #000000 !important;
+  color: #f1f5f9 !important;
 }
 
 /* Common Backgrounds */
-.dark .bg-white {
-  background-color: #0f172a !important;
-  /* slate-900 - Cards/Containers */
+html.dark .bg-white,
+html.dark .bg-slate-50,
+html.dark .bg-slate-50\/30,
+html.dark .bg-slate-50\/50,
+html.dark .bg-slate-50\/30,
+html.dark .bg-slate-50\/80,
+html.dark .bg-gray-50 {
+  background-color: #020617 !important;
+  /* Very dark slate for cards */
 }
 
-.dark .bg-slate-50,
-.dark .bg-slate-50\/80,
-.dark .bg-slate-50\/30 {
-  background-color: #020617 !important;
-  /* slate-950 - Main Backgrounds */
-}
-
-.dark .bg-gray-50 {
-  background-color: #020617 !important;
-  /* slate-950 */
+html.dark .min-h-screen.bg-slate-50\/50 {
+  background-color: #000000 !important;
+  /* True black for main page backgrounds */
 }
 
 /* Common Text Colors */
@@ -295,33 +304,74 @@
 }
 
 /* Component Specific Overrides */
-.dark .erp-card {
-  @apply bg-slate-900 border-slate-800;
+html.dark .erp-card {
+  background-color: #020617 !important;
+  border-color: #1e293b !important;
+  box-shadow: none !important;
 }
 
-.dark .erp-input {
-  @apply bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 focus:border-indigo-500 focus:ring-indigo-500/20;
+html.dark .erp-input {
+  background-color: #000000 !important;
+  border-color: #334155 !important;
+  color: #f1f5f9 !important;
 }
 
-.dark .erp-label {
-  @apply text-slate-400;
+html.dark .erp-label {
+  color: #94a3b8 !important;
 }
 
-.dark .erp-button-secondary {
-  @apply bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800;
+html.dark .erp-button-secondary {
+  background-color: #0f172a !important;
+  border-color: #1e293b !important;
+  color: #cbd5e1 !important;
 }
 
-.dark .erp-table th {
-  @apply bg-slate-900 border-slate-800 text-slate-400;
+html.dark .erp-table th {
+  background-color: #0f172a !important;
+  border-color: #1e293b !important;
+  color: #94a3b8 !important;
 }
 
-.dark .erp-table td {
-  @apply border-slate-800 text-slate-300;
+html.dark .erp-table td {
+  border-color: #0f172a !important;
+  color: #cbd5e1 !important;
 }
 
-.dark .erp-table tr:hover td {
+html.dark .erp-table tr:hover td {
   background-color: #1e293b !important;
-  /* slate-800 */
+}
+
+/* Global Text Colors */
+html.dark .text-slate-900,
+html.dark .text-slate-800,
+html.dark .text-slate-700,
+html.dark .text-gray-900,
+html.dark .text-gray-800,
+html.dark .text-gray-700 {
+  color: #f1f5f9 !important;
+}
+
+html.dark .text-slate-600,
+html.dark .text-slate-500,
+html.dark .text-gray-600,
+html.dark .text-gray-500 {
+  color: #94a3b8 !important;
+}
+
+/* Borders and Shadows */
+html.dark .border,
+html.dark .border-slate-200,
+html.dark .border-slate-300,
+html.dark .border-gray-200 {
+  border-color: #1e293b !important;
+}
+
+html.dark .shadow-sm,
+html.dark .shadow,
+html.dark .shadow-md,
+html.dark .shadow-lg,
+html.dark .shadow-xl {
+  box-shadow: none !important;
 }
 
 /* Global Input Overrides for Dark Mode */

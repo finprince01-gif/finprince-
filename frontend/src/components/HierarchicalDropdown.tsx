@@ -39,29 +39,29 @@ export const HierarchicalDropdown: React.FC<HierarchicalDropdownProps> = ({ onSe
     useEffect(() => {
         const fetchHierarchy = async () => {
             try {
-                console.log('🔍 Fetching hierarchy data from /api/hierarchy/...');
+                
                 const response = await fetch('http://localhost:8000/api/hierarchy/');
-                console.log('📡 Response status:', response.status);
+                
 
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
 
                 const data = await response.json();
-                console.log('✅ Received data:', data.length, 'rows');
-                console.log('📊 Sample row:', data[0]);
+                
+                
 
                 setHierarchyData(data);
 
                 // Build flattened hierarchy options
                 const flatOptions = buildHierarchyOptions(data);
-                console.log('🎯 Built options:', flatOptions.length, 'options');
-                console.log('📋 Sample option:', flatOptions[0]);
+                
+                
 
                 setOptions(flatOptions);
                 setLoading(false);
             } catch (error) {
-                console.error('❌ Error loading hierarchy:', error);
+                console.error('❌ Error loading hierarchy:');
                 setLoading(false);
             }
         };

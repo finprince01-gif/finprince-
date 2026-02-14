@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { apiService } from '../services/api';
 import { httpClient } from '../services/httpClient';
 import { showWarning } from '../utils/toast';
 
@@ -8,7 +9,13 @@ interface GRNItem {
     itemName: string;
     hsnCode: string;
     uom: string;
-    quantity: string;
+    refQty: string; // PO Qty
+    secondaryQty: string; // Invoice Qty
+    receivedQty: string;
+    acceptedQty: string;
+    rejectedQty: string;
+    shortExcessQty: string;
+    remarks: string;
     boxes: string;
 }
 
@@ -25,37 +32,139 @@ interface CreateGRNModalProps {
 const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
     // Form State
     const [grnNo, setGrnNo] = useState('');
-    const [date, setDate] = useState('');
-    const [time, setTime] = useState('');
+    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+    const [time, setTime] = useState(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
     const [location, setLocation] = useState('');
-    const [purchaseOrderNo, setPurchaseOrderNo] = useState('');
-    const [supplierInvoiceNo, setSupplierInvoiceNo] = useState('');
+
+    // Vendor State
     const [vendorName, setVendorName] = useState('');
     const [branch, setBranch] = useState('');
     const [address, setAddress] = useState('');
     const [gstin, setGstin] = useState('');
+
+    // References State
+    const [purchaseOrderNo, setPurchaseOrderNo] = useState('');
+    const [supplierInvoiceNo, setSupplierInvoiceNo] = useState('');
+
     const [postingNote, setPostingNote] = useState('');
 
-    // Locations State
+    // Data Source State
     const [locations, setLocations] = useState<Location[]>([]);
+    const [vendors, setVendors] = useState<any[]>([]);
+    const [itemsList, setItemsList] = useState<any[]>([]);
+
+    // Dynamic Options State
+    const [branchOptions, setBranchOptions] = useState<any[]>([]);
+    const [poOptions, setPoOptions] = useState<any[]>([]);
+    const [invoiceOptions, setInvoiceOptions] = useState<any[]>([]);
 
     // Items State
     const [items, setItems] = useState<GRNItem[]>([
-        { id: 1, itemCode: '', itemName: '', hsnCode: '', uom: '', quantity: '', boxes: '' }
+        {
+            id: 1,
+            itemCode: '',
+            itemName: '',
+            hsnCode: '',
+            uom: '',
+            refQty: '',
+            secondaryQty: '',
+            receivedQty: '',
+            acceptedQty: '',
+            rejectedQty: '',
+            shortExcessQty: '',
+            remarks: '',
+            boxes: ''
+        }
     ]);
 
-    // Fetch locations on mount
+    // Fetch initial data on mount
     useEffect(() => {
-        const fetchLocations = async () => {
+        const fetchInitialData = async () => {
             try {
-                const response = await httpClient.get<Location[]>('/api/inventory/locations/');
-                setLocations(response || []);
+                // Fetch Next GRN Number
+                const grnNumResponse = await httpClient.get<{ next_grn_no: string }>('/api/inventory/operations/next-grn-number/');
+                if (grnNumResponse && grnNumResponse.next_grn_no) {
+                    setGrnNo(grnNumResponse.next_grn_no);
+                }
+
+                // Fetch Locations
+                const locResponse = await httpClient.get<Location[]>('/api/inventory/locations/');
+                setLocations(locResponse || []);
+
+                // Fetch Vendors (Basic Details)
+                const vendorsResponse = await apiService.getRichVendors();
+                setVendors(vendorsResponse || []);
+
+                // Fetch Items
+                const itemsResponse = await apiService.getStockItems();
+                setItemsList(itemsResponse || []);
+
             } catch (error) {
-                console.error('Failed to fetch locations:', error);
+                console.error('Failed to fetch locations:');
             }
         };
-        fetchLocations();
+        fetchInitialData();
     }, []);
+
+    // Handle Vendor Change
+    const handleVendorChange = async (selectedVendorName: string) => {
+        setVendorName(selectedVendorName);
+
+        // Reset dependent fields
+        setBranch('');
+        setBranchOptions([]);
+        setAddress('');
+        setGstin('');
+        setPurchaseOrderNo('');
+        setPoOptions([]);
+        setSupplierInvoiceNo('');
+        setInvoiceOptions([]);
+
+        const vendor = vendors.find(v => v.vendor_name === selectedVendorName);
+        if (vendor) {
+            try {
+                // Fetch Branches (GST Details)
+                const branchResponse = await apiService.getVendorGSTDetails(vendor.id);
+                setBranchOptions(Array.isArray(branchResponse) ? branchResponse : []);
+
+                // Fetch Purchase Orders
+                const poResponse = await apiService.getVendorPurchaseOrders(selectedVendorName);
+                if (poResponse && poResponse.success && Array.isArray(poResponse.data)) {
+                    setPoOptions(poResponse.data);
+                }
+
+                // Fetch Purchase Invoices
+                const invResponse = await apiService.getVendorPurchaseInvoices(selectedVendorName);
+                if (Array.isArray(invResponse)) {
+                    setInvoiceOptions(invResponse);
+                }
+            } catch (error) {
+                console.error("Error fetching vendor details:", error);
+            }
+        }
+    };
+
+    // Handle Branch Change
+    const handleBranchChange = (selectedBranchName: string) => {
+        setBranch(selectedBranchName);
+        const selectedBranch = branchOptions.find(b =>
+            (b.reference_name || b.trade_name || 'Main') === selectedBranchName
+        );
+
+        if (selectedBranch) {
+            const addressParts = [
+                selectedBranch.address_line_1,
+                selectedBranch.address_line_2,
+                selectedBranch.city,
+                selectedBranch.state,
+                selectedBranch.pincode,
+                selectedBranch.country
+            ].filter(Boolean);
+
+            setAddress(addressParts.join(', '));
+            setGstin(selectedBranch.gstin || '');
+        }
+    };
 
     const handleAddItem = () => {
         const newItem: GRNItem = {
@@ -64,7 +173,13 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
             itemName: '',
             hsnCode: '',
             uom: '',
-            quantity: '',
+            refQty: '',
+            secondaryQty: '',
+            receivedQty: '',
+            acceptedQty: '',
+            rejectedQty: '',
+            shortExcessQty: '',
+            remarks: '',
             boxes: ''
         };
         setItems([...items, newItem]);
@@ -77,94 +192,136 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
     };
 
     const handleItemChange = (id: number, field: keyof GRNItem, value: string) => {
-        setItems(items.map(item => item.id === id ? { ...item, [field]: value } : item));
-    };
+        setItems(items.map(item => {
+            if (item.id !== id) return item;
 
-    const calculateTotalBoxes = () => {
-        return items.reduce((sum, item) => sum + (parseFloat(item.boxes) || 0), 0);
+            const updatedItem = { ...item, [field]: value };
+
+            // Logic for Item Selection
+            if (field === 'itemCode' || field === 'itemName') {
+                const selectedStockItem = itemsList.find(i =>
+                    (field === 'itemCode' ? i.item_code : i.item_name) === value
+                );
+
+                if (selectedStockItem) {
+                    updatedItem.itemCode = selectedStockItem.item_code;
+                    updatedItem.itemName = selectedStockItem.item_name;
+                    updatedItem.hsnCode = selectedStockItem.hsn_sac_code || '';
+                    updatedItem.uom = selectedStockItem.base_unit || '';
+                }
+            }
+
+            // Calculation Logic: Rejected = Received - Accepted
+            if (field === 'receivedQty' || field === 'acceptedQty') {
+                const received = parseFloat(updatedItem.receivedQty) || 0;
+                const accepted = parseFloat(updatedItem.acceptedQty) || 0;
+                updatedItem.rejectedQty = (received - accepted).toString();
+
+                // Short/Excess logic could be added here if needed, comparing with Ref/Sec Qty
+                // But for now keeping it manual or based on inventory logic
+            }
+
+            return updatedItem;
+        }));
     };
 
     const handleSave = () => {
         // Validate required fields
-        if (!grnNo) {
-            showWarning('Please enter GRN No');
-            return;
-        }
+        if (!grnNo) { alert('Please enter GRN No'); return; }
+        if (!vendorName) { alert('Please select a Vendor'); return; }
+        if (!location) { alert('Please select a Location'); return; }
 
-        // Construct payload to match InventoryOperationNewGRNSerializer
+        // Construct payload
         const payload = {
-            grn_type: 'purchases', // purchases or sales_return
+            grn_type: 'purchases',
             grn_no: grnNo,
             date: date || null,
             time: time || null,
-            location_id: location ? parseInt(location) : null, // BigIntegerField, not ForeignKey
-            reference_no: purchaseOrderNo || '', // PO No
+            location_id: location ? parseInt(location) : null,
+
+            vendor_name: vendorName,
+            branch: branch,
+            address: address,
+            gstin: gstin,
+
+            reference_no: purchaseOrderNo, // PO No
             secondary_ref_no: supplierInvoiceNo || '', // Supplier Invoice No
-            vendor_name: vendorName || '',
-            branch: branch || '',
-            address: address || '',
-            gstin: gstin || '',
+
             posting_note: postingNote || '',
             status: 'Posted',
+
             items: items.map(item => ({
                 item_code: item.itemCode || '',
                 item_name: item.itemName || '',
-                hsn_code: item.hsnCode || '',
                 uom: item.uom || '',
-                quantity: parseFloat(item.quantity) || 0,
+                ref_qty: parseFloat(item.refQty) || 0,
+                secondary_qty: parseFloat(item.secondaryQty) || 0,
+                received_qty: parseFloat(item.receivedQty) || 0,
+                accepted_qty: parseFloat(item.acceptedQty) || 0,
+                rejected_qty: parseFloat(item.rejectedQty) || 0,
+                short_excess_qty: parseFloat(item.shortExcessQty) || 0,
+                remarks: item.remarks,
                 no_of_boxes: item.boxes || '0'
             }))
         };
 
-        console.log('GRN Payload:', JSON.stringify(payload, null, 2));
+        
         onSave(payload);
         onClose();
     };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-            <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 w-full max-w-6xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-[4px] shadow-none border border-slate-200 w-full max-w-7xl mx-4 max-h-[90vh] overflow-y-auto flex flex-col">
                 {/* Header */}
-                <div className="px-6 py-4 border-b border-gray-200">
-                    <h3 className="text-xl font-bold text-gray-800">Create GRN (Goods Receipt Note)</h3>
+                <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
+                    <h3 className="text-xl font-bold text-gray-800">GOODS RECEIPT NOTE</h3>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl">✕</button>
                 </div>
 
-                <div className="p-6 space-y-6">
-                    {/* Row 1 */}
+                <div className="p-6 space-y-6 flex-1 overflow-y-auto">
+                    {/* Top Row */}
+                    <div className="mb-4">
+                        <label className="flex items-center gap-2">
+                            <input type="radio" checked readOnly className="text-indigo-600 focus:ring-indigo-500" />
+                            <span className="text-sm font-bold text-gray-700 uppercase">PURCHASES</span>
+                        </label>
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">GRN No</label>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">GRN NO.</label>
                             <input
                                 type="text"
                                 value={grnNo}
                                 onChange={(e) => setGrnNo(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">DATE</label>
                             <input
                                 type="date"
                                 value={date}
                                 onChange={(e) => setDate(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">TIME</label>
                             <input
                                 type="time"
                                 value={time}
                                 onChange={(e) => setTime(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">LOCATION</label>
                             <select
                                 value={location}
                                 onChange={(e) => setLocation(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
                             >
                                 <option value="">Select Location</option>
                                 {locations.map((loc) => (
@@ -176,150 +333,158 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
                         </div>
                     </div>
 
-                    {/* Row 2 */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Vendor Row */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Purchase Order No.</label>
-                            <input
-                                type="text"
-                                value={purchaseOrderNo}
-                                onChange={(e) => setPurchaseOrderNo(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Supplier Invoice No.</label>
-                            <input
-                                type="text"
-                                value={supplierInvoiceNo}
-                                onChange={(e) => setSupplierInvoiceNo(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Vendor Name</label>
-                            <input
-                                type="text"
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">VENDOR NAME</label>
+                            <select
                                 value={vendorName}
-                                onChange={(e) => setVendorName(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                placeholder="Enter Name"
+                                onChange={(e) => handleVendorChange(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            >
+                                <option value="">Select Vendor</option>
+                                {vendors.map((v) => (
+                                    <option key={v.id} value={v.vendor_name}>
+                                        {v.vendor_name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">BRANCH</label>
+                            <select
+                                value={branch}
+                                onChange={(e) => handleBranchChange(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            >
+                                <option value="">Select Branch</option>
+                                {branchOptions.map((b, idx) => (
+                                    <option key={idx} value={b.reference_name || b.trade_name || 'Main'}>
+                                        {b.reference_name || b.trade_name || 'Main'}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Address Row */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">ADDRESS</label>
+                            <textarea
+                                value={address}
+                                readOnly
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none bg-gray-50 resize-none h-[42px]"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">GSTIN NO.</label>
+                            <input
+                                type="text"
+                                value={gstin}
+                                readOnly
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none bg-gray-50"
                             />
                         </div>
                     </div>
 
-                    {/* Row 3 */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Reference Row */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Branch</label>
-                            <input
-                                type="text"
-                                value={branch}
-                                onChange={(e) => setBranch(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                            />
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">PURCHASE ORDER NO.</label>
+                            <select
+                                value={purchaseOrderNo}
+                                onChange={(e) => setPurchaseOrderNo(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            >
+                                <option value="">Select PO</option>
+                                {poOptions.map((po) => (
+                                    <option key={po.id} value={po.po_number}>
+                                        {po.po_number}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-                            <textarea
-                                value={address}
-                                onChange={(e) => setAddress(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
-                                rows={1}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">GSTIN No.</label>
-                            <input
-                                type="text"
-                                value={gstin}
-                                onChange={(e) => setGstin(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                            />
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">SUPPLIER INVOICE NO.</label>
+                            <select
+                                value={supplierInvoiceNo}
+                                onChange={(e) => setSupplierInvoiceNo(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            >
+                                <option value="">Select Invoice</option>
+                                {invoiceOptions.map((inv) => (
+                                    <option key={inv.id} value={inv.voucher_number}>
+                                        {inv.voucher_number}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
                     </div>
 
                     {/* Items Section */}
                     <div>
-                        <div className="flex justify-between items-center mb-2">
-                            <h4 className="text-sm font-medium text-gray-700">Items</h4>
-                            <button
-                                onClick={handleAddItem}
-                                className="text-indigo-600 hover:text-slate-700 text-sm font-medium flex items-center"
-                            >
-                                + Add Item
-                            </button>
-                        </div>
-                        <div className="border border-gray-200 rounded-[4px] overflow-hidden">
-                            <table className="w-full">
+                        <h4 className="text-sm font-bold text-gray-800 uppercase mb-4">ITEMS</h4>
+                        <div className="border border-gray-200 rounded-[4px] overflow-hidden overflow-x-auto">
+                            <table className="w-full min-w-[1000px]">
                                 <thead className="bg-gray-50 border-b border-gray-200">
                                     <tr>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Item Code</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Item Name</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">HSN Code</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">UOM</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Quantity</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">No. of boxes/packs</th>
-                                        <th className="px-4 py-2 text-center text-xs font-medium text-gray-500">Action</th>
+                                        <th className="px-3 py-2 text-left text-xs font-bold text-gray-600">Item Code</th>
+                                        <th className="px-3 py-2 text-left text-xs font-bold text-gray-600 w-48">Item Name</th>
+                                        <th className="px-3 py-2 text-left text-xs font-bold text-gray-600 w-20">UOM</th>
+                                        <th className="px-3 py-2 text-left text-xs font-bold text-gray-600 w-20">PO Qty</th>
+                                        <th className="px-3 py-2 text-left text-xs font-bold text-gray-600 w-20">Inv Qty</th>
+                                        <th className="px-3 py-2 text-left text-xs font-bold text-gray-600 w-20">Received</th>
+                                        <th className="px-3 py-2 text-left text-xs font-bold text-gray-600 w-20">Accepted</th>
+                                        <th className="px-3 py-2 text-left text-xs font-bold text-gray-600 w-20">Rejected</th>
+                                        <th className="px-3 py-2 text-left text-xs font-bold text-gray-600 w-20">Shrt/Excess</th>
+                                        <th className="px-3 py-2 text-left text-xs font-bold text-gray-600">Remarks</th>
+                                        <th className="px-3 py-2 text-center text-xs font-bold text-gray-600 w-10"></th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200">
                                     {items.map((item) => (
                                         <tr key={item.id}>
                                             <td className="p-2">
-                                                <input
-                                                    type="text"
+                                                <select
                                                     value={item.itemCode}
                                                     onChange={(e) => handleItemChange(item.id, 'itemCode', e.target.value)}
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                />
+                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none"
+                                                >
+                                                    <option value="">Select</option>
+                                                    {itemsList.map(i => <option key={i.id} value={i.item_code}>{i.item_code}</option>)}
+                                                </select>
                                             </td>
                                             <td className="p-2">
-                                                <input
-                                                    type="text"
+                                                <select
                                                     value={item.itemName}
                                                     onChange={(e) => handleItemChange(item.id, 'itemName', e.target.value)}
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                />
-                                            </td>
-                                            <td className="p-2">
-                                                <input
-                                                    type="text"
-                                                    value={item.hsnCode}
-                                                    onChange={(e) => handleItemChange(item.id, 'hsnCode', e.target.value)}
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                />
+                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none"
+                                                >
+                                                    <option value="">Select Item</option>
+                                                    {itemsList.map(i => <option key={i.id} value={i.item_name}>{i.item_name}</option>)}
+                                                </select>
                                             </td>
                                             <td className="p-2">
                                                 <input
                                                     type="text"
                                                     value={item.uom}
-                                                    onChange={(e) => handleItemChange(item.id, 'uom', e.target.value)}
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                    readOnly
+                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-xs bg-gray-50"
                                                 />
                                             </td>
-                                            <td className="p-2">
-                                                <input
-                                                    type="number"
-                                                    value={item.quantity}
-                                                    onChange={(e) => handleItemChange(item.id, 'quantity', e.target.value)}
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                />
-                                            </td>
-                                            <td className="p-2">
-                                                <input
-                                                    type="number"
-                                                    value={item.boxes}
-                                                    onChange={(e) => handleItemChange(item.id, 'boxes', e.target.value)}
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                />
-                                            </td>
+                                            <td className="p-2"><input type="number" value={item.refQty} onChange={(e) => handleItemChange(item.id, 'refQty', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-xs" /></td>
+                                            <td className="p-2"><input type="number" value={item.secondaryQty} onChange={(e) => handleItemChange(item.id, 'secondaryQty', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-xs" /></td>
+                                            <td className="p-2"><input type="number" value={item.receivedQty} onChange={(e) => handleItemChange(item.id, 'receivedQty', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-xs" /></td>
+                                            <td className="p-2"><input type="number" value={item.acceptedQty} onChange={(e) => handleItemChange(item.id, 'acceptedQty', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-xs" /></td>
+                                            <td className="p-2"><input type="number" value={item.rejectedQty} readOnly className="w-full px-2 py-1 border border-gray-300 rounded text-xs bg-red-50" /></td>
+                                            <td className="p-2"><input type="number" value={item.shortExcessQty} onChange={(e) => handleItemChange(item.id, 'shortExcessQty', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-xs" /></td>
+                                            <td className="p-2"><input type="text" value={item.remarks} onChange={(e) => handleItemChange(item.id, 'remarks', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-xs" /></td>
                                             <td className="p-2 text-center">
-                                                <button
-                                                    onClick={() => handleRemoveItem(item.id)}
-                                                    className="text-red-500 hover:text-red-700 text-sm font-medium"
-                                                >
-                                                    Remove
+                                                <button onClick={() => handleRemoveItem(item.id)} className="text-red-500 hover:text-red-700">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                                                    </svg>
                                                 </button>
                                             </td>
                                         </tr>
@@ -327,36 +492,34 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
                                 </tbody>
                             </table>
                         </div>
-                        <div className="flex justify-end mt-2 items-center gap-2">
-                            <span className="text-sm font-bold text-gray-700">Total Number of Boxes / Packs:</span>
-                            <div className="w-24 px-2 py-1 border border-gray-300 rounded text-right text-sm font-medium bg-gray-50">
-                                {calculateTotalBoxes()}
-                            </div>
-                        </div>
+                        <button onClick={handleAddItem} className="mt-2 text-indigo-600 hover:text-indigo-800 text-sm font-semibold flex items-center gap-1">
+                            + Add Another Item
+                        </button>
                     </div>
 
                     {/* Posting Note */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Posting Note</label>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">POSTING NOTE</label>
                         <textarea
                             value={postingNote}
                             onChange={(e) => setPostingNote(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none h-24"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 h-20 resize-none"
+                            placeholder="Enter notes here..."
                         />
                     </div>
                 </div>
 
                 {/* Footer */}
-                <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3 bg-gray-50 rounded-b-lg">
+                <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3 bg-gray-50 shrink-0">
                     <button
                         onClick={handleSave}
-                        className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-[4px] transition-colors"
+                        className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-[4px] transition-colors uppercase text-sm"
                     >
                         Save GRN
                     </button>
                     <button
                         onClick={onClose}
-                        className="px-6 py-2 bg-white border border-gray-300 text-gray-700 font-medium rounded-[4px] hover:bg-gray-50 transition-colors"
+                        className="px-6 py-2 bg-white border border-gray-300 text-gray-700 font-medium rounded-[4px] hover:bg-gray-50 transition-colors uppercase text-sm"
                     >
                         Cancel
                     </button>
@@ -367,5 +530,3 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
 };
 
 export default CreateGRNModal;
-
-

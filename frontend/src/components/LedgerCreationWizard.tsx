@@ -158,7 +158,7 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
 
                 setLoading(false);
             } catch (error) {
-                console.error('Error loading data:', error);
+                console.error('Error loading data:');
                 setLoading(false);
             }
         };
@@ -472,7 +472,7 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
                     setTreeData(tree);
                 }
             } catch (error) {
-                console.error('Error refetching data:', error);
+                console.error('Error refetching data:');
             }
         }, 500); // Wait 500ms for database to save
     };

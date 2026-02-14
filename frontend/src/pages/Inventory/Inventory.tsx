@@ -208,7 +208,7 @@ const InventoryPage: React.FC = () => {
       })) : [];
       setGrnSeriesList(mapped);
     } catch (error) {
-      console.error('Error fetching GRN series:', error);
+      console.error('Error fetching GRN series:');
     } finally {
       setLoadingGrnSeries(false);
     }
@@ -231,7 +231,7 @@ const InventoryPage: React.FC = () => {
       })) : [];
       setIssueSlipSeriesList(mapped);
     } catch (error) {
-      console.error('Error fetching Issue Slip series:', error);
+      console.error('Error fetching Issue Slip series:');
     } finally {
       setLoadingIssueSlipSeries(false);
     }
@@ -470,7 +470,7 @@ const InventoryPage: React.FC = () => {
       const response = await httpClient.get<Location[]>('/api/inventory/locations/');
       setLocations(response);
     } catch (error) {
-      console.error('Error fetching locations:', error);
+      console.error('Error fetching locations:');
     } finally {
       setLoadingLocations(false);
     }
@@ -482,7 +482,7 @@ const InventoryPage: React.FC = () => {
       const response = await httpClient.get<Item[]>('/api/inventory/items/');
       setItems(response);
     } catch (error) {
-      console.error('Error fetching items:', error);
+      console.error('Error fetching items:');
     } finally {
       setLoadingItems(false);
     }
@@ -493,7 +493,7 @@ const InventoryPage: React.FC = () => {
       const details = await apiService.getCompanyDetails();
       setCompanyDetails(details);
     } catch (error) {
-      console.error('Error fetching company details:', error);
+      console.error('Error fetching company details:');
     }
   };
 
@@ -502,7 +502,7 @@ const InventoryPage: React.FC = () => {
       const data = await apiService.getRichVendors();
       setVendors(Array.isArray(data) ? data : []);
     } catch (error) {
-      console.error('Error fetching vendors:', error);
+      console.error('Error fetching vendors:');
     }
   };
 
@@ -511,7 +511,7 @@ const InventoryPage: React.FC = () => {
       const data = await apiService.getRichCustomers();
       setCustomers(Array.isArray(data) ? data : []);
     } catch (error) {
-      console.error('Error fetching customers:', error);
+      console.error('Error fetching customers:');
     }
   };
 
@@ -560,7 +560,7 @@ const InventoryPage: React.FC = () => {
       await httpClient.post('/api/inventory/master-categories/', data);
       setCategoryUpdateCount(prev => prev + 1);
     } catch (error) {
-      console.error("Error creating category:", error);
+      console.error("Error creating category:");
       throw error;
     }
   };
@@ -570,7 +570,7 @@ const InventoryPage: React.FC = () => {
       await httpClient.put(`/api/inventory/master-categories/${data.id}/`, data);
       setCategoryUpdateCount(prev => prev + 1);
     } catch (error) {
-      console.error("Error updating category:", error);
+      console.error("Error updating category:");
       throw error;
     }
   };
@@ -580,7 +580,7 @@ const InventoryPage: React.FC = () => {
       await httpClient.delete(`/api/inventory/master-categories/${id}/`);
       setCategoryUpdateCount(prev => prev + 1);
     } catch (error) {
-      console.error("Error deleting category:", error);
+      console.error("Error deleting category:");
       throw error;
     }
   };
@@ -725,7 +725,7 @@ const InventoryPage: React.FC = () => {
         setInventoryItems(mappedItems);
       }
     } catch (error) {
-      console.error('Error fetching inventory items:', error);
+      console.error('Error fetching inventory items:');
     }
   };
 
@@ -873,7 +873,7 @@ const InventoryPage: React.FC = () => {
         is_saleable: editFormData.isSaleable || false
       };
 
-      console.log('Saving item with data:', data);
+      
 
       if (editFormData.id) {
         await httpClient.put(`/api/inventory/items/${editFormData.id}/`, data);
@@ -977,7 +977,7 @@ const InventoryPage: React.FC = () => {
                         })) : [];
                         setVendorAddresses(mapped);
                       } catch (err) {
-                        console.error("Error fetching vendor addresses", err);
+                        console.error("Error fetching vendor addresses");
                         setVendorAddresses([]);
                       }
                     } else {
@@ -1492,7 +1492,7 @@ const InventoryPage: React.FC = () => {
       setShowIssueSlipForm(false);
       // Optional: Reset form fields here if needed
     } catch (error) {
-      console.error('Error saving operation:', error);
+      console.error('Error saving operation:');
       showError('Failed to save operation. Please check your inputs.');
     }
   };
@@ -1853,7 +1853,7 @@ const InventoryPage: React.FC = () => {
       setShowGRNForm(false);
       // Reset logic if needed
     } catch (error) {
-      console.error('Error saving GRN:', error);
+      console.error('Error saving GRN:');
       showError('Failed to save GRN. Please check your inputs.');
     }
   };

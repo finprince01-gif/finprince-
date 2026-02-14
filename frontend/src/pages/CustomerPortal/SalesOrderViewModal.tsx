@@ -20,7 +20,7 @@ const SalesOrderViewModal: React.FC<ViewModalProps> = ({ isOpen, onClose, orderI
                 const data = await httpClient.get(`/api/customerportal/sales-orders/${orderId}/`);
                 setDetails(data);
             } catch (error) {
-                console.error('Error fetching sales order details:', error);
+                console.error('Error fetching sales order details:');
             } finally {
                 setLoading(false);
             }

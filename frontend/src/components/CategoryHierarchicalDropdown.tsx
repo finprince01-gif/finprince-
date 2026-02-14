@@ -104,7 +104,7 @@ const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
                 setCategories([...missingDefaults, ...processed]);
 
             } catch (error) {
-                console.error('Error fetching categories:', error);
+                console.error('Error fetching categories:');
                 // Fallback mock data matching systemCategories
                 const mockCategories: Category[] = systemCategories.map((name, idx) => ({
                     id: idx + 1,

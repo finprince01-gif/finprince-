@@ -14,7 +14,7 @@ export const useDashboardData = (vouchers: Voucher[] = [], ledgers: Ledger[] = [
                 const response = await apiService.getDashboardAnalytics();
                 setData(response);
             } catch (err) {
-                console.error("Failed to fetch dashboard analytics", err);
+                console.error("Failed to fetch dashboard analytics");
                 setError("Failed to load data");
             } finally {
                 setLoading(false);

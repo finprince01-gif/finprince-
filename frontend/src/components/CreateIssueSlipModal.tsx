@@ -56,7 +56,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                 const response = await httpClient.get<Location[]>('/api/inventory/locations/');
                 setLocations(response || []);
             } catch (error) {
-                console.error('Failed to fetch locations:', error);
+                console.error('Failed to fetch locations:');
             }
         };
         fetchLocations();
@@ -119,7 +119,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
             }))
         };
 
-        console.log('Outward Slip Payload:', JSON.stringify(payload, null, 2));
+        
         onSave(payload);
         onClose();
     };

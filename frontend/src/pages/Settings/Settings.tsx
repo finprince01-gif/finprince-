@@ -101,7 +101,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
           }));
         }
       } catch (error) {
-        console.warn('Failed to load company settings:', error);
+        
         // Pre-fill with signup data as fallback
         const signupCompanyName = localStorage.getItem('companyName') || '';
         const signupEmail = localStorage.getItem('signupEmail') || '';

@@ -24,7 +24,7 @@ const SalesQuotationViewModal: React.FC<ViewModalProps> = ({ isOpen, onClose, qu
                 const data = await httpClient.get(endpoint);
                 setDetails(data);
             } catch (error) {
-                console.error('Error fetching quotation details:', error);
+                console.error('Error fetching quotation details:');
             } finally {
                 setLoading(false);
             }

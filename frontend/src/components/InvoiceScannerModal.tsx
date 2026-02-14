@@ -105,7 +105,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose }) =>
                             const cleanJson = result.reply.replace(/```json\n?|\n?```/g, '').trim();
                             parsedData = JSON.parse(cleanJson);
                         } catch (e) {
-                            console.warn("Direct JSON parse failed, trying partial extraction...", e);
+                            
                             // If simple parse fails, try to find the first '[' and last ']'
                             try {
                                 const jsonMatch = result.reply.match(/\[[\s\S]*\]/);
@@ -115,7 +115,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose }) =>
                                     throw new Error("No JSON array found in response");
                                 }
                             } catch (e2) {
-                                console.error("JSON Extraction Error:", e2, result.reply);
+                                console.error("JSON Extraction Error:");
                                 throw new Error("Failed to parse extracted data. Response was not valid JSON.");
                             }
                         }
@@ -132,7 +132,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose }) =>
                         throw new Error("No data received from backend");
                     }
                 } catch (err) {
-                    console.error(`API Failed for ${file.name}:`, err);
+                    console.error(`API Failed for ${file.name}:`);
                     throw err; // Propagate error to main handler
                 }
             }
@@ -155,7 +155,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose }) =>
 
             setExtractedData(enhancedResults);
         } catch (error) {
-            console.error('OCR Global Error:', error);
+            console.error('OCR Global Error:');
             // alert('❌ OCR Failed: ' + (error as Error).message); // Use a more user-friendly message or keep detailed if needed for debug
             showError(`❌ Extraction Failed: ${(error as Error).message}. Please try again.`);
         } finally {

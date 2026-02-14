@@ -157,13 +157,13 @@ class CreateUserView(APIView):
                 
                 # Log successful registration
                 logger.info(f"✅ [{timezone.now()}] New user registered - Tenant: {tenant_uuid} ({pending.company_name}) - User: {user.username}")
-                print(f"\n{'='*80}")
-                print(f"✅ NEW REGISTRATION - {timezone.now()}")
-                print(f"Tenant ID: {tenant_uuid}")
-                print(f"Company: {pending.company_name}")
-                print(f"User: {user.username}")
-                print(f"Phone: {user.phone} (verified)")
-                print(f"{'='*80}\n")
+
+
+
+
+
+
+
                 
                 # Auto-login: Generate JWT tokens for the newly registered user
                 from rest_framework_simplejwt.tokens import RefreshToken

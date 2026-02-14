@@ -27,31 +27,31 @@ const RevenueChart: React.FC<RevenueChartProps> = ({ data, height = 300 }) => {
                             <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                         </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" />
                     <XAxis
                         dataKey="period"
                         axisLine={false}
                         tickLine={false}
-                        tick={{ fontSize: 10, fill: '#64748b' }}
+                        tick={{ fontSize: 10, fill: 'var(--chart-text)' }}
                         dy={10}
                     />
                     <YAxis
                         axisLine={false}
                         tickLine={false}
-                        tick={{ fontSize: 10, fill: '#64748b' }}
+                        tick={{ fontSize: 10, fill: 'var(--chart-text)' }}
                         tickFormatter={(value) => `₹${value / 1000}k`}
                     />
                     <Tooltip
                         contentStyle={{
-                            backgroundColor: '#ffffff',
+                            backgroundColor: 'var(--tooltip-bg)',
                             borderRadius: '12px',
-                            border: '1px solid #e2e8f0',
+                            border: '1px solid var(--tooltip-border)',
                             boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                         }}
                         itemStyle={{ color: '#10b981', fontSize: '12px', fontWeight: 600 }}
                         formatter={(value: number) => [formatCurrency(value), 'Revenue']}
-                        labelStyle={{ color: '#64748b', fontSize: '11px', marginBottom: '4px' }}
-                        cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '4 4' }}
+                        labelStyle={{ color: 'var(--chart-text)', fontSize: '11px', marginBottom: '4px' }}
+                        cursor={{ stroke: 'var(--chart-grid)', strokeWidth: 1, strokeDasharray: '4 4' }}
                     />
                     <Area
                         type="monotone"

@@ -114,7 +114,7 @@ class MasterLedgerSerializer(TenantModelSerializerMixin, serializers.ModelSerial
             
         except Exception as e:
             # If any error, return 0
-            print(f"ERROR getting balance for {obj.name}: {e}")
+
             import traceback
             traceback.print_exc()
             return 0.0
@@ -123,36 +123,36 @@ class MasterLedgerSerializer(TenantModelSerializerMixin, serializers.ModelSerial
     def create(self, validated_data):
         # Extract question answers (mapped from 'question_answers' to 'additional_data' via source)
         question_answers = validated_data.get('additional_data', {})
-        print(f"DEBUG: MasterLedger Create - Answers: {question_answers}")
-        print(f"DEBUG: Type of question_answers: {type(question_answers)}")
-        print(f"DEBUG: Keys in question_answers: {list(question_answers.keys()) if isinstance(question_answers, dict) else 'NOT A DICT'}")
+
+
+
         
         # Create the ledger first
         instance = super().create(validated_data)
-        print(f"DEBUG: Created ledger with ID: {instance.id}, Code: {instance.code}")
+
         
         # Save answers to Answer table
         if question_answers and isinstance(question_answers, dict):
             tenant_id = instance.tenant_id
-            print(f"DEBUG: Processing {len(question_answers)} question answers for tenant {tenant_id}")
+
             
             for q_id, ans_text in question_answers.items():
-                print(f"DEBUG: Processing Q_ID: {q_id} (type: {type(q_id)}), Answer: {ans_text}")
+
                 
                 if not ans_text:
-                    print(f"DEBUG: Skipping empty answer for Q_ID: {q_id}")
+
                     continue
                     
                 try:
                     # Frontend keys are expected to be Question IDs (strings)
-                    print(f"DEBUG: Looking up Question with ID: {q_id}")
+
                     question_obj = Question.objects.get(id=q_id)
-                    print(f"DEBUG: Found question: {question_obj.question[:50]}...")
+
                     
                     # Refresh to ensure code is populated if assigned by signals
                     if not instance.code:
                         instance.refresh_from_db()
-                        print(f"DEBUG: Refreshed ledger code: {instance.code}")
+
                         
                     Answer.objects.create(
                         ledger_code=instance.code,
@@ -162,23 +162,19 @@ class MasterLedgerSerializer(TenantModelSerializerMixin, serializers.ModelSerial
                         answer=ans_text,
                         tenant_id=tenant_id
                     )
-                    print(f"✅ DEBUG: Successfully saved Answer for Q:{q_id} Ledger:{instance.id}")
+
                     
                 except Question.DoesNotExist:
-                    print(f"❌ DEBUG: Question with ID {q_id} does not exist in database!")
+                    pass
                 except Exception as e:
-                    print(f"❌ DEBUG: Failed to save answer for Q:{q_id}: {type(e).__name__}: {str(e)}")
                     import traceback
                     traceback.print_exc()
-                    
-        else:
-            print(f"DEBUG: No question answers to save (empty or not a dict)")
                     
         return instance
 
     def update(self, instance, validated_data):
         question_answers = validated_data.get('additional_data', {})
-        print(f"DEBUG: MasterLedger Update - Answers: {question_answers}")
+
         
         # Update Master Ledger fields
         instance = super().update(instance, validated_data)
@@ -201,7 +197,7 @@ class MasterLedgerSerializer(TenantModelSerializerMixin, serializers.ModelSerial
                         }
                     )
                 except Exception as e:
-                    print(f"DEBUG: Failed to update answer: {e}")
+
                     pass
         return instance
 

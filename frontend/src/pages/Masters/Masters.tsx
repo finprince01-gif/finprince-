@@ -273,10 +273,10 @@ const MastersPage: React.FC<MastersPageProps> = ({
           updateData.inventoryType = inventoryType;
           updateData.inventoryValuationMethod = inventoryValuationMethod;
         }
-        console.log('Updating ledger:', identifier, updateData);
+        
         onUpdateLedger(identifier, updateData);
       } else {
-        console.warn('No update handler available');
+        
       }
       setIsEditMode(false);
       setSelectedLedger(null);
@@ -359,7 +359,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
           newLedger.inventoryType = inventoryType;
           newLedger.inventoryValuationMethod = inventoryValuationMethod;
         }
-        console.log('Creating new ledger:', newLedger);
+        
         onAddLedger(newLedger);
       }
     }
@@ -393,7 +393,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
       return;
     }
 
-    console.log('Editing ledger:', selectedLedger);
+    
     setLedgerName(selectedLedger.name);
     setLedgerGroup(selectedLedger.group);
 
@@ -467,12 +467,12 @@ const MastersPage: React.FC<MastersPageProps> = ({
     }
 
 
-    console.log('Deleting ledger:', selectedLedger);
+    
 
     if (onDeleteLedger) {
       try {
         const identifier = selectedLedger.id || selectedLedger.name;
-        console.log('Deleting with identifier:', identifier);
+        
         onDeleteLedger(identifier);
         setSelectedLedger(null);
         // Clear form if we were editing this ledger
@@ -487,7 +487,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
       }
 
     } else {
-      console.warn('Cannot delete ledger: missing delete handler');
+      
       showError('Delete function is not available.');
     }
 
@@ -536,14 +536,14 @@ const MastersPage: React.FC<MastersPageProps> = ({
     if (isEditModeGroup && selectedGroup) {
       if (onUpdateLedgerGroup) {
         const identifier = selectedGroup.id || selectedGroup.name;
-        console.log('Updating group:', identifier, { name: trimmedGroupName, under: groupUnder });
+        
         onUpdateLedgerGroup(identifier as number, { name: trimmedGroupName, under: groupUnder });
       }
       setIsEditModeGroup(false);
       setSelectedGroup(null);
     } else {
       // Create new group
-      console.log('Creating new group:', { name: trimmedGroupName, under: groupUnder });
+      
       onAddLedgerGroup({ name: trimmedGroupName, under: groupUnder });
     }
     // Reset form
@@ -557,7 +557,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
       return;
     }
 
-    console.log('Editing group:', selectedGroup);
+    
     setGroupName(selectedGroup.name);
     setGroupUnder(selectedGroup.under);
     setIsEditModeGroup(true);
@@ -577,7 +577,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
     }
 
 
-    console.log('Deleting group:', selectedGroup);
+    
 
     if (onDeleteLedgerGroup) {
       try {
@@ -595,7 +595,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
       }
 
     } else {
-      console.warn('Cannot delete group: missing delete handler');
+      
       showError('Delete function is not available.');
     }
 
@@ -1511,7 +1511,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                         value={group.name}
                         checked={isSelected}
                         onChange={() => {
-                          console.log('Selected group:', group);
+                          
                           setSelectedGroup(group);
                         }}
                         className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
@@ -1521,7 +1521,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                     <td
                       className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 cursor-pointer"
                       onClick={() => {
-                        console.log('Name cell clicked, selecting:', group);
+                        
                         setSelectedGroup(group);
                       }}
                     >
@@ -1597,7 +1597,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
     // voucherButtons is now defined at top level
 
     const handleVoucherClick = (voucherId: string) => {
-      console.log(`Clicked voucher: ${voucherId} `);
+      
       setSelectedVoucher(voucherId);
       // TODO: Add navigation or action logic here
     };

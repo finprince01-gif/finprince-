@@ -359,13 +359,13 @@ const CustomerContent: React.FC = () => {
     const fetchStockItems = async () => {
         try {
             const response = await httpClient.get<any[]>('/api/inventory/items/');
-            console.log('Raw inventory items response:', response);
+            
             const mappedItems = response.map(item => ({
                 code: item.item_code,
                 name: item.item_name,
                 uom: item.uom || ''
             }));
-            console.log('Mapped stock items with UOM:', mappedItems);
+            
             setStockItems(mappedItems);
         } catch (error) {
             handleApiError(error, 'Fetch Stock Items');
@@ -628,10 +628,10 @@ const CustomerContent: React.FC = () => {
             };
 
             // DEBUG LOGGING
-            console.log('='.repeat(80));
-            console.log('CUSTOMER SAVE - FRONTEND');
-            console.log('='.repeat(80));
-            console.log('Full Payload:', payload);
+            
+            
+            
+            
             console.log('Terms & Conditions:', {
                 credit_period: payload.credit_period,
                 credit_terms: payload.credit_terms,
@@ -641,20 +641,20 @@ const CustomerContent: React.FC = () => {
                 force_majeure: payload.force_majeure,
                 dispute_terms: payload.dispute_terms
             });
-            console.log('='.repeat(80));
+            
 
             let response;
             if (createdCustomerId) {
                 // Update existing customer
-                console.log('Updating existing customer:', createdCustomerId);
+                
                 response = await httpClient.patch(`/api/customerportal/customer-master/${createdCustomerId}/`, payload);
                 await fetchCustomers(); // Refresh the list
                 if (options.exit) showSuccess('Customer updated successfully!');
             } else {
                 // Create new customer
-                console.log('Creating new customer...');
+                
                 response = await httpClient.post('/api/customerportal/customer-master/', payload);
-                console.log('Customer created! Response:', response);
+                
                 setCreatedCustomerId(response.id);
                 await fetchCustomers(); // Refresh the list
                 if (options.exit) showSuccess('Customer created successfully!');
@@ -713,7 +713,7 @@ const CustomerContent: React.FC = () => {
     };
 
     const handleProductRowChange = (id: number, field: string, value: string) => {
-        console.log('handleProductRowChange called:', { id, field, value });
+        
         setProductRows(prev => prev.map(row => {
             if (row.id === id) {
                 const updatedRow = { ...row, [field]: value };
@@ -721,27 +721,27 @@ const CustomerContent: React.FC = () => {
                 if (field === 'itemCode') {
                     // When Item Code is selected, fetch and populate Item Name and UOM
                     const item = stockItems.find(i => i.code === value);
-                    console.log('Found item by code:', item);
+                    
                     if (item) {
                         updatedRow.itemName = item.name;
                         updatedRow.uom = item.uom;
-                        console.log('Auto-populated UOM:', item.uom);
+                        
                     } else {
                         updatedRow.itemName = '';
                     }
                 } else if (field === 'itemName') {
                     // When Item Name is selected, fetch and populate Item Code and UOM
                     const item = stockItems.find(i => i.name === value);
-                    console.log('Found item by name:', item);
+                    
                     if (item) {
                         updatedRow.itemCode = item.code;
                         updatedRow.uom = item.uom;
-                        console.log('Auto-populated UOM:', item.uom);
+                        
                     } else {
                         updatedRow.itemCode = '';
                     }
                 }
-                console.log('Updated row:', updatedRow);
+                
                 return updatedRow;
             }
             return row;
@@ -2970,7 +2970,7 @@ const LongTermContractsContent: React.FC = () => {
             const response = await httpClient.get('/api/customerportal/customer-master/');
             setCustomers((response as any) || []);
         } catch (error) {
-            console.error('Error fetching customers:', error);
+            console.error('Error fetching customers:');
             setCustomers([]);
         }
     };
@@ -2980,7 +2980,7 @@ const LongTermContractsContent: React.FC = () => {
             const response = await httpClient.get('/api/customerportal/long-term-contracts/');
             setContracts((response as any) || []);
         } catch (error) {
-            console.error('Error fetching contracts:', error);
+            console.error('Error fetching contracts:');
             setContracts([]);
         }
     };
@@ -3077,16 +3077,16 @@ const LongTermContractsContent: React.FC = () => {
                 }
             };
 
-            console.log('Saving contract:', contractData);
+            
 
             let response;
             if (isEditing && editingId) {
                 response = await httpClient.put(`/api/customerportal/long-term-contracts/${editingId}/`, contractData);
-                console.log('Contract updated successfully:', (response as any).data);
+                
                 showSuccess('Contract Updated Successfully!');
             } else {
                 response = await httpClient.post('/api/customerportal/long-term-contracts/', contractData);
-                console.log('Contract created successfully:', (response as any).data);
+                
                 showSuccess('Contract Created Successfully!');
             }
 
@@ -3094,7 +3094,7 @@ const LongTermContractsContent: React.FC = () => {
             resetForm();
             setView('list');
         } catch (error: any) {
-            console.error('Error saving contract:', error);
+            console.error('Error saving contract:');
             const errorMessage = error.response?.data?.error || error.message || `Failed to ${isEditing ? 'update' : 'create'} contract`;
             showError(`Error: ${errorMessage}`);
         } finally {
@@ -3248,7 +3248,7 @@ const LongTermContractsContent: React.FC = () => {
                                                                 setFilteredBranches([]);
                                                             }
                                                         } catch (error) {
-                                                            console.error('Error fetching customer branches:', error);
+                                                            console.error('Error fetching customer branches:');
                                                             setFilteredBranches([]);
                                                         } finally {
                                                             setBranchLoading(false);

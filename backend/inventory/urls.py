@@ -14,7 +14,8 @@ from .views import (
     InventoryOperationConsumptionViewSet,
     InventoryOperationScrapViewSet,
     InventoryOperationOutwardViewSet,
-    InventoryOperationNewGRNViewSet
+    InventoryOperationNewGRNViewSet,
+    PendingGRNListView
 )
 
 router = DefaultRouter()
@@ -38,4 +39,5 @@ router.register('operations/new-grn', InventoryOperationNewGRNViewSet, basename=
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('operations/pending-grns/', PendingGRNListView.as_view(), name='pending-grns-list'),
 ]

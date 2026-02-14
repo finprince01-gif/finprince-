@@ -1,4 +1,4 @@
-﻿// Vendor Portal - Master Configuration
+// Vendor Portal - Master Configuration
 import React, { useState, useEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -440,7 +440,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
     const handleSubmitGST = (e: React.FormEvent) => {
         e.preventDefault();
-        console.log('GST Details Submitted:', gstRecords);
+        
         setActiveMasterSubTab('Products/Services');
     };
 
@@ -569,9 +569,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
     const handleSubmitPO = async () => {
         try {
-            console.log('=== Creating Purchase Order ===');
-            console.log('PO Form:', createPOForm);
-            console.log('PO Items:', poItems);
+            
+            
+            
 
             // Prepare items data
             const items = poItems.map(item => ({
@@ -609,12 +609,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 items: items
             };
 
-            console.log('Payload:', payload);
+            
 
             // Send to API
             const response = await httpClient.post('/api/vendors/purchase-orders/', payload);
 
-            console.log('✅ PO created successfully:', response);
+            
 
             const poNumber = (response as any)?.data?.data?.po_number || (response as any)?.data?.po_number || 'Generated';
             showSuccess(`Purchase Order created successfully! PO Number: ${poNumber}`);
@@ -677,7 +677,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
     const handleSavePODetails = () => {
         // Handle save logic here
-        console.log('Saving PO:', selectedPO);
+        
 
         // Update the purchaseOrders list with the modified PO
         setPurchaseOrders(purchaseOrders.map(po => po.id === selectedPO.id ? selectedPO : po));
@@ -724,7 +724,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         // Remove the PO from the list (or update status to 'Cancelled')
         setPurchaseOrders(purchaseOrders.filter(po => po.id !== selectedPO.id));
 
-        console.log(`PO ${selectedPO.poNumber} cancelled. Reason: ${cancelReason}`);
+        
 
         // Close both modals and reset state
         setShowCancelPOModal(false);
@@ -877,10 +877,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     }
 
     const vendorAgingTableData: VendorAgingData[] = [
-        { id: 1, vendorCode: 'VEN-001', vendorName: 'Alpha Raw Materials', amount0to45: '₹ 45,000', amount45to90: '-', amount6m: '-', amount1yr: '-', status: 'Pending' },
-        { id: 2, vendorCode: 'VEN-005', vendorName: 'Beta Supplies', amount0to45: '₹ 12,500', amount45to90: '-', amount6m: '-', amount1yr: '-', status: 'Pending' },
-        { id: 3, vendorCode: 'VEN-012', vendorName: 'Gamma Corp', amount0to45: '₹ 78,000', amount45to90: '-', amount6m: '-', amount1yr: '-', status: 'Overdue' },
-        { id: 4, vendorCode: 'VEN-003', vendorName: 'Delta Industries', amount0to45: '-', amount45to90: '₹ 1,20,000', amount6m: '-', amount1yr: '-', status: 'Pending' },
+        { id: 1, vendorCode: 'VEN-001', vendorName: 'Alpha Raw Materials', amount0to45: '? 45,000', amount45to90: '-', amount6m: '-', amount1yr: '-', status: 'Pending' },
+        { id: 2, vendorCode: 'VEN-005', vendorName: 'Beta Supplies', amount0to45: '? 12,500', amount45to90: '-', amount6m: '-', amount1yr: '-', status: 'Pending' },
+        { id: 3, vendorCode: 'VEN-012', vendorName: 'Gamma Corp', amount0to45: '? 78,000', amount45to90: '-', amount6m: '-', amount1yr: '-', status: 'Overdue' },
+        { id: 4, vendorCode: 'VEN-003', vendorName: 'Delta Industries', amount0to45: '-', amount45to90: '? 1,20,000', amount6m: '-', amount1yr: '-', status: 'Pending' },
     ];
 
     // Keep the old structure for backward compatibility with other parts
@@ -889,16 +889,16 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             id: '0-90',
             label: '0 - 90 days',
             items: [
-                { id: 1, vendorCode: 'VEN-001', vendorName: 'Alpha Raw Materials', amount: '₹ 45,000', status: 'Pending' },
-                { id: 2, vendorCode: 'VEN-005', vendorName: 'Beta Supplies', amount: '₹ 12,500', status: 'Pending' },
-                { id: 3, vendorCode: 'VEN-012', vendorName: 'Gamma Corp', amount: '₹ 78,000', status: 'Overdue' },
+                { id: 1, vendorCode: 'VEN-001', vendorName: 'Alpha Raw Materials', amount: '? 45,000', status: 'Pending' },
+                { id: 2, vendorCode: 'VEN-005', vendorName: 'Beta Supplies', amount: '? 12,500', status: 'Pending' },
+                { id: 3, vendorCode: 'VEN-012', vendorName: 'Gamma Corp', amount: '? 78,000', status: 'Overdue' },
             ]
         },
         {
             id: '90-180',
             label: '90 days - 6 months',
             items: [
-                { id: 4, vendorCode: 'VEN-003', vendorName: 'Delta Industries', amount: '₹ 1,20,000', status: 'Pending' },
+                { id: 4, vendorCode: 'VEN-003', vendorName: 'Delta Industries', amount: '? 1,20,000', status: 'Pending' },
             ]
         },
         { id: '180-365', label: '6 months - 1 year', items: [] },
@@ -930,18 +930,18 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     }
 
     const [paymentBills, setPaymentBills] = useState<PaymentBill[]>([
-        { id: 1, date: '2023-11-15', vendorReferenceName: 'Alpha Raw Materials', voucherNo: 'V-001', supplierInvoiceNo: 'INV-2023-001', amount: '₹ 45,000', status: 'Pending', category: 'Raw Material', actionLog: [] },
-        { id: 2, date: '2023-11-10', vendorReferenceName: 'Beta Supplies', voucherNo: 'V-002', supplierInvoiceNo: 'INV-2023-002', amount: '₹ 12,500', status: 'Pending', category: 'Raw Material', actionLog: [] },
+        { id: 1, date: '2023-11-15', vendorReferenceName: 'Alpha Raw Materials', voucherNo: 'V-001', supplierInvoiceNo: 'INV-2023-001', amount: '? 45,000', status: 'Pending', category: 'Raw Material', actionLog: [] },
+        { id: 2, date: '2023-11-10', vendorReferenceName: 'Beta Supplies', voucherNo: 'V-002', supplierInvoiceNo: 'INV-2023-002', amount: '? 12,500', status: 'Pending', category: 'Raw Material', actionLog: [] },
         {
-            id: 3, date: '2023-11-05', vendorReferenceName: 'Gamma Corp', voucherNo: 'V-003', supplierInvoiceNo: 'INV-2023-003', amount: '₹ 78,000', status: 'Approved', category: 'Services',
+            id: 3, date: '2023-11-05', vendorReferenceName: 'Gamma Corp', voucherNo: 'V-003', supplierInvoiceNo: 'INV-2023-003', amount: '? 78,000', status: 'Approved', category: 'Services',
             actionLog: [{ action: 'Approved', user: 'John Doe', date: '2023-11-06 10:30 AM' }]
         },
         {
-            id: 4, date: '2023-10-28', vendorReferenceName: 'Delta Industries', voucherNo: 'V-004', supplierInvoiceNo: 'INV-2023-004', amount: '₹ 1,20,000', status: 'Posted', category: 'Stock-in Trade',
+            id: 4, date: '2023-10-28', vendorReferenceName: 'Delta Industries', voucherNo: 'V-004', supplierInvoiceNo: 'INV-2023-004', amount: '? 1,20,000', status: 'Posted', category: 'Stock-in Trade',
             actionLog: [{ action: 'Approved', user: 'Jane Smith', date: '2023-10-29 02:15 PM' }]
         },
         {
-            id: 5, date: '2023-10-20', vendorReferenceName: 'Epsilon Trading', voucherNo: 'V-005', supplierInvoiceNo: 'INV-2023-005', amount: '₹ 56,700', status: 'Initiated', category: 'Consumables',
+            id: 5, date: '2023-10-20', vendorReferenceName: 'Epsilon Trading', voucherNo: 'V-005', supplierInvoiceNo: 'INV-2023-005', amount: '? 56,700', status: 'Initiated', category: 'Consumables',
             actionLog: [{ action: 'Approved', user: 'Mike Johnson', date: '2023-10-21 09:45 AM' }]
         },
     ]);
@@ -1011,7 +1011,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     // Handle Basic Details Form Submit (Navigation Only)
     const handleBasicDetailsSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        console.log('Refactored: Basic Details -> Next');
+        
         if (!vendorName || !vendorEmail || !contactNo || !vendorCategory) {
             showError('Please fill in all required fields (Vendor Name, Email, Contact No, Vendor Category)');
             return;
@@ -1070,7 +1070,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     // Handle TDS Details Form Submit (Navigation Only)
     const handleTDSDetailsSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        console.log('Refactored: TDS -> Next');
+        
         setActiveMasterSubTab('Banking Info');
     };
 
@@ -1079,7 +1079,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     // Handle Banking Details Submit (Navigation Only)
     const handleBankingDetailsSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        console.log('Refactored: Banking -> Next');
+        
         setActiveMasterSubTab('Terms & Conditions');
     };
 
@@ -1096,7 +1096,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     // Handle Finish (Total Save)
     const handleFinish = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
-        console.log('=== Finishing and Saving All Vendor Data ===');
+        
 
         if (!vendorName) {
             showError('Vendor Name is required in Basic Details');
@@ -1120,7 +1120,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             };
             const basicRes: any = await httpClient.post('/api/vendors/basic-details/', basicPayload);
             const newId = basicRes.id;
-            console.log('✅ Basic Details Saved, ID:', newId);
+            
 
             // 2. GST Details
             for (const gst of gstRecords) {
@@ -1148,7 +1148,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 };
                 await httpClient.post('/api/vendors/gst-details/', gstPayload);
             }
-            console.log('✅ GST Details Saved');
+            
 
             // 3. Products/Services
             const prodPayload = items.filter(i => i.itemName && i.itemName.trim() !== '').map(item => ({
@@ -1162,7 +1162,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             }));
             if (prodPayload.length > 0) {
                 await httpClient.post('/api/vendors/product-services/', prodPayload);
-                console.log('✅ Products Saved');
+                
             }
 
             // 4. TDS
@@ -1183,7 +1183,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
             // Use postFormData which handles multipart automatically
             await httpClient.postFormData('/api/vendors/tds-details/', tdsFormData);
-            console.log('✅ TDS Saved');
+            
 
             // 5. Banking
             const bankPayload = bankAccounts.filter(b => b.accountNumber).map(bank => ({
@@ -1199,7 +1199,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             }));
             if (bankPayload.length > 0) {
                 await httpClient.post('/api/vendors/banking-details/', bankPayload);
-                console.log('✅ Banking Saved');
+                
             }
 
             // 6. Terms
@@ -1215,7 +1215,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 dispute_redressal_terms: disputeRedressalTerms || undefined
             };
             await httpClient.post('/api/vendors/terms/', termsPayload);
-            console.log('✅ Terms Saved');
+            
 
             showSuccess('Vendor Onboarded Successfully!');
             // Reset and Redirect
@@ -1321,14 +1321,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     // Handle GST Details Form Submit (Navigation Only)
     const handleGSTDetailsSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        console.log('Refactored: GST Details -> Next');
+        
         // Add basic validation if needed using gstRecords
         setActiveMasterSubTab('Products/Services');
     };
 
     // Handle Product Services Submit (Navigation Only)
     const handleProductServicesSubmit = () => {
-        console.log('Refactored: Product Services -> Next');
+        
         if (items.length === 0) {
             showError('Please add at least one item.');
             return;
@@ -1596,7 +1596,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             is_active: true
                                         });
                                     } catch (error: any) {
-                                        console.error('Error updating category:', error);
+                                        console.error('Error updating category:');
                                         throw error;
                                     }
                                 }}
@@ -1604,7 +1604,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                     try {
                                         await httpClient.delete(`/api/vendors/categories/${id}/`);
                                     } catch (error: any) {
-                                        console.error('Error deleting category:', error);
+                                        console.error('Error deleting category:');
                                         throw error;
                                     }
                                 }}
@@ -2265,7 +2265,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     </button>
                                                 </div>
                                                 {uploadedFiles.msmeFile && (
-                                                    <p className="mt-1 text-xs text-indigo-600">✓ {uploadedFiles.msmeFile.name}</p>
+                                                    <p className="mt-1 text-xs text-indigo-600">? {uploadedFiles.msmeFile.name}</p>
                                                 )}
                                             </div>
                                             <div>
@@ -2299,7 +2299,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     </button>
                                                 </div>
                                                 {uploadedFiles.fssaiFile && (
-                                                    <p className="mt-1 text-xs text-indigo-600">✓ {uploadedFiles.fssaiFile.name}</p>
+                                                    <p className="mt-1 text-xs text-indigo-600">? {uploadedFiles.fssaiFile.name}</p>
                                                 )}
                                             </div>
                                             <div>
@@ -2333,7 +2333,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     </button>
                                                 </div>
                                                 {uploadedFiles.iecFile && (
-                                                    <p className="mt-1 text-xs text-indigo-600">✓ {uploadedFiles.iecFile.name}</p>
+                                                    <p className="mt-1 text-xs text-indigo-600">? {uploadedFiles.iecFile.name}</p>
                                                 )}
                                             </div>
                                             <div>
@@ -2367,7 +2367,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     </button>
                                                 </div>
                                                 {uploadedFiles.eouFile && (
-                                                    <p className="mt-1 text-xs text-indigo-600">✓ {uploadedFiles.eouFile.name}</p>
+                                                    <p className="mt-1 text-xs text-indigo-600">? {uploadedFiles.eouFile.name}</p>
                                                 )}
                                             </div>
                                             <div>
@@ -4408,15 +4408,15 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             <div className="grid grid-cols-3 gap-6 bg-gray-50 p-4 rounded-[4px] border-t-2 border-gray-300">
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-1">Total Taxable Value</label>
-                                                    <p className="text-lg font-semibold text-gray-900">₹ 0.00</p>
+                                                    <p className="text-lg font-semibold text-gray-900">? 0.00</p>
                                                 </div>
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-1">Total Tax</label>
-                                                    <p className="text-lg font-semibold text-gray-900">₹ 0.00</p>
+                                                    <p className="text-lg font-semibold text-gray-900">? 0.00</p>
                                                 </div>
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-1">Total Value</label>
-                                                    <p className="text-lg font-bold text-indigo-900">₹ 0.00</p>
+                                                    <p className="text-lg font-bold text-indigo-900">? 0.00</p>
                                                 </div>
                                             </div>
 
@@ -4662,7 +4662,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 <button
                                                     onClick={() => {
                                                         // Handle post payment logic here
-                                                        console.log('Posting payment:', postPaymentForm);
+                                                        
                                                         // Update bill status to Posted
                                                         setPaymentBills(paymentBills.map(bill =>
                                                             bill.id === selectedBillForPayment.id ? { ...bill, status: 'Posted' as const } : bill

@@ -73,7 +73,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
             if (!editId) return;
             try {
                 const order = await httpClient.get<any>(`/api/customerportal/sales-orders/${editId}/`);
-                console.log('Fetched order for edit:', order);
+                
 
                 // Set Basic Details
                 setSOSeries(order.so_series_name);
@@ -431,16 +431,16 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
                 }
             };
 
-            console.log('Sending sales order data:', salesOrderData);
+            
 
             let result;
             if (editId) {
                 result = await httpClient.patch(`/api/customerportal/sales-orders/${editId}/`, salesOrderData);
-                console.log('Sales order updated successfully:', result);
+                
                 showSuccess('Sales Order updated successfully!');
             } else {
                 result = await httpClient.post('/api/customerportal/sales-orders/', salesOrderData);
-                console.log('Sales order saved successfully:', result);
+                
                 showSuccess('Sales Order saved successfully!');
             }
 

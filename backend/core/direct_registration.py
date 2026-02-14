@@ -80,7 +80,7 @@ class DirectRegisterView(APIView):
                 password_hash = make_password(password)
                 
                 logger.info(f"🔧 About to create user: {username}")
-                print(f"🔧 Creating user: {username} for company: {company_name}")
+
                 
                 # Create user account
                 user = User.objects.create(
@@ -99,7 +99,7 @@ class DirectRegisterView(APIView):
                 )
                 
                 logger.info(f"✅ User created with ID: {user.id}")
-                print(f"✅ User created successfully! ID: {user.id}, Username: {user.username}")
+
                 
                 # Seed default account groups (inside transaction)
                 try:
@@ -111,12 +111,12 @@ class DirectRegisterView(APIView):
                 
                 # Log successful registration
                 logger.info(f"✅ [{timezone.now()}] New user registered - Tenant: {tenant_uuid} ({company_name}) - User: {username}")
-                print(f"\n{'='*80}")
-                print(f"✅ NEW REGISTRATION - {timezone.now()}")
-                print(f"Tenant ID: {tenant_uuid}")
-                print(f"Company: {company_name}")
-                print(f"User: {username}")
-                print(f"{'='*80}\n")
+
+
+
+
+
+
                 
                 # Auto-login: Generate JWT tokens (inside transaction)
                 from rest_framework_simplejwt.tokens import RefreshToken
@@ -153,7 +153,7 @@ class DirectRegisterView(APIView):
             
             # Transaction committed! Now return the response
             logger.info(f"✅ Transaction committed - User {response_data['user']['id']} saved to database")
-            print(f"✅ Transaction committed - User saved to database!")
+
             
             return Response(response_data, status=status.HTTP_201_CREATED)
         
