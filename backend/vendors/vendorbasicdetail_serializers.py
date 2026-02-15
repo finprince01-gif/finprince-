@@ -24,6 +24,7 @@ class VendorBasicDetailSerializer(serializers.ModelSerializer):
             'contact_no',
             'vendor_category',
             'is_also_customer',
+            'tcs_applicable',
             'is_active',
             'created_at',
             'updated_at',
@@ -48,7 +49,8 @@ class VendorBasicDetailCreateSerializer(serializers.ModelSerializer):
             'email',
             'contact_no',
             'vendor_category',
-            'is_also_customer'
+            'is_also_customer',
+            'tcs_applicable'
         ]
     
     def validate_vendor_name(self, value):
@@ -100,6 +102,7 @@ class VendorBasicDetailUpdateSerializer(serializers.ModelSerializer):
             'contact_no',
             'vendor_category',
             'is_also_customer',
+            'tcs_applicable',
             'is_active'
         ]
     

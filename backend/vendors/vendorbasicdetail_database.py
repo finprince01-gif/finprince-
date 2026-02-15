@@ -63,7 +63,9 @@ class VendorBasicDetailDatabase:
                 contact_person=vendor_data.get('contact_person'),
                 email=vendor_data.get('email'),
                 contact_no=vendor_data.get('contact_no'),
+                vendor_category=vendor_data.get('vendor_category'),
                 is_also_customer=vendor_data.get('is_also_customer', False),
+                tcs_applicable=vendor_data.get('tcs_applicable', False),
                 created_by=created_by
             )
             
@@ -315,7 +317,9 @@ class VendorBasicDetailDatabase:
                     contact_person=vendor_data.get('contact_person'),
                     email=vendor_data.get('email'),
                     contact_no=vendor_data.get('contact_no'),
+                    vendor_category=vendor_data.get('vendor_category'),
                     is_also_customer=vendor_data.get('is_also_customer', False),
+                    tcs_applicable=vendor_data.get('tcs_applicable', False),
                     created_by=created_by
                 )
                 vendors.append(vendor)
