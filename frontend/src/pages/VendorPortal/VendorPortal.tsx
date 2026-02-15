@@ -440,7 +440,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
     const handleSubmitGST = (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         setActiveMasterSubTab('Products/Services');
     };
 
@@ -569,9 +569,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
     const handleSubmitPO = async () => {
         try {
-            
-            
-            
+
+
+
 
             // Prepare items data
             const items = poItems.map(item => ({
@@ -609,12 +609,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 items: items
             };
 
-            
+
 
             // Send to API
             const response = await httpClient.post('/api/vendors/purchase-orders/', payload);
 
-            
+
 
             const poNumber = (response as any)?.data?.data?.po_number || (response as any)?.data?.po_number || 'Generated';
             showSuccess(`Purchase Order created successfully! PO Number: ${poNumber}`);
@@ -677,7 +677,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
     const handleSavePODetails = () => {
         // Handle save logic here
-        
+
 
         // Update the purchaseOrders list with the modified PO
         setPurchaseOrders(purchaseOrders.map(po => po.id === selectedPO.id ? selectedPO : po));
@@ -724,7 +724,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         // Remove the PO from the list (or update status to 'Cancelled')
         setPurchaseOrders(purchaseOrders.filter(po => po.id !== selectedPO.id));
 
-        
+
 
         // Close both modals and reset state
         setShowCancelPOModal(false);
@@ -1011,7 +1011,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     // Handle Basic Details Form Submit (Navigation Only)
     const handleBasicDetailsSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         if (!vendorName || !vendorEmail || !contactNo || !vendorCategory) {
             showError('Please fill in all required fields (Vendor Name, Email, Contact No, Vendor Category)');
             return;
@@ -1070,7 +1070,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     // Handle TDS Details Form Submit (Navigation Only)
     const handleTDSDetailsSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         setActiveMasterSubTab('Banking Info');
     };
 
@@ -1079,7 +1079,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     // Handle Banking Details Submit (Navigation Only)
     const handleBankingDetailsSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         setActiveMasterSubTab('Terms & Conditions');
     };
 
@@ -1093,10 +1093,64 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const [forceMajeure, setForceMajeure] = useState('');
     const [disputeRedressalTerms, setDisputeRedressalTerms] = useState('');
 
+    const resetVendorCreationFlow = () => {
+        setVendorCode('');
+        setVendorName('');
+        setPanNo('');
+        setContactPerson('');
+        setVendorEmail('');
+        setContactNo('');
+        setVendorCategory('');
+        setIsAlsoCustomer(false);
+        setTcsApplicable(false);
+        setGstRecords([
+            {
+                id: '1',
+                gstin: '',
+                registrationType: 'Regular',
+                placesOfBusiness: [],
+                isExpanded: true
+            }
+        ]);
+        setItems([
+            { id: 1, hsnSacCode: '', itemCode: '', itemName: '', supplierItemCode: '', supplierItemName: '' },
+            { id: 2, hsnSacCode: '', itemCode: '', itemName: '', supplierItemCode: '', supplierItemName: '' },
+        ]);
+        setMsmeUdyamNo('');
+        setFssaiLicenseNo('');
+        setImportExportCode('');
+        setEouStatus('');
+        setTdsSectionApplicable('');
+        setEnableAutomaticTdsPosting(false);
+        setUploadedFiles({
+            msmeFile: null,
+            fssaiFile: null,
+            iecFile: null,
+            eouFile: null
+        });
+        setBankAccounts([
+            { id: 1, accountNumber: '', bankName: '', ifscCode: '', branchName: '', swiftCode: '', vendorBranch: [], accountType: 'Savings' }
+        ]);
+        setCreditLimit('');
+        setCreditPeriod('');
+        setCreditTerms('');
+        setPenaltyTerms('');
+        setDeliveryTerms('');
+        setWarrantyGuaranteeDetails('');
+        setForceMajeure('');
+        setDisputeRedressalTerms('');
+        setGstin('');
+        setGstRegistrationType('regular');
+        setLegalName('');
+        setTradeName('');
+        setCreatedVendorId(null);
+        localStorage.removeItem('currentVendorId');
+    };
+
     // Handle Finish (Total Save)
     const handleFinish = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
-        
+
 
         if (!vendorName) {
             showError('Vendor Name is required in Basic Details');
@@ -1120,7 +1174,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             };
             const basicRes: any = await httpClient.post('/api/vendors/basic-details/', basicPayload);
             const newId = basicRes.id;
-            
+
 
             // 2. GST Details
             for (const gst of gstRecords) {
@@ -1148,7 +1202,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 };
                 await httpClient.post('/api/vendors/gst-details/', gstPayload);
             }
-            
+
 
             // 3. Products/Services
             const prodPayload = items.filter(i => i.itemName && i.itemName.trim() !== '').map(item => ({
@@ -1162,7 +1216,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             }));
             if (prodPayload.length > 0) {
                 await httpClient.post('/api/vendors/product-services/', prodPayload);
-                
+
             }
 
             // 4. TDS
@@ -1183,7 +1237,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
             // Use postFormData which handles multipart automatically
             await httpClient.postFormData('/api/vendors/tds-details/', tdsFormData);
-            
+
 
             // 5. Banking
             const bankPayload = bankAccounts.filter(b => b.accountNumber).map(bank => ({
@@ -1199,7 +1253,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             }));
             if (bankPayload.length > 0) {
                 await httpClient.post('/api/vendors/banking-details/', bankPayload);
-                
+
             }
 
             // 6. Terms
@@ -1215,13 +1269,16 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 dispute_redressal_terms: disputeRedressalTerms || undefined
             };
             await httpClient.post('/api/vendors/terms/', termsPayload);
-            
+
 
             showSuccess('Vendor Onboarded Successfully!');
-            // Reset and Redirect
-            setCreatedVendorId(null);
-            localStorage.removeItem('currentVendorId');
-            window.location.reload();
+
+            // Refetch vendors to update any lists
+            await fetchVendors();
+
+            // Reset flow and Return to Vendor Creation Dashboard
+            resetVendorCreationFlow();
+            setActiveMasterSubTab('Vendor Creation');
 
         } catch (error: any) {
             handleApiError(error, 'Save Vendor');
@@ -1321,14 +1378,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     // Handle GST Details Form Submit (Navigation Only)
     const handleGSTDetailsSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         // Add basic validation if needed using gstRecords
         setActiveMasterSubTab('Products/Services');
     };
 
     // Handle Product Services Submit (Navigation Only)
     const handleProductServicesSubmit = () => {
-        
+
         if (items.length === 0) {
             showError('Please add at least one item.');
             return;
@@ -4662,7 +4719,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 <button
                                                     onClick={() => {
                                                         // Handle post payment logic here
-                                                        
+
                                                         // Update bill status to Posted
                                                         setPaymentBills(paymentBills.map(bill =>
                                                             bill.id === selectedBillForPayment.id ? { ...bill, status: 'Posted' as const } : bill
