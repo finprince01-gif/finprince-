@@ -38,7 +38,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
     // Populate from AI Extraction
     React.useEffect(() => {
         if (prefilledData) {
-            
+
             setDate(prefilledData.invoiceDate || new Date().toISOString().split('T')[0]);
             setSalesInvoiceNo(prefilledData.invoiceNumber || '');
             setCustomerName(prefilledData.sellerName || ''); // Maps Seller/Party -> Customer Name
@@ -2585,9 +2585,9 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                     onClose={() => setIsIssueSlipModalOpen(false)}
                     onSave={async (data) => {
                         try {
-                            
+
                             const response = await apiService.createInventoryOperationOutward(data);
-                            
+
                             setOutwardSlipNo(response.outward_slip_no);
                             showSuccess('Issue Slip Created Successfully!');
 
