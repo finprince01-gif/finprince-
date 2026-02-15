@@ -495,17 +495,31 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         receiveBy?: string;
         receiveAt?: string;
         deliveryTerms?: string;
+        category?: string;
+        branch?: string;
+        deliveryDate?: string;
+        amount?: string;
     }
 
     const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([
-        { id: 1, poNumber: 'PO-2023-001', poDate: '2023-10-26', vendorName: 'Tech Solutions Inc.', address: '123 Innovation Dr, Tech City', status: 'Draft' },
-        { id: 2, poNumber: 'PO-2023-002', poDate: '2023-10-27', vendorName: 'Global Supplies Ltd.', address: '456 Logistics Way, Port Town', status: 'Pending Approval' },
-        { id: 3, poNumber: 'PO-2023-003', poDate: '2023-10-28', vendorName: 'Quality Materials Co.', address: '789 Industrial Park, Mfg Zone', status: 'Approved' },
-        { id: 4, poNumber: 'PO-2023-004', poDate: '2023-10-29', vendorName: 'Office Depot', address: '101 Corporate Blvd, Biz Dist', status: 'Mailed' },
-        { id: 5, poNumber: 'PO-2023-005', poDate: '2023-10-30', vendorName: 'Fast Track Logistics', address: '222 Speedy Ln, Transit Hub', status: 'Approved' },
-        { id: 6, poNumber: 'PO-2023-006', poDate: '2023-10-15', vendorName: 'Old World Imports', address: '88 Antiques Rd, Old Town', status: 'Closed' },
-        { id: 7, poNumber: 'PO-2023-007', poDate: '2023-10-18', vendorName: 'Modern Systems', address: '99 Future St, New City', status: 'Closed' },
+        { id: 1, poNumber: 'PO-2023-001', poDate: '2023-10-26', vendorName: 'Tech Solutions Inc.', address: '123 Innovation Dr, Tech City', status: 'Draft', category: 'Raw Material', branch: 'Main Branch', deliveryDate: '2023-11-10', amount: '12500.00' },
+        { id: 2, poNumber: 'PO-2023-002', poDate: '2023-10-27', vendorName: 'Global Supplies Ltd.', address: '456 Logistics Way, Port Town', status: 'Pending Approval', category: 'Stock-in Trade', branch: 'West Wing', deliveryDate: '2023-11-15', amount: '8750.50' },
+        { id: 3, poNumber: 'PO-2023-003', poDate: '2023-10-28', vendorName: 'Quality Materials Co.', address: '789 Industrial Park, Mfg Zone', status: 'Approved', category: 'Consumables', branch: 'East Warehouse', deliveryDate: '2023-11-20', amount: '3400.00' },
+        { id: 4, poNumber: 'PO-2023-004', poDate: '2023-10-29', vendorName: 'Office Depot', address: '101 Corporate Blvd, Biz Dist', status: 'Mailed', category: 'Stores & Spares', branch: 'HQ', deliveryDate: '2023-11-05', amount: '1200.00' },
+        { id: 5, poNumber: 'PO-2023-005', poDate: '2023-10-30', vendorName: 'Fast Track Logistics', address: '222 Speedy Ln, Transit Hub', status: 'Approved', category: 'Services', branch: 'Main Branch', deliveryDate: '2023-11-25', amount: '5600.00' },
+        { id: 6, poNumber: 'PO-2023-006', poDate: '2023-10-15', vendorName: 'Old World Imports', address: '88 Antiques Rd, Old Town', status: 'Closed', category: 'Raw Material', branch: 'West Wing', deliveryDate: '2023-10-30', amount: '9800.00' },
     ]);
+
+    const handleApproveAndMail = (poId: number) => {
+        setPurchaseOrders(prevOrders => prevOrders.map(po => {
+            if (po.id === poId) {
+                return { ...po, status: 'Mailed' };
+            }
+            return po;
+        }));
+        // Use global toast if available, or just log for now since showToast was commented out
+        console.log(`PO #${poId} approved and mailed.`);
+    };
 
     // PO Item Handlers
     const handleAddPOItem = () => {
@@ -1118,6 +1132,60 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const [warrantyGuaranteeDetails, setWarrantyGuaranteeDetails] = useState('');
     const [forceMajeure, setForceMajeure] = useState('');
     const [disputeRedressalTerms, setDisputeRedressalTerms] = useState('');
+
+    const resetVendorCreationFlow = () => {
+        setVendorCode('');
+        setVendorName('');
+        setPanNo('');
+        setContactPerson('');
+        setVendorEmail('');
+        setContactNo('');
+        setVendorCategory('');
+        setIsAlsoCustomer(false);
+        setTcsApplicable(false);
+        setGstRecords([
+            {
+                id: '1',
+                gstin: '',
+                registrationType: 'Regular',
+                placesOfBusiness: [],
+                isExpanded: true
+            }
+        ]);
+        setItems([
+            { id: 1, hsnSacCode: '', itemCode: '', itemName: '', supplierItemCode: '', supplierItemName: '' },
+            { id: 2, hsnSacCode: '', itemCode: '', itemName: '', supplierItemCode: '', supplierItemName: '' },
+        ]);
+        setMsmeUdyamNo('');
+        setFssaiLicenseNo('');
+        setImportExportCode('');
+        setEouStatus('');
+        setTdsSectionApplicable('');
+        setEnableAutomaticTdsPosting(false);
+        setUploadedFiles({
+            msmeFile: null,
+            fssaiFile: null,
+            iecFile: null,
+            eouFile: null
+        });
+        setBankAccounts([
+            { id: 1, accountNumber: '', bankName: '', ifscCode: '', branchName: '', swiftCode: '', vendorBranch: [], accountType: 'Savings' }
+        ]);
+        setCreditLimit('');
+        setCreditPeriod('');
+        setCreditTerms('');
+        setPenaltyTerms('');
+        setDeliveryTerms('');
+        setWarrantyGuaranteeDetails('');
+        setForceMajeure('');
+        setDisputeRedressalTerms('');
+        setGstin('');
+        setGstRegistrationType('regular');
+        setLegalName('');
+        setTradeName('');
+        setCreatedVendorId(null);
+        localStorage.removeItem('currentVendorId');
+    };
 
     // Handle Finish (Total Save)
     const handleFinish = async (e?: React.FormEvent) => {
@@ -3293,49 +3361,6 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         </div>
                                                     </div>
 
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                                        {[
-                                                            { name: 'Raw Material', desc: 'Manage raw material procurement', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /> },
-                                                            { name: 'Stock-in Trade', desc: 'Manage stock-in trade items', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /> },
-                                                            { name: 'Consumables', desc: 'Manage consumable items', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /> },
-                                                            { name: 'Stores & Spares', desc: 'Manage stores and spares', icon: <g><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></g> },
-                                                            { name: 'Services', desc: 'Manage service procurement', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /> },
-                                                        ]
-                                                            .filter(item => isSuperuser || hasTabAccess('Vendor Portal', item.name))
-                                                            .map((item) => (
-                                                                <button
-                                                                    key={item.name}
-                                                                    onClick={() => setActiveProcurementSubTab(item.name as ProcurementSubTab)}
-                                                                    className="p-6 border-2 border-gray-200 rounded-[4px] hover:border-indigo-500 hover:shadow-none border border-slate-200 transition-all duration-200 text-left group bg-white"
-                                                                >
-                                                                    <div className="flex items-center justify-between mb-4">
-                                                                        <div className="w-12 h-12 bg-indigo-50/50 rounded-[4px] flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                                                                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                {item.icon}
-                                                                            </svg>
-                                                                        </div>
-                                                                        <svg className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                                                        </svg>
-                                                                    </div>
-                                                                    <h3 className="text-lg font-bold text-gray-800 group-hover:text-indigo-600 transition-colors">{item.name}</h3>
-                                                                    <p className="text-sm text-gray-500 mt-1">{item.desc}</p>
-                                                                </button>
-                                                            ))}
-                                                    </div>
-                                                </>
-                                            )}
-
-
-                                            {selectedProcurementVendor && (
-                                                <div className="erp-card border border-slate-200">
-                                                    <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                                                        <div className="flex items-center space-x-4">
-                                                            <button onClick={() => setSelectedProcurementVendor(null)} className="text-gray-500 hover:text-gray-700 p-1 rounded-[4px] hover:bg-gray-100 transition-colors">
-                                                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-                                                            </button>
-                                                        </div>
-                                                    </div>
 
                                                     {/* Sub-tabs for Create PO */}
                                                     <div className="mb-6">
@@ -3366,14 +3391,16 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                             <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO#</th>
                                                                             <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO Date</th>
                                                                             <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Vendor Name</th>
-                                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Address</th>
+                                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Branch</th>
+                                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Delivery Date</th>
+                                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Amount</th>
                                                                             <th className="px-6 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Action</th>
                                                                         </tr>
                                                                     </thead>
                                                                     <tbody className="bg-white divide-y divide-gray-200">
                                                                         {purchaseOrders.filter(po => po.status === 'Pending Approval').length === 0 ? (
                                                                             <tr>
-                                                                                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                                                                                <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                                                                                     No purchase orders pending approval.
                                                                                 </td>
                                                                             </tr>
@@ -3383,16 +3410,18 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{po.poNumber}</td>
                                                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(po.poDate)}</td>
                                                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{po.vendorName}</td>
-                                                                                    <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title={po.address}>{po.address}</td>
+                                                                                    <td className="px-6 py-4 text-sm text-gray-500">{po.branch || '-'}</td>
+                                                                                    <td className="px-6 py-4 text-sm text-gray-500">{po.deliveryDate ? formatDate(po.deliveryDate) : '-'}</td>
+                                                                                    <td className="px-6 py-4 text-sm text-gray-500">{po.amount ? `₹${po.amount}` : '-'}</td>
                                                                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                                                         <button
-                                                                                            onClick={() => handleViewPO(po)}
-                                                                                            className="text-indigo-600 hover:text-indigo-900"
-                                                                                            title="View PO"
+                                                                                            onClick={() => handleApproveAndMail(po.id)}
+                                                                                            className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                                                                                            title="Approve & Mail"
                                                                                         >
-                                                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                                                            <span className="mr-1">Approve & Mail</span>
+                                                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                                                                                             </svg>
                                                                                         </button>
                                                                                     </td>
@@ -3411,14 +3440,16 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                             <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO#</th>
                                                                             <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO Date</th>
                                                                             <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Vendor Name</th>
-                                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Address</th>
+                                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Branch</th>
+                                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Delivery Date</th>
+                                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Amount</th>
                                                                             <th className="px-6 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Action</th>
                                                                         </tr>
                                                                     </thead>
                                                                     <tbody className="bg-white divide-y divide-gray-200">
                                                                         {purchaseOrders.filter(po => po.status === 'Approved').length === 0 ? (
                                                                             <tr>
-                                                                                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                                                                                <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                                                                                     No approved purchase orders found.
                                                                                 </td>
                                                                             </tr>
@@ -3428,9 +3459,16 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{po.poNumber}</td>
                                                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(po.poDate)}</td>
                                                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{po.vendorName}</td>
-                                                                                    <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title={po.address}>{po.address}</td>
+                                                                                    <td className="px-6 py-4 text-sm text-gray-500">{po.branch || '-'}</td>
+                                                                                    <td className="px-6 py-4 text-sm text-gray-500">{po.deliveryDate ? formatDate(po.deliveryDate) : '-'}</td>
+                                                                                    <td className="px-6 py-4 text-sm text-gray-500">{po.amount ? `₹${po.amount}` : '-'}</td>
                                                                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                                                        <button className="text-indigo-600 hover:text-indigo-900 mr-3" title="Mail PO">
+                                                                                        <button
+                                                                                            onClick={() => handleApproveAndMail(po.id)}
+                                                                                            className="text-indigo-600 hover:text-indigo-900 mr-3"
+                                                                                            title="Mail PO"
+                                                                                        >
+                                                                                            <span className="sr-only">Mail PO</span>
                                                                                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                                                                                         </button>
                                                                                         <button
@@ -3448,103 +3486,115 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                             </div>
                                                         )}
                                                     </div>
-                                                    )
-
-                                                    {activePOSubTab === 'Pending PO' && (
-                                                        <div className="erp-card overflow-hidden border border-slate-200">
-                                                            <table className="min-w-full divide-y divide-gray-200">
-                                                                <thead className="bg-slate-50/50">
-                                                                    <tr>
-                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO#</th>
-                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO Date</th>
-                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Vendor Name</th>
-                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Address</th>
-                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Status</th>
-                                                                        <th className="px-6 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Action</th>
+                                                </>
+                                            )}          {activePOSubTab === 'Pending PO' && (
+                                                <div className="erp-card overflow-hidden border border-slate-200">
+                                                    <table className="min-w-full divide-y divide-gray-200">
+                                                        <thead className="bg-slate-50/50">
+                                                            <tr>
+                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO#</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO Date</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Vendor Name</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Branch</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Delivery Date</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Amount</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Status</th>
+                                                                <th className="px-6 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Action</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="bg-white divide-y divide-gray-200">
+                                                            {purchaseOrders.filter(po => po.status === 'Mailed').length === 0 ? (
+                                                                <tr>
+                                                                    <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
+                                                                        No pending purchase orders found (Mailed).
+                                                                    </td>
+                                                                </tr>
+                                                            ) : (
+                                                                purchaseOrders.filter(po => po.status === 'Mailed').map((po) => (
+                                                                    <tr key={po.id} className="hover:bg-gray-50 transition-colors">
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{po.poNumber}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(po.poDate)}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{po.vendorName}</td>
+                                                                        <td className="px-6 py-4 text-sm text-gray-500">{po.branch || '-'}</td>
+                                                                        <td className="px-6 py-4 text-sm text-gray-500">{po.deliveryDate ? formatDate(po.deliveryDate) : '-'}</td>
+                                                                        <td className="px-6 py-4 text-sm text-gray-500">{po.amount ? `₹${po.amount}` : '-'}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap">
+                                                                            <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] bg-slate-100 text-slate-700 border border-amber-200">
+                                                                                {po.status}
+                                                                            </span>
+                                                                        </td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                                            <button
+                                                                                onClick={() => handleViewPO(po)}
+                                                                                className="text-indigo-600 hover:text-indigo-900"
+                                                                                title="View"
+                                                                            >
+                                                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                                                            </button>
+                                                                        </td>
                                                                     </tr>
-                                                                </thead>
-                                                                <tbody className="bg-white divide-y divide-gray-200">
-                                                                    {purchaseOrders.filter(po => po.status === 'Mailed').length === 0 ? (
-                                                                        <tr>
-                                                                            <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
-                                                                                No pending purchase orders found (Mailed).
-                                                                            </td>
-                                                                        </tr>
-                                                                    ) : (
-                                                                        purchaseOrders.filter(po => po.status === 'Mailed').map((po) => (
-                                                                            <tr key={po.id} className="hover:bg-gray-50 transition-colors">
-                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{po.poNumber}</td>
-                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(po.poDate)}</td>
-                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{po.vendorName}</td>
-                                                                                <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title={po.address}>{po.address}</td>
-                                                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                                                    <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] bg-slate-100 text-slate-700 border border-amber-200">
-                                                                                        {po.status}
-                                                                                    </span>
-                                                                                </td>
-                                                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                                                    <button className="text-indigo-600 hover:text-indigo-900" title="View">
-                                                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                                                                                    </button>
-                                                                                </td>
-                                                                            </tr>
-                                                                        ))
-                                                                    )}
-                                                                </tbody>
-                                                            </table>
-                                                        </div>
-                                                    )}
-                                                    {activePOSubTab === 'Executed PO' && (
-                                                        <div className="erp-card overflow-hidden border border-slate-200">
-                                                            <table className="min-w-full divide-y divide-gray-200">
-                                                                <thead className="bg-slate-50/50">
-                                                                    <tr>
-                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO#</th>
-                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO Date</th>
-                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Vendor Name</th>
-                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Address</th>
-                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Status</th>
-                                                                        <th className="px-6 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Action</th>
+                                                                ))
+                                                            )}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            )}
+                                            {activePOSubTab === 'Executed PO' && (
+                                                <div className="erp-card overflow-hidden border border-slate-200">
+                                                    <table className="min-w-full divide-y divide-gray-200">
+                                                        <thead className="bg-slate-50/50">
+                                                            <tr>
+                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO#</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO Date</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Vendor Name</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Branch</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Delivery Date</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Amount</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Status</th>
+                                                                <th className="px-6 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Action</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="bg-white divide-y divide-gray-200">
+                                                            {purchaseOrders.filter(po => po.status === 'Closed').length === 0 ? (
+                                                                <tr>
+                                                                    <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
+                                                                        No executed purchase orders found (Closed).
+                                                                    </td>
+                                                                </tr>
+                                                            ) : (
+                                                                purchaseOrders.filter(po => po.status === 'Closed').map((po) => (
+                                                                    <tr key={po.id} className="hover:bg-gray-50 transition-colors">
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{po.poNumber}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(po.poDate)}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{po.vendorName}</td>
+                                                                        <td className="px-6 py-4 text-sm text-gray-500">{po.branch || '-'}</td>
+                                                                        <td className="px-6 py-4 text-sm text-gray-500">{po.deliveryDate ? formatDate(po.deliveryDate) : '-'}</td>
+                                                                        <td className="px-6 py-4 text-sm text-gray-500">{po.amount ? `₹${po.amount}` : '-'}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap">
+                                                                            <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] bg-slate-100 text-slate-700 border border-green-200">
+                                                                                {po.status}
+                                                                            </span>
+                                                                        </td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                                            <button
+                                                                                onClick={() => handleViewPO(po)}
+                                                                                className="text-indigo-600 hover:text-indigo-900"
+                                                                                title="View"
+                                                                            >
+                                                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                                                            </button>
+                                                                        </td>
                                                                     </tr>
-                                                                </thead>
-                                                                <tbody className="bg-white divide-y divide-gray-200">
-                                                                    {purchaseOrders.filter(po => po.status === 'Closed').length === 0 ? (
-                                                                        <tr>
-                                                                            <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
-                                                                                No executed purchase orders found (Closed).
-                                                                            </td>
-                                                                        </tr>
-                                                                    ) : (
-                                                                        purchaseOrders.filter(po => po.status === 'Closed').map((po) => (
-                                                                            <tr key={po.id} className="hover:bg-gray-50 transition-colors">
-                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{po.poNumber}</td>
-                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(po.poDate)}</td>
-                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{po.vendorName}</td>
-                                                                                <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title={po.address}>{po.address}</td>
-                                                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                                                    <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] bg-slate-100 text-slate-700 border border-green-200">
-                                                                                        {po.status}
-                                                                                    </span>
-                                                                                </td>
-                                                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                                                    <button className="text-indigo-600 hover:text-indigo-900" title="View">
-                                                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                                                                                    </button>
-                                                                                </td>
-                                                                            </tr>
-                                                                        ))
-                                                                    )}
-                                                                </tbody>
-                                                            </table>
-                                                        </div>
-                                                    )}
+                                                                ))
+                                                            )}
+                                                        </tbody>
+                                                    </table>
                                                 </div>
                                             )}
                                         </div>
                                     )}
                                 </div>
                             )}
-
                             {activeTransactionSubTab === 'Procurement' && (
                                 <div>
                                     {activeProcurementSubTab === 'Dashboard' ? (
@@ -3564,18 +3614,15 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 ]
                                                     .filter(item => isSuperuser || hasTabAccess('Vendor Portal', item.name))
                                                     .map((item) => {
-                                                        const totalPendingAmount = paymentBills
-                                                            .filter(bill => bill.status !== 'Posted' && bill.category === item.name)
-                                                            .reduce((sum, bill) => {
-                                                                const amount = parseFloat(bill.amount.replace(/[^0-9.-]+/g, ""));
-                                                                return sum + amount;
-                                                            }, 0);
-                                                        const formattedTotal = totalPendingAmount.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
+                                                        const activeOrders = purchaseOrders.filter(po =>
+                                                            po.category === item.name &&
+                                                            ['Draft', 'Pending Approval', 'Approved', 'Mailed'].includes(po.status)
+                                                        ).length;
 
                                                         return (
                                                             <button
                                                                 key={item.name}
-                                                                onClick={() => setActivePaymentSubTab(item.name as ProcurementSubTab)}
+                                                                onClick={() => setActiveProcurementSubTab(item.name as ProcurementSubTab)}
                                                                 className="p-6 border-2 border-gray-200 rounded-[4px] hover:border-indigo-500 hover:shadow-none border border-slate-200 transition-all duration-200 text-left group bg-white relative"
                                                             >
                                                                 <div className="flex items-center justify-between mb-4">
@@ -3594,8 +3641,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                         <p className="text-sm text-gray-500 mt-1">{item.desc}</p>
                                                                     </div>
                                                                     <div className="text-right">
-                                                                        <p className="text-lg font-bold text-gray-800">{formattedTotal}</p>
-                                                                        <p className="text-xs text-red-600 font-semibold mt-1">Credit</p>
+                                                                        <p className="text-lg font-bold text-gray-800">{activeOrders}</p>
+                                                                        <p className="text-xs text-indigo-600 font-semibold mt-1">Active Orders</p>
                                                                     </div>
                                                                 </div>
                                                             </button>
@@ -3605,190 +3652,85 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         </div>
                                     ) : (
                                         <div>
-                                            {selectedProcurementVendor ? (
-                                                <div className="erp-card border border-slate-200">
-                                                    <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                                                        <div className="flex items-center space-x-4">
-                                                            <button onClick={() => setSelectedProcurementVendor(null)} className="text-gray-500 hover:text-gray-700 p-1 rounded-[4px] hover:bg-gray-100 transition-colors">
-                                                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-                                                            </button>
-                                                            <h2 className="text-xl font-bold text-gray-800">{selectedProcurementVendor.vendorName}</h2>
-                                                        </div>
-                                                        <button
-                                                            onClick={() => setIsMonthView(!isMonthView)}
-                                                            className="px-4 py-2 bg-white border border-slate-200 rounded hover:bg-gray-50 text-sm font-medium text-gray-700"
-                                                        >
-                                                            {isMonthView ? 'Bill-wise View' : 'Month View'}
-                                                        </button>
-                                                    </div>
-                                                    <div className="overflow-x-auto">
-                                                        {isMonthView ? (
-                                                            <table className="min-w-full divide-y divide-gray-200">
-                                                                <thead className="bg-gray-50">
-                                                                    <tr>
-                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Month</th>
-                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Debit</th>
-                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Credit</th>
-                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Closing balance</th>
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody className="bg-white divide-y divide-gray-200">
-                                                                    {mockMonthlySummary.map((item) => (
-                                                                        <tr key={item.month} className="hover:bg-gray-50 transition-colors">
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{item.month}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.debit > 0 ? item.debit.toLocaleString('en-IN') : '-'}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.credit > 0 ? item.credit.toLocaleString('en-IN') : '-'}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{item.closingBalance.toLocaleString('en-IN')}Cr</td>
-                                                                        </tr>
-                                                                    ))}
-                                                                    <tr className="bg-gray-50 font-bold border-t-2 border-gray-300">
-                                                                        <td className="px-6 py-4 text-left text-sm text-gray-900 uppercase">Total</td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-indigo-600 border-t-2 border-gray-400">
-                                                                            {mockMonthlySummary.reduce((acc, curr) => acc + curr.debit, 0).toLocaleString('en-IN')}
-                                                                        </td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-indigo-600 border-t-2 border-gray-400">
-                                                                            {mockMonthlySummary.reduce((acc, curr) => acc + curr.credit, 0).toLocaleString('en-IN')}
-                                                                        </td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"></td>
-                                                                    </tr>
-                                                                </tbody>
-                                                            </table>
-                                                        ) : (
-                                                            <table className="min-w-full divide-y divide-gray-200">
-                                                                <thead className="bg-gray-50">
-                                                                    <tr>
-                                                                        {[
-                                                                            { label: 'Date', key: 'date' },
-                                                                            { label: 'Transfer from', key: 'transferFrom' },
-                                                                            { label: 'Invoice No', key: 'invoiceNo' },
-                                                                            { label: 'Ledger', key: 'ledger' },
-                                                                            { label: 'Status', key: 'status' },
-                                                                            { label: 'Debit', key: 'debit' },
-                                                                            { label: 'Credit', key: 'credit' },
-                                                                            { label: 'Running balance', key: 'runningBalance' }
-                                                                        ].map((header) => (
-                                                                            <th key={header.key} className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider align-top">
-                                                                                <div className="mb-2">{header.label}</div>
-                                                                                <input
-                                                                                    type="text"
-                                                                                    placeholder={`Filter ${header.label}`}
-                                                                                    value={ledgerFilters[header.key as keyof typeof ledgerFilters]}
-                                                                                    onChange={(e) => setLedgerFilters({ ...ledgerFilters, [header.key]: e.target.value })}
-                                                                                    className="block w-full text-xs border-gray-300 rounded-[4px] shadow-none border border-slate-200 focus:border-indigo-500 focus:ring-indigo-500 py-1 px-2"
-                                                                                />
-                                                                            </th>
-                                                                        ))}
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody className="bg-white divide-y divide-gray-200">
-                                                                    {filteredLedgerEntries.map((entry) => (
-                                                                        <tr key={entry.id} className="hover:bg-gray-50 transition-colors">
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(entry.date)}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.takenFrom}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-indigo-600">{entry.invoiceNo || '-'}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.ledger}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                                                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] 
-                                                                                        ${entry.status === 'Paid' ? 'bg-slate-100 text-slate-700' :
-                                                                                        entry.status === 'Unpaid' ? 'bg-red-100 text-red-800' :
-                                                                                            'bg-yellow-100 text-yellow-800'}`}>
-                                                                                    {entry.status}
-                                                                                </span>
-                                                                            </td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.debit > 0 ? entry.debit.toLocaleString('en-IN') : '-'}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.credit > 0 ? entry.credit.toLocaleString('en-IN') : '-'}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{entry.runningBalance.toLocaleString('en-IN')}Cr</td>
-                                                                        </tr>
-                                                                    ))}
-                                                                    {/* Totals Footer */}
-                                                                    <tr className="bg-gray-50 font-bold border-t-2 border-gray-300">
-                                                                        <td colSpan={5} className="px-6 py-4 text-right text-sm text-gray-900 uppercase">Total</td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-t-2 border-gray-400">
-                                                                            {filteredLedgerEntries.reduce((acc, curr) => acc + curr.debit, 0).toLocaleString('en-IN')}
-                                                                        </td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-t-2 border-gray-400">
-                                                                            {filteredLedgerEntries.reduce((acc, curr) => acc + curr.credit, 0).toLocaleString('en-IN')}
-                                                                        </td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"></td>
-                                                                    </tr>
-                                                                </tbody>
-                                                            </table>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            ) : (
+                                            <div className="flex items-center justify-between mb-6">
                                                 <div>
-                                                    <div className="flex items-center justify-between mb-6">
-                                                        <div>
-                                                            <div className="flex items-center space-x-2 text-sm text-gray-500 mb-1">
-                                                                <button onClick={() => setActiveProcurementSubTab('Dashboard')} className="hover:text-indigo-600 hover:underline">
-                                                                    Procurement
-                                                                </button>
-                                                                <span>/</span>
-                                                                <span className="text-indigo-600 font-medium">{activeProcurementSubTab}</span>
-                                                            </div>
-                                                            <h2 className="text-2xl font-bold text-gray-800">{activeProcurementSubTab}</h2>
-                                                            <p className="text-sm text-gray-500">Manage {activeProcurementSubTab.toLowerCase()} details here.</p>
-                                                        </div>
-                                                        <button
-                                                            onClick={() => setActiveProcurementSubTab('Dashboard')}
-                                                            className="px-4 py-2 border border-slate-200 rounded-[4px] text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                                                        >
-                                                            Back to Dashboard
+                                                    <div className="flex items-center space-x-2 text-sm text-gray-500 mb-1">
+                                                        <button onClick={() => setActiveProcurementSubTab('Dashboard')} className="hover:text-indigo-600 hover:underline">
+                                                            Procurement
                                                         </button>
+                                                        <span>/</span>
+                                                        <span className="text-indigo-600 font-medium">{activeProcurementSubTab}</span>
                                                     </div>
-
-                                                    {/* Aging Table with Columns */}
-                                                    <div className="erp-card border border-slate-200 overflow-hidden">
-                                                        <div className="overflow-x-auto">
-                                                            <table className="min-w-full divide-y divide-gray-200">
-                                                                <thead className="bg-gray-50">
-                                                                    <tr>
-                                                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vendor Code</th>
-                                                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vendor Name</th>
-                                                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">0-45</th>
-                                                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">45-90</th>
-                                                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">&gt;6m</th>
-                                                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">&gt;1yr</th>
-
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody className="bg-white divide-y divide-gray-200">
-                                                                    {vendorAgingTableData.map((vendor) => (
-                                                                        <tr key={vendor.id} className="hover:bg-gray-50 transition-colors">
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{vendor.vendorCode}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                                                                <button
-                                                                                    onClick={() => {
-                                                                                        // Convert to ProcurementItem format for ledger view
-                                                                                        const procurementItem: ProcurementItem = {
-                                                                                            id: vendor.id,
-                                                                                            vendorCode: vendor.vendorCode,
-                                                                                            vendorName: vendor.vendorName,
-                                                                                            amount: vendor.amount0to45 !== '-' ? vendor.amount0to45 : vendor.amount45to90,
-                                                                                            status: vendor.status
-                                                                                        };
-                                                                                        setSelectedProcurementVendor(procurementItem);
-                                                                                    }}
-                                                                                    className="text-indigo-600 hover:text-indigo-900 hover:underline font-medium text-left"
-                                                                                    title="View Ledger"
-                                                                                >
-                                                                                    {vendor.vendorName}
-                                                                                </button>
-                                                                            </td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">{vendor.amount0to45}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">{vendor.amount45to90}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">{vendor.amount6m}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">{vendor.amount1yr}</td>
-
-                                                                        </tr>
-                                                                    ))}
-                                                                </tbody>
-                                                            </table>
-                                                        </div>
-                                                    </div>
+                                                    <h2 className="text-2xl font-bold text-gray-800">{activeProcurementSubTab} Orders</h2>
+                                                    <p className="text-sm text-gray-500">Manage procurement orders for {activeProcurementSubTab.toLowerCase()}.</p>
                                                 </div>
-                                            )}
+                                                <div className="flex space-x-2">
+                                                    <button
+                                                        onClick={() => {
+                                                            // Logic to open Create PO Modal with category pre-selected
+                                                            // For now just open the modal
+                                                            setShowCreatePOModal(true);
+                                                        }}
+                                                        className="px-4 py-2 bg-indigo-600 text-white rounded-[4px] text-sm font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                                    >
+                                                        Create PO
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setActiveProcurementSubTab('Dashboard')}
+                                                        className="px-4 py-2 border border-slate-200 rounded-[4px] text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                                    >
+                                                        Back to Dashboard
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div className="erp-card border border-slate-200 overflow-hidden">
+                                                <table className="min-w-full divide-y divide-gray-200">
+                                                    <thead className="bg-gray-50">
+                                                        <tr>
+                                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PO Number</th>
+                                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vendor</th>
+                                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="bg-white divide-y divide-gray-200">
+                                                        {purchaseOrders
+                                                            .filter(po => po.category === activeProcurementSubTab || !po.category) // Show uncategorized if any, during dev
+                                                            .map((po) => (
+                                                                <tr key={po.id} className="hover:bg-gray-50 transition-colors">
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{po.poNumber}</td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(po.poDate)}</td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{po.vendorName}</td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${po.status === 'Approved' ? 'bg-green-100 text-green-800' :
+                                                                            po.status === 'Draft' ? 'bg-gray-100 text-gray-800' :
+                                                                                'bg-indigo-100 text-indigo-800'
+                                                                            }`}>
+                                                                            {po.status}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                                        <button
+                                                                            onClick={() => handleViewPO(po)}
+                                                                            className="text-indigo-600 hover:text-indigo-900"
+                                                                        >
+                                                                            View
+                                                                        </button>
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        {purchaseOrders.filter(po => po.category === activeProcurementSubTab).length === 0 && (
+                                                            <tr>
+                                                                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                                                                    No purchase orders found for this category.
+                                                                </td>
+                                                            </tr>
+                                                        )}
+                                                    </tbody>
+                                                </table>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -3902,14 +3844,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                 ].map((header) => (
                                                                     <th key={header.key} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider align-top">
                                                                         <div className="mb-2">{header.label}</div>
-                                                                        {['approve', 'action'].includes(header.key) ? (
-                                                                            <input
-                                                                                type="text"
-                                                                                placeholder={`Filter ${header.label}`}
-                                                                                disabled
-                                                                                className="block w-full text-xs border-gray-300 rounded-[4px] shadow-none border border-slate-200 bg-gray-100 py-1 px-2"
-                                                                            />
-                                                                        ) : (
+                                                                        {!['approve', 'action'].includes(header.key) && (
                                                                             <input
                                                                                 type="text"
                                                                                 placeholder={`Filter ${header.label}`}
@@ -3994,6 +3929,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                 {bill.status !== 'Posted' && (
                                                                                     <>
                                                                                         <button
+                                                                                            onClick={() => {
+                                                                                                setSelectedBillForPayment(bill);
+                                                                                                setShowPostPaymentModal(true);
+                                                                                            }}
                                                                                             className="px-3 py-1 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700"
                                                                                             title="Initiate & Post"
                                                                                         >
@@ -4882,11 +4821,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                             )}
                         </div>
                     </div>
-                )}
+                )
+            }
 
             {/* Toast notifications handled globally */}
 
-        </div>
+        </div >
     )
 };
 

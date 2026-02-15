@@ -171,6 +171,15 @@ class ApiService {
     // INVENTORY - ITEMS
     // ============================================================================
 
+    /**
+     * Get all inventory locations
+     * @returns Array of locations
+     */
+    async getInventoryLocations() {
+        return httpClient.get<any[]>('/api/inventory/locations/');
+    }
+
+
     async getStockItems() {
         return httpClient.get<StockItem[]>('/api/inventory/items/');
     }
