@@ -261,7 +261,17 @@ if (typeof window !== 'undefined') {
     window.addEventListener('unhandledrejection', (event) => {
         event.preventDefault(); // Prevent default browser error display
 
-        console.error('Unhandled promise rejection:');
+        // Log full error details for debugging
+        if (process.env.NODE_ENV === 'development') {
+            console.group('🔴 Unhandled Promise Rejection');
+            console.error('Reason:', event.reason);
+            if (event.reason?.stack) {
+                console.error('Stack:', event.reason.stack);
+            }
+            console.groupEnd();
+        } else {
+            console.error('Unhandled promise rejection:', event.reason);
+        }
 
         // Show sanitized error to user
         handleApiError(event.reason, 'System Error');
@@ -271,7 +281,17 @@ if (typeof window !== 'undefined') {
     window.addEventListener('error', (event) => {
         event.preventDefault(); // Prevent default browser error display
 
-        console.error('Global error:');
+        // Log full error details for debugging
+        if (process.env.NODE_ENV === 'development') {
+            console.group('🔴 Global Error');
+            console.error('Message:', event.message);
+            console.error('Source:', event.filename);
+            console.error('Line:', event.lineno, 'Column:', event.colno);
+            console.error('Error Object:', event.error);
+            console.groupEnd();
+        } else {
+            console.error('Global error:', event.message);
+        }
 
         // Only show generic message for global errors
         showError('An unexpected error occurred. Please refresh the page.', 'System Error');

@@ -44,6 +44,53 @@ class VoucherSalesInvoiceDetails(BaseModel):
     # Reference from Item Tab (logically header info)
     sales_order_no = models.CharField(max_length=50, null=True, blank=True)
 
+    # GST-Compliant Fields
+    place_of_supply = models.CharField(
+        max_length=2, 
+        null=True, 
+        blank=True, 
+        help_text="State code (01-38)"
+    )
+    reverse_charge = models.CharField(
+        max_length=1, 
+        default='N', 
+        help_text="Reverse charge applicable (Y/N)"
+    )
+    invoice_type = models.CharField(
+        max_length=50, 
+        default='Regular', 
+        help_text="Invoice type (Regular, SEZ with payment, etc.)"
+    )
+    gst_export_type = models.CharField(
+        max_length=10, 
+        null=True, 
+        blank=True, 
+        help_text="Export type (WPAY/WOPAY) for exports"
+    )
+    port_code = models.CharField(
+        max_length=6, 
+        null=True, 
+        blank=True, 
+        help_text="6-digit port code for exports"
+    )
+    shipping_bill_number = models.CharField(
+        max_length=50, 
+        null=True, 
+        blank=True, 
+        help_text="Shipping bill number for exports"
+    )
+    shipping_bill_date = models.DateField(
+        null=True, 
+        blank=True, 
+        help_text="Shipping bill date for exports"
+    )
+    ecommerce_gstin = models.CharField(
+        max_length=15, 
+        null=True, 
+        blank=True, 
+        help_text="E-commerce operator GSTIN"
+    )
+
     class Meta:
         db_table = 'voucher_sales_invoicedetails'
         verbose_name = "Voucher Sales Invoice Detail"

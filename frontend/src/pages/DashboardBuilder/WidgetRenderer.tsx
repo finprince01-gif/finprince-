@@ -218,7 +218,7 @@ const WidgetRenderer: React.FC<WidgetRendererProps> = ({ widget, data }) => {
             </div>
 
             {/* Content Area */}
-            <div className="flex-1 p-6 min-h-0 relative">
+            <div className="flex-1 p-6 min-h-[200px] relative">
                 {renderVisual()}
             </div>
         </div>

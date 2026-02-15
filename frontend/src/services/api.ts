@@ -230,6 +230,13 @@ class ApiService {
     }
 
     /**
+     * Get Pending GRNs for reference in Vouchers
+     */
+    async getPendingGRNs() {
+        return httpClient.get<any[]>('/api/inventory/operations/pending-grns/');
+    }
+
+    /**
      * Get Job Work Outward Slips (for reference in Receipt)
      */
     async getJobWorkOutwardSlips() {

@@ -75,7 +75,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
     // Populate from AI Extraction
     useEffect(() => {
         if (prefilledData) {
-            
+
             // Assuming prefilledData.invoiceDate is YYYY-MM-DD
             if (prefilledData.invoiceDate) {
                 setDate(prefilledData.invoiceDate);
@@ -105,12 +105,12 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
     useEffect(() => {
         const fetchPaymentConfigs = async () => {
             try {
-                
+
                 const data = await httpClient.get<any[]>('/api/masters/voucher-configurations/?voucher_type=payments');
-                
+
 
                 const paymentConfigs = data?.filter(config => config.voucher_type === 'payments') || [];
-                
+
 
                 setPaymentVoucherConfigs(paymentConfigs);
                 if (paymentConfigs && paymentConfigs.length === 1) {
@@ -224,11 +224,6 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
     };
 
     const handlePostPayment = async () => {
-        if (isLimitReached && onLimitReached) {
-            onLimitReached();
-            return;
-        }
-
         try {
             if (activeTab === 'single') {
                 const payload = {
@@ -245,9 +240,9 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                     }))
                 };
 
-                
+
                 const response = await httpClient.post('/api/vouchers/payment-single/', payload);
-                
+
                 showSuccess('Single Payment Voucher posted successfully!');
 
                 handleCancel();
@@ -269,9 +264,9 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                         }))
                 };
 
-                
+
                 const response = await httpClient.post('/api/vouchers/payment-bulk/', payload);
-                
+
                 showSuccess('Bulk Payment Voucher posted successfully!');
 
                 handleCancel();

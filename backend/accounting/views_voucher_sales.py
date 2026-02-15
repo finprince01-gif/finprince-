@@ -9,8 +9,6 @@ class VoucherSalesViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
     serializer_class = VoucherSalesInvoiceDetailsSerializer
 
     def perform_create(self, serializer):
-        from .utils_subscription import check_subscription_limit
-        check_subscription_limit(self.request.user)
         super().perform_create(serializer)
 
     def create(self, request, *args, **kwargs):

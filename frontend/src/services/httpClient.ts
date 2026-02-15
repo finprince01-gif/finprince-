@@ -98,17 +98,12 @@ class HttpClient {
 
                 try {
 
-
                     // Call backend refresh endpoint
-                    // Note: Backend reads refresh token from HTTP-only cookie, 
-                    // but we also support reading from storage if response body contained it.
-                    // For this setup, we assume backend handles the cookie or body.
-                    // Based on provided code, the backend view reads COOKIES for the refresh token.
+                    // The backend reads the refresh token from HTTP-only cookies
                     const refreshResponse = await fetch(`/api/auth/refresh/`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ refresh: localStorage.getItem('refreshToken') }),
-                        credentials: 'include' // Send refresh cookie
+                        credentials: 'include' // Send cookies (refresh token is in HTTP-only cookie)
                     });
 
                     if (!refreshResponse.ok) {

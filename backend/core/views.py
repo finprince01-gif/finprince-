@@ -322,12 +322,14 @@ class AIProxyView(views.APIView):
                         data = parsed_data
 
                     if data and isinstance(data, dict):
+                        # Create ExtractedInvoice with timezone-aware datetime
                         ExtractedInvoice.objects.create(
                             tenant_id=tenant_id,
                             invoice_number=data.get('Invoice Number') or data.get('invoiceNumber'),
                             supplier_name=data.get('Supplier Name') or data.get('sellerName'),
                             invoice_value=str(data.get('Invoice Value') or data.get('totalAmount') or ''),
-                            additional_fields=data
+                            additional_fields=data,
+                            created_at=timezone.now()  # Use timezone-aware datetime
                         )
                         logger.info(f"✅ Recorded extraction for tenant {tenant_id}")
                 except Exception as e:
