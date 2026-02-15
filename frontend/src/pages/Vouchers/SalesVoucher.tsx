@@ -524,11 +524,14 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
     const [railUptoPortDeliveryType, setRailUptoPortDeliveryType] = useState('');
     const [railUptoPortTransporterId, setRailUptoPortTransporterId] = useState('');
     const [railUptoPortTransporterName, setRailUptoPortTransporterName] = useState('');
+    const [railUptoPortVehicleNo, setRailUptoPortVehicleNo] = useState('');
+    const [railUptoPortLrGrConsignment, setRailUptoPortLrGrConsignment] = useState('');
     const [railBeyondPortRailwayReceiptNo, setRailBeyondPortRailwayReceiptNo] = useState('');
     const [railBeyondPortRailwayReceiptDate, setRailBeyondPortRailwayReceiptDate] = useState('');
     const [railBeyondPortOrigin, setRailBeyondPortOrigin] = useState('');
     const [railBeyondPortOriginCountry, setRailBeyondPortOriginCountry] = useState('');
     const [railBeyondPortRailNo, setRailBeyondPortRailNo] = useState('');
+    const [railBeyondPortFnrNo, setRailBeyondPortFnrNo] = useState('');
     const [railBeyondPortStationOfLoading, setRailBeyondPortStationOfLoading] = useState('');
     const [railBeyondPortStationOfDischarge, setRailBeyondPortStationOfDischarge] = useState('');
     const [railBeyondPortFinalDestination, setRailBeyondPortFinalDestination] = useState('');
@@ -751,11 +754,14 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                     rail_upto_port_delivery_type: railUptoPortDeliveryType,
                     rail_upto_port_transporter_id: railUptoPortTransporterId,
                     rail_upto_port_transporter_name: railUptoPortTransporterName,
+                    rail_upto_port_vehicle_no: railUptoPortVehicleNo,
+                    rail_upto_port_lr_gr_consignment: railUptoPortLrGrConsignment,
                     rail_beyond_port_receipt_no: railBeyondPortRailwayReceiptNo,
                     rail_beyond_port_receipt_date: formatDate(railBeyondPortRailwayReceiptDate),
                     rail_beyond_port_origin: railBeyondPortOrigin,
                     rail_beyond_port_origin_country: railBeyondPortOriginCountry,
                     rail_beyond_port_rail_no: railBeyondPortRailNo,
+                    rail_beyond_port_fnr_no: railBeyondPortFnrNo,
                     rail_beyond_port_station_loading: railBeyondPortStationOfLoading,
                     rail_beyond_port_station_discharge: railBeyondPortStationOfDischarge,
                     rail_beyond_port_final_destination: railBeyondPortFinalDestination,
@@ -2335,7 +2341,6 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                 setTransporterId('');
                                                 setTransporterName('');
                                                 setVehicleNo('');
-                                                setLrGrConsignment('');
                                             }
                                         }}
                                         className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
@@ -2360,7 +2365,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         onChange={(e) => setTransporterId(e.target.value)}
                                         disabled={deliveryType === 'Courier'}
                                         className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                                        placeholder="Editable with numerics and alphabet"
+
                                     />
                                 </div>
 
@@ -2375,7 +2380,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         onChange={(e) => setTransporterName(e.target.value)}
                                         disabled={deliveryType === 'Courier'}
                                         className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                                        placeholder="Editable with numerics and alphabet"
+
                                     />
                                 </div>
 
@@ -2390,7 +2395,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         onChange={(e) => setVehicleNo(e.target.value)}
                                         disabled={deliveryType === 'Courier'}
                                         className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                                        placeholder="Editable with numerics and alphabet"
+
                                     />
                                 </div>
 
@@ -2403,9 +2408,9 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         type="text"
                                         value={lrGrConsignment}
                                         onChange={(e) => setLrGrConsignment(e.target.value)}
-                                        disabled={deliveryType === 'Courier'}
+                                        disabled={false}
                                         className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                                        placeholder="Editable with numerics and alphabet"
+
                                     />
                                 </div>
                             </div>
@@ -2578,18 +2583,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                 />
                                             </div>
 
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                    Dest. Country
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={beyondPortDestCountry}
-                                                    onChange={(e) => setBeyondPortDestCountry(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                    placeholder="Country"
-                                                />
-                                            </div>
+
                                         </div>
                                     </div>
                                 </div>
@@ -2628,6 +2622,18 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                 />
                                             </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Vehicle No.
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={railUptoPortVehicleNo}
+                                                    onChange={(e) => setRailUptoPortVehicleNo(e.target.value)}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                />
+                                            </div>
                                         </div>
 
                                         <div className="space-y-4">
@@ -2639,6 +2645,18 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="text"
                                                     value={railUptoPortTransporterId}
                                                     onChange={(e) => setRailUptoPortTransporterId(e.target.value)}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    LR/GR/Consignment No.
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={railUptoPortLrGrConsignment}
+                                                    onChange={(e) => setRailUptoPortLrGrConsignment(e.target.value)}
                                                     className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                 />
                                             </div>
@@ -2754,16 +2772,17 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
 
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                    Dest. Country
+                                                    FNR No.
                                                 </label>
                                                 <input
                                                     type="text"
-                                                    value={railBeyondPortDestCountry}
-                                                    onChange={(e) => setRailBeyondPortDestCountry(e.target.value)}
+                                                    value={railBeyondPortFnrNo}
+                                                    onChange={(e) => setRailBeyondPortFnrNo(e.target.value)}
                                                     className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                    placeholder="Country"
                                                 />
                                             </div>
+
+
                                         </div>
                                     </div>
                                 </div>
@@ -2813,13 +2832,28 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                             <label className="block text-sm font-medium text-gray-700 mb-1">
                                                 Eway Bill - Available
                                             </label>
-                                            <input
-                                                type="text"
-                                                value={entry.available}
-                                                onChange={(e) => handleEwayEntryChange(entry.id, 'available', e.target.value)}
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                placeholder="Yes/No"
-                                            />
+                                            <div className="flex gap-4">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleEwayEntryChange(entry.id, 'available', 'Yes')}
+                                                    className={`flex-1 px-4 py-2 border rounded-[4px] transition-colors ${entry.available === 'Yes'
+                                                            ? 'bg-indigo-600 text-white border-indigo-600'
+                                                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                                                        }`}
+                                                >
+                                                    Yes
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleEwayEntryChange(entry.id, 'available', 'No')}
+                                                    className={`flex-1 px-4 py-2 border rounded-[4px] transition-colors ${entry.available === 'No'
+                                                            ? 'bg-indigo-600 text-white border-indigo-600'
+                                                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                                                        }`}
+                                                >
+                                                    No
+                                                </button>
+                                            </div>
                                         </div>
 
                                         <div>
