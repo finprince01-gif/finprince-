@@ -1286,7 +1286,7 @@ const InventoryPage: React.FC = () => {
           delivery_challan: {
             dispatch_from: dispatchFrom,
             mode_of_transport: modeOfTransport,
-            dispatch_date: dispatchDate,
+            dispatch_date: dispatchDate || deliveryChallanDate,
             dispatch_time: dispatchTime,
             delivery_type: deliveryType,
             transporter_id: transporterId,
@@ -1325,7 +1325,6 @@ const InventoryPage: React.FC = () => {
 
             // Maintained for compatibility
             dispatch_address: dispatchFrom || deliveryChallanAddress,
-            dispatch_date: dispatchDate || deliveryChallanDate,
           },
           eway_bill: (ewayValidationEntries.length > 0 && (ewayValidationEntries[0].updatedVehicleNo || ewayValidationEntries[0].date)) ? {
             vehicle_number: ewayValidationEntries[0].updatedVehicleNo || null,
@@ -5247,7 +5246,7 @@ const InventoryPage: React.FC = () => {
                       </div>
 
                       {/* Delivery Challan Details - For Inter-unit & Outward (Sales/Pur Return) */}
-                      {(issueSlipTab === 'inter-unit' || issueSlipTab === 'outward') && deliveryChallanFieldsJSX}
+                      {issueSlipTab === 'inter-unit' && deliveryChallanFieldsJSX}
 
                       {/* Action Buttons */}
                       <div className="flex gap-3 justify-end border-t border-gray-200 pt-5">
