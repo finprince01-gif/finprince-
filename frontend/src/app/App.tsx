@@ -60,6 +60,9 @@ import ErrorBoundary from '../components/ErrorBoundary';  // Error handling wrap
 import MassUploadResultPage from '../pages/MassUploadResult'; // Bulk upload results page
 import { showError, showSuccess } from '../utils/toast';
 
+// Import assets
+import kikiLogo from '../assets/fox-logo-transparent.png';
+
 // ============================================================================
 // SERVICE IMPORTS
 // ============================================================================
@@ -1205,7 +1208,7 @@ const App: React.FC = () => {
         className="fixed bottom-2 right-2 w-28 h-28 hover:scale-110 transition-transform duration-300 z-50 flex items-center justify-center group filter drop-shadow-none border-none outline-none focus:outline-none"
         title="Chat with Kiki Agent"
       >
-        <img src="/src/assets/fox-logo-transparent.png" alt="AI Agent" className="w-full h-full object-contain" />
+        <img src={kikiLogo} alt="AI Agent" className="w-full h-full object-contain" />
       </button>
 
 

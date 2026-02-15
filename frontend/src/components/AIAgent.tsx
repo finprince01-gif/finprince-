@@ -54,6 +54,9 @@ import type { AgentMessage } from '../types';
 // Import Icon component for UI icons
 import Icon from './Icon';
 
+// Import assets
+import kikiLogo from '../assets/fox-logo-transparent.png';
+
 /**
  * Props for AIAgent component
  */
@@ -162,7 +165,7 @@ const AIAgent: React.FC<AIAgentProps> = ({ isOpen, onClose, messages, onSendMess
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
           <div className="flex items-center space-x-3">
             <div className="w-20 h-20 flex items-center justify-center">
-              <img src="/src/assets/fox-logo-transparent.png" alt="Kiki" className="w-full h-full object-contain" />
+              <img src={kikiLogo} alt="Kiki" className="w-full h-full object-contain" />
             </div>
             <h3 className="text-lg font-semibold text-gray-800">Kiki Agent</h3>
           </div>
@@ -176,7 +179,7 @@ const AIAgent: React.FC<AIAgentProps> = ({ isOpen, onClose, messages, onSendMess
           {messages.map((msg, index) => (
             <div key={index}>
               <div className={`flex items-end gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                {msg.role === 'model' && <div className="w-10 h-10 flex items-center justify-center flex-shrink-0"><img src="/src/assets/fox-logo-transparent.png" alt="Kiki" className="w-full h-full object-contain filter drop-shadow-none" /></div>}
+                {msg.role === 'model' && <div className="w-10 h-10 flex items-center justify-center flex-shrink-0"><img src={kikiLogo} alt="Kiki" className="w-full h-full object-contain filter drop-shadow-none" /></div>}
                 <div className={`max-w-xs md:max-w-sm rounded-[4px] px-4 py-2 text-sm ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-gray-100 text-gray-800 rounded-bl-none'}`}>
                   {msg.text}
                 </div>
@@ -199,7 +202,7 @@ const AIAgent: React.FC<AIAgentProps> = ({ isOpen, onClose, messages, onSendMess
           ))}
           {isLoading && (
             <div className="flex items-end gap-2 justify-start">
-              <div className="w-10 h-10 flex items-center justify-center flex-shrink-0"><img src="/src/assets/fox-logo-transparent.png" alt="Kiki" className="w-full h-full object-contain filter drop-shadow-none" /></div>
+              <div className="w-10 h-10 flex items-center justify-center flex-shrink-0"><img src={kikiLogo} alt="Kiki" className="w-full h-full object-contain filter drop-shadow-none" /></div>
               <div className="max-w-xs rounded-[4px] px-4 py-2 bg-gray-100 text-gray-800 rounded-bl-none">
                 <div className="flex items-center justify-center space-x-1">
                   <div className="w-1.5 h-1.5 bg-gray-400 rounded-[4px] animate-bounce"></div>
