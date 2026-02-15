@@ -4253,21 +4253,44 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
   // Get expense ledgers
   const expenseLedgers = useMemo(() => {
-    return allLedgers.filter(l =>
-      l.group?.toLowerCase().includes('expense') ||
-      l.group?.toLowerCase().includes('indirect')
-    );
+    return allLedgers.filter(l => {
+      const searchFields = [
+        l.category,
+        l.group,
+        l.sub_group_1,
+        l.sub_group_2,
+        l.sub_group_3,
+        l.ledger_type
+      ].map(f => (f || '').toLowerCase());
+
+      return searchFields.some(f =>
+        f.includes('expense') ||
+        f.includes('indirect') ||
+        f.includes('expenditure')
+      );
+    });
   }, [allLedgers]);
 
   // Get Post To ledgers (Liabilities + Cash & Bank)
   const postToLedgers = useMemo(() => {
-    return allLedgers.filter(l =>
-      l.group?.toLowerCase().includes('liabilit') ||
-      l.group?.toLowerCase().includes('bank') ||
-      l.group?.toLowerCase().includes('cash') ||
-      l.group?.toLowerCase().includes('od') ||
-      l.group?.toLowerCase().includes('cc')
-    );
+    return allLedgers.filter(l => {
+      const searchFields = [
+        l.category,
+        l.group,
+        l.sub_group_1,
+        l.sub_group_2,
+        l.sub_group_3,
+        l.ledger_type
+      ].map(f => (f || '').toLowerCase());
+
+      return searchFields.some(f =>
+        f.includes('liabilit') ||
+        f.includes('bank') ||
+        f.includes('cash') ||
+        f.includes('od') ||
+        f.includes('cc')
+      );
+    });
   }, [allLedgers]);
 
   // Handle expense row change
@@ -4973,7 +4996,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           .table-header { padding: 0.75rem 1rem; text-align: center; font-size: 0.75rem; font-weight: 600; color: #4b5563; text-transform: uppercase; letter-spacing: 0.05em; background-color: #f9fafb; }
         `}
         </style>
-        {voucherType === 'Sales' && <SalesVoucher prefilledData={prefilledData} clearPrefilledData={clearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} />}
+        {voucherType === 'Sales' && <SalesVoucher prefilledData={prefilledData} clearPrefilledData={clearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} customers={richCustomers} />}
         {voucherType === 'Payment' && <PaymentVoucherSingle prefilledData={prefilledData} clearPrefilledData={clearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} />}
         {voucherType === 'Receipt' && <ReceiptVoucher prefilledData={prefilledData} clearPrefilledData={clearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} />}
         {voucherType === 'Purchase' && renderSalesPurchaseForm()}

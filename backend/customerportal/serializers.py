@@ -3,6 +3,7 @@ Customer Portal Serializers
 Handles data serialization for API responses
 """
 from rest_framework import serializers
+import json
 from .database import (
     CustomerMaster,
     CustomerMasterCategory,
@@ -130,6 +131,48 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
         Convert the model instance to a dictionary for JSON serialization
         Only include fields that actually exist in the BasicDetails model
         """
+        # Helper to parse address
+        def parse_address_data(addr_str):
+            if not addr_str:
+                return {}
+            try:
+                addr_str = addr_str.strip()
+                if (addr_str.startswith('{') and addr_str.endswith('}')):
+                    return json.loads(addr_str)
+                return {'addressLine1': addr_str}
+            except:
+                return {'addressLine1': addr_str}
+
+        # Process branches
+        processed_branches = []
+        dropdown_branches = []
+        
+        for gst in instance.gst_details.all():
+            addr_data = parse_address_data(gst.branch_address)
+            
+            processed_branch = {
+                'id': gst.id,
+                'gstin': gst.gstin,
+                'defaultRef': gst.branch_reference_name,
+                'addressLine1': addr_data.get('addressLine1', ''),
+                'addressLine2': addr_data.get('addressLine2', ''),
+                'city': addr_data.get('city', ''),
+                'pincode': addr_data.get('pincode', ''),
+                'state': addr_data.get('state', ''),
+                'country': addr_data.get('country', 'India'),
+                'contactPerson': gst.branch_contact_person,
+                'email': gst.branch_email,
+                'contactNumber': gst.branch_contact_number
+            }
+            # For backward compatibility if needed, or structured usage
+            processed_branches.append(processed_branch)
+            
+            dropdown_branches.append({
+                'id': gst.id,
+                'gstin': gst.gstin,
+                'branch_reference_name': gst.branch_reference_name or "Main Branch",
+            })
+
         return {
             'id': instance.id,
             'tenant_id': instance.tenant_id,
@@ -151,29 +194,11 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
             # Form-compatible structure for GST & Branch Configuration
             'gst_details': {
                 'gstins': [gst.gstin for gst in instance.gst_details.all() if gst.gstin],
-                'branches': [
-                    {
-                        'id': gst.id,
-                        'gstin': gst.gstin,
-                        'defaultRef': gst.branch_reference_name,
-                        'address': gst.branch_address,
-                        'contactPerson': gst.branch_contact_person,
-                        'email': gst.branch_email,
-                        'contactNumber': gst.branch_contact_number
-                    }
-                    for gst in instance.gst_details.all()
-                ]
+                'branches': processed_branches
             },
             
             # Compatibility list for dropdowns
-            'branches': [
-                {
-                    'id': gst.id,
-                    'gstin': gst.gstin,
-                    'branch_reference_name': gst.branch_reference_name or "Main Branch",
-                }
-                for gst in instance.gst_details.all()
-            ],
+            'branches': dropdown_branches,
             
             # Products/Services
             'products_services': {
@@ -308,12 +333,24 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
                 # Process branches first (they have more detail)
                 for branch in branches:
                     branch_gstin = branch.get('gstin')
+                    
+                    # Construct structured address JSON
+                    address_data = {
+                        'addressLine1': branch.get('addressLine1', branch.get('address', '')),
+                        'addressLine2': branch.get('addressLine2', ''),
+                        'city': branch.get('city', ''),
+                        'pincode': branch.get('pincode', ''),
+                        'state': branch.get('state', ''),
+                        'country': branch.get('country', 'India')
+                    }
+                    branch_address_json = json.dumps(address_data)
+
                     CustomerMasterCustomerGSTDetails.objects.create(
                         customer_basic_detail=basic_details,
                         tenant_id=basic_details.tenant_id,
                         gstin=branch_gstin,
                         branch_reference_name=branch.get('defaultRef'),
-                        branch_address=branch.get('address'),
+                        branch_address=branch_address_json,
                         branch_contact_person=branch.get('contactPerson'),
                         branch_email=branch.get('email'),
                         branch_contact_number=branch.get('contactNumber'),
@@ -518,12 +555,24 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
                 
                 for branch in branches:
                     branch_gstin = branch.get('gstin')
+                    
+                    # Construct structured address JSON
+                    address_data = {
+                        'addressLine1': branch.get('addressLine1', branch.get('address', '')),
+                        'addressLine2': branch.get('addressLine2', ''),
+                        'city': branch.get('city', ''),
+                        'pincode': branch.get('pincode', ''),
+                        'state': branch.get('state', ''),
+                        'country': branch.get('country', 'India')
+                    }
+                    branch_address_json = json.dumps(address_data)
+
                     CustomerMasterCustomerGSTDetails.objects.create(
                         customer_basic_detail=instance,
                         tenant_id=instance.tenant_id,
                         gstin=branch_gstin,
                         branch_reference_name=branch.get('defaultRef'),
-                        branch_address=branch.get('address'),
+                        branch_address=branch_address_json,
                         branch_contact_person=branch.get('contactPerson'),
                         branch_email=branch.get('email'),
                         branch_contact_number=branch.get('contactNumber'),

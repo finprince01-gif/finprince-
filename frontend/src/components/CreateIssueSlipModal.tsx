@@ -1,12 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { httpClient } from '../services/httpClient';
 import { showWarning } from '../utils/toast';
-import Icon from './Icon'; // Assuming Icon component exists, need to verify path or mock it
-// If Icon doesn't exist at this path, I'll use simple SVGs or adjust. 
-// Based on Vouchers.tsx, it seems Icon is at '../../components/Icon' from pages, so './Icon' is likely incorrect if this is in 'components'.
-// Let's check where Icon is available or just use inline SVGs to be safe and self-contained, or correct the import.
-// Checking previous view_file of Vouchers.tsx: `import Icon from '../../components/Icon';`
-// So in `src/components/CreateIssueSlipModal.tsx`, it should be `import Icon from './Icon';` IF Icon is in `src/components`.
+import Icon from './Icon';
+import SearchableDropdown from './SearchableDropdown';
+import { apiService } from '../services/api';
 
 interface IssueSlipItem {
     id: number;
@@ -14,6 +11,7 @@ interface IssueSlipItem {
     itemName: string;
     hsnCode: string;
     uom: string;
+    alternateUnit: string;
     quantity: string;
     boxes: string;
 }
@@ -43,23 +41,63 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
 
     // Locations State
     const [locations, setLocations] = useState<Location[]>([]);
+    const [salesOrdersList, setSalesOrdersList] = useState<any[]>([]);
+    const [customersList, setCustomersList] = useState<string[]>([]);
+    const [fullCustomersData, setFullCustomersData] = useState<any[]>([]); // Detailed customer records
+    const [inventoryItems, setInventoryItems] = useState<any[]>([]); // Inventory Masters data
 
     // Items State
     const [items, setItems] = useState<IssueSlipItem[]>([
-        { id: 1, itemCode: '', itemName: '', hsnCode: '', uom: '', quantity: '', boxes: '' }
+        { id: 1, itemCode: '', itemName: '', hsnCode: '', uom: '', alternateUnit: '', quantity: '', boxes: '' }
     ]);
 
-    // Fetch locations on mount
+    // Fetch data on mount
     useEffect(() => {
-        const fetchLocations = async () => {
+        const fetchData = async () => {
             try {
-                const response = await httpClient.get<Location[]>('/api/inventory/locations/');
-                setLocations(response || []);
+                // Fetch data from multiple sources to ensure full coverage
+                const [locResponse, soResponse, custResponse, richCustResponse, invResponse] = await Promise.all([
+                    httpClient.get<any>('/api/inventory/locations/').catch(() => []),
+                    httpClient.get<any>('/api/customerportal/sales-orders/').catch(() => []),
+                    httpClient.get<any>('/api/customerportal/customers/').catch(() => []),
+                    apiService.getRichCustomers().catch(() => []),
+                    apiService.getStockItems().catch(() => [])
+                ]);
+
+                const getList = (response: any) => {
+                    if (!response) return [];
+                    if (Array.isArray(response)) return response;
+                    if (Array.isArray(response.results)) return response.results;
+                    if (Array.isArray(response.data)) return response.data;
+                    return [];
+                };
+
+                setLocations(getList(locResponse));
+                setInventoryItems(getList(invResponse));
+
+                const soList = getList(soResponse);
+                setSalesOrdersList(soList);
+
+                const custData = getList(custResponse);
+                const richCustData = getList(richCustResponse);
+                setFullCustomersData([...custData, ...richCustData]);
+
+                // Merge customers from all sources for maximum coverage
+                const extractNames = (arr: any[]) =>
+                    arr.map((c: any) => c.customer_name || c.name || c.party_name).filter(Boolean);
+
+                const customers = extractNames(custData);
+                const richCustomers = extractNames(richCustData);
+                const soCustomers = extractNames(soList);
+
+                const allCustomers = Array.from(new Set([...customers, ...richCustomers, ...soCustomers])).sort();
+                setCustomersList(allCustomers);
+
             } catch (error) {
-                console.error('Failed to fetch locations:');
+                console.error('Failed to fetch initial data:', error);
             }
         };
-        fetchLocations();
+        fetchData();
     }, []);
 
     const handleAddItem = () => {
@@ -69,6 +107,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
             itemName: '',
             hsnCode: '',
             uom: '',
+            alternateUnit: '',
             quantity: '',
             boxes: ''
         };
@@ -81,8 +120,91 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
         }
     };
 
+    // Derived State: Branches for selected customer
+    const customerBranches = React.useMemo(() => {
+        if (!customerName) return [];
+
+        const detail = fullCustomersData.find(c =>
+            (c.customer_name || c.name || c.party_name) === customerName
+        );
+        let masterBranches = detail?.branches?.map((b: any) => b.branch_reference_name) || [];
+
+        // Also check Sales Orders for this customer for extra reliability
+        const soBranches = salesOrdersList
+            .filter(so => (so.customer_name || so.party_name) === customerName && so.branch)
+            .map(so => so.branch);
+
+        return Array.from(new Set([...masterBranches, ...soBranches])).filter(Boolean).sort();
+    }, [customerName, fullCustomersData, salesOrdersList]);
+
+    // Autofetch Address & GSTIN logic - Only triggers when BOTH are present
+    useEffect(() => {
+        if (!customerName || !branch) {
+            setAddress('');
+            setGstin('');
+            return;
+        }
+
+        // 1. Try finding in Master Customers (Preferred source for accuracy)
+        const customer = fullCustomersData.find(c =>
+            (c.customer_name || c.name || c.party_name) === customerName
+        );
+
+        if (customer) {
+            const branchDetail = customer.gst_details?.branches?.find((b: any) =>
+                b.defaultRef === branch
+            );
+
+            if (branchDetail) {
+                const city = branchDetail.city ? `, ${branchDetail.city}` : '';
+                const state = branchDetail.state ? `, ${branchDetail.state}` : '';
+                const pin = branchDetail.pincode ? ` - ${branchDetail.pincode}` : '';
+                const fullAddr = `${branchDetail.addressLine1}${branchDetail.addressLine2 ? ', ' + branchDetail.addressLine2 : ''}${city}${state}${pin}`;
+
+                setAddress(fullAddr);
+                if (branchDetail.gstin) setGstin(branchDetail.gstin);
+                return;
+            }
+        }
+
+        // 2. Fallback: Search in Sales Orders
+        const order = salesOrdersList.find(so =>
+            (so.customer_name || so.party_name) === customerName && so.branch === branch
+        );
+
+        if (order) {
+            if (order.address) setAddress(order.address);
+            if (order.gst_no) setGstin(order.gst_no);
+        }
+    }, [customerName, branch, fullCustomersData, salesOrdersList]);
+
     const handleItemChange = (id: number, field: keyof IssueSlipItem, value: string) => {
-        setItems(items.map(item => item.id === id ? { ...item, [field]: value } : item));
+        setItems(items.map(item => {
+            if (item.id !== id) return item;
+
+            let updatedItem = { ...item, [field]: value };
+
+            // Cross-fetch logic
+            if (field === 'itemCode') {
+                const found = inventoryItems.find(i => i.item_code === value);
+                if (found) {
+                    updatedItem.itemName = found.item_name || found.name || '';
+                    updatedItem.hsnCode = found.hsn_code || '';
+                    updatedItem.uom = found.uom || '';
+                    updatedItem.alternateUnit = found.alternate_uom || '';
+                }
+            } else if (field === 'itemName') {
+                const found = inventoryItems.find(i => (i.item_name || i.name) === value);
+                if (found) {
+                    updatedItem.itemCode = found.item_code || '';
+                    updatedItem.hsnCode = found.hsn_code || '';
+                    updatedItem.uom = found.uom || '';
+                    updatedItem.alternateUnit = found.alternate_uom || '';
+                }
+            }
+
+            return updatedItem;
+        }));
     };
 
     const calculateTotalBoxes = () => {
@@ -114,12 +236,13 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                 item_name: item.itemName || '',
                 hsn_code: item.hsnCode || '',
                 uom: item.uom || '',
+                alternate_unit: item.alternateUnit || '',
                 quantity: parseFloat(item.quantity) || 0,
                 no_of_boxes: item.boxes || '0'
             }))
         };
 
-        
+
         onSave(payload);
         onClose();
     };
@@ -188,22 +311,63 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                             <label className="block text-sm font-medium text-gray-700 mb-1">Sales Order No.</label>
                             <select
                                 value={salesOrderNo}
-                                onChange={(e) => setSalesOrderNo(e.target.value)}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    setSalesOrderNo(val);
+                                    const order = salesOrdersList.find(so => so.so_number === val);
+                                    if (order) {
+                                        if (order.customer_name) setCustomerName(order.customer_name);
+                                        if (order.branch) setBranch(order.branch);
+                                        // Address and GSTIN will be autofetched by useEffect once branch is set
+
+                                        // Autofetch items from Sales Order if they exist
+                                        if (order.items && Array.isArray(order.items)) {
+                                            const newItems = order.items.map((soItem: any, idx: number) => {
+                                                // Try to get HSN from Inventory Masters if missing in SO
+                                                const masterItem = inventoryItems.find(i => i.item_code === soItem.item_code);
+                                                return {
+                                                    id: Date.now() + idx,
+                                                    itemCode: soItem.item_code || '',
+                                                    itemName: soItem.item_name || '',
+                                                    hsnCode: soItem.hsn_code || masterItem?.hsn_code || '',
+                                                    uom: soItem.uom || masterItem?.uom || '',
+                                                    alternateUnit: masterItem?.alternate_uom || '',
+                                                    quantity: soItem.quantity?.toString() || '',
+                                                    boxes: ''
+                                                };
+                                            });
+                                            if (newItems.length > 0) {
+                                                setItems(newItems);
+                                            } else {
+                                                // Reset to one empty item if SO has no items
+                                                setItems([{ id: Date.now(), itemCode: '', itemName: '', hsnCode: '', uom: '', alternateUnit: '', quantity: '', boxes: '' }]);
+                                            }
+                                        }
+                                    }
+                                }}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
                             >
                                 <option value="">Select Pending Sales Order</option>
-                                <option value="SO-001">SO-001</option>
-                                <option value="SO-002">SO-002</option>
+                                {salesOrdersList.map((so) => (
+                                    <option key={so.id} value={so.so_number}>
+                                        {so.so_number}
+                                    </option>
+                                ))}
                             </select>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Customer Name</label>
-                            <input
-                                type="text"
+                            <SearchableDropdown
+                                options={customersList}
                                 value={customerName}
-                                onChange={(e) => setCustomerName(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                placeholder="Enter Name"
+                                onChange={(val) => {
+                                    setCustomerName(val);
+                                    setBranch('');
+                                    setAddress('');
+                                    setGstin('');
+                                }}
+                                placeholder="Select Customer"
+                                noResultsText="No customers found in portal"
                             />
                         </div>
                         <div>
@@ -211,11 +375,13 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                             <select
                                 value={branch}
                                 onChange={(e) => setBranch(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                disabled={!customerName}
+                                className={`w-full px-3 py-2 border rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500 ${!customerName ? 'bg-gray-50 text-gray-400 cursor-not-allowed border-gray-200' : 'border-gray-300'}`}
                             >
                                 <option value="">Select Branch</option>
-                                <option value="Main Branch">Main Branch</option>
-                                <option value="North Branch">North Branch</option>
+                                {customerBranches.map((br: any) => (
+                                    <option key={br} value={br}>{br}</option>
+                                ))}
                             </select>
                         </div>
                     </div>
@@ -261,6 +427,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Item Name</th>
                                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">HSN Code</th>
                                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">UOM</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Alternate Unit</th>
                                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Quantity</th>
                                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">No. of boxes/packs</th>
                                         <th className="px-4 py-2 text-center text-xs font-medium text-gray-500">Action</th>
@@ -269,20 +436,20 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                 <tbody className="divide-y divide-gray-200">
                                     {items.map((item) => (
                                         <tr key={item.id}>
-                                            <td className="p-2">
-                                                <input
-                                                    type="text"
+                                            <td className="p-2 min-w-[150px]">
+                                                <SearchableDropdown
+                                                    options={inventoryItems.map(i => i.item_code).filter(Boolean)}
                                                     value={item.itemCode}
-                                                    onChange={(e) => handleItemChange(item.id, 'itemCode', e.target.value)}
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                    onChange={(val) => handleItemChange(item.id, 'itemCode', val)}
+                                                    placeholder="Select Code"
                                                 />
                                             </td>
-                                            <td className="p-2">
-                                                <input
-                                                    type="text"
+                                            <td className="p-2 min-w-[200px]">
+                                                <SearchableDropdown
+                                                    options={inventoryItems.map(i => i.item_name || i.name).filter(Boolean)}
                                                     value={item.itemName}
-                                                    onChange={(e) => handleItemChange(item.id, 'itemName', e.target.value)}
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                    onChange={(val) => handleItemChange(item.id, 'itemName', val)}
+                                                    placeholder="Select Item"
                                                 />
                                             </td>
                                             <td className="p-2">
@@ -290,7 +457,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                                     type="text"
                                                     value={item.hsnCode}
                                                     onChange={(e) => handleItemChange(item.id, 'hsnCode', e.target.value)}
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                    className="w-full px-2 py-1 border border-primary-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
                                                 />
                                             </td>
                                             <td className="p-2">
@@ -299,6 +466,14 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                                     value={item.uom}
                                                     onChange={(e) => handleItemChange(item.id, 'uom', e.target.value)}
                                                     className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                />
+                                            </td>
+                                            <td className="p-2">
+                                                <input
+                                                    type="text"
+                                                    value={item.alternateUnit}
+                                                    readOnly
+                                                    className="w-full px-2 py-1 border border-gray-100 bg-gray-50 text-gray-500 rounded text-sm focus:outline-none"
                                                 />
                                             </td>
                                             <td className="p-2">

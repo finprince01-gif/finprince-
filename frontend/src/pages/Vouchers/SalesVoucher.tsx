@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { apiService } from '../../services/api';
+import { httpClient } from '../../services/httpClient';
 import { showError, showSuccess } from '../../utils/toast';
 import CreateIssueSlipModal from '../../components/CreateIssueSlipModal';
+import SearchableDropdown from '../../components/SearchableDropdown';
 
 import { INDIA_STATE_CODES, GST_INVOICE_TYPES, EXPORT_TYPES } from '../../utils/gstConstants';
 
@@ -18,10 +20,12 @@ interface ItemRow {
     taxableValue: string;
     igst: string;
     cgst: string;
+    sgst: string;
     cess: string;
     invoiceValue: string;
     salesLedger: string;
     description: string;
+    alternateUnit: string;
 }
 
 interface SalesVoucherProps {
@@ -29,11 +33,38 @@ interface SalesVoucherProps {
     clearPrefilledData?: () => void;
     isLimitReached?: boolean;
     onLimitReached?: () => void;
+    customers?: any[];
 }
 
-const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefilledData, isLimitReached, onLimitReached }) => {
+const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefilledData, isLimitReached, onLimitReached, customers = [] }) => {
     const [activeTab, setActiveTab] = useState('invoice');
     const [isIssueSlipModalOpen, setIsIssueSlipModalOpen] = useState(false);
+    const [inventoryItems, setInventoryItems] = useState<any[]>([]);
+    const [locations, setLocations] = useState<any[]>([]);
+
+    React.useEffect(() => {
+        const fetchInventoryData = async () => {
+            try {
+                const [items, locs] = await Promise.all([
+                    apiService.getStockItems(),
+                    apiService.getInventoryLocations().catch(() => [])
+                ]);
+                setInventoryItems(items);
+                setLocations(locs);
+            } catch (error) {
+                console.error('Error fetching inventory data:', error);
+            }
+        };
+        fetchInventoryData();
+    }, []);
+
+    const itemCodeOptions = useMemo(() => {
+        return inventoryItems.map(item => item.item_code).filter(Boolean);
+    }, [inventoryItems]);
+
+    const itemNameOptions = useMemo(() => {
+        return inventoryItems.map(item => item.name || item.item_name).filter(Boolean);
+    }, [inventoryItems]);
 
     // Populate from AI Extraction
     React.useEffect(() => {
@@ -68,7 +99,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                         cgst: (tax / 2).toFixed(2),
                         sgst: (tax / 2).toFixed(2),
                         cess: '0',
-                        invoiceValue: (taxable + tax).toFixed(2)
+                        invoiceValue: (taxable + tax).toFixed(2),
+                        alternateUnit: ''
                     };
                 });
                 setItemRows(newRows);
@@ -97,6 +129,158 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
     const [shipToPincode, setShipToPincode] = useState('');
     const [shipToState, setShipToState] = useState('');
     const [shipToCountry, setShipToCountry] = useState('India');
+    const [sameAsBillTo, setSameAsBillTo] = useState(false);
+
+    React.useEffect(() => {
+        if (sameAsBillTo) {
+            setShipToAddress1(billToAddress1);
+            setShipToAddress2(billToAddress2);
+            setShipToCity(billToCity);
+            setShipToPincode(billToPincode);
+            setShipToState(billToState);
+            setShipToCountry(billToCountry);
+        }
+    }, [sameAsBillTo, billToAddress1, billToAddress2, billToCity, billToPincode, billToState, billToCountry]);
+
+    const customerOptions = useMemo(() => {
+        return Array.from(new Set(customers.map(c => c.customer_name).filter(Boolean)));
+    }, [customers]);
+
+    // Show GSTINs only for the selected customer
+    const gstinOptions = useMemo(() => {
+        if (!customerName) return [];
+
+        const customer = customers.find(c => c.customer_name === customerName);
+        if (!customer) return [];
+
+        const options: string[] = [];
+        const branches = customer.gst_details?.branches || [];
+
+        branches.forEach((b: any) => {
+            if (b.gstin) {
+                options.push(b.gstin);
+            } else {
+                options.push('Unregistered');
+            }
+        });
+
+        // Add main GSTIN if exists
+        if (customer.gstin && !options.includes(customer.gstin)) {
+            options.push(customer.gstin);
+        }
+
+        if (options.length === 0) {
+            options.push('Unregistered');
+        }
+
+        return Array.from(new Set(options));
+    }, [customerName, customers]);
+
+    // Handle Customer Selection
+    const handleCustomerChange = (val: string) => {
+        setCustomerName(val);
+
+        const customer = customers.find(c => c.customer_name === val);
+        if (customer) {
+            const branches = customer.gst_details?.branches || [];
+            const allGstins: string[] = [];
+
+            // Collect all GSTINs
+            branches.forEach((b: any) => {
+                if (b.gstin) {
+                    allGstins.push(b.gstin);
+                } else {
+                    allGstins.push('Unregistered');
+                }
+            });
+            if (customer.gstin && !allGstins.includes(customer.gstin)) {
+                allGstins.push(customer.gstin);
+            }
+            const uniqueGstins = Array.from(new Set(allGstins));
+
+            // If only 1 GSTIN: auto-fill and populate address
+            if (uniqueGstins.length === 1) {
+                setGstin(uniqueGstins[0]);
+
+                // Auto-fill address from branch structured fields
+                console.log('Selected Customer:', customer);
+                console.log('Branches:', branches);
+
+                const selectedGstin = uniqueGstins[0];
+                const isUnregistered = selectedGstin === 'Unregistered';
+
+                if (branches.length === 1 || (isUnregistered && branches.length > 0)) {
+                    const branch = branches[0];
+                    setContact(branch.contactNumber || customer.contact_number || '');
+                    // Check for structured address fields first
+                    if (branch.addressLine1 || branch.city || branch.state) {
+                        setBillToAddress1(branch.addressLine1 || '');
+                        setBillToAddress2(branch.addressLine2 || '');
+                        setBillToCity(branch.city || '');
+                        setBillToPincode(branch.pincode || '');
+                        setBillToState(branch.state || '');
+                        setBillToCountry(branch.country || 'India');
+                    } else if (branch.address) {
+                        // Fallback to old single address field
+                        setBillToAddress1(branch.address);
+                        setBillToAddress2('');
+                        setBillToCity('');
+                        setBillToState('');
+                        setBillToPincode('');
+                        setBillToCountry('India');
+                    }
+                } else if (customer.bill_to) {
+                    try {
+                        const billTo = typeof customer.bill_to === 'string' ? JSON.parse(customer.bill_to) : customer.bill_to;
+                        setBillToAddress1(billTo.address_line_1 || '');
+                        setBillToAddress2(billTo.address_line_2 || '');
+                        setBillToCity(billTo.city || '');
+                        setBillToPincode(billTo.pincode || '');
+                        setBillToState(billTo.state || '');
+                        setBillToCountry(billTo.country || 'India');
+                    } catch (e) {
+                        console.error('Error parsing customer address', e);
+                    }
+                }
+            } else {
+                // Multiple GSTINs: reset GSTIN, user must choose from dropdown
+                setGstin('');
+            }
+        }
+    };
+
+    const handleGstinChange = (val: string) => {
+        setGstin(val);
+        const customer = customers.find(c => c.customer_name === customerName);
+        if (customer) {
+            const branches = customer.gst_details?.branches || [];
+            const matchedBranch = branches.find((b: any) => {
+                const bGstin = b.gstin || 'Unregistered';
+                return bGstin === val;
+            });
+
+            // Check for structured address fields first
+            if (matchedBranch) {
+                setContact(matchedBranch.contactNumber || customer.contact_number || '');
+                if (matchedBranch.addressLine1 || matchedBranch.city || matchedBranch.state) {
+                    setBillToAddress1(matchedBranch.addressLine1 || '');
+                    setBillToAddress2(matchedBranch.addressLine2 || '');
+                    setBillToCity(matchedBranch.city || '');
+                    setBillToPincode(matchedBranch.pincode || '');
+                    setBillToState(matchedBranch.state || '');
+                    setBillToCountry(matchedBranch.country || 'India');
+                } else if (matchedBranch.address) {
+                    // Fallback to old single address field
+                    setBillToAddress1(matchedBranch.address);
+                    setBillToAddress2('');
+                    setBillToCity('');
+                    setBillToState('');
+                    setBillToPincode('');
+                    setBillToCountry('India');
+                }
+            }
+        }
+    };
 
     const [gstin, setGstin] = useState('');
     const [contact, setContact] = useState('');
@@ -117,6 +301,153 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
 
     // Item & Tax Details State
     const [salesOrderNo, setSalesOrderNo] = useState('');
+    const [salesOrders, setSalesOrders] = useState<any[]>([]);
+    const [salesQuotations, setSalesQuotations] = useState<any[]>([]);
+    const [masterCustomers, setMasterCustomers] = useState<any[]>([]);
+
+    React.useEffect(() => {
+        const fetchSalesDocs = async () => {
+            try {
+                const [soRes, soBasicRes, sqGenRes, sqSpecRes, sqBasicRes, custRes] = await Promise.all([
+                    httpClient.get('/api/customerportal/sales-orders/').catch(() => []),
+                    httpClient.get('/api/customerportal/orders/').catch(() => []),
+                    httpClient.get('/api/customerportal/sales-quotations-general/').catch(() => []),
+                    httpClient.get('/api/customerportal/sales-quotations-specific/').catch(() => []),
+                    httpClient.get('/api/customerportal/quotations/').catch(() => []),
+                    httpClient.get('/api/customerportal/customer-master/').catch(() => [])
+                ]);
+
+                const getList = (res: any) => Array.isArray(res) ? res : (res as any).results || [];
+
+                setSalesOrders([...getList(soRes), ...getList(soBasicRes)]);
+                setSalesQuotations([...getList(sqGenRes), ...getList(sqSpecRes), ...getList(sqBasicRes)]);
+                setMasterCustomers(getList(custRes));
+            } catch (error) {
+                console.error('Error fetching sales documents:', error);
+            }
+        };
+        fetchSalesDocs();
+    }, []);
+
+    const handleSalesDocChange = async (val: string) => {
+        setSalesOrderNo(val);
+        if (!val) return;
+
+        const doc = salesDocOptions.find(d => d.number === val);
+        if (!doc) return;
+
+        try {
+            let fullDoc: any;
+            if (doc.type === 'Order') {
+                try {
+                    fullDoc = await httpClient.get(`/api/customerportal/sales-orders/${doc.id}/`);
+                } catch {
+                    fullDoc = await httpClient.get(`/api/customerportal/orders/${doc.id}/`);
+                }
+            } else {
+                try {
+                    fullDoc = await httpClient.get(`/api/customerportal/sales-quotations-general/${doc.id}/`);
+                } catch {
+                    try {
+                        fullDoc = await httpClient.get(`/api/customerportal/sales-quotations-specific/${doc.id}/`);
+                    } catch {
+                        fullDoc = await httpClient.get(`/api/customerportal/quotations/${doc.id}/`);
+                    }
+                }
+            }
+
+            if (fullDoc && fullDoc.items) {
+                const itemsToMap = Array.isArray(fullDoc.items) ? fullDoc.items : [];
+                const mappedRows: ItemRow[] = itemsToMap.map((item: any, idx: number) => {
+                    const qty = parseFloat(item.quantity || item.qty) || 0;
+                    const rate = parseFloat(item.item_rate || item.price || item.negotiated_price || item.rate) || 0;
+                    const taxable = qty * rate;
+                    const igst = parseFloat(item.igst || item.igst_amount) || 0;
+                    const cgst = parseFloat(item.cgst || item.cgst_amount) || (taxable * 0.09);
+                    const cess = parseFloat(item.cess || item.cess_amount) || 0;
+                    const invVal = taxable + igst + (cgst * 2) + cess;
+
+                    return {
+                        id: Date.now() + idx,
+                        itemCode: item.item_code || '',
+                        itemName: item.item_name || '',
+                        hsnSac: item.hsn_sac || '',
+                        qty: qty.toString(),
+                        uom: item.uom || '',
+                        itemRate: rate.toString(),
+                        taxableValue: taxable.toFixed(2),
+                        igst: igst.toString(),
+                        cgst: cgst.toFixed(2),
+                        sgst: cgst.toFixed(2),
+                        cess: cess.toString(),
+                        invoiceValue: invVal.toFixed(2),
+                        salesLedger: '',
+                        description: item.description || '',
+                        alternateUnit: item.alternative_unit || item.alternate_uom || ''
+                    };
+                });
+
+                if (mappedRows.length > 0) {
+                    setItemRows(mappedRows);
+                }
+
+                let customerToSet = fullDoc.customer_name || fullDoc.party_name;
+                if (!customerToSet && fullDoc.customer_id) {
+                    const cust = masterCustomers.find(c => c.id === fullDoc.customer_id);
+                    if (cust) customerToSet = cust.customer_name;
+                }
+
+                if (!customerName && customerToSet) {
+                    handleCustomerChange(customerToSet);
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching full document details:', error);
+        }
+    };
+
+    const salesDocOptions = useMemo(() => {
+        const getCustomerName = (doc: any) => {
+            if (doc.customer_name) return doc.customer_name;
+            if (doc.party_name) return doc.party_name;
+            if (doc.customer_id) {
+                const cust = masterCustomers.find(c => c.id === doc.customer_id);
+                return cust ? cust.customer_name : null;
+            }
+            return doc.customer_category || null;
+        };
+
+        const orders = salesOrders.map(o => ({
+            id: o.id,
+            number: o.so_number || o.order_number || o.number || `Order-${o.id}`,
+            type: 'Order',
+            customer: getCustomerName(o)
+        }));
+
+        const quotations = salesQuotations.map(q => ({
+            id: q.id,
+            number: q.quote_number || q.quotation_number || q.number || `Quote-${q.id}`,
+            type: 'Quotation',
+            customer: getCustomerName(q)
+        }));
+
+        const combined = [...orders, ...quotations];
+        const uniqueMap = new Map();
+        combined.forEach(doc => {
+            if (doc.number && !uniqueMap.has(doc.number)) {
+                uniqueMap.set(doc.number, doc);
+            }
+        });
+
+        let filtered = Array.from(uniqueMap.values());
+        if (customerName) {
+            filtered = filtered.filter(doc =>
+                !doc.customer ||
+                doc.customer.toLowerCase() === customerName.toLowerCase()
+            );
+        }
+        return filtered;
+    }, [salesOrders, salesQuotations, customerName, masterCustomers]);
     const [itemRows, setItemRows] = useState<ItemRow[]>([
         {
             id: 1,
@@ -125,10 +456,12 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
             hsnSac: '',
             qty: '',
             uom: '',
+            alternateUnit: '',
             itemRate: '',
             taxableValue: '',
             igst: '',
             cgst: '',
+            sgst: '',
             cess: '',
             invoiceValue: '',
             salesLedger: '',
@@ -144,8 +477,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
     const [paymentCess, setPaymentCess] = useState('0.00');
     const [paymentStateCess, setPaymentStateCess] = useState('0.00');
     const [paymentInvoiceValue, setPaymentInvoiceValue] = useState('0.00');
-    const [paymentTds, setPaymentTds] = useState('0.00');
-    const [paymentTcs, setPaymentTcs] = useState('0.00');
+    const [paymentTdsIncomeTax, setPaymentTdsIncomeTax] = useState('0.00');
+    const [paymentTdsGst, setPaymentTdsGst] = useState('0.00');
     const [paymentAdvance, setPaymentAdvance] = useState('0.00');
     const [paymentPayable, setPaymentPayable] = useState('0.00');
     const [paymentPostingNote, setPaymentPostingNote] = useState('');
@@ -352,6 +685,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                     taxable_value: parseNum(row.taxableValue),
                     igst: parseNum(row.igst),
                     cgst: parseNum(row.cgst),
+                    sgst: parseNum(row.sgst),
                     cess: parseNum(row.cess),
                     invoice_value: parseNum(row.invoiceValue),
                     sales_ledger: row.salesLedger,
@@ -372,12 +706,12 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                     payment_taxable_value: calculateTotals().taxableValue,
                     payment_igst: calculateTotals().igst,
                     payment_cgst: calculateTotals().cgst,
-                    payment_sgst: parseNum(paymentSgst),
+                    payment_sgst: calculateTotals().sgst,
                     payment_cess: calculateTotals().cess,
                     payment_state_cess: parseNum(paymentStateCess),
                     payment_invoice_value: calculateTotals().invoiceValue,
-                    payment_tds: parseNum(paymentTds),
-                    payment_tcs: parseNum(paymentTcs),
+                    payment_tds: parseNum(paymentTdsIncomeTax),
+                    payment_tcs: parseNum(paymentTdsGst),
                     payment_advance: parseNum(paymentAdvance),
                     payment_payable: parseNum(paymentPayable),
                     posting_note: paymentPostingNote,
@@ -469,7 +803,42 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
     const handleItemRowChange = (id: number, field: keyof ItemRow, value: string) => {
         setItemRows(itemRows.map(row => {
             if (row.id === id) {
-                const updatedRow = { ...row, [field]: value };
+                // Prevent negative values for specific numeric fields
+                let cleanValue = value;
+                if (['qty', 'itemRate', 'igst', 'cgst', 'sgst', 'cess'].includes(field)) {
+                    if (parseFloat(value) < 0) {
+                        cleanValue = '0';
+                    }
+                }
+                let updatedRow = { ...row, [field]: cleanValue };
+
+                // Auto-fill item details when itemCode or itemName changes
+                if (field === 'itemCode' || field === 'itemName') {
+                    const matchedItem = inventoryItems.find(item =>
+                        field === 'itemCode' ? item.item_code === value : (item.name === value || item.item_name === value)
+                    );
+                    if (matchedItem) {
+                        updatedRow.itemCode = matchedItem.item_code || updatedRow.itemCode;
+                        updatedRow.itemName = matchedItem.name || matchedItem.item_name || updatedRow.itemName;
+                        updatedRow.hsnSac = matchedItem.hsn_code || matchedItem.hsn || updatedRow.hsnSac;
+                        updatedRow.uom = matchedItem.uom || matchedItem.unit || updatedRow.uom;
+                        updatedRow.alternateUnit = matchedItem.alternative_unit || matchedItem.alternate_uom || '';
+                        updatedRow.itemRate = (matchedItem.rate || matchedItem.standard_rate || 0).toString();
+
+                        // Trigger recalculation of taxable value
+                        const qty = parseFloat(updatedRow.qty) || 0;
+                        const rate = parseFloat(updatedRow.itemRate) || 0;
+                        updatedRow.taxableValue = (qty * rate).toFixed(2);
+
+                        // Recalculate invoice value
+                        const taxableVal = parseFloat(updatedRow.taxableValue) || 0;
+                        const igst = parseFloat(updatedRow.igst) || 0;
+                        const cgst = parseFloat(updatedRow.cgst) || 0;
+                        const sgst = parseFloat(updatedRow.sgst) || 0;
+                        const cess = parseFloat(updatedRow.cess) || 0;
+                        updatedRow.invoiceValue = (taxableVal + igst + cgst + sgst + cess).toFixed(2);
+                    }
+                }
 
                 // Auto-calculate taxable value when qty or item rate changes
                 if (field === 'qty' || field === 'itemRate') {
@@ -481,17 +850,19 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                     const taxableVal = parseFloat(updatedRow.taxableValue) || 0;
                     const igst = parseFloat(updatedRow.igst) || 0;
                     const cgst = parseFloat(updatedRow.cgst) || 0;
+                    const sgst = parseFloat(updatedRow.sgst) || 0;
                     const cess = parseFloat(updatedRow.cess) || 0;
-                    updatedRow.invoiceValue = (taxableVal + igst + cgst + cess).toFixed(2);
+                    updatedRow.invoiceValue = (taxableVal + igst + cgst + sgst + cess).toFixed(2);
                 }
 
                 // Auto-calculate invoice value when tax fields change
-                if (field === 'igst' || field === 'cgst' || field === 'cess') {
+                if (field === 'igst' || field === 'cgst' || field === 'sgst' || field === 'cess') {
                     const taxableVal = parseFloat(updatedRow.taxableValue) || 0;
                     const igst = parseFloat(updatedRow.igst) || 0;
                     const cgst = parseFloat(updatedRow.cgst) || 0;
+                    const sgst = parseFloat(updatedRow.sgst) || 0;
                     const cess = parseFloat(updatedRow.cess) || 0;
-                    updatedRow.invoiceValue = (taxableVal + igst + cgst + cess).toFixed(2);
+                    updatedRow.invoiceValue = (taxableVal + igst + cgst + sgst + cess).toFixed(2);
                 }
 
                 return updatedRow;
@@ -499,7 +870,6 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
             return row;
         }));
     };
-
     const handleAddItemRow = () => {
         const newRow: ItemRow = {
             id: itemRows.length + 1,
@@ -512,10 +882,12 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
             taxableValue: '',
             igst: '',
             cgst: '',
+            sgst: '',
             cess: '',
             invoiceValue: '',
             salesLedger: '',
-            description: ''
+            description: '',
+            alternateUnit: ''
         };
         setItemRows([...itemRows, newRow]);
     };
@@ -540,13 +912,24 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                 taxableValue: acc.taxableValue + (parseFloat(row.taxableValue) || 0),
                 igst: acc.igst + (parseFloat(row.igst) || 0),
                 cgst: acc.cgst + (parseFloat(row.cgst) || 0),
+                sgst: acc.sgst + (parseFloat(row.sgst) || 0),
                 cess: acc.cess + (parseFloat(row.cess) || 0),
                 invoiceValue: acc.invoiceValue + (parseFloat(row.invoiceValue) || 0)
             };
-        }, { taxableValue: 0, igst: 0, cgst: 0, cess: 0, invoiceValue: 0 });
+        }, { taxableValue: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0 });
 
         return totals;
     };
+
+    React.useEffect(() => {
+        const totals = calculateTotals();
+        const invVal = totals.invoiceValue;
+        const tdsIT = parseFloat(paymentTdsIncomeTax) || 0;
+        const tdsGST = parseFloat(paymentTdsGst) || 0;
+        const advance = parseFloat(paymentAdvance) || 0;
+        const payable = invVal - tdsIT - tdsGST - advance;
+        setPaymentPayable(payable.toFixed(2));
+    }, [itemRows, paymentTdsIncomeTax, paymentTdsGst, paymentAdvance]);
 
     const handleNext = () => {
         // Validation
@@ -617,14 +1000,14 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Voucher Name
+                                    Sales Invoice Series
                                 </label>
                                 <input
                                     type="text"
                                     value={voucherName}
                                     onChange={(e) => setVoucherName(e.target.value)}
                                     className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                    placeholder="Enter voucher name"
+                                    placeholder="Enter sales invoice series"
                                 />
                             </div>
 
@@ -632,12 +1015,11 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Customer Name <span className="text-red-500">*</span>
                                 </label>
-                                <input
-                                    type="text"
+                                <SearchableDropdown
                                     value={customerName}
-                                    onChange={(e) => setCustomerName(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                    placeholder="Search or enter customer name"
+                                    onChange={handleCustomerChange}
+                                    options={customerOptions}
+                                    placeholder="Search or select customer"
                                     required
                                 />
                             </div>
@@ -646,13 +1028,23 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                     GSTIN
                                 </label>
-                                <input
-                                    type="text"
-                                    value={gstin}
-                                    onChange={(e) => setGstin(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                    placeholder="Enter GSTIN"
-                                />
+                                {gstinOptions.length > 1 ? (
+                                    <SearchableDropdown
+                                        value={gstin}
+                                        onChange={handleGstinChange}
+                                        options={gstinOptions}
+                                        placeholder={customerName ? "Select GSTIN" : "Select Customer first"}
+                                        disabled={!customerName}
+                                    />
+                                ) : (
+                                    <input
+                                        type="text"
+                                        value={gstin}
+                                        onChange={(e) => setGstin(e.target.value)}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="Enter GSTIN"
+                                    />
+                                )}
                             </div>
 
                             <div>
@@ -780,7 +1172,18 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
 
                             {/* Ship To Section */}
                             <div className="space-y-4">
-                                <h3 className="font-semibold text-gray-700">Ship To</h3>
+                                <div className="flex justify-between items-center">
+                                    <h3 className="font-semibold text-gray-700">Ship To</h3>
+                                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={sameAsBillTo}
+                                            onChange={(e) => setSameAsBillTo(e.target.checked)}
+                                            className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                        />
+                                        <span className="text-xs text-gray-600">Same as Bill To Address</span>
+                                    </label>
+                                </div>
                                 <div>
                                     <input
                                         type="text"
@@ -1097,12 +1500,15 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                     <div className="flex items-center gap-2">
                                         <select
                                             value={salesOrderNo}
-                                            onChange={(e) => setSalesOrderNo(e.target.value)}
+                                            onChange={(e) => handleSalesDocChange(e.target.value)}
                                             className="px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 min-w-[200px]"
                                         >
-                                            <option value="">Select Sales Order</option>
-                                            <option value="SO-001">SO-001</option>
-                                            <option value="SO-002">SO-002</option>
+                                            <option value="">Select Sales Order/Quotation</option>
+                                            {salesDocOptions.map((doc, idx) => (
+                                                <option key={`${doc.type}-${doc.id}-${idx}`} value={doc.number}>
+                                                    {doc.number} ({doc.type})
+                                                </option>
+                                            ))}
                                         </select>
 
                                     </div>
@@ -1246,12 +1652,15 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                             </label>
                             <select
                                 value={salesOrderNo}
-                                onChange={(e) => setSalesOrderNo(e.target.value)}
+                                onChange={(e) => handleSalesDocChange(e.target.value)}
                                 className="px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                             >
-                                <option value="">Select Sales Order</option>
-                                <option value="SO-001">SO-001</option>
-                                <option value="SO-002">SO-002</option>
+                                <option value="">Select Sales Order/Quotation</option>
+                                {salesDocOptions.map((doc, idx) => (
+                                    <option key={`${doc.type}-${doc.id}-${idx}`} value={doc.number}>
+                                        {doc.number} ({doc.type})
+                                    </option>
+                                ))}
                             </select>
 
                         </div>
@@ -1267,10 +1676,17 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">HSN/SAC</th>
                                         <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">Qty</th>
                                         <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">UOM</th>
+                                        <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">Alternate Unit</th>
                                         <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">Item Rate</th>
                                         <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">Taxable Value</th>
-                                        <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">IGST</th>
-                                        <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">CGST</th>
+                                        {stateType === 'within' ? (
+                                            <>
+                                                <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">CGST</th>
+                                                <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">SGST/UTGST</th>
+                                            </>
+                                        ) : (
+                                            <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">IGST</th>
+                                        )}
                                         <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">CESS</th>
                                         <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">Invoice Value</th>
                                         <th className="px-3 py-2 text-xs font-semibold text-center">Delete</th>
@@ -1288,20 +1704,18 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     <span className="ml-2">{index + 1}</span>
                                                 </td>
                                                 <td className="px-2 py-2 border-r border-gray-200">
-                                                    <input
-                                                        type="text"
+                                                    <SearchableDropdown
+                                                        options={itemCodeOptions}
                                                         value={row.itemCode}
-                                                        onChange={(e) => handleItemRowChange(row.id, 'itemCode', e.target.value)}
-                                                        className="w-full px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm"
+                                                        onChange={(val) => handleItemRowChange(row.id, 'itemCode', val)}
                                                         placeholder="Item code"
                                                     />
                                                 </td>
                                                 <td className="px-2 py-2 border-r border-gray-200">
-                                                    <input
-                                                        type="text"
+                                                    <SearchableDropdown
+                                                        options={itemNameOptions}
                                                         value={row.itemName}
-                                                        onChange={(e) => handleItemRowChange(row.id, 'itemName', e.target.value)}
-                                                        className="w-full px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm"
+                                                        onChange={(val) => handleItemRowChange(row.id, 'itemName', val)}
                                                         placeholder="Item name"
                                                     />
                                                 </td>
@@ -1318,6 +1732,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     <input
                                                         type="number"
                                                         value={row.qty}
+                                                        min="0"
                                                         onChange={(e) => handleItemRowChange(row.id, 'qty', e.target.value)}
                                                         className="w-20 px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm"
                                                         placeholder="Qty"
@@ -1334,8 +1749,18 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                 </td>
                                                 <td className="px-2 py-2 border-r border-gray-200">
                                                     <input
+                                                        type="text"
+                                                        value={row.alternateUnit}
+                                                        readOnly
+                                                        className="w-24 px-2 py-1 bg-gray-50 border-0 rounded text-sm"
+                                                        placeholder="Alt Unit"
+                                                    />
+                                                </td>
+                                                <td className="px-2 py-2 border-r border-gray-200">
+                                                    <input
                                                         type="number"
                                                         value={row.itemRate}
+                                                        min="0"
                                                         onChange={(e) => handleItemRowChange(row.id, 'itemRate', e.target.value)}
                                                         className="w-24 px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm"
                                                         placeholder="Rate"
@@ -1349,28 +1774,46 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                         className="w-24 px-2 py-1 bg-gray-50 border-0 rounded text-sm"
                                                     />
                                                 </td>
-                                                <td className="px-2 py-2 border-r border-gray-200">
-                                                    <input
-                                                        type="number"
-                                                        value={row.igst}
-                                                        onChange={(e) => handleItemRowChange(row.id, 'igst', e.target.value)}
-                                                        className="w-20 px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm"
-                                                        placeholder="IGST"
-                                                    />
-                                                </td>
-                                                <td className="px-2 py-2 border-r border-gray-200">
-                                                    <input
-                                                        type="number"
-                                                        value={row.cgst}
-                                                        onChange={(e) => handleItemRowChange(row.id, 'cgst', e.target.value)}
-                                                        className="w-20 px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm"
-                                                        placeholder="CGST"
-                                                    />
-                                                </td>
+                                                {stateType === 'within' ? (
+                                                    <>
+                                                        <td className="px-2 py-2 border-r border-gray-200">
+                                                            <input
+                                                                type="number"
+                                                                value={row.cgst}
+                                                                min="0"
+                                                                onChange={(e) => handleItemRowChange(row.id, 'cgst', e.target.value)}
+                                                                className="w-20 px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm"
+                                                                placeholder="CGST"
+                                                            />
+                                                        </td>
+                                                        <td className="px-2 py-2 border-r border-gray-200">
+                                                            <input
+                                                                type="number"
+                                                                value={row.sgst}
+                                                                min="0"
+                                                                onChange={(e) => handleItemRowChange(row.id, 'sgst', e.target.value)}
+                                                                className="w-20 px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm"
+                                                                placeholder="SGST"
+                                                            />
+                                                        </td>
+                                                    </>
+                                                ) : (
+                                                    <td className="px-2 py-2 border-r border-gray-200">
+                                                        <input
+                                                            type="number"
+                                                            value={row.igst}
+                                                            min="0"
+                                                            onChange={(e) => handleItemRowChange(row.id, 'igst', e.target.value)}
+                                                            className="w-20 px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm"
+                                                            placeholder="IGST"
+                                                        />
+                                                    </td>
+                                                )}
                                                 <td className="px-2 py-2 border-r border-gray-200">
                                                     <input
                                                         type="number"
                                                         value={row.cess}
+                                                        min="0"
                                                         onChange={(e) => handleItemRowChange(row.id, 'cess', e.target.value)}
                                                         className="w-20 px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm"
                                                         placeholder="CESS"
@@ -1411,7 +1854,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                         />
                                                     </div>
                                                 </td>
-                                                <td colSpan={9} className="px-2 py-2">
+                                                <td colSpan={stateType === 'within' ? 10 : 9} className="px-2 py-2">
                                                     <div className="flex items-center gap-2">
                                                         <label className="text-xs font-medium text-gray-700 whitespace-nowrap">Description:</label>
                                                         <input
@@ -1429,7 +1872,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
 
                                     {/* Totals Row */}
                                     <tr className="bg-gray-100 font-semibold border-t-2 border-gray-300">
-                                        <td colSpan={7} className="px-3 py-2 text-right text-sm">Total:</td>
+                                        <td colSpan={8} className="px-3 py-2 text-right text-sm">Total:</td>
                                         <td className="px-2 py-2">
                                             <input
                                                 type="text"
@@ -1438,22 +1881,35 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                 className="w-24 px-2 py-1 bg-white border border-gray-300 rounded text-sm font-semibold text-center"
                                             />
                                         </td>
-                                        <td className="px-2 py-2">
-                                            <input
-                                                type="text"
-                                                value={calculateTotals().igst.toFixed(2)}
-                                                readOnly
-                                                className="w-20 px-2 py-1 bg-white border border-gray-300 rounded text-sm font-semibold text-center"
-                                            />
-                                        </td>
-                                        <td className="px-2 py-2">
-                                            <input
-                                                type="text"
-                                                value={calculateTotals().cgst.toFixed(2)}
-                                                readOnly
-                                                className="w-20 px-2 py-1 bg-white border border-gray-300 rounded text-sm font-semibold text-center"
-                                            />
-                                        </td>
+                                        {stateType === 'within' ? (
+                                            <>
+                                                <td className="px-2 py-2">
+                                                    <input
+                                                        type="text"
+                                                        value={calculateTotals().cgst.toFixed(2)}
+                                                        readOnly
+                                                        className="w-20 px-2 py-1 bg-white border border-gray-300 rounded text-sm font-semibold text-center"
+                                                    />
+                                                </td>
+                                                <td className="px-2 py-2">
+                                                    <input
+                                                        type="text"
+                                                        value={calculateTotals().sgst.toFixed(2)}
+                                                        readOnly
+                                                        className="w-20 px-2 py-1 bg-white border border-gray-300 rounded text-sm font-semibold text-center"
+                                                    />
+                                                </td>
+                                            </>
+                                        ) : (
+                                            <td className="px-2 py-2">
+                                                <input
+                                                    type="text"
+                                                    value={calculateTotals().igst.toFixed(2)}
+                                                    readOnly
+                                                    className="w-20 px-2 py-1 bg-white border border-gray-300 rounded text-sm font-semibold text-center"
+                                                />
+                                            </td>
+                                        )}
                                         <td className="px-2 py-2">
                                             <input
                                                 type="text"
@@ -1550,7 +2006,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         <td className="px-4 py-3 border-r border-gray-300">
                                             <input
                                                 type="text"
-                                                value={paymentSgst}
+                                                value={calculateTotals().sgst.toFixed(2)}
                                                 readOnly
                                                 className="w-full px-2 py-1 bg-gray-50 border-0 rounded text-sm text-center"
                                             />
@@ -1594,12 +2050,25 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
 
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        TDS/TCS
+                                        TDS/TCS under Income Tax
                                     </label>
                                     <input
                                         type="text"
-                                        value={paymentTds}
-                                        onChange={(e) => setPaymentTds(e.target.value)}
+                                        value={paymentTdsIncomeTax}
+                                        onChange={(e) => setPaymentTdsIncomeTax(e.target.value)}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-right"
+                                        placeholder="0.00"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        TDS/TCS under GST
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={paymentTdsGst}
+                                        onChange={(e) => setPaymentTdsGst(e.target.value)}
                                         className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-right"
                                         placeholder="0.00"
                                     />
@@ -1765,12 +2234,18 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
                                         Dispatch From
                                     </label>
-                                    <textarea
+                                    <select
                                         value={dispatchFrom}
                                         onChange={(e) => setDispatchFrom(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 resize-none"
-                                        rows={3}
-                                    />
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white shadow-sm"
+                                    >
+                                        <option value="">Select Location</option>
+                                        {locations.map((loc, idx) => (
+                                            <option key={loc.id || idx} value={loc.name || loc.location_name}>
+                                                {loc.name || loc.location_name}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
 
                                 {/* Mode of Transport */}
@@ -1787,7 +2262,6 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         <option value="Air">Air</option>
                                         <option value="Sea">Sea</option>
                                         <option value="Rail">Rail</option>
-                                        <option value="Courier">Courier</option>
                                     </select>
                                 </div>
 
