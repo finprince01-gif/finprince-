@@ -1119,6 +1119,60 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const [forceMajeure, setForceMajeure] = useState('');
     const [disputeRedressalTerms, setDisputeRedressalTerms] = useState('');
 
+    const resetVendorCreationFlow = () => {
+        setVendorCode('');
+        setVendorName('');
+        setPanNo('');
+        setContactPerson('');
+        setVendorEmail('');
+        setContactNo('');
+        setVendorCategory('');
+        setIsAlsoCustomer(false);
+        setTcsApplicable(false);
+        setGstRecords([
+            {
+                id: '1',
+                gstin: '',
+                registrationType: 'Regular',
+                placesOfBusiness: [],
+                isExpanded: true
+            }
+        ]);
+        setItems([
+            { id: 1, hsnSacCode: '', itemCode: '', itemName: '', supplierItemCode: '', supplierItemName: '' },
+            { id: 2, hsnSacCode: '', itemCode: '', itemName: '', supplierItemCode: '', supplierItemName: '' },
+        ]);
+        setMsmeUdyamNo('');
+        setFssaiLicenseNo('');
+        setImportExportCode('');
+        setEouStatus('');
+        setTdsSectionApplicable('');
+        setEnableAutomaticTdsPosting(false);
+        setUploadedFiles({
+            msmeFile: null,
+            fssaiFile: null,
+            iecFile: null,
+            eouFile: null
+        });
+        setBankAccounts([
+            { id: 1, accountNumber: '', bankName: '', ifscCode: '', branchName: '', swiftCode: '', vendorBranch: [], accountType: 'Savings' }
+        ]);
+        setCreditLimit('');
+        setCreditPeriod('');
+        setCreditTerms('');
+        setPenaltyTerms('');
+        setDeliveryTerms('');
+        setWarrantyGuaranteeDetails('');
+        setForceMajeure('');
+        setDisputeRedressalTerms('');
+        setGstin('');
+        setGstRegistrationType('regular');
+        setLegalName('');
+        setTradeName('');
+        setCreatedVendorId(null);
+        localStorage.removeItem('currentVendorId');
+    };
+
     // Handle Finish (Total Save)
     const handleFinish = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
