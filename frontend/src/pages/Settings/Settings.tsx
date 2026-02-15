@@ -101,7 +101,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
           }));
         }
       } catch (error) {
-        
+
         // Pre-fill with signup data as fallback
         const signupCompanyName = localStorage.getItem('companyName') || '';
         const signupEmail = localStorage.getItem('signupEmail') || '';

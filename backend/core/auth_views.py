@@ -59,8 +59,7 @@ class CookieTokenObtainPairView(TokenObtainPairView):
                 httponly=True,
                 secure=settings.SIMPLE_JWT.get('AUTH_COOKIE_SECURE', False),
                 samesite=settings.SIMPLE_JWT.get('AUTH_COOKIE_SAMESITE', 'Lax'),
-                max_age=settings.SIMPLE_JWT.get('REFRESH_TOKEN_LIFETIME').total_seconds(),
-                path='/api/auth/refresh/' 
+                max_age=settings.SIMPLE_JWT.get('REFRESH_TOKEN_LIFETIME').total_seconds()
             )
 
             # 5. Log login event
@@ -136,8 +135,7 @@ class CookieTokenRefreshView(TokenRefreshView):
                 httponly=True,
                 secure=settings.SIMPLE_JWT.get('AUTH_COOKIE_SECURE', False),
                 samesite=settings.SIMPLE_JWT.get('AUTH_COOKIE_SAMESITE', 'Lax'),
-                max_age=settings.SIMPLE_JWT.get('REFRESH_TOKEN_LIFETIME').total_seconds(),
-                path='/api/auth/refresh/'
+                max_age=settings.SIMPLE_JWT.get('REFRESH_TOKEN_LIFETIME').total_seconds()
             )
 
         return response
@@ -146,9 +144,11 @@ class LogoutView(APIView):
     permission_classes = [AllowAny]
     def post(self, request):
         response = Response({'success': True}, status=status.HTTP_200_OK)
-        # Clear cookies
-        response.delete_cookie('access_token')
-        response.delete_cookie('refresh_token')
+        # Clear cookies (ensure both are deleted with all possible path settings)
+        response.delete_cookie('access_token', path='/')
+        response.delete_cookie('refresh_token', path='/')
+        # Clear legacy restricted cookie to prevent conflicts
+        response.delete_cookie('refresh_token', path='/api/auth/refresh/')
         return response
 
 @method_decorator(csrf_exempt, name='dispatch')

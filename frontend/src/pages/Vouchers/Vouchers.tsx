@@ -1070,7 +1070,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
         if (prefilledData.lineItems && prefilledData.lineItems.length > 0) {
           const newItems = prefilledData.lineItems.map(item => {
-            const stockItem = stockItems.find(si => si.name.toLowerCase() === (item.itemDescription || '').toLowerCase());
+            const stockItem = stockItems.find(si => si.name?.toLowerCase() === (item.itemDescription || '').toLowerCase());
             const gstRate = stockItem?.gstRate || 18;
             const taxableAmount = item.quantity * item.rate;
             const tax = taxableAmount * (gstRate / 100);
@@ -1291,13 +1291,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const handleRemoveEntryRow = (index: number) => entries.length > 2 && setEntries(entries.filter((_, i) => i !== index));
 
   const handleSaveVoucher = async () => {
-    // Only block saving for invoice-related types if limit reached
-    const isInvoiceType = voucherType === 'Sales' || voucherType === 'Purchase' || voucherType === 'Expenses';
-    if (isLimitReached && isInvoiceType) {
-      handleLimitReached();
-      return;
-    }
-
     let voucher: Voucher | null = null;
 
     if (voucherType === 'Purchase') {
@@ -4396,10 +4389,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
   // Validate and save expense voucher
   const handleSaveExpenseVoucher = async () => {
-    if (isLimitReached) {
-      handleLimitReached();
-      return;
-    }
     // Validation
     let hasError = false;
 
@@ -5052,23 +5041,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               </button>
             ) : (
               <>
-                {isLimitReached && (voucherType === 'Purchase') ? (
-                  <button
-                    className="inline-flex items-center justify-center px-6 py-2 bg-slate-300 text-slate-500 font-medium rounded-[4px] cursor-not-allowed border border-slate-300"
-                    title="Monthly invoice limit reached. Please upgrade your plan."
-                  >
-                    Limit Reached
+                <>
+                  <button onClick={handleSaveVoucher} className="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    Post & Close
                   </button>
-                ) : (
-                  <>
-                    <button onClick={handleSaveVoucher} className="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                      Post & Close
-                    </button>
-                    <button onClick={handleSaveVoucher} className="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                      Post & Print/Email
-                    </button>
-                  </>
-                )}
+                  <button onClick={handleSaveVoucher} className="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    Post & Print/Email
+                  </button>
+                </>
               </>
             )}
           </div>

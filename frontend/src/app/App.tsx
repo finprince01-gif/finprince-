@@ -60,6 +60,9 @@ import ErrorBoundary from '../components/ErrorBoundary';  // Error handling wrap
 import MassUploadResultPage from '../pages/MassUploadResult'; // Bulk upload results page
 import { showError, showSuccess } from '../utils/toast';
 
+// Import assets
+import kikiLogo from '../assets/fox-logo-transparent.png';
+
 // ============================================================================
 // SERVICE IMPORTS
 // ============================================================================
@@ -158,7 +161,14 @@ const App: React.FC = () => {
   // ============================================================================
 
   // Authentication state - tracks if user is logged in
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
+    const token = localStorage.getItem('token');
+    const loggedOut = localStorage.getItem('loggedOut') === 'true';
+    // Ensure we have a token and user didn't explicitly logout
+    // We also generally expect a tenantId for standard users, but admin might not have one.
+    // For safety, checking token + !loggedOut is the baseline.
+    return !!token && !loggedOut;
+  });
 
   // View state - determines whether to show login or signup page
   const [view, setView] = useState<'login' | 'signup' | 'forgot-password'>('login');
@@ -356,10 +366,7 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Always show login page first - no auto-login
-  useEffect(() => {
-    setIsDataLoaded(true);
-  }, []); // Run only on mount
+
 
   // Load data on initial mount and login state changes
   useEffect(() => {
@@ -1201,7 +1208,7 @@ const App: React.FC = () => {
         className="fixed bottom-2 right-2 w-28 h-28 hover:scale-110 transition-transform duration-300 z-50 flex items-center justify-center group filter drop-shadow-none border-none outline-none focus:outline-none"
         title="Chat with Kiki Agent"
       >
-        <img src="/src/assets/fox-logo-transparent.png" alt="AI Agent" className="w-full h-full object-contain" />
+        <img src={kikiLogo} alt="AI Agent" className="w-full h-full object-contain" />
       </button>
 
 

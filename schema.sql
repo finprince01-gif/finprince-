@@ -1647,6 +1647,16 @@ CREATE TABLE `voucher_sales_invoicedetails` (
   `supporting_document` VARCHAR(100),
   `sales_order_no` VARCHAR(50),
 
+  -- GST-Compliant Fields
+  `place_of_supply` VARCHAR(2) DEFAULT NULL COMMENT 'State code (01-38)',
+  `reverse_charge` VARCHAR(1) DEFAULT 'N' COMMENT 'Y or N',
+  `invoice_type` VARCHAR(50) DEFAULT 'Regular' COMMENT 'Regular, SEZ with payment, etc.',
+  `gst_export_type` VARCHAR(10) DEFAULT NULL COMMENT 'WPAY or WOPAY for exports',
+  `port_code` VARCHAR(6) DEFAULT NULL COMMENT '6-digit port code for exports',
+  `shipping_bill_number` VARCHAR(50) DEFAULT NULL COMMENT 'Shipping bill number for exports',
+  `shipping_bill_date` DATE DEFAULT NULL COMMENT 'Shipping bill date for exports',
+  `ecommerce_gstin` VARCHAR(15) DEFAULT NULL COMMENT 'E-commerce GSTIN',
+
   PRIMARY KEY (`id`),
   KEY `idx_tenant_id` (`tenant_id`),
   KEY `idx_sales_invoice_no` (`sales_invoice_no`)
