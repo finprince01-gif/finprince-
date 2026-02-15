@@ -158,7 +158,14 @@ const App: React.FC = () => {
   // ============================================================================
 
   // Authentication state - tracks if user is logged in
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
+    const token = localStorage.getItem('token');
+    const loggedOut = localStorage.getItem('loggedOut') === 'true';
+    // Ensure we have a token and user didn't explicitly logout
+    // We also generally expect a tenantId for standard users, but admin might not have one.
+    // For safety, checking token + !loggedOut is the baseline.
+    return !!token && !loggedOut;
+  });
 
   // View state - determines whether to show login or signup page
   const [view, setView] = useState<'login' | 'signup' | 'forgot-password'>('login');
@@ -356,10 +363,7 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Always show login page first - no auto-login
-  useEffect(() => {
-    setIsDataLoaded(true);
-  }, []); // Run only on mount
+
 
   // Load data on initial mount and login state changes
   useEffect(() => {

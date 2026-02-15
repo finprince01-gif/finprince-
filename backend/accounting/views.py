@@ -174,18 +174,12 @@ class VoucherViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
         return queryset
     
     def perform_create(self, serializer):
-        from .utils_subscription import check_subscription_limit
-        check_subscription_limit(self.request.user)
         super().perform_create(serializer)
     
     @action(detail=False, methods=['post'], url_path='bulk')
     def bulk_create(self, request):
         """Create multiple vouchers at once"""
         vouchers_data = request.data if isinstance(request.data, list) else [request.data]
-        
-        # Check limit for batch size
-        from .utils_subscription import check_subscription_limit
-        check_subscription_limit(request.user, increment=len(vouchers_data))
         
         # Use bulk serializers or iterate
         # Standard DRF create logic for list:

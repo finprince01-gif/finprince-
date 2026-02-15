@@ -80,7 +80,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
     // Populate from AI Extraction
     useEffect(() => {
         if (prefilledData) {
-            
+
             if (prefilledData.invoiceDate) {
                 setDate(prefilledData.invoiceDate);
             }
@@ -96,9 +96,9 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
     useEffect(() => {
         const fetchReceiptConfigs = async () => {
             try {
-                
+
                 const data = await httpClient.get<any[]>('/api/masters/voucher-configurations/?voucher_type=receipts');
-                
+
 
                 const receiptConfigs = data?.filter(config => config.voucher_type === 'receipts') || [];
 
@@ -214,11 +214,6 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
     };
 
     const handlePostReceipt = async () => {
-        if (isLimitReached && onLimitReached) {
-            onLimitReached();
-            return;
-        }
-
         try {
             if (activeTab === 'single') {
                 const payload = {
@@ -235,9 +230,9 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                     }))
                 };
 
-                
+
                 const response = await httpClient.post('/api/vouchers/receipt-single/', payload);
-                
+
                 showSuccess('Single Receipt Voucher posted successfully!');
 
                 handleCancel();
@@ -259,9 +254,9 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                         }))
                 };
 
-                
+
                 const response = await httpClient.post('/api/vouchers/receipt-bulk/', payload);
-                
+
                 showSuccess('Bulk Receipt Voucher posted successfully!');
 
                 handleCancel();

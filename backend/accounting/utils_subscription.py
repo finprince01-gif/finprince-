@@ -1,18 +1,7 @@
 from datetime import timedelta
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
-from .models import Voucher, SalesVoucher as SalesInvoice
-# Check if VoucherSalesInvoiceDetails exists, otherwise use SalesVoucher
-try:
-    from .models_voucher_sales import VoucherSalesInvoiceDetails
-except ImportError:
-    VoucherSalesInvoiceDetails = None
-
-# Check if VoucherPurchaseSupplierDetails exists
-try:
-    from .models_voucher_purchase import VoucherPurchaseSupplierDetails
-except ImportError:
-    VoucherPurchaseSupplierDetails = None
+# AI extraction and scanner models are imported dynamically in get_invoice_usage()
 
 def get_billing_cycle_start(user):
     """
@@ -40,8 +29,9 @@ def get_billing_cycle_start(user):
 
 def get_invoice_usage(user):
     """
-    Count invoices (Sales + Purchase) created in the current billing cycle.
-    Aggregates counts from relevant tables, excluding cancelled ones.
+    Count invoices from AI extraction and scanner only in the current billing cycle.
+    Only AI-extracted and scanned invoices count towards subscription limits.
+    Manual invoice creation is unlimited and does not count towards the limit.
     """
     cycle_start = get_billing_cycle_start(user)
     tenant_id = getattr(user, 'tenant_id', None)
@@ -49,41 +39,7 @@ def get_invoice_usage(user):
     if not tenant_id:
         return 0
 
-    # 1. Count from Unified Voucher (types 'sales', 'purchase')
-    # Use __icontains or lower for type check if needed, but normally exact.
-    count_unified = Voucher.objects.filter(
-        tenant_id=tenant_id,
-        created_at__gte=cycle_start,
-        type__in=['sales', 'purchase', 'Sales', 'Purchase']
-    ).count() 
-    
-    # 2. Count from SalesInvoice (New Phase 1 model)
-    count_sales_invoice = 0
-    if SalesInvoice:
-        count_sales_invoice = SalesInvoice.objects.filter(
-            tenant_id=tenant_id,
-            created_at__gte=cycle_start
-        ).exclude(status='cancelled').count()
-    
-    # 3. Count from New Sales System (VoucherSalesInvoiceDetails)
-    count_sales_new = 0
-    if VoucherSalesInvoiceDetails:
-        count_sales_new = VoucherSalesInvoiceDetails.objects.filter(
-            tenant_id=tenant_id,
-            created_at__gte=cycle_start
-        ).count()
-        # Note: VoucherSalesInvoiceDetails doesn't have status field currently.
-    
-    # 4. Count from New Purchase System (VoucherPurchaseSupplierDetails)
-    count_purchase_new = 0
-    if VoucherPurchaseSupplierDetails:
-        count_purchase_new = VoucherPurchaseSupplierDetails.objects.filter(
-            tenant_id=tenant_id, 
-            created_at__gte=cycle_start
-        ).count()
-        # Note: VoucherPurchaseSupplierDetails doesn't have status field currently.
-    
-    # 5. Count from AI Extractions (ExtractedInvoice)
+    # Only count from AI Extractions (ExtractedInvoice) and Scanner
     count_extracted = 0
     try:
         from .models import ExtractedInvoice
@@ -94,7 +50,18 @@ def get_invoice_usage(user):
     except ImportError:
         pass
     
-    return count_unified + count_sales_invoice + count_sales_new + count_purchase_new + count_extracted
+    # Count from Scanner if it exists as a separate model
+    count_scanned = 0
+    try:
+        from .models import ScannedInvoice
+        count_scanned = ScannedInvoice.objects.filter(
+            tenant_id=tenant_id,
+            created_at__gte=cycle_start
+        ).count()
+    except ImportError:
+        pass
+    
+    return count_extracted + count_scanned
 
 def check_subscription_limit(user, increment=1):
     """

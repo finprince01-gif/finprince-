@@ -287,11 +287,6 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
     ];
 
     const handlePost = async () => {
-        if (isLimitReached && onLimitReached) {
-            onLimitReached();
-            return;
-        }
-
         try {
             const parseNum = (val: any) => {
                 if (val === '' || val === null || val === undefined) return 0;
@@ -2548,57 +2543,47 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
 
                         {/* Action Buttons */}
                         <div className="flex justify-end gap-4 pt-4">
-                            {isLimitReached ? (
-                                <button
-                                    type="button"
-                                    onClick={onLimitReached}
-                                    className="px-8 py-3 bg-slate-100 text-slate-400 rounded-[4px] border border-slate-200 cursor-not-allowed font-medium"
-                                    title="Monthly invoice limit reached. Please upgrade your plan."
-                                >
-                                    Limit Reached
-                                </button>
-                            ) : (
-                                <>
-                                    <button
-                                        type="button"
-                                        onClick={handlePost}
-                                        className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors font-medium"
-                                    >
-                                        Post & Close
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={handlePost}
-                                        className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors font-medium"
-                                    >
-                                        Post & Print/Email
-                                    </button>
-                                </>
-                            )}
+                            <button
+                                type="button"
+                                onClick={handlePost}
+                                className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors font-medium"
+                            >
+                                Post & Close
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handlePost}
+                                className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors font-medium"
+                            >
+                                Post & Print/Email
+                            </button>
+
                         </div>
                     </div>
                 )}
             </div>
             {/* Issue Slip Modal */}
-            {isIssueSlipModalOpen && (
-                <CreateIssueSlipModal
-                    onClose={() => setIsIssueSlipModalOpen(false)}
-                    onSave={async (data) => {
-                        try {
+            {
+                isIssueSlipModalOpen && (
+                    <CreateIssueSlipModal
+                        onClose={() => setIsIssueSlipModalOpen(false)}
+                        onSave={async (data) => {
+                            try {
 
-                            const response = await apiService.createInventoryOperationOutward(data);
+                                const response = await apiService.createInventoryOperationOutward(data);
 
-                            setOutwardSlipNo(response.outward_slip_no);
-                            showSuccess('Issue Slip Created Successfully!');
+                                setOutwardSlipNo(response.outward_slip_no);
+                                showSuccess('Issue Slip Created Successfully!');
 
-                        } catch (error) {
-                            console.error("Failed to create Issue Slip");
-                            showError("Failed to create Issue Slip. Please check inputs.");
+                            } catch (error) {
+                                console.error("Failed to create Issue Slip");
+                                showError("Failed to create Issue Slip. Please check inputs.");
 
-                        }
-                    }}
-                />
-            )}
+                            }
+                        }}
+                    />
+                )
+            }
         </div>
     );
 };

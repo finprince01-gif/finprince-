@@ -21,7 +21,5 @@ class VoucherPurchaseViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
-        from .utils_subscription import check_subscription_limit
-        check_subscription_limit(self.request.user)
         tenant_id = self.request.user.tenant_id
         serializer.save(tenant_id=tenant_id)
