@@ -285,6 +285,8 @@ const InventoryPage: React.FC = () => {
   const [outwardSupplierInvoice, setOutwardSupplierInvoice] = useState('');
   const [outwardVendorName, setOutwardVendorName] = useState('');
   const [outwardBranchOptions, setOutwardBranchOptions] = useState<any[]>([]); // Added for dynamic branches
+  const [outwardSalesOrderOptions, setOutwardSalesOrderOptions] = useState<any[]>([]);
+  const [outwardSupplierInvoiceOptions, setOutwardSupplierInvoiceOptions] = useState<any[]>([]);
   const [materialIssueSlipNo, setMaterialIssueSlipNo] = useState('');
   const [processTransferSlipNo, setProcessTransferSlipNo] = useState('');
   const [prodItemTab, setProdItemTab] = useState<'materials_issued' | 'converted_output'>('materials_issued');
@@ -323,6 +325,8 @@ const InventoryPage: React.FC = () => {
   const [deliveryChallanDate, setDeliveryChallanDate] = useState('');
 
   const [showEWayBill, setShowEWayBill] = useState(false);
+  const [irn, setIrn] = useState('');
+  const [ackNo, setAckNo] = useState('');
 
   // E-Invoice & E-way Bill Details State
   interface EwayBillEntry {
@@ -404,6 +408,32 @@ const InventoryPage: React.FC = () => {
   const [uptoPortShipPortCode, setUptoPortShipPortCode] = useState('');
   const [uptoPortShippingBillDate, setUptoPortShippingBillDate] = useState('');
   const [uptoPortOrigin, setUptoPortOrigin] = useState('');
+
+  // Beyond Port Details (for Air/Sea transport)
+  const [beyondPortShippingBillNo, setBeyondPortShippingBillNo] = useState('');
+  const [beyondPortShippingBillDate, setBeyondPortShippingBillDate] = useState('');
+  const [beyondPortShipPortCode, setBeyondPortShipPortCode] = useState('');
+  const [beyondPortVesselFlightNo, setBeyondPortVesselFlightNo] = useState('');
+  const [beyondPortPortOfLoading, setBeyondPortPortOfLoading] = useState('');
+  const [beyondPortPortOfDischarge, setBeyondPortPortOfDischarge] = useState('');
+  const [beyondPortFinalDestination, setBeyondPortFinalDestination] = useState('');
+  const [beyondPortOriginCountry, setBeyondPortOriginCountry] = useState('');
+  const [beyondPortDestCountry, setBeyondPortDestCountry] = useState('');
+
+  // Rail Details (for Rail transport)
+  const [railUptoPortDeliveryType, setRailUptoPortDeliveryType] = useState('');
+  const [railUptoPortTransporterId, setRailUptoPortTransporterId] = useState('');
+  const [railUptoPortTransporterName, setRailUptoPortTransporterName] = useState('');
+  const [railBeyondPortRailwayReceiptNo, setRailBeyondPortRailwayReceiptNo] = useState('');
+  const [railBeyondPortRailwayReceiptDate, setRailBeyondPortRailwayReceiptDate] = useState('');
+  const [railBeyondPortOrigin, setRailBeyondPortOrigin] = useState('');
+  const [railBeyondPortOriginCountry, setRailBeyondPortOriginCountry] = useState('');
+  const [railBeyondPortRailNo, setRailBeyondPortRailNo] = useState('');
+  const [railBeyondPortStationOfLoading, setRailBeyondPortStationOfLoading] = useState('');
+  const [railBeyondPortStationOfDischarge, setRailBeyondPortStationOfDischarge] = useState('');
+  const [railBeyondPortFinalDestination, setRailBeyondPortFinalDestination] = useState('');
+  const [railBeyondPortDestCountry, setRailBeyondPortDestCountry] = useState('');
+
   const [operationsStockData, setOperationsStockData] = useState<any[]>([
     { id: 1, category: 'Electronics', subCategory: 'Mobile', itemCode: 'IT001', itemName: 'Product A', uom: 'Nos', openingQty: 100, openingValue: 150000, inwardQty: 50, inwardValue: 75000, outwardQty: 30, outwardValue: 45000, closingQty: 120, closingValue: 180000 },
     { id: 2, category: 'Furniture', subCategory: 'Chairs', itemCode: 'IT002', itemName: 'Product B', uom: 'Nos', openingQty: 200, openingValue: 1000000, inwardQty: 100, inwardValue: 500000, outwardQty: 50, outwardValue: 250000, closingQty: 250, closingValue: 1250000 },
@@ -742,6 +772,12 @@ const InventoryPage: React.FC = () => {
     }
   }, [issueSlipTab, jobWorkSubTab, jobWorkSentType]);
 
+  useEffect(() => {
+    if (['inter-unit', 'location-change', 'consumption', 'scrap', 'production'].includes(issueSlipTab)) {
+      if (locations.length === 0) fetchLocations();
+    }
+  }, [issueSlipTab]);
+
   // Handlers - Items
   const handleItemSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -873,7 +909,7 @@ const InventoryPage: React.FC = () => {
         is_saleable: editFormData.isSaleable || false
       };
 
-      
+
 
       if (editFormData.id) {
         await httpClient.put(`/api/inventory/items/${editFormData.id}/`, data);
@@ -1247,10 +1283,50 @@ const InventoryPage: React.FC = () => {
             quantity: item.quantity || 0,
             no_of_boxes: item.noOfBoxes || null
           })),
-          delivery_challan: (deliveryChallanAddress || deliveryChallanDate) ? {
-            dispatch_address: deliveryChallanAddress,
-            dispatch_date: deliveryChallanDate || null
-          } : null,
+          delivery_challan: {
+            dispatch_from: dispatchFrom,
+            mode_of_transport: modeOfTransport,
+            dispatch_date: dispatchDate,
+            dispatch_time: dispatchTime,
+            delivery_type: deliveryType,
+            transporter_id: transporterId,
+            transporter_name: transporterName,
+            vehicle_no: vehicleNo,
+            lr_gr_consignment: lrGrConsignment,
+            // Air/Sea Upto Port
+            shipping_bill_no: uptoPortShippingBillNo,
+            ship_port_code: uptoPortShipPortCode,
+            shipping_bill_date: uptoPortShippingBillDate,
+            origin: uptoPortOrigin,
+            // Air/Sea Beyond Port
+            beyond_port_shipping_bill_no: beyondPortShippingBillNo,
+            beyond_port_shipping_bill_date: beyondPortShippingBillDate,
+            beyond_port_ship_port_code: beyondPortShipPortCode,
+            beyond_port_vessel_flight_no: beyondPortVesselFlightNo,
+            beyond_port_port_of_loading: beyondPortPortOfLoading,
+            beyond_port_port_of_discharge: beyondPortPortOfDischarge,
+            beyond_port_final_destination: beyondPortFinalDestination,
+            beyond_port_origin_country: beyondPortOriginCountry,
+            beyond_port_dest_country: beyondPortDestCountry,
+            // Rail Upto Port
+            rail_upto_port_delivery_type: railUptoPortDeliveryType,
+            rail_upto_port_transporter_id: railUptoPortTransporterId,
+            rail_upto_port_transporter_name: railUptoPortTransporterName,
+            // Rail Beyond Port
+            rail_beyond_port_receipt_no: railBeyondPortRailwayReceiptNo,
+            rail_beyond_port_receipt_date: railBeyondPortRailwayReceiptDate,
+            rail_beyond_port_origin: railBeyondPortOrigin,
+            rail_beyond_port_origin_country: railBeyondPortOriginCountry,
+            rail_beyond_port_rail_no: railBeyondPortRailNo,
+            rail_beyond_port_station_loading: railBeyondPortStationOfLoading,
+            rail_beyond_port_station_discharge: railBeyondPortStationOfDischarge,
+            rail_beyond_port_final_destination: railBeyondPortFinalDestination,
+            rail_beyond_port_dest_country: railBeyondPortDestCountry,
+
+            // Maintained for compatibility
+            dispatch_address: dispatchFrom || deliveryChallanAddress,
+            dispatch_date: dispatchDate || deliveryChallanDate,
+          },
           eway_bill: (ewayValidationEntries.length > 0 && (ewayValidationEntries[0].updatedVehicleNo || ewayValidationEntries[0].date)) ? {
             vehicle_number: ewayValidationEntries[0].updatedVehicleNo || null,
             valid_till: ewayValidationEntries[0].date || null
@@ -1431,13 +1507,41 @@ const InventoryPage: React.FC = () => {
             transporter_name: transporterName,
             vehicle_no: vehicleNo,
             lr_gr_consignment: lrGrConsignment,
+            // Air/Sea Upto Port
             shipping_bill_no: uptoPortShippingBillNo,
             ship_port_code: uptoPortShipPortCode,
             shipping_bill_date: uptoPortShippingBillDate,
             origin: uptoPortOrigin,
-            // Maintained for compatibility if backend expects these keys
+            // Air/Sea Beyond Port
+            beyond_port_shipping_bill_no: beyondPortShippingBillNo,
+            beyond_port_shipping_bill_date: beyondPortShippingBillDate,
+            beyond_port_ship_port_code: beyondPortShipPortCode,
+            beyond_port_vessel_flight_no: beyondPortVesselFlightNo,
+            beyond_port_port_of_loading: beyondPortPortOfLoading,
+            beyond_port_port_of_discharge: beyondPortPortOfDischarge,
+            beyond_port_final_destination: beyondPortFinalDestination,
+            beyond_port_origin_country: beyondPortOriginCountry,
+            beyond_port_dest_country: beyondPortDestCountry,
+            // Rail Upto Port
+            rail_upto_port_delivery_type: railUptoPortDeliveryType,
+            rail_upto_port_transporter_id: railUptoPortTransporterId,
+            rail_upto_port_transporter_name: railUptoPortTransporterName,
+            // Rail Beyond Port
+            rail_beyond_port_receipt_no: railBeyondPortRailwayReceiptNo,
+            rail_beyond_port_receipt_date: railBeyondPortRailwayReceiptDate,
+            rail_beyond_port_origin: railBeyondPortOrigin,
+            rail_beyond_port_origin_country: railBeyondPortOriginCountry,
+            rail_beyond_port_rail_no: railBeyondPortRailNo,
+            rail_beyond_port_station_loading: railBeyondPortStationOfLoading,
+            rail_beyond_port_station_discharge: railBeyondPortStationOfDischarge,
+            rail_beyond_port_final_destination: railBeyondPortFinalDestination,
+            rail_beyond_port_dest_country: railBeyondPortDestCountry,
+
+            // Maintained for compatibility
             dispatch_address: dispatchFrom,
           },
+          irn: irn,
+          ack_no: ackNo,
           eway_bill: (ewayValidationEntries.length > 0 && (ewayValidationEntries[0].updatedVehicleNo || ewayValidationEntries[0].date)) ? {
             vehicle_number: ewayValidationEntries[0].updatedVehicleNo || null,
             valid_till: ewayValidationEntries[0].date || null
@@ -1546,6 +1650,83 @@ const InventoryPage: React.FC = () => {
     } else {
       setOutwardAddress('');
       setOutwardGstin('');
+    }
+  };
+
+  // --- Handlers for Outward Sales & Purchase Return ---
+
+  const handleOutwardSalesOrderChange = (soNumber: string) => {
+    setOutwardSalesOrder(soNumber);
+    const so = outwardSalesOrderOptions.find(o => o.voucher_number === soNumber || o.id?.toString() === soNumber || o.sales_order_no === soNumber);
+    if (so) {
+      if (so.party_name) {
+        handleSalesOutwardCustomerChange(so.party_name);
+      }
+      // Optional: Populate items from SO if needed?
+      // For now, let's just handle header details as per requirement.
+    }
+  };
+
+  const handleSalesOutwardCustomerChange = async (customerName: string) => {
+    setOutwardCustomerName(customerName);
+    setOutwardBranch('');
+    setOutwardBranchOptions([]);
+    setOutwardAddress('');
+    setOutwardGstin('');
+
+    const customer = customers.find(c => c.customer_name === customerName);
+    if (customer) {
+      // Set branches from customer object
+      if (customer.gst_details && Array.isArray(customer.gst_details.branches)) {
+        const branches = customer.gst_details.branches.map((b: any) => ({
+          ...b,
+          reference_name: b.defaultRef || b.branch_reference_name || 'Main',
+          branch_address: b.address || b.branch_address,
+          gstin: b.gstin
+        }));
+        setOutwardBranchOptions(branches);
+
+        if (branches.length > 0) {
+          handleOutwardBranchChange(branches[0].reference_name);
+        }
+      }
+    }
+  };
+
+  const handleOutwardSupplierInvoiceChange = (invNumber: string) => {
+    setOutwardSupplierInvoice(invNumber);
+    const inv = outwardSupplierInvoiceOptions.find(i => i.voucher_number === invNumber || i.id?.toString() === invNumber || i.supplier_invoice_no === invNumber);
+    if (inv) {
+      if (inv.party_name) {
+        handlePurchaseReturnVendorChange(inv.party_name);
+      }
+    }
+  };
+
+  const handlePurchaseReturnVendorChange = async (vendorName: string) => {
+    setOutwardVendorName(vendorName);
+    setOutwardBranch('');
+    setOutwardBranchOptions([]);
+    setOutwardAddress('');
+    setOutwardGstin('');
+
+    const vendor = vendors.find(v => v.vendor_name === vendorName);
+    if (vendor) {
+      try {
+        const branchResponse = await apiService.getVendorGSTDetails(vendor.id);
+        const mappedBranches = Array.isArray(branchResponse) ? branchResponse.map((b: any) => ({
+          ...b,
+          reference_name: b.reference_name || b.defaultRef || b.branch_name || b.name || b.gstin || `Branch ${b.id}` || 'Main',
+          branch_address: b.branch_address || b.address
+        })) : [];
+        setOutwardBranchOptions(mappedBranches);
+
+        if (mappedBranches.length > 0) {
+          handleOutwardBranchChange(mappedBranches[0].reference_name);
+        }
+      } catch (error) {
+        handleApiError(error, "Fetching vendor details");
+      }
     }
   };
 
@@ -1812,6 +1993,25 @@ const InventoryPage: React.FC = () => {
     }
   }, [showIssueSlipForm]);
 
+  useEffect(() => {
+    if (showIssueSlipForm && issueSlipTab === 'outward') {
+      const fetchOutwardData = async () => {
+        try {
+          if (outwardType === 'sales') {
+            const response = await apiService.getSalesVouchers({ status: 'Pending' });
+            setOutwardSalesOrderOptions(Array.isArray(response) ? response : []);
+          } else if (outwardType === 'purchase_return') {
+            const response = await apiService.getVouchers('Purchase');
+            setOutwardSupplierInvoiceOptions(Array.isArray(response) ? response : []);
+          }
+        } catch (error) {
+          console.error("Error fetching outward options", error);
+        }
+      };
+      fetchOutwardData();
+    }
+  }, [showIssueSlipForm, issueSlipTab, outwardType]);
+
   const handleGRNSubmit = async () => {
     try {
       const payload = {
@@ -1875,6 +2075,7 @@ const InventoryPage: React.FC = () => {
       if (selectedItem) {
         updatedItems[index].itemName = selectedItem.name || selectedItem.item_name;
         updatedItems[index].uom = selectedItem.uom || selectedItem.unit;
+        updatedItems[index].hsnCode = selectedItem.hsn_code || '';
         // Fetch Rate
         updatedItems[index].rate = selectedItem.standard_rate || selectedItem.rate || 0;
         // Recalculate Value immediately as rate changed
@@ -1886,6 +2087,7 @@ const InventoryPage: React.FC = () => {
       if (selectedItem) {
         updatedItems[index].itemCode = selectedItem.item_code;
         updatedItems[index].uom = selectedItem.uom || selectedItem.unit;
+        updatedItems[index].hsnCode = selectedItem.hsn_code || '';
         // Fetch Rate
         updatedItems[index].rate = selectedItem.standard_rate || selectedItem.rate || 0;
         // Recalculate Value immediately as rate changed
@@ -1949,6 +2151,344 @@ const InventoryPage: React.FC = () => {
       const matchUom = item.uom.toLowerCase().includes(detailsFilters.uom.toLowerCase());
       return matchDate && matchParticulars && matchRefNo && matchLocation && matchUom;
     });
+
+    const deliveryChallanFieldsJSX = (
+      <div className="mt-8 pt-6 border-t border-gray-200">
+        <h3 className="text-lg font-bold text-gray-800 mb-4">Delivery Challan / Dispatch Details</h3>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Left Column */}
+          <div className="space-y-4">
+            {/* Dispatch From */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Dispatch From
+              </label>
+              <textarea
+                value={dispatchFrom}
+                onChange={(e) => setDispatchFrom(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                rows={3}
+              />
+            </div>
+
+            {/* Mode of Transport */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Mode of Transport
+              </label>
+              <select
+                value={modeOfTransport}
+                onChange={(e) => setModeOfTransport(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+              >
+                <option value="">Select Mode</option>
+                <option value="Road">Road</option>
+                <option value="Air">Air</option>
+                <option value="Sea">Sea</option>
+                <option value="Rail">Rail</option>
+                <option value="Courier">Courier</option>
+              </select>
+            </div>
+
+            {/* Dispatch Date & Time */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Dispatch Date
+                </label>
+                <input
+                  type="date"
+                  value={dispatchDate}
+                  onChange={(e) => setDispatchDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Dispatch Time
+                </label>
+                <input
+                  type="time"
+                  value={dispatchTime}
+                  onChange={(e) => setDispatchTime(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+
+            {/* Upload Document */}
+            <div className="mt-2">
+              <input
+                type="file"
+                id="dispatch-doc-inventory"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) setDispatchDocument(file);
+                }}
+                className="hidden"
+                accept=".jpg,.jpeg,.pdf"
+              />
+              <button
+                type="button"
+                onClick={() => document.getElementById('dispatch-doc-inventory')?.click()}
+                className="w-full h-32 border-2 border-dashed border-gray-300 hover:border-indigo-500 bg-gray-50 hover:bg-indigo-50/50 text-gray-600 rounded transition-colors flex flex-col items-center justify-center gap-2"
+              >
+                <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                <span className="text-xs font-medium">UPLOAD DOCUMENT</span>
+                {dispatchDocument && (
+                  <span className="text-xs mt-1 text-indigo-600 font-medium">✓ {dispatchDocument.name}</span>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Right Column */}
+          <div className="space-y-4">
+            {/* Delivery Type */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Delivery Type
+              </label>
+              <select
+                value={deliveryType}
+                onChange={(e) => {
+                  setDeliveryType(e.target.value);
+                  if (e.target.value === 'Courier') {
+                    setTransporterId('');
+                    setTransporterName('');
+                    setVehicleNo('');
+                    setLrGrConsignment('');
+                  }
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+              >
+                <option value="">Select</option>
+                <option value="Self">Self</option>
+                <option value="Third Party">Third Party</option>
+                <option value="Courier">Courier</option>
+              </select>
+            </div>
+
+            {/* Transporter ID/GSTIN */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Transporter ID/GSTIN
+              </label>
+              <input
+                type="text"
+                value={transporterId}
+                onChange={(e) => setTransporterId(e.target.value)}
+                disabled={deliveryType === 'Courier'}
+                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                placeholder="Editable with numerics and alphabet"
+              />
+            </div>
+
+            {/* Transporter Name */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Transporter Name
+              </label>
+              <input
+                type="text"
+                value={transporterName}
+                onChange={(e) => setTransporterName(e.target.value)}
+                disabled={deliveryType === 'Courier'}
+                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                placeholder="Editable with numerics and alphabet"
+              />
+            </div>
+
+            {/* Vehicle No. */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Vehicle No.
+              </label>
+              <input
+                type="text"
+                value={vehicleNo}
+                onChange={(e) => setVehicleNo(e.target.value)}
+                disabled={deliveryType === 'Courier'}
+                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                placeholder="Editable with numerics and alphabet"
+              />
+            </div>
+
+            {/* LR/GR/Consignment */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                LR/GR/Consignment
+              </label>
+              <input
+                type="text"
+                value={lrGrConsignment}
+                onChange={(e) => setLrGrConsignment(e.target.value)}
+                disabled={deliveryType === 'Courier'}
+                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                placeholder="Editable with numerics and alphabet"
+              />
+            </div>
+          </div>
+        </div>
+
+        {(modeOfTransport === 'Air' || modeOfTransport === 'Sea') && (
+          <div className="space-y-6 mt-6 border-t border-gray-200 pt-4">
+            {/* UPTO PORT */}
+            <div>
+              <h3 className="text-md font-semibold text-gray-800 mb-3">UPTO PORT</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Bill No.</label>
+                    <input type="text" value={uptoPortShippingBillNo} onChange={(e) => setUptoPortShippingBillNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Ship/Port Code</label>
+                    <input type="text" value={uptoPortShipPortCode} onChange={(e) => setUptoPortShipPortCode(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Bill Date</label>
+                    <input type="date" value={uptoPortShippingBillDate} onChange={(e) => setUptoPortShippingBillDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Origin</label>
+                    <input type="text" value={uptoPortOrigin} onChange={(e) => setUptoPortOrigin(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="City" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* BEYOND PORT */}
+            <div>
+              <h3 className="text-md font-semibold text-gray-800 mb-3">BEYOND PORT</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Bill No.</label>
+                    <input type="text" value={beyondPortShippingBillNo} onChange={(e) => setBeyondPortShippingBillNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Ship/Port Code</label>
+                    <input type="text" value={beyondPortShipPortCode} onChange={(e) => setBeyondPortShipPortCode(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Port of Loading</label>
+                    <input type="text" value={beyondPortPortOfLoading} onChange={(e) => setBeyondPortPortOfLoading(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Final Destination</label>
+                    <input type="text" value={beyondPortFinalDestination} onChange={(e) => setBeyondPortFinalDestination(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Destination Country</label>
+                    <input type="text" value={beyondPortDestCountry} onChange={(e) => setBeyondPortDestCountry(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Bill Date</label>
+                    <input type="date" value={beyondPortShippingBillDate} onChange={(e) => setBeyondPortShippingBillDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Vessel/Flight No.</label>
+                    <input type="text" value={beyondPortVesselFlightNo} onChange={(e) => setBeyondPortVesselFlightNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Port of Discharge</label>
+                    <input type="text" value={beyondPortPortOfDischarge} onChange={(e) => setBeyondPortPortOfDischarge(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Origin Country</label>
+                    <input type="text" value={beyondPortOriginCountry} onChange={(e) => setBeyondPortOriginCountry(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Conditional Details for Rail */}
+        {modeOfTransport === 'Rail' && (
+          <div className="space-y-6 mt-6 border-t border-gray-200 pt-4">
+            {/* UPTO PORT (Rail) */}
+            <div>
+              <h3 className="text-md font-semibold text-gray-800 mb-3">UPTO PORT</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Type</label>
+                    <input type="text" value={railUptoPortDeliveryType} onChange={(e) => setRailUptoPortDeliveryType(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Transporter Name</label>
+                    <input type="text" value={railUptoPortTransporterName} onChange={(e) => setRailUptoPortTransporterName(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Transporter ID</label>
+                    <input type="text" value={railUptoPortTransporterId} onChange={(e) => setRailUptoPortTransporterId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* BEYOND PORT (Rail) */}
+            <div>
+              <h3 className="text-md font-semibold text-gray-800 mb-3">BEYOND PORT</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Railway Receipt No.</label>
+                    <input type="text" value={railBeyondPortRailwayReceiptNo} onChange={(e) => setRailBeyondPortRailwayReceiptNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Origin</label>
+                    <input type="text" value={railBeyondPortOrigin} onChange={(e) => setRailBeyondPortOrigin(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Rail No.</label>
+                    <input type="text" value={railBeyondPortRailNo} onChange={(e) => setRailBeyondPortRailNo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Station of Discharge</label>
+                    <input type="text" value={railBeyondPortStationOfDischarge} onChange={(e) => setRailBeyondPortStationOfDischarge(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Destination Country</label>
+                    <input type="text" value={railBeyondPortDestCountry} onChange={(e) => setRailBeyondPortDestCountry(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Railway Receipt Date</label>
+                    <input type="date" value={railBeyondPortRailwayReceiptDate} onChange={(e) => setRailBeyondPortRailwayReceiptDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Origin Country</label>
+                    <input type="text" value={railBeyondPortOriginCountry} onChange={(e) => setRailBeyondPortOriginCountry(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Station of Loading</label>
+                    <input type="text" value={railBeyondPortStationOfLoading} onChange={(e) => setRailBeyondPortStationOfLoading(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Final Destination</label>
+                    <input type="text" value={railBeyondPortFinalDestination} onChange={(e) => setRailBeyondPortFinalDestination(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+
 
     return (
       <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200 p-6">
@@ -3117,34 +3657,49 @@ const InventoryPage: React.FC = () => {
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Sales Order No.</label>
                           <select
                             value={outwardSalesOrder}
-                            onChange={(e) => setOutwardSalesOrder(e.target.value)}
+                            onChange={(e) => handleOutwardSalesOrderChange(e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select Pending Sales Order</option>
-                            <option value="SO-001">SO-001</option>
-                            <option value="SO-002">SO-002</option>
+                            {outwardSalesOrderOptions.map(so => (
+                              <option key={so.id} value={so.voucher_number || so.id}>{so.voucher_number || so.sales_order_no || `SO #${so.id}`}</option>
+                            ))}
                           </select>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">Customer Name</label>
-                            <input
-                              type="text"
-                              value={outwardCustomerName}
-                              onChange={(e) => setOutwardCustomerName(e.target.value)}
-                              placeholder={outwardSalesOrder ? "Auto-fetched" : "Enter Name"}
-                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            />
+                            {outwardSalesOrder ? (
+                              <input
+                                type="text"
+                                value={outwardCustomerName}
+                                readOnly
+                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-100"
+                              />
+                            ) : (
+                              <select
+                                value={outwardCustomerName}
+                                onChange={(e) => handleSalesOutwardCustomerChange(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              >
+                                <option value="">Select Customer</option>
+                                {customers.map(c => (
+                                  <option key={c.id} value={c.customer_name}>{c.customer_name}</option>
+                                ))}
+                              </select>
+                            )}
                           </div>
                           <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">Branch</label>
                             <select
                               value={outwardBranch}
-                              onChange={(e) => setOutwardBranch(e.target.value)}
+                              onChange={(e) => handleOutwardBranchChange(e.target.value)}
                               className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             >
                               <option value="">Select Branch</option>
-                              <option value="Main">Main</option>
+                              {outwardBranchOptions.map((b, idx) => (
+                                <option key={idx} value={b.reference_name}>{b.reference_name}</option>
+                              ))}
                             </select>
                           </div>
                         </div>
@@ -3155,9 +3710,9 @@ const InventoryPage: React.FC = () => {
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Address</label>
                           <textarea
                             value={outwardAddress}
-                            onChange={(e) => setOutwardAddress(e.target.value)}
+                            readOnly
                             rows={2}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-100 cursor-not-allowed"
                           />
                         </div>
                         <div>
@@ -3165,8 +3720,8 @@ const InventoryPage: React.FC = () => {
                           <input
                             type="text"
                             value={outwardGstin}
-                            onChange={(e) => setOutwardGstin(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            readOnly
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-100 cursor-not-allowed"
                           />
                         </div>
                       </div>
@@ -3198,10 +3753,49 @@ const InventoryPage: React.FC = () => {
                             <tbody className="divide-y divide-gray-200">
                               {issueSlipItems.map((item, index) => (
                                 <tr key={index}>
-                                  <td className="px-3 py-2"><input type="text" value={item.itemCode} onChange={(e) => handleIssueSlipItemChange(index, 'itemCode', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
-                                  <td className="px-3 py-2"><input type="text" value={item.itemName} onChange={(e) => handleIssueSlipItemChange(index, 'itemName', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
-                                  <td className="px-3 py-2"><input type="text" value={item.hsnCode || ''} onChange={(e) => handleIssueSlipItemChange(index, 'hsnCode', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
-                                  <td className="px-3 py-2"><input type="text" value={item.uom} onChange={(e) => handleIssueSlipItemChange(index, 'uom', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
+                                  <td className="px-3 py-2">
+                                    <select
+                                      value={item.itemCode}
+                                      onChange={(e) => handleIssueSlipItemChange(index, 'itemCode', e.target.value)}
+                                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm min-w-[120px]"
+                                    >
+                                      <option value="">Code</option>
+                                      {items.map(i => (<option key={i.id} value={i.item_code}>{i.item_code}</option>))}
+                                    </select>
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <select
+                                      value={item.itemName}
+                                      onChange={(e) => handleIssueSlipItemChange(index, 'itemName', e.target.value)}
+                                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm min-w-[150px]"
+                                    >
+                                      <option value="">Item</option>
+                                      {items.map(i => (<option key={i.id} value={i.item_name || i.name}>{i.item_name || i.name}</option>))}
+                                    </select>
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <input type="text" value={item.hsnCode || ''} readOnly className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-gray-50" />
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <select
+                                      value={item.uom || ''}
+                                      onChange={(e) => handleIssueSlipItemChange(index, 'uom', e.target.value)}
+                                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-center"
+                                    >
+                                      <option value="">Unit</option>
+                                      {(() => {
+                                        const selectedItem = items.find(i => i.item_code === item.itemCode);
+                                        const units = [];
+                                        if (selectedItem) {
+                                          const u1 = selectedItem.uom || selectedItem.unit;
+                                          const u2 = selectedItem.alternate_uom || selectedItem.alternative_unit;
+                                          if (u1) units.push(u1);
+                                          if (u2 && u2 !== u1) units.push(u2);
+                                        }
+                                        return units.map(u => (<option key={u} value={u}>{u}</option>));
+                                      })()}
+                                    </select>
+                                  </td>
                                   <td className="px-3 py-2"><input type="number" value={item.quantity} onChange={(e) => handleIssueSlipItemChange(index, 'quantity', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
                                   <td className="px-3 py-2"><input type="text" value={item.noOfBoxes || ''} onChange={(e) => handleIssueSlipItemChange(index, 'noOfBoxes', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
                                   <td className="px-3 py-2 text-center">
@@ -3233,7 +3827,10 @@ const InventoryPage: React.FC = () => {
                         />
                       </div>
 
-                      <div className="flex gap-3 justify-end border-t border-gray-200 pt-5 mt-4">
+                      {deliveryChallanFieldsJSX}
+                      <div className="flex gap-3 justify-end border-t border-gray-200 pt-5 mt-4"><button onClick={() => setShowDeliveryChallan(true)} className="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 font-semibold text-sm">Delivery Challan</button>
+                        <button onClick={() => setShowEWayBill(true)} className="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 font-semibold text-sm">E-Way Bill</button>
+
                         <button
                           onClick={handleIssueSlipSubmit}
                           className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 font-semibold text-sm"
@@ -3301,34 +3898,49 @@ const InventoryPage: React.FC = () => {
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Supplier Invoice No.</label>
                           <select
                             value={outwardSupplierInvoice}
-                            onChange={(e) => setOutwardSupplierInvoice(e.target.value)}
+                            onChange={(e) => handleOutwardSupplierInvoiceChange(e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select Supplier Invoice</option>
-                            <option value="INV-001">INV-001</option>
-                            <option value="INV-002">INV-002</option>
+                            {outwardSupplierInvoiceOptions.map(inv => (
+                              <option key={inv.id} value={inv.voucher_number || inv.id}>{inv.voucher_number || inv.supplier_invoice_no || `INV #${inv.id}`}</option>
+                            ))}
                           </select>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">Vendor Name</label>
-                            <input
-                              type="text"
-                              value={outwardVendorName}
-                              onChange={(e) => setOutwardVendorName(e.target.value)}
-                              placeholder={outwardSupplierInvoice ? "Auto-fetched" : "Enter Name"}
-                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            />
+                            {outwardSupplierInvoice ? (
+                              <input
+                                type="text"
+                                value={outwardVendorName}
+                                readOnly
+                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-100"
+                              />
+                            ) : (
+                              <select
+                                value={outwardVendorName}
+                                onChange={(e) => handlePurchaseReturnVendorChange(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              >
+                                <option value="">Select Vendor</option>
+                                {vendors.map(v => (
+                                  <option key={v.id} value={v.vendor_name}>{v.vendor_name}</option>
+                                ))}
+                              </select>
+                            )}
                           </div>
                           <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">Branch</label>
                             <select
                               value={outwardBranch}
-                              onChange={(e) => setOutwardBranch(e.target.value)}
+                              onChange={(e) => handleOutwardBranchChange(e.target.value)}
                               className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             >
                               <option value="">Select Branch</option>
-                              <option value="Main">Main</option>
+                              {outwardBranchOptions.map((b, idx) => (
+                                <option key={idx} value={b.reference_name}>{b.reference_name}</option>
+                              ))}
                             </select>
                           </div>
                         </div>
@@ -3339,9 +3951,9 @@ const InventoryPage: React.FC = () => {
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Address</label>
                           <textarea
                             value={outwardAddress}
-                            onChange={(e) => setOutwardAddress(e.target.value)}
+                            readOnly
                             rows={2}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-100 cursor-not-allowed"
                           />
                         </div>
                         <div>
@@ -3349,8 +3961,8 @@ const InventoryPage: React.FC = () => {
                           <input
                             type="text"
                             value={outwardGstin}
-                            onChange={(e) => setOutwardGstin(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            readOnly
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-100 cursor-not-allowed"
                           />
                         </div>
                       </div>
@@ -3382,10 +3994,49 @@ const InventoryPage: React.FC = () => {
                             <tbody className="divide-y divide-gray-200">
                               {issueSlipItems.map((item, index) => (
                                 <tr key={index}>
-                                  <td className="px-3 py-2"><input type="text" value={item.itemCode} onChange={(e) => handleIssueSlipItemChange(index, 'itemCode', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
-                                  <td className="px-3 py-2"><input type="text" value={item.itemName} onChange={(e) => handleIssueSlipItemChange(index, 'itemName', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
-                                  <td className="px-3 py-2"><input type="text" value={item.hsnCode || ''} onChange={(e) => handleIssueSlipItemChange(index, 'hsnCode', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
-                                  <td className="px-3 py-2"><input type="text" value={item.uom} onChange={(e) => handleIssueSlipItemChange(index, 'uom', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
+                                  <td className="px-3 py-2">
+                                    <select
+                                      value={item.itemCode}
+                                      onChange={(e) => handleIssueSlipItemChange(index, 'itemCode', e.target.value)}
+                                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm min-w-[120px]"
+                                    >
+                                      <option value="">Code</option>
+                                      {items.map(i => (<option key={i.id} value={i.item_code}>{i.item_code}</option>))}
+                                    </select>
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <select
+                                      value={item.itemName}
+                                      onChange={(e) => handleIssueSlipItemChange(index, 'itemName', e.target.value)}
+                                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm min-w-[150px]"
+                                    >
+                                      <option value="">Item</option>
+                                      {items.map(i => (<option key={i.id} value={i.item_name || i.name}>{i.item_name || i.name}</option>))}
+                                    </select>
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <input type="text" value={item.hsnCode || ''} readOnly className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-gray-50" />
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <select
+                                      value={item.uom || ''}
+                                      onChange={(e) => handleIssueSlipItemChange(index, 'uom', e.target.value)}
+                                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-center"
+                                    >
+                                      <option value="">Unit</option>
+                                      {(() => {
+                                        const selectedItem = items.find(i => i.item_code === item.itemCode);
+                                        const units = [];
+                                        if (selectedItem) {
+                                          const u1 = selectedItem.uom || selectedItem.unit;
+                                          const u2 = selectedItem.alternate_uom || selectedItem.alternative_unit;
+                                          if (u1) units.push(u1);
+                                          if (u2 && u2 !== u1) units.push(u2);
+                                        }
+                                        return units.map(u => (<option key={u} value={u}>{u}</option>));
+                                      })()}
+                                    </select>
+                                  </td>
                                   <td className="px-3 py-2"><input type="number" value={item.quantity} onChange={(e) => handleIssueSlipItemChange(index, 'quantity', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
                                   <td className="px-3 py-2"><input type="text" value={item.noOfBoxes || ''} onChange={(e) => handleIssueSlipItemChange(index, 'noOfBoxes', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" /></td>
                                   <td className="px-3 py-2 text-center">
@@ -3524,7 +4175,7 @@ const InventoryPage: React.FC = () => {
                             onChange={(e) => setGoodsFromLocation(e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
-                            <option value="">Select Company Premises</option>
+                            <option value="">Select Location</option>
                             {locations.filter(l => l.location_type === 'company_premises').map(loc => (
                               <option key={loc.id} value={loc.id}>{loc.name}</option>
                             ))}
@@ -3537,7 +4188,7 @@ const InventoryPage: React.FC = () => {
                             onChange={(e) => setGoodsToLocation(e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
-                            <option value="">Select Company Premises</option>
+                            <option value="">Select Location</option>
                             {locations.filter(l => l.location_type === 'company_premises').map(loc => (
                               <option key={loc.id} value={loc.id}>{loc.name}</option>
                             ))}
@@ -3566,9 +4217,52 @@ const InventoryPage: React.FC = () => {
                                 {/* We reuse issueSlipItems for Raw Materials here */}
                                 {issueSlipItems.map((item, index) => (
                                   <tr key={index}>
-                                    <td className="p-1"><input type="text" value={item.itemCode} onChange={(e) => handleIssueSlipItemChange(index, 'itemCode', e.target.value)} className="w-full border rounded px-1 text-xs" /></td>
-                                    <td className="p-1"><input type="text" value={item.itemName} onChange={(e) => handleIssueSlipItemChange(index, 'itemName', e.target.value)} className="w-full border rounded px-1 text-xs" /></td>
-                                    <td className="p-1"><input type="text" value={item.uom} readOnly className="w-12 bg-gray-50 border rounded px-1 text-xs" /></td>
+                                    <td className="p-1">
+                                      <select
+                                        value={item.itemCode}
+                                        onChange={(e) => handleIssueSlipItemChange(index, 'itemCode', e.target.value)}
+                                        className="w-full border rounded px-1 text-xs"
+                                      >
+                                        <option value="">Code</option>
+                                        {items.map(i => (
+                                          <option key={i.id} value={i.item_code}>{i.item_code}</option>
+                                        ))}
+                                      </select>
+                                    </td>
+                                    <td className="p-1">
+                                      <select
+                                        value={item.itemName}
+                                        onChange={(e) => handleIssueSlipItemChange(index, 'itemName', e.target.value)}
+                                        className="w-full border rounded px-1 text-xs"
+                                      >
+                                        <option value="">Item</option>
+                                        {items.map(i => (
+                                          <option key={i.id} value={i.name || i.item_name}>{i.name || i.item_name}</option>
+                                        ))}
+                                      </select>
+                                    </td>
+                                    <td className="p-1">
+                                      <select
+                                        value={item.uom || ''}
+                                        onChange={(e) => handleIssueSlipItemChange(index, 'uom', e.target.value)}
+                                        className="w-16 border rounded px-1 text-xs"
+                                      >
+                                        <option value="">Unit</option>
+                                        {(() => {
+                                          const selectedItem = items.find(i => i.item_code === item.itemCode);
+                                          const units = [];
+                                          if (selectedItem) {
+                                            const u1 = selectedItem.uom || selectedItem.unit;
+                                            const u2 = selectedItem.alternate_uom || selectedItem.alternative_unit;
+                                            if (u1) units.push(u1);
+                                            if (u2 && u2 !== u1) units.push(u2);
+                                          }
+                                          return units.map(u => (
+                                            <option key={u} value={u}>{u}</option>
+                                          ));
+                                        })()}
+                                      </select>
+                                    </td>
                                     <td className="p-1"><input type="number" value={item.quantity} onChange={(e) => handleIssueSlipItemChange(index, 'quantity', e.target.value)} className="w-full border rounded px-1 text-xs text-right" /></td>
                                   </tr>
                                 ))}
@@ -3601,36 +4295,74 @@ const InventoryPage: React.FC = () => {
                                 {resultingWIPItems.map((item, index) => (
                                   <tr key={index}>
                                     <td className="p-1">
-                                      <input
-                                        type="text"
+                                      <select
                                         value={item.itemCode}
                                         onChange={(e) => {
+                                          const val = e.target.value;
                                           const newWIP = [...resultingWIPItems];
-                                          newWIP[index].itemCode = e.target.value;
+                                          newWIP[index].itemCode = val;
+                                          const selectedItem = items.find(i => i.item_code === val);
+                                          if (selectedItem) {
+                                            newWIP[index].itemName = selectedItem.name || selectedItem.item_name;
+                                            newWIP[index].uom = selectedItem.uom || selectedItem.unit;
+                                          }
                                           setResultingWIPItems(newWIP);
                                         }}
                                         className="w-full border rounded px-1 text-xs"
-                                      />
+                                      >
+                                        <option value="">Code</option>
+                                        {items.map(i => (
+                                          <option key={i.id} value={i.item_code}>{i.item_code}</option>
+                                        ))}
+                                      </select>
                                     </td>
                                     <td className="p-1">
-                                      <input
-                                        type="text"
+                                      <select
                                         value={item.itemName}
                                         onChange={(e) => {
+                                          const val = e.target.value;
                                           const newWIP = [...resultingWIPItems];
-                                          newWIP[index].itemName = e.target.value;
+                                          newWIP[index].itemName = val;
+                                          const selectedItem = items.find(i => (i.name || i.item_name) === val);
+                                          if (selectedItem) {
+                                            newWIP[index].itemCode = selectedItem.item_code;
+                                            newWIP[index].uom = selectedItem.uom || selectedItem.unit;
+                                          }
                                           setResultingWIPItems(newWIP);
                                         }}
                                         className="w-full border rounded px-1 text-xs"
-                                      />
+                                      >
+                                        <option value="">Item</option>
+                                        {items.map(i => (
+                                          <option key={i.id} value={i.name || i.item_name}>{i.name || i.item_name}</option>
+                                        ))}
+                                      </select>
                                     </td>
                                     <td className="p-1">
-                                      <input
-                                        type="text"
-                                        value={item.uom}
-                                        readOnly
-                                        className="w-12 bg-gray-50 border rounded px-1 text-xs"
-                                      />
+                                      <select
+                                        value={item.uom || ''}
+                                        onChange={(e) => {
+                                          const newWIP = [...resultingWIPItems];
+                                          newWIP[index].uom = e.target.value;
+                                          setResultingWIPItems(newWIP);
+                                        }}
+                                        className="w-16 border rounded px-1 text-xs"
+                                      >
+                                        <option value="">Unit</option>
+                                        {(() => {
+                                          const selectedItem = items.find(i => i.item_code === item.itemCode);
+                                          const units = [];
+                                          if (selectedItem) {
+                                            const u1 = selectedItem.uom || selectedItem.unit;
+                                            const u2 = selectedItem.alternate_uom || selectedItem.alternative_unit;
+                                            if (u1) units.push(u1);
+                                            if (u2 && u2 !== u1) units.push(u2);
+                                          }
+                                          return units.map(u => (
+                                            <option key={u} value={u}>{u}</option>
+                                          ));
+                                        })()}
+                                      </select>
                                     </td>
                                     <td className="p-1">
                                       <input
@@ -3736,27 +4468,26 @@ const InventoryPage: React.FC = () => {
                       <div className="w-1/2">
                         <label className="block text-sm font-semibold text-gray-700 mb-1">Material Issue Slip No.</label>
                         <select
-                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          multiple
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 h-24"
                         >
-                          <option value="">Select Issue Slip(s)</option>
                           <option value="MIS-001">MIS-001</option>
+                          <option value="MIS-002">MIS-002</option>
+                          {/* Fetch actual slips here */}
                         </select>
+                        <p className="text-xs text-gray-500 mt-1">Hold Ctrl (Cmd) to select multiple</p>
                       </div>
 
                       {/* Issued From & To */}
                       <div className="grid grid-cols-2 gap-6">
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-1">Issued From</label>
-                          <select
-                            value={goodsFromLocation}
-                            onChange={(e) => setGoodsFromLocation(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          >
-                            <option value="">Fetch from Material Issue Slip</option>
-                            {locations.filter(l => l.location_type === 'company_premises').map(loc => (
-                              <option key={loc.id} value={loc.id}>{loc.name}</option>
-                            ))}
-                          </select>
+                          <input
+                            type="text"
+                            readOnly
+                            placeholder="Fetch from Material Issue Slip"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-100 cursor-not-allowed"
+                          />
                         </div>
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-1">Issued To</label>
@@ -3765,7 +4496,7 @@ const InventoryPage: React.FC = () => {
                             onChange={(e) => setGoodsToLocation(e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
-                            <option value="">Select Company Premises</option>
+                            <option value="">Select location</option>
                             {locations.filter(l => l.location_type === 'company_premises').map(loc => (
                               <option key={loc.id} value={loc.id}>{loc.name}</option>
                             ))}
@@ -3812,9 +4543,43 @@ const InventoryPage: React.FC = () => {
                                     <td className="px-3 py-2 border-r"><input type="text" value={item.itemName} readOnly className="w-full bg-gray-50 border-none rounded text-sm" /></td>
                                     <td className="px-3 py-2 border-r"><input type="text" value={item.uom} readOnly className="w-full bg-gray-50 border-none rounded text-sm text-center" /></td>
                                     <td className="px-3 py-2 border-r"><input type="number" value={item.quantity} readOnly className="w-full bg-gray-50 border-none rounded text-sm text-center" /></td>
-                                    <td className="px-3 py-2 border-r"><input type="number" placeholder="Issue Qty" className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-center" /></td>
-                                    <td className="px-3 py-2 border-r"><input type="number" placeholder="Rate" className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-center" /></td>
-                                    <td className="px-3 py-2"><input type="number" placeholder="Amount" readOnly className="w-full bg-gray-50 border-none rounded text-sm text-center" /></td>
+                                    <td className="px-3 py-2 border-r">
+                                      <input
+                                        type="number"
+                                        value={item.issueQty || ''}
+                                        onChange={(e) => {
+                                          const newItems = [...resultingWIPItems];
+                                          newItems[index] = { ...newItems[index], issueQty: e.target.value };
+                                          // Auto calc amount
+                                          if (newItems[index].rate && e.target.value) {
+                                            newItems[index].amount = (parseFloat(e.target.value) * parseFloat(newItems[index].rate)).toFixed(2);
+                                          } else {
+                                            newItems[index].amount = '';
+                                          }
+                                          setResultingWIPItems(newItems);
+                                        }}
+                                        placeholder="Issue Qty"
+                                        className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-center"
+                                      />
+                                    </td>
+                                    <td className="px-3 py-2 border-r">
+                                      <input
+                                        type="number"
+                                        value={item.rate || ''}
+                                        readOnly
+                                        placeholder="Rate"
+                                        className="w-full bg-gray-50 border-none rounded text-sm text-center"
+                                      />
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <input
+                                        type="number"
+                                        value={item.amount || ''}
+                                        readOnly
+                                        placeholder="Amount"
+                                        className="w-full bg-gray-50 border-none rounded text-sm text-center"
+                                      />
+                                    </td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -3835,8 +4600,7 @@ const InventoryPage: React.FC = () => {
                                 {convertedOutputItems.map((item, index) => (
                                   <tr key={index}>
                                     <td className="px-3 py-2 border-r">
-                                      <input
-                                        type="text"
+                                      <select
                                         value={item.itemCode}
                                         onChange={(e) => {
                                           const val = e.target.value;
@@ -3850,11 +4614,15 @@ const InventoryPage: React.FC = () => {
                                           setConvertedOutputItems(newItems);
                                         }}
                                         className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
-                                      />
+                                      >
+                                        <option value="">Code</option>
+                                        {items.map(i => (
+                                          <option key={i.id} value={i.item_code}>{i.item_code}</option>
+                                        ))}
+                                      </select>
                                     </td>
                                     <td className="px-3 py-2 border-r">
-                                      <input
-                                        type="text"
+                                      <select
                                         value={item.itemName}
                                         onChange={(e) => {
                                           const val = e.target.value;
@@ -3868,15 +4636,38 @@ const InventoryPage: React.FC = () => {
                                           setConvertedOutputItems(newItems);
                                         }}
                                         className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
-                                      />
+                                      >
+                                        <option value="">Item</option>
+                                        {items.map(i => (
+                                          <option key={i.id} value={i.name || i.item_name}>{i.name || i.item_name}</option>
+                                        ))}
+                                      </select>
                                     </td>
                                     <td className="px-3 py-2 border-r">
-                                      <input
-                                        type="text"
-                                        value={item.uom}
-                                        readOnly
-                                        className="w-full bg-gray-50 border-none rounded px-2 py-1 text-sm text-center"
-                                      />
+                                      <select
+                                        value={item.uom || ''}
+                                        onChange={(e) => {
+                                          const newItems = [...convertedOutputItems];
+                                          newItems[index].uom = e.target.value;
+                                          setConvertedOutputItems(newItems);
+                                        }}
+                                        className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-center"
+                                      >
+                                        <option value="">Unit</option>
+                                        {(() => {
+                                          const selectedItem = items.find(i => i.item_code === item.itemCode);
+                                          const units = [];
+                                          if (selectedItem) {
+                                            const u1 = selectedItem.uom || selectedItem.unit;
+                                            const u2 = selectedItem.alternate_uom || selectedItem.alternative_unit;
+                                            if (u1) units.push(u1);
+                                            if (u2 && u2 !== u1) units.push(u2);
+                                          }
+                                          return units.map(u => (
+                                            <option key={u} value={u}>{u}</option>
+                                          ));
+                                        })()}
+                                      </select>
                                     </td>
                                     <td className="px-3 py-2 border-r">
                                       <input
@@ -3885,6 +4676,12 @@ const InventoryPage: React.FC = () => {
                                         onChange={(e) => {
                                           const newItems = [...convertedOutputItems];
                                           newItems[index].quantity = e.target.value;
+                                          // Auto calc amount
+                                          if (newItems[index].rate && e.target.value) {
+                                            newItems[index].amount = (parseFloat(e.target.value) * parseFloat(newItems[index].rate)).toFixed(2);
+                                          } else {
+                                            newItems[index].amount = '';
+                                          }
                                           setConvertedOutputItems(newItems);
                                         }}
                                         className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-center"
@@ -3897,6 +4694,12 @@ const InventoryPage: React.FC = () => {
                                         onChange={(e) => {
                                           const newItems = [...convertedOutputItems];
                                           newItems[index].rate = e.target.value;
+                                          // Auto calc amount
+                                          if (newItems[index].quantity && e.target.value) {
+                                            newItems[index].amount = (parseFloat(newItems[index].quantity) * parseFloat(e.target.value)).toFixed(2);
+                                          } else {
+                                            newItems[index].amount = '';
+                                          }
                                           setConvertedOutputItems(newItems);
                                         }}
                                         className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-center"
@@ -4002,27 +4805,26 @@ const InventoryPage: React.FC = () => {
                       <div className="w-1/2">
                         <label className="block text-sm font-semibold text-gray-700 mb-1">Process Transfer Slip No.</label>
                         <select
-                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          multiple
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 h-24"
                         >
-                          <option value="">Select Process Transfer Slip(s)</option>
                           <option value="PTS-001">PTS-001</option>
+                          <option value="PTS-002">PTS-002</option>
+                          {/* Fetch actual slips here */}
                         </select>
+                        <p className="text-xs text-gray-500 mt-1">Hold Ctrl (Cmd) to select multiple</p>
                       </div>
 
                       {/* Issued From & To */}
                       <div className="grid grid-cols-2 gap-6">
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-1">Issued From</label>
-                          <select
-                            value={goodsFromLocation}
-                            onChange={(e) => setGoodsFromLocation(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          >
-                            <option value="">Fetch from Process Transfer Slip</option>
-                            {locations.filter(l => l.location_type === 'company_premises').map(loc => (
-                              <option key={loc.id} value={loc.id}>{loc.name}</option>
-                            ))}
-                          </select>
+                          <input
+                            type="text"
+                            readOnly
+                            placeholder="Fetch from Process Transfer Slip"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-100 cursor-not-allowed"
+                          />
                         </div>
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-1">Issued To</label>
@@ -4031,7 +4833,7 @@ const InventoryPage: React.FC = () => {
                             onChange={(e) => setGoodsToLocation(e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
-                            <option value="">Select Company Premises</option>
+                            <option value="">Select location</option>
                             {locations.filter(l => l.location_type === 'company_premises').map(loc => (
                               <option key={loc.id} value={loc.id}>{loc.name}</option>
                             ))}
@@ -4102,8 +4904,7 @@ const InventoryPage: React.FC = () => {
                                 {goodsProducedItems.map((item, index) => (
                                   <tr key={index}>
                                     <td className="px-3 py-2 border-r">
-                                      <input
-                                        type="text"
+                                      <select
                                         value={item.itemCode}
                                         onChange={(e) => {
                                           const val = e.target.value;
@@ -4117,11 +4918,15 @@ const InventoryPage: React.FC = () => {
                                           setGoodsProducedItems(newItems);
                                         }}
                                         className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
-                                      />
+                                      >
+                                        <option value="">Code</option>
+                                        {items.map(i => (
+                                          <option key={i.id} value={i.item_code}>{i.item_code}</option>
+                                        ))}
+                                      </select>
                                     </td>
                                     <td className="px-3 py-2 border-r">
-                                      <input
-                                        type="text"
+                                      <select
                                         value={item.itemName}
                                         onChange={(e) => {
                                           const val = e.target.value;
@@ -4135,15 +4940,38 @@ const InventoryPage: React.FC = () => {
                                           setGoodsProducedItems(newItems);
                                         }}
                                         className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
-                                      />
+                                      >
+                                        <option value="">Item</option>
+                                        {items.map(i => (
+                                          <option key={i.id} value={i.name || i.item_name}>{i.name || i.item_name}</option>
+                                        ))}
+                                      </select>
                                     </td>
                                     <td className="px-3 py-2 border-r">
-                                      <input
-                                        type="text"
-                                        value={item.uom}
-                                        readOnly
-                                        className="w-full bg-gray-50 border-none rounded px-2 py-1 text-sm text-center"
-                                      />
+                                      <select
+                                        value={item.uom || ''}
+                                        onChange={(e) => {
+                                          const newItems = [...goodsProducedItems];
+                                          newItems[index].uom = e.target.value;
+                                          setGoodsProducedItems(newItems);
+                                        }}
+                                        className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-center"
+                                      >
+                                        <option value="">Unit</option>
+                                        {(() => {
+                                          const selectedItem = items.find(i => i.item_code === item.itemCode);
+                                          const units = [];
+                                          if (selectedItem) {
+                                            const u1 = selectedItem.uom || selectedItem.unit;
+                                            const u2 = selectedItem.alternate_uom || selectedItem.alternative_unit;
+                                            if (u1) units.push(u1);
+                                            if (u2 && u2 !== u1) units.push(u2);
+                                          }
+                                          return units.map(u => (
+                                            <option key={u} value={u}>{u}</option>
+                                          ));
+                                        })()}
+                                      </select>
                                     </td>
                                     <td className="px-3 py-2 border-r">
                                       <input
@@ -4289,13 +5117,26 @@ const InventoryPage: React.FC = () => {
                         </div>
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Goods Sent To</label>
-                          <input
-                            type="text"
-                            value={goodsToLocation}
-                            onChange={(e) => setGoodsToLocation(e.target.value)}
-                            placeholder="Select location"
-                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          />
+                          {(issueSlipTab === 'inter-unit' || issueSlipTab === 'location-change') ? (
+                            <select
+                              value={goodsToLocation}
+                              onChange={(e) => setGoodsToLocation(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            >
+                              <option value="">Select location</option>
+                              {locations.filter(l => l.location_type === 'company_premises').map(loc => (
+                                <option key={loc.id} value={loc.id}>{loc.name}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              type="text"
+                              value={goodsToLocation}
+                              onChange={(e) => setGoodsToLocation(e.target.value)}
+                              placeholder="Enter location"
+                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                          )}
                         </div>
                       </div>
 
@@ -4405,263 +5246,27 @@ const InventoryPage: React.FC = () => {
                         />
                       </div>
 
-                      {/* Delivery Challan Details - Only for Inter-unit */}
-                      {issueSlipTab === 'inter-unit' && (
-                        <div className="mt-8 pt-6 border-t border-gray-200">
-                          <h3 className="text-lg font-bold text-gray-800 mb-4">Delivery Challan Details</h3>
-
-                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            {/* Left Column */}
-                            <div className="space-y-4">
-                              {/* Dispatch From */}
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                  Dispatch From
-                                </label>
-                                <textarea
-                                  value={dispatchFrom}
-                                  onChange={(e) => setDispatchFrom(e.target.value)}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                                  rows={3}
-                                />
-                              </div>
-
-                              {/* Mode of Transport */}
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                  Mode of Transport
-                                </label>
-                                <select
-                                  value={modeOfTransport}
-                                  onChange={(e) => setModeOfTransport(e.target.value)}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-                                >
-                                  <option value="">Select Mode</option>
-                                  <option value="Road">Road</option>
-                                  <option value="Air">Air</option>
-                                  <option value="Sea">Sea</option>
-                                  <option value="Rail">Rail</option>
-                                  <option value="Courier">Courier</option>
-                                </select>
-                              </div>
-
-                              {/* Dispatch Date & Time */}
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Dispatch Date
-                                  </label>
-                                  <input
-                                    type="date"
-                                    value={dispatchDate}
-                                    onChange={(e) => setDispatchDate(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Dispatch Time
-                                  </label>
-                                  <input
-                                    type="time"
-                                    value={dispatchTime}
-                                    onChange={(e) => setDispatchTime(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                  />
-                                </div>
-                              </div>
-
-                              {/* Upload Document */}
-                              <div className="mt-2">
-                                <input
-                                  type="file"
-                                  id="dispatch-doc-inventory"
-                                  onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    if (file) setDispatchDocument(file);
-                                  }}
-                                  className="hidden"
-                                  accept=".jpg,.jpeg,.pdf"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => document.getElementById('dispatch-doc-inventory')?.click()}
-                                  className="w-full h-32 border-2 border-dashed border-gray-300 hover:border-indigo-500 bg-gray-50 hover:bg-indigo-50/50 text-gray-600 rounded transition-colors flex flex-col items-center justify-center gap-2"
-                                >
-                                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                                  </svg>
-                                  <span className="text-xs font-medium">UPLOAD DOCUMENT</span>
-                                  {dispatchDocument && (
-                                    <span className="text-xs mt-1 text-indigo-600 font-medium">✓ {dispatchDocument.name}</span>
-                                  )}
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Right Column */}
-                            <div className="space-y-4">
-                              {/* Delivery Type */}
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                  Delivery Type
-                                </label>
-                                <select
-                                  value={deliveryType}
-                                  onChange={(e) => {
-                                    setDeliveryType(e.target.value);
-                                    if (e.target.value === 'Courier') {
-                                      setTransporterId('');
-                                      setTransporterName('');
-                                      setVehicleNo('');
-                                      setLrGrConsignment('');
-                                    }
-                                  }}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-                                >
-                                  <option value="">Select</option>
-                                  <option value="Self">Self</option>
-                                  <option value="Third Party">Third Party</option>
-                                  <option value="Courier">Courier</option>
-                                </select>
-                              </div>
-
-                              {/* Transporter ID/GSTIN */}
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                  Transporter ID/GSTIN
-                                </label>
-                                <input
-                                  type="text"
-                                  value={transporterId}
-                                  onChange={(e) => setTransporterId(e.target.value)}
-                                  disabled={deliveryType === 'Courier'}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                                  placeholder="Editable with numerics and alphabet"
-                                />
-                              </div>
-
-                              {/* Transporter Name */}
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                  Transporter Name
-                                </label>
-                                <input
-                                  type="text"
-                                  value={transporterName}
-                                  onChange={(e) => setTransporterName(e.target.value)}
-                                  disabled={deliveryType === 'Courier'}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                                  placeholder="Editable with numerics and alphabet"
-                                />
-                              </div>
-
-                              {/* Vehicle No. */}
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                  Vehicle No.
-                                </label>
-                                <input
-                                  type="text"
-                                  value={vehicleNo}
-                                  onChange={(e) => setVehicleNo(e.target.value)}
-                                  disabled={deliveryType === 'Courier'}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                                  placeholder="Editable with numerics and alphabet"
-                                />
-                              </div>
-
-                              {/* LR/GR/Consignment */}
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                  LR/GR/Consignment
-                                </label>
-                                <input
-                                  type="text"
-                                  value={lrGrConsignment}
-                                  onChange={(e) => setLrGrConsignment(e.target.value)}
-                                  disabled={deliveryType === 'Courier'}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                                  placeholder="Editable with numerics and alphabet"
-                                />
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Conditional Port Details for Air/Sea */}
-                          {(modeOfTransport === 'Air' || modeOfTransport === 'Sea') && (
-                            <div className="space-y-6 mt-6 border-t border-gray-200 pt-4">
-                              <h3 className="text-md font-semibold text-gray-800">UPTO PORT</h3>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-4">
-                                  <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                      Shipping Bill No.
-                                    </label>
-                                    <input
-                                      type="text"
-                                      value={uptoPortShippingBillNo}
-                                      onChange={(e) => setUptoPortShippingBillNo(e.target.value)}
-                                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                      Ship/Port Code
-                                    </label>
-                                    <input
-                                      type="text"
-                                      value={uptoPortShipPortCode}
-                                      onChange={(e) => setUptoPortShipPortCode(e.target.value)}
-                                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                    />
-                                  </div>
-                                </div>
-                                <div className="space-y-4">
-                                  <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                      Shipping Bill Date
-                                    </label>
-                                    <input
-                                      type="date"
-                                      value={uptoPortShippingBillDate}
-                                      onChange={(e) => setUptoPortShippingBillDate(e.target.value)}
-                                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                      Origin
-                                    </label>
-                                    <input
-                                      type="text"
-                                      value={uptoPortOrigin}
-                                      onChange={(e) => setUptoPortOrigin(e.target.value)}
-                                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                      placeholder="City"
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                      {/* Delivery Challan Details - For Inter-unit & Outward (Sales/Pur Return) */}
+                      {(issueSlipTab === 'inter-unit' || issueSlipTab === 'outward') && deliveryChallanFieldsJSX}
 
                       {/* Action Buttons */}
                       <div className="flex gap-3 justify-end border-t border-gray-200 pt-5">
-                        <button
-                          onClick={() => setShowDeliveryChallan(true)}
-                          className="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 font-semibold text-sm"
-                        >
-                          Delivery Challan
-                        </button>
-                        <button
-                          onClick={() => setShowEWayBill(true)}
-                          className="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 font-semibold text-sm"
-                        >
-                          E-Way Bill
-                        </button>
+                        {issueSlipTab !== 'location-change' && (
+                          <>
+                            <button
+                              onClick={() => setShowDeliveryChallan(true)}
+                              className="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 font-semibold text-sm"
+                            >
+                              Delivery Challan
+                            </button>
+                            <button
+                              onClick={() => setShowEWayBill(true)}
+                              className="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 font-semibold text-sm"
+                            >
+                              E-Way Bill
+                            </button>
+                          </>
+                        )}
                         <button
                           onClick={handleIssueSlipSubmit}
                           className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 font-semibold text-sm"
@@ -5164,6 +5769,146 @@ const InventoryPage: React.FC = () => {
                       </div>
                     </div>
 
+                    {/* Additional Transport Details for Air/Sea */}
+                    {(modeOfTransport === 'Air' || modeOfTransport === 'Sea') && (
+                      <div className="mb-6 border border-black border-t-0 -mt-6 text-sm">
+                        {/* Upto Port */}
+                        <div className="bg-gray-100 p-1 px-2 border-b border-black font-bold text-xs uppercase text-center">Upto Port Details</div>
+                        <div className="grid grid-cols-4 border-b border-black">
+                          <div className="p-2 border-r border-black">
+                            <span className="block text-xs font-semibold text-gray-500 uppercase">SB No.</span>
+                            <span className="font-bold">{uptoPortShippingBillNo || "-"}</span>
+                          </div>
+                          <div className="p-2 border-r border-black">
+                            <span className="block text-xs font-semibold text-gray-500 uppercase">SB Date</span>
+                            <span className="font-bold">{uptoPortShippingBillDate || "-"}</span>
+                          </div>
+                          <div className="p-2 border-r border-black">
+                            <span className="block text-xs font-semibold text-gray-500 uppercase">Port Code</span>
+                            <span className="font-bold">{uptoPortShipPortCode || "-"}</span>
+                          </div>
+                          <div className="p-2">
+                            <span className="block text-xs font-semibold text-gray-500 uppercase">Origin</span>
+                            <span className="font-bold">{uptoPortOrigin || "-"}</span>
+                          </div>
+                        </div>
+
+                        {/* Beyond Port */}
+                        <div className="bg-gray-100 p-1 px-2 border-b border-black font-bold text-xs uppercase text-center">Beyond Port Details</div>
+                        <div className="grid grid-cols-3">
+                          {/* Row 1 */}
+                          <div className="p-2 border-r border-black border-b">
+                            <span className="block text-xs font-semibold text-gray-500 uppercase">SB No.</span>
+                            <span className="font-bold">{beyondPortShippingBillNo || "-"}</span>
+                          </div>
+                          <div className="p-2 border-r border-black border-b">
+                            <span className="block text-xs font-semibold text-gray-500 uppercase">SB Date</span>
+                            <span className="font-bold">{beyondPortShippingBillDate || "-"}</span>
+                          </div>
+                          <div className="p-2 border-black border-b">
+                            <span className="block text-xs font-semibold text-gray-500 uppercase">Port Code</span>
+                            <span className="font-bold">{beyondPortShipPortCode || "-"}</span>
+                          </div>
+
+                          {/* Row 2 */}
+                          <div className="p-2 border-r border-black border-b">
+                            <span className="block text-xs font-semibold text-gray-500 uppercase">Vessel/Flight No.</span>
+                            <span className="font-bold">{beyondPortVesselFlightNo || "-"}</span>
+                          </div>
+                          <div className="p-2 border-r border-black border-b">
+                            <span className="block text-xs font-semibold text-gray-500 uppercase">Port of Loading</span>
+                            <span className="font-bold">{beyondPortPortOfLoading || "-"}</span>
+                          </div>
+                          <div className="p-2 border-black border-b">
+                            <span className="block text-xs font-semibold text-gray-500 uppercase">Port of Discharge</span>
+                            <span className="font-bold">{beyondPortPortOfDischarge || "-"}</span>
+                          </div>
+
+                          {/* Row 3 */}
+                          <div className="p-2 border-r border-black">
+                            <span className="block text-xs font-semibold text-gray-500 uppercase">Final Dest.</span>
+                            <span className="font-bold">{beyondPortFinalDestination || "-"}</span>
+                          </div>
+                          <div className="p-2 border-r border-black">
+                            <span className="block text-xs font-semibold text-gray-500 uppercase">Origin Country</span>
+                            <span className="font-bold">{beyondPortOriginCountry || "-"}</span>
+                          </div>
+                          <div className="p-2 border-black">
+                            <span className="block text-xs font-semibold text-gray-500 uppercase">Dest. Country</span>
+                            <span className="font-bold">{beyondPortDestCountry || "-"}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Additional Transport Details for Rail */}
+                    {modeOfTransport === 'Rail' && (
+                      <div className="mb-6 border border-black border-t-0 -mt-6 text-sm">
+                        {/* Upto Port */}
+                        <div className="bg-gray-100 p-1 px-2 border-b border-black font-bold text-xs uppercase text-center">Upto Port Details</div>
+                        <div className="grid grid-cols-3 border-b border-black">
+                          <div className="p-2 border-r border-black">
+                            <span className="block text-xs font-semibold text-gray-500 uppercase">Delivery Type</span>
+                            <span className="font-bold">{railUptoPortDeliveryType || "-"}</span>
+                          </div>
+                          <div className="p-2 border-r border-black">
+                            <span className="block text-xs font-semibold text-gray-500 uppercase">Transporter Name</span>
+                            <span className="font-bold">{railUptoPortTransporterName || "-"}</span>
+                          </div>
+                          <div className="p-2">
+                            <span className="block text-xs font-semibold text-gray-500 uppercase">Transporter ID</span>
+                            <span className="font-bold">{railUptoPortTransporterId || "-"}</span>
+                          </div>
+                        </div>
+
+                        {/* Beyond Port */}
+                        <div className="bg-gray-100 p-1 px-2 border-b border-black font-bold text-xs uppercase text-center">Beyond Port Details</div>
+                        <div className="grid grid-cols-3">
+                          {/* Row 1 */}
+                          <div className="p-2 border-r border-black border-b">
+                            <span className="block text-xs font-semibold text-gray-500 uppercase">RR No.</span>
+                            <span className="font-bold">{railBeyondPortRailwayReceiptNo || "-"}</span>
+                          </div>
+                          <div className="p-2 border-r border-black border-b">
+                            <span className="block text-xs font-semibold text-gray-500 uppercase">RR Date</span>
+                            <span className="font-bold">{railBeyondPortRailwayReceiptDate || "-"}</span>
+                          </div>
+                          <div className="p-2 border-black border-b">
+                            <span className="block text-xs font-semibold text-gray-500 uppercase">Origin</span>
+                            <span className="font-bold">{railBeyondPortOrigin || "-"}</span>
+                          </div>
+
+                          {/* Row 2 */}
+                          <div className="p-2 border-r border-black border-b">
+                            <span className="block text-xs font-semibold text-gray-500 uppercase">Rail No.</span>
+                            <span className="font-bold">{railBeyondPortRailNo || "-"}</span>
+                          </div>
+                          <div className="p-2 border-r border-black border-b">
+                            <span className="block text-xs font-semibold text-gray-500 uppercase">Loading Stn</span>
+                            <span className="font-bold">{railBeyondPortStationOfLoading || "-"}</span>
+                          </div>
+                          <div className="p-2 border-black border-b">
+                            <span className="block text-xs font-semibold text-gray-500 uppercase">Discharge Stn</span>
+                            <span className="font-bold">{railBeyondPortStationOfDischarge || "-"}</span>
+                          </div>
+
+                          {/* Row 3 */}
+                          <div className="p-2 border-r border-black">
+                            <span className="block text-xs font-semibold text-gray-500 uppercase">Final Dest.</span>
+                            <span className="font-bold">{railBeyondPortFinalDestination || "-"}</span>
+                          </div>
+                          <div className="p-2 border-r border-black">
+                            <span className="block text-xs font-semibold text-gray-500 uppercase">Origin Country</span>
+                            <span className="font-bold">{railBeyondPortOriginCountry || "-"}</span>
+                          </div>
+                          <div className="p-2 border-black">
+                            <span className="block text-xs font-semibold text-gray-500 uppercase">Dest. Country</span>
+                            <span className="font-bold">{railBeyondPortDestCountry || "-"}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Items Table */}
                     <div className="mb-6">
                       <table className="w-full border-collapse border border-black text-sm">
@@ -5256,6 +6001,25 @@ const InventoryPage: React.FC = () => {
                   </button>
                 </div>
                 <div className="p-6 space-y-8">
+                  {/* IRN & Ack No Section */}
+                  <div className="bg-gray-50 p-6 rounded-[4px] border border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4">E-Invoice Details</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">IRN</label>
+                          <input type="text" value={irn} onChange={(e) => setIrn(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500" />
+                        </div>
+                      </div>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Ack No</label>
+                          <input type="text" value={ackNo} onChange={(e) => setAckNo(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   {ewayValidationEntries.map((entry, index) => (
                     <div key={entry.id} className="bg-gray-50 p-6 rounded-[4px] relative">
                       {ewayValidationEntries.length > 1 && (
