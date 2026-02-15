@@ -359,13 +359,13 @@ const CustomerContent: React.FC = () => {
     const fetchStockItems = async () => {
         try {
             const response = await httpClient.get<any[]>('/api/inventory/items/');
-            
+
             const mappedItems = response.map(item => ({
                 code: item.item_code,
                 name: item.item_name,
                 uom: item.uom || ''
             }));
-            
+
             setStockItems(mappedItems);
         } catch (error) {
             handleApiError(error, 'Fetch Stock Items');
@@ -419,7 +419,20 @@ const CustomerContent: React.FC = () => {
     const [showGstDropdown, setShowGstDropdown] = useState(false); // Dropdown visibility state
     const [addMultipleBranches, setAddMultipleBranches] = useState(false); // Toggle for multiple branches
     const [unregisteredBranches, setUnregisteredBranches] = useState([
-        { id: 1, referenceName: '', address: '', contactPerson: '', email: '', contactNumber: '', gstin: null }
+        {
+            id: 1,
+            referenceName: '',
+            addressLine1: '',
+            addressLine2: '',
+            city: '',
+            pincode: '',
+            state: '',
+            country: 'India',
+            contactPerson: '',
+            email: '',
+            contactNumber: '',
+            gstin: null
+        }
     ]);
     const [registeredBranches, setRegisteredBranches] = useState<any[]>([]); // Track registered branch inputs
 
@@ -588,14 +601,24 @@ const CustomerContent: React.FC = () => {
                     gstins: isUnregistered ? [] : selectedGSTINs,
                     branches: isUnregistered ? unregisteredBranches.map(b => ({
                         defaultRef: b.referenceName,
-                        address: b.address,
+                        addressLine1: b.addressLine1 || '',
+                        addressLine2: b.addressLine2 || '',
+                        city: b.city || '',
+                        pincode: b.pincode || '',
+                        state: b.state || '',
+                        country: b.country || 'India',
                         contactPerson: b.contactPerson,
                         email: b.email,
                         contactNumber: b.contactNumber,
                         gstin: null
                     })) : (showBranchDetails ? registeredBranches.map(b => ({
                         defaultRef: b.defaultRef,
-                        address: b.address,
+                        addressLine1: b.addressLine1 || '',
+                        addressLine2: b.addressLine2 || '',
+                        city: b.city || '',
+                        pincode: b.pincode || '',
+                        state: b.state || '',
+                        country: b.country || 'India',
                         contactPerson: b.contactPerson,
                         email: b.email,
                         contactNumber: b.contactNumber,
@@ -628,10 +651,10 @@ const CustomerContent: React.FC = () => {
             };
 
             // DEBUG LOGGING
-            
-            
-            
-            
+
+
+
+
             console.log('Terms & Conditions:', {
                 credit_period: payload.credit_period,
                 credit_terms: payload.credit_terms,
@@ -641,20 +664,20 @@ const CustomerContent: React.FC = () => {
                 force_majeure: payload.force_majeure,
                 dispute_terms: payload.dispute_terms
             });
-            
+
 
             let response;
             if (createdCustomerId) {
                 // Update existing customer
-                
+
                 response = await httpClient.patch(`/api/customerportal/customer-master/${createdCustomerId}/`, payload);
                 await fetchCustomers(); // Refresh the list
                 if (options.exit) showSuccess('Customer updated successfully!');
             } else {
                 // Create new customer
-                
+
                 response = await httpClient.post('/api/customerportal/customer-master/', payload);
-                
+
                 setCreatedCustomerId(response.id);
                 await fetchCustomers(); // Refresh the list
                 if (options.exit) showSuccess('Customer created successfully!');
@@ -713,7 +736,7 @@ const CustomerContent: React.FC = () => {
     };
 
     const handleProductRowChange = (id: number, field: string, value: string) => {
-        
+
         setProductRows(prev => prev.map(row => {
             if (row.id === id) {
                 const updatedRow = { ...row, [field]: value };
@@ -721,27 +744,27 @@ const CustomerContent: React.FC = () => {
                 if (field === 'itemCode') {
                     // When Item Code is selected, fetch and populate Item Name and UOM
                     const item = stockItems.find(i => i.code === value);
-                    
+
                     if (item) {
                         updatedRow.itemName = item.name;
                         updatedRow.uom = item.uom;
-                        
+
                     } else {
                         updatedRow.itemName = '';
                     }
                 } else if (field === 'itemName') {
                     // When Item Name is selected, fetch and populate Item Code and UOM
                     const item = stockItems.find(i => i.name === value);
-                    
+
                     if (item) {
                         updatedRow.itemCode = item.code;
                         updatedRow.uom = item.uom;
-                        
+
                     } else {
                         updatedRow.itemCode = '';
                     }
                 }
-                
+
                 return updatedRow;
             }
             return row;
@@ -830,7 +853,12 @@ const CustomerContent: React.FC = () => {
         setUnregisteredBranches(prev => [...prev, {
             id: prev.length + 1,
             referenceName: '',
-            address: '',
+            addressLine1: '',
+            addressLine2: '',
+            city: '',
+            pincode: '',
+            state: '',
+            country: 'India',
             contactPerson: '',
             email: '',
             contactNumber: '',
@@ -899,13 +927,32 @@ const CustomerContent: React.FC = () => {
                 const branches = gstData.branches.map((b: any, index: number) => ({
                     id: index + 1,
                     referenceName: b.defaultRef || '',
-                    address: b.address || '',
+                    addressLine1: b.addressLine1 || b.address || '',
+                    addressLine2: b.addressLine2 || '',
+                    city: b.city || '',
+                    pincode: b.pincode || '',
+                    state: b.state || '',
+                    country: b.country || 'India',
                     contactPerson: b.contactPerson || '',
                     email: b.email || '',
                     contactNumber: b.contactNumber || '',
                     gstin: null
                 }));
-                setUnregisteredBranches(branches.length ? branches : [{ id: 1, referenceName: '', address: '', contactPerson: '', email: '', contactNumber: '', gstin: null }]);
+                const fallbackState = {
+                    id: 1,
+                    referenceName: '',
+                    addressLine1: '',
+                    addressLine2: '',
+                    city: '',
+                    pincode: '',
+                    state: '',
+                    country: 'India',
+                    contactPerson: '',
+                    email: '',
+                    contactNumber: '',
+                    gstin: null
+                };
+                setUnregisteredBranches(branches.length ? branches : [fallbackState]);
             } else {
                 // Populate registered branches
                 setSelectedGSTINs(gstData.gstins || []);
@@ -913,10 +960,18 @@ const CustomerContent: React.FC = () => {
                 // Populate registered branches state
                 const branches = gstData.branches.map((b: any) => {
                     const mock = mockBranches.find(mb => mb.gstin === b.gstin);
+                    const mockAddr = mock ? mock.address : '';
+                    const mockRef = mock ? mock.defaultRef : '';
+
                     return {
                         gstin: b.gstin,
-                        defaultRef: b.defaultRef || (mock ? mock.defaultRef : ''),
-                        address: b.address || (mock ? mock.address : ''),
+                        defaultRef: b.defaultRef || mockRef,
+                        addressLine1: b.addressLine1 || b.address || mockAddr,
+                        addressLine2: b.addressLine2 || '',
+                        city: b.city || '',
+                        pincode: b.pincode || '',
+                        state: b.state || '',
+                        country: b.country || 'India',
                         contactPerson: b.contactPerson || '',
                         contactNumber: b.contactNumber || '',
                         email: b.email || ''
@@ -930,7 +985,20 @@ const CustomerContent: React.FC = () => {
             setIsUnregistered(false);
             setSelectedGSTINs([]);
             setRegisteredBranches([]);
-            setUnregisteredBranches([{ id: 1, referenceName: '', address: '', contactPerson: '', email: '', contactNumber: '', gstin: null }]);
+            setUnregisteredBranches([{
+                id: 1,
+                referenceName: '',
+                addressLine1: '',
+                addressLine2: '',
+                city: '',
+                pincode: '',
+                state: '',
+                country: 'India',
+                contactPerson: '',
+                email: '',
+                contactNumber: '',
+                gstin: null
+            }]);
         }
 
         // 4. Products Services
@@ -1381,8 +1449,8 @@ const CustomerContent: React.FC = () => {
                                                 rows={3}
                                                 className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 resize-none"
                                                 placeholder="Enter Full Address"
-                                                value={unregisteredBranches[0].address}
-                                                onChange={(e) => handleManualBranchChange(1, 'address', e.target.value)}
+                                                value={unregisteredBranches[0].addressLine1}
+                                                onChange={(e) => handleManualBranchChange(1, 'addressLine1', e.target.value)}
                                             />
                                         </div>
                                     ) : (
@@ -1420,12 +1488,63 @@ const CustomerContent: React.FC = () => {
                                                                     />
                                                                 </div>
                                                                 <div className="md:col-span-2">
-                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Address</label>
-                                                                    <textarea
-                                                                        rows={2}
-                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm resize-none"
-                                                                        value={branch.address}
-                                                                        onChange={(e) => handleManualBranchChange(branch.id, 'address', e.target.value)}
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Address Line 1</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                        value={branch.addressLine1 || ''}
+                                                                        onChange={(e) => handleManualBranchChange(branch.id, 'addressLine1', e.target.value)}
+                                                                        placeholder="Enter address line 1"
+                                                                    />
+                                                                </div>
+                                                                <div className="md:col-span-2">
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Address Line 2</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                        value={branch.addressLine2 || ''}
+                                                                        onChange={(e) => handleManualBranchChange(branch.id, 'addressLine2', e.target.value)}
+                                                                        placeholder="Enter address line 2"
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">City</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                        value={branch.city || ''}
+                                                                        onChange={(e) => handleManualBranchChange(branch.id, 'city', e.target.value)}
+                                                                        placeholder="Enter city"
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Pincode</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                        value={branch.pincode || ''}
+                                                                        onChange={(e) => handleManualBranchChange(branch.id, 'pincode', e.target.value)}
+                                                                        placeholder="Enter pincode"
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">State</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                        value={branch.state || ''}
+                                                                        onChange={(e) => handleManualBranchChange(branch.id, 'state', e.target.value)}
+                                                                        placeholder="Enter state"
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Country</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                        value={branch.country || 'India'}
+                                                                        onChange={(e) => handleManualBranchChange(branch.id, 'country', e.target.value)}
+                                                                        placeholder="Enter country"
                                                                     />
                                                                 </div>
                                                                 <div>
@@ -1553,13 +1672,68 @@ const CustomerContent: React.FC = () => {
                                                     {isExpanded && (
                                                         <div className="p-6 grid grid-cols-1 gap-6">
                                                             <div>
-                                                                <label className="block text-xs font-medium text-gray-500 mb-1">Address (Fetched / Editable)</label>
-                                                                <textarea
-                                                                    rows={3}
-                                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm resize-none"
-                                                                    value={branch.address}
-                                                                    onChange={(e) => handleRegisteredBranchChange(gstin, 'address', e.target.value)}
+                                                                <label className="block text-xs font-medium text-gray-500 mb-1">Address Line 1</label>
+                                                                <input
+                                                                    type="text"
+                                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                    value={branch.addressLine1 || ''}
+                                                                    onChange={(e) => handleRegisteredBranchChange(gstin, 'addressLine1', e.target.value)}
+                                                                    placeholder="Enter address line 1"
                                                                 />
+                                                            </div>
+                                                            <div>
+                                                                <label className="block text-xs font-medium text-gray-500 mb-1">Address Line 2</label>
+                                                                <input
+                                                                    type="text"
+                                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                    value={branch.addressLine2 || ''}
+                                                                    onChange={(e) => handleRegisteredBranchChange(gstin, 'addressLine2', e.target.value)}
+                                                                    placeholder="Enter address line 2"
+                                                                />
+                                                            </div>
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">City</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                        value={branch.city || ''}
+                                                                        onChange={(e) => handleRegisteredBranchChange(gstin, 'city', e.target.value)}
+                                                                        placeholder="Enter city"
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Pincode</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                        value={branch.pincode || ''}
+                                                                        onChange={(e) => handleRegisteredBranchChange(gstin, 'pincode', e.target.value)}
+                                                                        placeholder="Enter pincode"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">State</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                        value={branch.state || ''}
+                                                                        onChange={(e) => handleRegisteredBranchChange(gstin, 'state', e.target.value)}
+                                                                        placeholder="Enter state"
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Country</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                        value={branch.country || 'India'}
+                                                                        onChange={(e) => handleRegisteredBranchChange(gstin, 'country', e.target.value)}
+                                                                        placeholder="Enter country"
+                                                                    />
+                                                                </div>
                                                             </div>
 
                                                             <div>
@@ -3077,16 +3251,16 @@ const LongTermContractsContent: React.FC = () => {
                 }
             };
 
-            
+
 
             let response;
             if (isEditing && editingId) {
                 response = await httpClient.put(`/api/customerportal/long-term-contracts/${editingId}/`, contractData);
-                
+
                 showSuccess('Contract Updated Successfully!');
             } else {
                 response = await httpClient.post('/api/customerportal/long-term-contracts/', contractData);
-                
+
                 showSuccess('Contract Created Successfully!');
             }
 

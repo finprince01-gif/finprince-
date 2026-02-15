@@ -9,7 +9,8 @@ interface SearchableDropdownProps {
     placeholder?: string;
     disabled?: boolean;
     required?: boolean;
-    label?: string; // Optional label if you want it inside, but usually outside
+    label?: string;
+    noResultsText?: string;
 }
 
 const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
@@ -18,199 +19,162 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
     onChange,
     placeholder = 'Select...',
     disabled = false,
-    required = false
+    required = false,
+    noResultsText = 'No results found'
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [filteredOptions, setFilteredOptions] = useState<string[]>(options);
-    const [dropdownStyles, setDropdownStyles] = useState<{ top: number, left: number, width: number } | null>(null);
+    const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
+
+    const containerRef = useRef<HTMLDivElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
-    // Update filtered options when search term or options change
+    // Update filtered options
     useEffect(() => {
         setFilteredOptions(
             options.filter(option =>
-                option.toLowerCase().includes(searchTerm.toLowerCase())
+                (option || '').toLowerCase().includes(searchTerm.toLowerCase())
             )
         );
     }, [searchTerm, options]);
 
-    // Handle open/close and positioning
+    const updatePosition = () => {
+        if (containerRef.current) {
+            const rect = containerRef.current.getBoundingClientRect();
+            setPosition({
+                top: rect.bottom + window.scrollY,
+                left: rect.left + window.scrollX,
+                width: rect.width
+            });
+        }
+    };
+
     const toggleDropdown = () => {
         if (!disabled) {
             if (!isOpen) {
-                // Determine position
-                if (dropdownRef.current) {
-                    const rect = dropdownRef.current.getBoundingClientRect();
-                    setDropdownStyles({
-                        top: rect.bottom + window.scrollY, // For absolute positioning in body (requires document height consideration)
-                        // Actually, using fixed positioning is often easier for "breaking out"
-                        // because it ignores parent scroll constraints.
-                        // Let's us standard Portal with FIXED positioning relative to viewport.
-                    });
-                }
-                setIsOpen(true);
-            } else {
-                setIsOpen(false);
+                updatePosition();
             }
+            setIsOpen(!isOpen);
         }
     };
 
-    // Calculate fixed position
-    const getDropdownPosition = () => {
-        if (dropdownRef.current) {
-            const rect = dropdownRef.current.getBoundingClientRect();
-            // Check formatted available space below
-            const spaceBelow = window.innerHeight - rect.bottom;
-            // If space below is small (< 200px) and space above is large, flip it?
-            // For now, let's stick to standard "below" positioning but strictly FIXED.
-            return {
-                top: rect.bottom,
-                left: rect.left,
-                width: rect.width,
-            };
-        }
-        return { top: 0, left: 0, width: 0 };
-    };
-
-    // Handle global click to close
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            // We can't rely on ref.current.contains because Portal is outside.
-            // But we can check if the click target is inside the dropdown content wrapper.
-            // We'll attach a unique ID or use a Ref for generic portal content if possible,
-            // or simply stop propagation on the dropdown content.
-
-            // If we stop propagation on the content, then any click that reaches here (document)
-            // MUST be outside the dropdown content.
-            // However, we must also check if it was the TRIGGER button.
-            if (dropdownRef.current && dropdownRef.current.contains(event.target as Node)) {
-                return; // Clicked on the trigger, let toggleDropdown handle it
+            const target = event.target as Node;
+            if (
+                containerRef.current && !containerRef.current.contains(target) &&
+                dropdownRef.current && !dropdownRef.current.contains(target)
+            ) {
+                setIsOpen(false);
             }
+        };
 
+        const handleScroll = (event: Event) => {
+            // Only close if scrolling something other than the dropdown itself
+            if (dropdownRef.current && dropdownRef.current.contains(event.target as Node)) {
+                return;
+            }
             setIsOpen(false);
         };
 
         if (isOpen) {
             document.addEventListener('mousedown', handleClickOutside);
-            window.addEventListener('scroll', () => setIsOpen(false), true); // Close on scroll
+            // Use capture phase for scroll to catch it before it bubbles
+            window.addEventListener('scroll', handleScroll, true);
             window.addEventListener('resize', () => setIsOpen(false));
+            updatePosition();
         }
 
         return () => {
             document.removeEventListener('mousedown', handleClickOutside);
-            window.removeEventListener('scroll', () => setIsOpen(false), true);
+            window.removeEventListener('scroll', handleScroll, true);
             window.removeEventListener('resize', () => setIsOpen(false));
         };
     }, [isOpen]);
 
-    // Cleanup search on close
     useEffect(() => {
         if (!isOpen) {
             setSearchTerm('');
         }
     }, [isOpen]);
 
-    const dropdownPortal = isOpen ? createPortal(
-        <div
-            className="fixed z-[9999] bg-white border border-gray-300 rounded-md shadow-lg flex flex-col"
-            style={{
-                ...getDropdownPosition(),
-                maxHeight: '15rem', // max-h-60 equivalent
-            }}
-            onMouseDown={(e) => e.stopPropagation()} // Prevent closing when clicking inside
-        >
-            {/* Search Input Sticky Header */}
-            <div className="p-2 border-b border-gray-200 bg-white rounded-t-md shrink-0">
-                <div className="relative">
-                    <Search className="absolute left-2 top-2.5 w-4 h-4 text-gray-400" />
-                    <input
-                        type="text"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        placeholder="Search..."
-                        className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
-                        autoFocus
-                    />
-                </div>
-            </div>
-
-            {/* Options List */}
-            <div className="overflow-y-auto flex-1">
-                {filteredOptions.length > 0 ? (
-                    filteredOptions.map((option) => (
-                        <div
-                            key={option}
-                            onClick={() => {
-                                onChange(option);
-                                setIsOpen(false);
-                                setSearchTerm('');
-                            }}
-                            className={`px-4 py-2 cursor-pointer text-sm hover:bg-teal-50 hover:text-teal-700
-            ${value === option ? 'bg-teal-100 text-teal-800 font-medium' : 'text-gray-700'}
-            `}
-                        >
-                            {option}
-                        </div>
-                    ))
-                ) : (
-                    <div className="p-4 text-center text-sm text-gray-500">No results found</div>
-                )}
-            </div>
-        </div>,
-        document.body
-    ) : null;
-
     return (
-        <div className="relative w-full" ref={dropdownRef}>
-            {/* Trigger Button */}
+        <div className="relative w-full" ref={containerRef}>
             <button
                 type="button"
                 onClick={toggleDropdown}
                 disabled={disabled}
-                className={`w-full px-4 py-2 text-left border-2 rounded-[4px] flex justify-between items-center bg-white
-          ${disabled ? 'bg-gray-100 cursor-not-allowed border-gray-300 text-gray-500' : 'border-slate-300 focus:ring-2 focus:ring-indigo-500 hover:border-indigo-500'}
-          ${!value ? 'text-gray-500' : 'text-gray-900'}
-        `}
+                className={`w-full px-3 py-2 text-left border rounded-[4px] flex justify-between items-center bg-white transition-all
+                    ${disabled ? 'bg-gray-100 cursor-not-allowed border-gray-300 text-gray-500' : 'border-gray-300 focus:ring-1 focus:ring-indigo-500 hover:border-indigo-400'}
+                    ${!value ? 'text-gray-500' : 'text-gray-900 shadow-sm'}
+                `}
             >
-                <span className="truncate block">{value || placeholder}</span>
-                <ChevronDown className="w-4 h-4 text-gray-500 flex-shrink-0 ml-2" />
+                <span className="truncate block font-medium">{value || placeholder}</span>
+                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
             </button>
 
-            {/* Required hidden input */}
             {required && (
                 <input
                     type="text"
                     value={value}
                     required={required}
-                    className="absolute opacity-0 h-0 w-0 bottom-0 left-0"
+                    className="absolute opacity-0 h-0 w-0"
                     onChange={() => { }}
-                    onInvalid={(e) => (e.target as HTMLInputElement).setCustomValidity('Please select an option')}
-                    onInput={(e) => (e.target as HTMLInputElement).setCustomValidity('')}
+                    tabIndex={-1}
                 />
             )}
 
-            {/* Dropdown Menu */}
-            {isOpen && (
-                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 max-h-60 flex flex-col">
-
-                    {/* Search Input Sticky Header */}
-                    <div className="p-2 border-b border-gray-200 sticky top-0 bg-white rounded-t-md">
+            {isOpen && createPortal(
+                <div
+                    ref={dropdownRef}
+                    className="fixed z-[9999] bg-white border border-slate-200 rounded-[4px] shadow-xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-100"
+                    style={{
+                        top: position.top - window.scrollY,
+                        left: position.left - window.scrollX,
+                        width: position.width,
+                        maxHeight: '250px'
+                    }}
+                >
+                    <style>
+                        {`
+                            .custom-scrollbar {
+                                scrollbar-width: thin;
+                                scrollbar-color: #475569 #f1f5f9;
+                            }
+                            .custom-scrollbar::-webkit-scrollbar {
+                                width: 12px;
+                                display: block !important;
+                            }
+                            .custom-scrollbar::-webkit-scrollbar-track {
+                                background: #f1f5f9;
+                                border-radius: 6px;
+                            }
+                            .custom-scrollbar::-webkit-scrollbar-thumb {
+                                background: #475569;
+                                border-radius: 6px;
+                                border: 3px solid #f1f5f9;
+                            }
+                            .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                                background: #1e293b;
+                            }
+                        `}
+                    </style>
+                    <div className="p-2 border-b border-gray-100 bg-slate-50">
                         <div className="relative">
-                            <Search className="absolute left-2 top-2.5 w-4 h-4 text-gray-400" />
+                            <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-gray-400" />
                             <input
                                 type="text"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 placeholder="Search..."
-                                className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                                autoFocus // Focus search input when opened
+                                className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                                autoFocus
                             />
                         </div>
                     </div>
 
-                    {/* Options List */}
-                    <div className="overflow-y-auto flex-1">
+                    <div className="overflow-y-scroll flex-1 overscroll-contain custom-scrollbar" style={{ minHeight: '100px' }}>
                         {filteredOptions.length > 0 ? (
                             filteredOptions.map((option) => (
                                 <div
@@ -218,24 +182,25 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
                                     onClick={() => {
                                         onChange(option);
                                         setIsOpen(false);
-                                        setSearchTerm('');
                                     }}
-                                    className={`px-4 py-2 cursor-pointer text-sm hover:bg-indigo-50/50 hover:text-slate-700
-                    ${value === option ? 'bg-indigo-100 text-indigo-800 font-medium' : 'text-gray-700'}
-                  `}
+                                    className={`px-4 py-2.5 cursor-pointer text-sm transition-colors
+                                        ${value === option
+                                            ? 'bg-indigo-600 text-white font-semibold'
+                                            : 'text-gray-700 hover:bg-indigo-50 hover:text-indigo-700'}
+                                    `}
                                 >
                                     {option}
                                 </div>
                             ))
                         ) : (
-                            <div className="p-4 text-center text-sm text-gray-500">No results found</div>
+                            <div className="p-8 text-center text-sm text-gray-400 italic">{noResultsText}</div>
                         )}
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );
 };
 
 export default SearchableDropdown;
-
