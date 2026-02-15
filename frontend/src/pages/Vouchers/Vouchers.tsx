@@ -244,6 +244,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
   // Rich Vendor Data
   const [richVendors, setRichVendors] = useState<any[]>([]);
+  const [richCustomers, setRichCustomers] = useState<any[]>([]);
   const [vendorGstDetails, setVendorGstDetails] = useState<any[]>([]);
   const [pendingGRNs, setPendingGRNs] = useState<any[]>([]);
   const [vendorAddresses, setVendorAddresses] = useState<string[]>([]);
@@ -252,12 +253,16 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   // Fetch rich vendor data on mount
   useEffect(() => {
     const fetchData = async () => {
-      // 1. Rich Vendors
+      // 1. Rich Vendors & Customers
       try {
-        const rv = await apiService.getRichVendors();
-        setRichVendors(Array.isArray(rv) ? rv : []);
+        const [rv, rc] = await Promise.all([
+          apiService.getRichVendors(),
+          apiService.getRichCustomers()
+        ]);
+        setRichVendors(Array.isArray(rv) ? rv : ((rv as any).results || []));
+        setRichCustomers(Array.isArray(rc) ? rc : ((rc as any).results || []));
       } catch (err) {
-        console.warn('Failed to fetch Rich Vendors', err);
+        console.warn('Failed to fetch Rich Vendors/Customers', err);
       }
 
       // 2. Vendor GST Details
@@ -1121,9 +1126,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     const allLedgers = [...ledgers];
 
     // Combine Ledgers with rich Vendor Reference Names for Purchase Vouchers
-    const partyOptions = [...ledgers.map(l => l.name)];
+    // Combine Ledgers with rich Vendor/Customer names
+    const partyOptions = [...new Set([
+      ...ledgers.map(l => l.name),
+      ...richVendors.map(v => v.vendor_name),
+      ...richCustomers.map(c => c.customer_name)
+    ])].filter(Boolean);
 
-    // Add reference names (branches)
+    // Add vendor reference names (branches)
     vendorGstDetails.forEach(gst => {
       const vendor = richVendors.find(rv => rv.id === gst.vendor_basic_detail);
       if (vendor && gst.reference_name) {
@@ -1134,79 +1144,79 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       }
     });
 
+    // Add customer reference names (branches)
+    richCustomers.forEach(customer => {
+      const branches = customer.gst_details?.branches || [];
+      branches.forEach((br: any) => {
+        if (br.defaultRef) {
+          const combinedName = `${customer.customer_name} (${br.defaultRef})`;
+          if (!partyOptions.includes(combinedName)) {
+            partyOptions.push(combinedName);
+          }
+        }
+      });
+    });
+
     return { partyLedgers, accountLedgers, allLedgers, partyOptions };
-  }, [ledgers, cashBankLedgers, richVendors, vendorGstDetails]);
+  }, [ledgers, cashBankLedgers, richVendors, vendorGstDetails, richCustomers]);
 
   const handlePartyChange = (value: string) => {
     setParty(value);
 
-    // Auto-population logic for Purchase Vouchers
-    if (voucherType === 'Purchase') {
-      let currentVendorId: string | undefined;
-
-      // 1. Try to match combined name: "Vendor Name (Reference Name)"
+    // Auto-population logic for Vouchers
+    if (voucherType === 'Purchase' || voucherType === 'Sales') {
       const match = value.match(/^(.*) \((.*)\)$/);
-      let matchedGst: any = undefined;
+      const entityName = match ? match[1] : value;
+      const refName = match ? match[2] : null;
 
-      if (match) {
-        const vName = match[1];
-        const rName = match[2];
+      // 1. Try to match Vendor from Rich Data
+      const vendor = richVendors.find(v => v.vendor_name === entityName);
+      if (vendor) {
+        let matchedGst = vendorGstDetails.find(g =>
+          g.vendor_basic_detail === vendor.id && (refName ? g.reference_name === refName : true)
+        );
 
-        // Find the specific GST record
-        matchedGst = vendorGstDetails.find(g => {
-          const vendor = richVendors.find(rv => rv.id === g.vendor_basic_detail);
-          if (vendor && vendor.vendor_name === vName) {
-            currentVendorId = vendor.id;
-            return g.reference_name === rName;
+        if (matchedGst) {
+          if (matchedGst.gstin) setGstin(matchedGst.gstin);
+          if (matchedGst.branch_address) {
+            setBillFrom(matchedGst.branch_address);
+            setShipFrom(matchedGst.branch_address);
           }
-          return false;
+        } else if (vendor.billing_address) {
+          setBillFrom(vendor.billing_address);
+          setShipFrom(vendor.billing_address);
+        }
+
+        // Collect addresses for dropdown
+        let addresses = [vendor.billing_address];
+        vendorGstDetails.filter(g => g.vendor_basic_detail === vendor.id).forEach(g => {
+          if (g.branch_address) addresses.push(g.branch_address);
         });
-      } else {
-        // 2. Try to match exact vendor name from Rich Data
-        const exactVendor = richVendors.find(rv => rv.vendor_name === value);
-        if (exactVendor) {
-          currentVendorId = exactVendor.id;
-          // Find default or first GST record
-          matchedGst = vendorGstDetails.find(g => g.vendor_basic_detail === exactVendor.id);
-        }
-      }
-
-      // Collect all addresses for this vendor
-      let addresses: string[] = [];
-      if (currentVendorId) {
-        const v = richVendors.find(rv => rv.id === currentVendorId);
-        if (v?.billing_address) addresses.push(v.billing_address); // Base address
-
-        vendorGstDetails
-          .filter(g => g.vendor_basic_detail === currentVendorId)
-          .forEach(g => {
-            if (g.branch_address) addresses.push(g.branch_address);
-          });
-
-        // Deduplicate
-        addresses = Array.from(new Set(addresses.filter(Boolean)));
-      }
-      setVendorAddresses(addresses);
-
-      if (matchedGst) {
-        if (matchedGst.gstin) setGstin(matchedGst.gstin);
-        if (matchedGst.branch_address) {
-          setBillFrom(matchedGst.branch_address);
-          setShipFrom(matchedGst.branch_address);
-        }
-        return;
-      } else if (currentVendorId) {
-        // If we found a vendor but no specific GST record matched (e.g. just vendor selected, no GST details or default usage)
-        // We can still try to set a default address if available
-        const v = richVendors.find(rv => rv.id === currentVendorId);
-        if (v?.billing_address) {
-          setBillFrom(v.billing_address);
-          setShipFrom(v.billing_address);
-        }
+        setVendorAddresses(Array.from(new Set(addresses.filter(Boolean))));
         return;
       }
 
-      // 3. Try to match exact ledger name (fallback)
+      // 2. Try to match Customer from Rich Data
+      const customer = richCustomers.find(c => c.customer_name === entityName);
+      if (customer) {
+        const branches = customer.gst_details?.branches || [];
+        let matchedBranch = branches.find((b: any) => refName ? b.defaultRef === refName : true);
+
+        if (matchedBranch) {
+          if (matchedBranch.gstin) setGstin(matchedBranch.gstin);
+          if (matchedBranch.address) {
+            setBillFrom(matchedBranch.address);
+            setShipFrom(matchedBranch.address);
+          }
+        }
+
+        // Collect addresses for dropdown
+        let addresses = branches.map((b: any) => b.address).filter(Boolean);
+        setVendorAddresses(Array.from(new Set(addresses)));
+        return;
+      }
+
+      // 3. Fallback to Ledgers
       const ledger = ledgers.find(l => l.name === value);
       if (ledger) {
         if (ledger.gstin) setGstin(ledger.gstin);
@@ -1214,6 +1224,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           setBillFrom(ledger.additional_data.address);
           setShipFrom(ledger.additional_data.address);
         }
+        setVendorAddresses([]);
       }
     }
   };
