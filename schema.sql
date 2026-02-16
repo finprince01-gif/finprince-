@@ -1571,12 +1571,15 @@ CREATE TABLE `voucher_sales_dispatchdetails` (
   `rail_upto_port_delivery_type` VARCHAR(100),
   `rail_upto_port_transporter_id` VARCHAR(100),
   `rail_upto_port_transporter_name` VARCHAR(255),
+  `rail_upto_port_vehicle_no` VARCHAR(100),
+  `rail_upto_port_lr_gr_consignment` VARCHAR(100),
 
   `rail_beyond_port_receipt_no` VARCHAR(100),
   `rail_beyond_port_receipt_date` DATE,
   `rail_beyond_port_origin` VARCHAR(100),
   `rail_beyond_port_origin_country` VARCHAR(100),
   `rail_beyond_port_rail_no` VARCHAR(100),
+  `rail_beyond_port_fnr_no` VARCHAR(100),
   `rail_beyond_port_station_loading` VARCHAR(100),
   `rail_beyond_port_station_discharge` VARCHAR(100),
   `rail_beyond_port_final_destination` VARCHAR(100),
@@ -1597,7 +1600,7 @@ CREATE TABLE `voucher_sales_ewaybill` (
   `created_at` DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
 
-  `eway_bill_available` VARCHAR(10),
+  `eway_bill_available` BOOLEAN DEFAULT 0,
   `eway_bill_no` VARCHAR(50),
   `eway_bill_date` DATE,
   `validity_period` VARCHAR(50),
@@ -1610,9 +1613,10 @@ CREATE TABLE `voucher_sales_ewaybill` (
   `remaining_distance` VARCHAR(50),
   `new_validity` VARCHAR(50),
   `updated_vehicle_no` VARCHAR(50),
+  `irn` VARCHAR(255) DEFAULT NULL,
+  `ack_no` VARCHAR(100) DEFAULT NULL,
 
-  `irn` VARCHAR(255),
-  `ack_no` VARCHAR(100),
+
 
   `invoice_id` BIGINT,
 
@@ -1733,13 +1737,16 @@ CREATE TABLE `voucher_sales_paymentdetails` (
   `payment_state_cess` DECIMAL(18,2) DEFAULT 0.00,
 
   `payment_invoice_value` DECIMAL(18,2) DEFAULT 0.00,
-  `payment_tds` DECIMAL(18,2) DEFAULT 0.00,
-  `payment_tcs` DECIMAL(18,2) DEFAULT 0.00,
+  
+  -- Specific Payment Fields
+  `payment_tds_income_tax` DECIMAL(18,2) DEFAULT 0.00,
+  `payment_tds_gst` DECIMAL(18,2) DEFAULT 0.00,
   `payment_advance` DECIMAL(18,2) DEFAULT 0.00,
   `payment_payable` DECIMAL(18,2) DEFAULT 0.00,
 
   `posting_note` LONGTEXT,
   `terms_conditions` LONGTEXT,
+  `advance_references` LONGTEXT DEFAULT '[]' COMMENT 'JSON array of advance references',
 
   `invoice_id` BIGINT,
 

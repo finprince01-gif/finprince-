@@ -100,7 +100,7 @@ class HttpClient {
 
                     // Call backend refresh endpoint
                     // The backend reads the refresh token from HTTP-only cookies
-                    const refreshResponse = await fetch(`/api/auth/refresh/`, {
+                    const refreshResponse = await fetch(`${this.baseURL}/api/auth/refresh/`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         credentials: 'include' // Send cookies (refresh token is in HTTP-only cookie)

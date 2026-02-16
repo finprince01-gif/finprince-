@@ -711,12 +711,13 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                     payment_cess: calculateTotals().cess,
                     payment_state_cess: parseNum(paymentStateCess),
                     payment_invoice_value: calculateTotals().invoiceValue,
-                    payment_tds: parseNum(paymentTdsIncomeTax),
-                    payment_tcs: parseNum(paymentTdsGst),
+                    payment_tds_income_tax: parseNum(paymentTdsIncomeTax),
+                    payment_tds_gst: parseNum(paymentTdsGst),
                     payment_advance: parseNum(paymentAdvance),
                     payment_payable: parseNum(paymentPayable),
                     posting_note: paymentPostingNote,
-                    terms_conditions: termsConditions
+                    terms_conditions: termsConditions,
+                    advance_references: JSON.stringify(advanceReferences)
                 },
 
                 // Dispatch Details
@@ -764,22 +765,22 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                 },
 
                 // E-way Bill Details
-                eway_bill_details: {
-                    eway_bill_available: ewayValidationEntries[0]?.available || '',
-                    eway_bill_no: ewayValidationEntries[0]?.ewayBillNo || '',
-                    eway_bill_date: formatDate(ewayValidationEntries[0]?.date || ''),
-                    validity_period: ewayValidationEntries[0]?.validityPeriod || '',
-                    distance: ewayValidationEntries[0]?.distance || '',
-                    extension_date: formatDate(ewayValidationEntries[0]?.extensionDate || ''),
-                    extended_ewb_no: ewayValidationEntries[0]?.extendedEwbNo || '',
-                    extension_reason: ewayValidationEntries[0]?.extensionReason || '',
-                    from_place: ewayValidationEntries[0]?.fromPlace || '',
-                    remaining_distance: ewayValidationEntries[0]?.remainingDistance || '',
-                    new_validity: ewayValidationEntries[0]?.newValidity || '',
-                    updated_vehicle_no: ewayValidationEntries[0]?.updatedVehicleNo || '',
+                eway_bill_details: ewayValidationEntries.map(entry => ({
+                    eway_bill_available: entry.available === 'Yes',
+                    eway_bill_no: entry.ewayBillNo || '',
+                    eway_bill_date: formatDate(entry.date || ''),
+                    validity_period: entry.validityPeriod || '',
+                    distance: entry.distance || '',
+                    extension_date: formatDate(entry.extensionDate || ''),
+                    extended_ewb_no: entry.extendedEwbNo || '',
+                    extension_reason: entry.extensionReason || '',
+                    from_place: entry.fromPlace || '',
+                    remaining_distance: entry.remainingDistance || '',
+                    new_validity: entry.newValidity || '',
+                    updated_vehicle_no: entry.updatedVehicleNo || '',
                     irn: irn,
                     ack_no: ackNo
-                }
+                }))
             };
 
             await apiService.createSalesVoucherNew(payload);
@@ -2814,6 +2815,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                             <label className="block text-sm font-medium text-gray-700 mb-1">
                                                 Eway Bill - Available
                                             </label>
+<<<<<<< Updated upstream
                                             <input
                                                 type="text"
                                                 value={entry.available}
@@ -2821,6 +2823,30 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                 className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                 placeholder="Yes/No"
                                             />
+=======
+                                            <div className="flex gap-4">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleEwayEntryChange(entry.id, 'available', 'Yes')}
+                                                    className={`flex-1 px-4 py-2 border rounded-[4px] transition-colors ${entry.available === 'Yes'
+                                                        ? 'bg-indigo-600 text-white border-indigo-600'
+                                                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                                                        }`}
+                                                >
+                                                    Yes
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleEwayEntryChange(entry.id, 'available', 'No')}
+                                                    className={`flex-1 px-4 py-2 border rounded-[4px] transition-colors ${entry.available === 'No'
+                                                        ? 'bg-indigo-600 text-white border-indigo-600'
+                                                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                                                        }`}
+                                                >
+                                                    No
+                                                </button>
+                                            </div>
+>>>>>>> Stashed changes
                                         </div>
 
                                         <div>

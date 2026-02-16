@@ -41,7 +41,7 @@ class VoucherSalesInvoiceDetailsSerializer(TenantModelSerializerMixin, serialize
     foreign_items = VoucherSalesItemsForeignSerializer(many=True, required=False)
     payment_details = VoucherSalesPaymentDetailsSerializer(required=False)
     dispatch_details = VoucherSalesDispatchDetailsSerializer(required=False)
-    eway_bill_details = VoucherSalesEwayBillSerializer(required=False) 
+    eway_bill_details = VoucherSalesEwayBillSerializer(many=True, required=False) 
 
     class Meta:
         model = VoucherSalesInvoiceDetails
@@ -53,7 +53,7 @@ class VoucherSalesInvoiceDetailsSerializer(TenantModelSerializerMixin, serialize
         foreign_items_data = validated_data.pop('foreign_items', [])
         payment_data = validated_data.pop('payment_details', None)
         dispatch_data = validated_data.pop('dispatch_details', None)
-        eway_bill_data = validated_data.pop('eway_bill_details', None)
+        eway_bill_details_data = validated_data.pop('eway_bill_details', [])
         
         # Create Invoice header
         invoice = super().create(validated_data)
@@ -76,8 +76,8 @@ class VoucherSalesInvoiceDetailsSerializer(TenantModelSerializerMixin, serialize
             VoucherSalesDispatchDetails.objects.create(invoice=invoice, tenant_id=tenant_id, **dispatch_data)
             
         # Create Eway Bill Details
-        if eway_bill_data:
-            VoucherSalesEwayBill.objects.create(invoice=invoice, tenant_id=tenant_id, **eway_bill_data)
+        for eway_data in eway_bill_details_data:
+            VoucherSalesEwayBill.objects.create(invoice=invoice, tenant_id=tenant_id, **eway_data)
 
         return invoice
 
@@ -86,7 +86,7 @@ class VoucherSalesInvoiceDetailsSerializer(TenantModelSerializerMixin, serialize
         foreign_items_data = validated_data.pop('foreign_items', None)
         payment_data = validated_data.pop('payment_details', None)
         dispatch_data = validated_data.pop('dispatch_details', None)
-        eway_bill_data = validated_data.pop('eway_bill_details', None)
+        eway_bill_details_data = validated_data.pop('eway_bill_details', None)
 
         # Update Invoice Header
         instance = super().update(instance, validated_data)
@@ -119,10 +119,9 @@ class VoucherSalesInvoiceDetailsSerializer(TenantModelSerializerMixin, serialize
             )
 
         # Update Eway Bill Details
-        if eway_bill_data:
-            VoucherSalesEwayBill.objects.update_or_create(
-                invoice=instance, 
-                defaults={**eway_bill_data, 'tenant_id': tenant_id}
-            )
+        if eway_bill_details_data is not None:
+            instance.eway_bill_details.all().delete()
+            for eway_data in eway_bill_details_data:
+                VoucherSalesEwayBill.objects.create(invoice=instance, tenant_id=tenant_id, **eway_data)
 
         return instance

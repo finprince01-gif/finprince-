@@ -163,14 +163,17 @@ class VoucherSalesPaymentDetails(BaseModel):
     payment_invoice_value = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     
     # Specific Payment Fields
-    payment_tds = models.DecimalField(max_digits=18, decimal_places=2, default=0)
-    payment_tcs = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    payment_tds_income_tax = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    payment_tds_gst = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     payment_advance = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     payment_payable = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     
     # Notes
     posting_note = models.TextField(null=True, blank=True)
     terms_conditions = models.TextField(null=True, blank=True)
+    
+    # Store dynamic references from frontend
+    advance_references = models.TextField(default="[]", null=True, blank=True)
 
     class Meta:
         db_table = 'voucher_sales_paymentdetails'
@@ -218,12 +221,15 @@ class VoucherSalesDispatchDetails(BaseModel):
     rail_upto_port_delivery_type = models.CharField(max_length=100, null=True, blank=True)
     rail_upto_port_transporter_id = models.CharField(max_length=100, null=True, blank=True)
     rail_upto_port_transporter_name = models.CharField(max_length=255, null=True, blank=True)
+    rail_upto_port_vehicle_no = models.CharField(max_length=100, null=True, blank=True)
+    rail_upto_port_lr_gr_consignment = models.CharField(max_length=100, null=True, blank=True)
     
     rail_beyond_port_receipt_no = models.CharField(max_length=100, null=True, blank=True)
     rail_beyond_port_receipt_date = models.DateField(null=True, blank=True)
     rail_beyond_port_origin = models.CharField(max_length=100, null=True, blank=True)
     rail_beyond_port_origin_country = models.CharField(max_length=100, null=True, blank=True)
     rail_beyond_port_rail_no = models.CharField(max_length=100, null=True, blank=True)
+    rail_beyond_port_fnr_no = models.CharField(max_length=100, null=True, blank=True)
     rail_beyond_port_station_loading = models.CharField(max_length=100, null=True, blank=True)
     rail_beyond_port_station_discharge = models.CharField(max_length=100, null=True, blank=True)
     rail_beyond_port_final_destination = models.CharField(max_length=100, null=True, blank=True)
@@ -238,9 +244,9 @@ class VoucherSalesEwayBill(BaseModel):
     """
     Sales Voucher - E-way Bill & E-Invoice Details
     """
-    invoice = models.OneToOneField(VoucherSalesInvoiceDetails, on_delete=models.CASCADE, related_name='eway_bill_details')
+    invoice = models.ForeignKey(VoucherSalesInvoiceDetails, on_delete=models.CASCADE, related_name='eway_bill_details')
     
-    eway_bill_available = models.CharField(max_length=10, null=True, blank=True)
+    eway_bill_available = models.BooleanField(default=False)
     eway_bill_no = models.CharField(max_length=50, null=True, blank=True)
     eway_bill_date = models.DateField(null=True, blank=True)
     validity_period = models.CharField(max_length=50, null=True, blank=True)

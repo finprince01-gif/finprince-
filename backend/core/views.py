@@ -328,8 +328,7 @@ class AIProxyView(views.APIView):
                             invoice_number=data.get('Invoice Number') or data.get('invoiceNumber'),
                             supplier_name=data.get('Supplier Name') or data.get('sellerName'),
                             invoice_value=str(data.get('Invoice Value') or data.get('totalAmount') or ''),
-                            additional_fields=data,
-                            created_at=timezone.now()  # Use timezone-aware datetime
+                            additional_fields=data
                         )
                         logger.info(f"✅ Recorded extraction for tenant {tenant_id}")
                 except Exception as e:
