@@ -80,6 +80,20 @@ class BaseModel(models.Model):
 
     class Meta:
         abstract = True
+    
+    def save(self, *args, **kwargs):
+        """Ensure created_at and updated_at are timezone-aware"""
+        from django.utils.timezone import is_aware, make_aware
+        
+        # Fix created_at if it's naive
+        if self.created_at and not is_aware(self.created_at):
+            self.created_at = make_aware(self.created_at)
+        
+        # Fix updated_at if it's naive
+        if self.updated_at and not is_aware(self.updated_at):
+            self.updated_at = make_aware(self.updated_at)
+        
+        super().save(*args, **kwargs)
 
 
 class CompanyFullInfo(BaseModel):

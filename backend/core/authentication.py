@@ -17,17 +17,14 @@ class CustomJWTAuthentication(JWTAuthentication):
 
             validated_token = self.get_validated_token(raw_token)
             return self.get_user(validated_token), validated_token
-        except AuthenticationFailed as e:
-            # If authentication fails (e.g., user not found, invalid token),
-            # return None to allow AllowAny views to work
-
-            return None
+        except AuthenticationFailed:
+            # Re-raise AuthenticationFailed to return proper 401 with error message
+            raise
         except Exception as e:
-            # Catch any other exceptions and return None
-
+            # For other exceptions, raise AuthenticationFailed with details
             import traceback
             traceback.print_exc()
-            return None
+            raise AuthenticationFailed(f"Authentication error: {str(e)}")
 
     def get_user(self, validated_token):
         """
