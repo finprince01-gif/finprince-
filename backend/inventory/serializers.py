@@ -57,259 +57,459 @@ class InventoryMasterIssueSlipSerializer(serializers.ModelSerializer):
 
 # --- Job Work ---
 class InventoryOperationJobWorkSerializer(serializers.ModelSerializer):
-    # Accepts nested dicts for creation/update helper, merged into model fields
-    delivery_challan = serializers.DictField(write_only=True, required=False, allow_null=True)
-    eway_bill = serializers.DictField(write_only=True, required=False, allow_null=True)
-
     class Meta:
         model = InventoryOperationJobWork
         fields = '__all__'
         read_only_fields = ['tenant_id', 'id', 'created_at', 'updated_at']
 
     def create(self, validated_data):
-        dc_data = validated_data.pop('delivery_challan', None)
-        ew_data = validated_data.pop('eway_bill', None)
+        dc_data = validated_data.get('delivery_challan', None)
 
-        # Merge nested data into main model fields
         if dc_data:
-            validated_data['dispatch_address'] = dc_data.get('dispatch_address')
-            validated_data['dispatch_date'] = dc_data.get('dispatch_date')
-        if ew_data:
-            validated_data['vehicle_number'] = ew_data.get('vehicle_number')
-            validated_data['valid_till'] = ew_data.get('valid_till')
+            validated_data['dispatch_from'] = dc_data.get('dispatch_from')
+            if not validated_data.get('dispatch_from'):
+                 validated_data['dispatch_from'] = dc_data.get('dispatch_address')
+
+            validated_data['mode_of_transport'] = dc_data.get('mode_of_transport')
+            
+            d_date = dc_data.get('dispatch_date')
+            validated_data['dispatch_date'] = d_date if d_date else None
+            
+            d_time = dc_data.get('dispatch_time')
+            validated_data['dispatch_time'] = d_time if d_time else None
+            
+            validated_data['delivery_type'] = dc_data.get('delivery_type')
+            validated_data['transporter_id'] = dc_data.get('transporter_id')
+            validated_data['transporter_name'] = dc_data.get('transporter_name')
+            validated_data['vehicle_no'] = dc_data.get('vehicle_no')
+
+            if not validated_data.get('vehicle_no'):
+                 validated_data['vehicle_no'] = dc_data.get('vehicle_number')
+
+            validated_data['lr_gr_consignment'] = dc_data.get('lr_gr_consignment')
 
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
-        dc_data = validated_data.pop('delivery_challan', None)
-        ew_data = validated_data.pop('eway_bill', None)
+        dc_data = validated_data.get('delivery_challan', None)
         
-        # Merge updates
         if dc_data:
-            instance.dispatch_address = dc_data.get('dispatch_address', instance.dispatch_address)
-            instance.dispatch_date = dc_data.get('dispatch_date', instance.dispatch_date)
-        if ew_data:
-            instance.vehicle_number = ew_data.get('vehicle_number', instance.vehicle_number)
-            instance.valid_till = ew_data.get('valid_till', instance.valid_till)
+            instance.dispatch_from = dc_data.get('dispatch_from', instance.dispatch_from)
+            if not instance.dispatch_from and dc_data.get('dispatch_address'):
+                 instance.dispatch_from = dc_data.get('dispatch_address')
+            
+            instance.mode_of_transport = dc_data.get('mode_of_transport', instance.mode_of_transport)
+            
+            d_date = dc_data.get('dispatch_date')
+            if d_date is not None:
+                instance.dispatch_date = d_date if d_date else None
+            
+            d_time = dc_data.get('dispatch_time')
+            if d_time is not None:
+                instance.dispatch_time = d_time if d_time else None
+            
+            instance.delivery_type = dc_data.get('delivery_type', instance.delivery_type)
+            instance.transporter_id = dc_data.get('transporter_id', instance.transporter_id)
+            instance.transporter_name = dc_data.get('transporter_name', instance.transporter_name)
+            
+            instance.vehicle_no = dc_data.get('vehicle_no', instance.vehicle_no)
+            if not instance.vehicle_no and dc_data.get('vehicle_number'):
+                 instance.vehicle_no = dc_data.get('vehicle_number')
 
+            instance.lr_gr_consignment = dc_data.get('lr_gr_consignment', instance.lr_gr_consignment)
+            
         return super().update(instance, validated_data)
 
 # --- Inter Unit ---
 class InventoryOperationInterUnitSerializer(serializers.ModelSerializer):
-    delivery_challan = serializers.DictField(write_only=True, required=False, allow_null=True)
-    eway_bill = serializers.DictField(write_only=True, required=False, allow_null=True)
-
     class Meta:
         model = InventoryOperationInterUnit
         fields = '__all__'
         read_only_fields = ['tenant_id', 'id', 'created_at', 'updated_at']
 
     def create(self, validated_data):
-        dc_data = validated_data.pop('delivery_challan', None)
-        ew_data = validated_data.pop('eway_bill', None)
+        dc_data = validated_data.get('delivery_challan', None)
 
         if dc_data:
-            validated_data['dispatch_address'] = dc_data.get('dispatch_address')
-            validated_data['dispatch_date'] = dc_data.get('dispatch_date')
-        if ew_data:
-            validated_data['vehicle_number'] = ew_data.get('vehicle_number')
-            validated_data['valid_till'] = ew_data.get('valid_till')
+            validated_data['dispatch_from'] = dc_data.get('dispatch_from')
+            if not validated_data.get('dispatch_from'):
+                 validated_data['dispatch_from'] = dc_data.get('dispatch_address')
+
+            validated_data['mode_of_transport'] = dc_data.get('mode_of_transport')
+            
+            d_date = dc_data.get('dispatch_date')
+            validated_data['dispatch_date'] = d_date if d_date else None
+            
+            d_time = dc_data.get('dispatch_time')
+            validated_data['dispatch_time'] = d_time if d_time else None
+            
+            validated_data['delivery_type'] = dc_data.get('delivery_type')
+            validated_data['transporter_id'] = dc_data.get('transporter_id')
+            validated_data['transporter_name'] = dc_data.get('transporter_name')
+            validated_data['vehicle_no'] = dc_data.get('vehicle_no')
+
+            if not validated_data.get('vehicle_no'):
+                 validated_data['vehicle_no'] = dc_data.get('vehicle_number')
+
+            validated_data['lr_gr_consignment'] = dc_data.get('lr_gr_consignment')
 
         return super().create(validated_data)
-    
+
     def update(self, instance, validated_data):
-        dc_data = validated_data.pop('delivery_challan', None)
-        ew_data = validated_data.pop('eway_bill', None)
-
+        dc_data = validated_data.get('delivery_challan', None)
+        
         if dc_data:
-            instance.dispatch_address = dc_data.get('dispatch_address', instance.dispatch_address)
-            instance.dispatch_date = dc_data.get('dispatch_date', instance.dispatch_date)
-        if ew_data:
-            instance.vehicle_number = ew_data.get('vehicle_number', instance.vehicle_number)
-            instance.valid_till = ew_data.get('valid_till', instance.valid_till)
+            instance.dispatch_from = dc_data.get('dispatch_from', instance.dispatch_from)
+            if not instance.dispatch_from and dc_data.get('dispatch_address'):
+                 instance.dispatch_from = dc_data.get('dispatch_address')
+            
+            instance.mode_of_transport = dc_data.get('mode_of_transport', instance.mode_of_transport)
+            
+            d_date = dc_data.get('dispatch_date')
+            if d_date is not None:
+                instance.dispatch_date = d_date if d_date else None
+            
+            d_time = dc_data.get('dispatch_time')
+            if d_time is not None:
+                instance.dispatch_time = d_time if d_time else None
+            
+            instance.delivery_type = dc_data.get('delivery_type', instance.delivery_type)
+            instance.transporter_id = dc_data.get('transporter_id', instance.transporter_id)
+            instance.transporter_name = dc_data.get('transporter_name', instance.transporter_name)
+            
+            instance.vehicle_no = dc_data.get('vehicle_no', instance.vehicle_no)
+            if not instance.vehicle_no and dc_data.get('vehicle_number'):
+                 instance.vehicle_no = dc_data.get('vehicle_number')
 
+            instance.lr_gr_consignment = dc_data.get('lr_gr_consignment', instance.lr_gr_consignment)
+            
         return super().update(instance, validated_data)
 
 # --- Location Change ---
 class InventoryOperationLocationChangeSerializer(serializers.ModelSerializer):
-    delivery_challan = serializers.DictField(write_only=True, required=False, allow_null=True)
-    eway_bill = serializers.DictField(write_only=True, required=False, allow_null=True)
-
     class Meta:
         model = InventoryOperationLocationChange
         fields = '__all__'
         read_only_fields = ['tenant_id', 'id', 'created_at', 'updated_at']
 
     def create(self, validated_data):
-        dc_data = validated_data.pop('delivery_challan', None)
-        ew_data = validated_data.pop('eway_bill', None)
+        dc_data = validated_data.get('delivery_challan', None)
 
         if dc_data:
-            validated_data['dispatch_address'] = dc_data.get('dispatch_address')
-            validated_data['dispatch_date'] = dc_data.get('dispatch_date')
-        if ew_data:
-            validated_data['vehicle_number'] = ew_data.get('vehicle_number')
-            validated_data['valid_till'] = ew_data.get('valid_till')
+            validated_data['dispatch_from'] = dc_data.get('dispatch_from')
+            if not validated_data.get('dispatch_from'):
+                 validated_data['dispatch_from'] = dc_data.get('dispatch_address')
+
+            validated_data['mode_of_transport'] = dc_data.get('mode_of_transport')
+            
+            d_date = dc_data.get('dispatch_date')
+            validated_data['dispatch_date'] = d_date if d_date else None
+            
+            d_time = dc_data.get('dispatch_time')
+            validated_data['dispatch_time'] = d_time if d_time else None
+            
+            validated_data['delivery_type'] = dc_data.get('delivery_type')
+            validated_data['transporter_id'] = dc_data.get('transporter_id')
+            validated_data['transporter_name'] = dc_data.get('transporter_name')
+            validated_data['vehicle_no'] = dc_data.get('vehicle_no')
+
+            if not validated_data.get('vehicle_no'):
+                 validated_data['vehicle_no'] = dc_data.get('vehicle_number')
+
+            validated_data['lr_gr_consignment'] = dc_data.get('lr_gr_consignment')
 
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
-        dc_data = validated_data.pop('delivery_challan', None)
-        ew_data = validated_data.pop('eway_bill', None)
-
+        dc_data = validated_data.get('delivery_challan', None)
+        
         if dc_data:
-            instance.dispatch_address = dc_data.get('dispatch_address', instance.dispatch_address)
-            instance.dispatch_date = dc_data.get('dispatch_date', instance.dispatch_date)
-        if ew_data:
-            instance.vehicle_number = ew_data.get('vehicle_number', instance.vehicle_number)
-            instance.valid_till = ew_data.get('valid_till', instance.valid_till)
+            instance.dispatch_from = dc_data.get('dispatch_from', instance.dispatch_from)
+            if not instance.dispatch_from and dc_data.get('dispatch_address'):
+                 instance.dispatch_from = dc_data.get('dispatch_address')
+            
+            instance.mode_of_transport = dc_data.get('mode_of_transport', instance.mode_of_transport)
+            
+            d_date = dc_data.get('dispatch_date')
+            if d_date is not None:
+                instance.dispatch_date = d_date if d_date else None
+            
+            d_time = dc_data.get('dispatch_time')
+            if d_time is not None:
+                instance.dispatch_time = d_time if d_time else None
+            
+            instance.delivery_type = dc_data.get('delivery_type', instance.delivery_type)
+            instance.transporter_id = dc_data.get('transporter_id', instance.transporter_id)
+            instance.transporter_name = dc_data.get('transporter_name', instance.transporter_name)
+            
+            instance.vehicle_no = dc_data.get('vehicle_no', instance.vehicle_no)
+            if not instance.vehicle_no and dc_data.get('vehicle_number'):
+                 instance.vehicle_no = dc_data.get('vehicle_number')
 
+            instance.lr_gr_consignment = dc_data.get('lr_gr_consignment', instance.lr_gr_consignment)
+            
         return super().update(instance, validated_data)
 
 # --- Production ---
 class InventoryOperationProductionSerializer(serializers.ModelSerializer):
-    delivery_challan = serializers.DictField(write_only=True, required=False, allow_null=True)
-    eway_bill = serializers.DictField(write_only=True, required=False, allow_null=True)
-
     class Meta:
         model = InventoryOperationProduction
         fields = '__all__'
         read_only_fields = ['tenant_id', 'id', 'created_at', 'updated_at']
 
     def create(self, validated_data):
-        dc_data = validated_data.pop('delivery_challan', None)
-        ew_data = validated_data.pop('eway_bill', None)
+        dc_data = validated_data.get('delivery_challan', None)
 
         if dc_data:
-            validated_data['dispatch_address'] = dc_data.get('dispatch_address')
-            validated_data['dispatch_date'] = dc_data.get('dispatch_date')
-        if ew_data:
-            validated_data['vehicle_number'] = ew_data.get('vehicle_number')
-            validated_data['valid_till'] = ew_data.get('valid_till')
+            validated_data['dispatch_from'] = dc_data.get('dispatch_from')
+            if not validated_data.get('dispatch_from'):
+                 validated_data['dispatch_from'] = dc_data.get('dispatch_address')
+
+            validated_data['mode_of_transport'] = dc_data.get('mode_of_transport')
+            
+            d_date = dc_data.get('dispatch_date')
+            validated_data['dispatch_date'] = d_date if d_date else None
+            
+            d_time = dc_data.get('dispatch_time')
+            validated_data['dispatch_time'] = d_time if d_time else None
+            
+            validated_data['delivery_type'] = dc_data.get('delivery_type')
+            validated_data['transporter_id'] = dc_data.get('transporter_id')
+            validated_data['transporter_name'] = dc_data.get('transporter_name')
+            validated_data['vehicle_no'] = dc_data.get('vehicle_no')
+
+            if not validated_data.get('vehicle_no'):
+                 validated_data['vehicle_no'] = dc_data.get('vehicle_number')
+
+            validated_data['lr_gr_consignment'] = dc_data.get('lr_gr_consignment')
 
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
-        dc_data = validated_data.pop('delivery_challan', None)
-        ew_data = validated_data.pop('eway_bill', None)
-
+        dc_data = validated_data.get('delivery_challan', None)
+        
         if dc_data:
-            instance.dispatch_address = dc_data.get('dispatch_address', instance.dispatch_address)
-            instance.dispatch_date = dc_data.get('dispatch_date', instance.dispatch_date)
-        if ew_data:
-            instance.vehicle_number = ew_data.get('vehicle_number', instance.vehicle_number)
-            instance.valid_till = ew_data.get('valid_till', instance.valid_till)
+            instance.dispatch_from = dc_data.get('dispatch_from', instance.dispatch_from)
+            if not instance.dispatch_from and dc_data.get('dispatch_address'):
+                 instance.dispatch_from = dc_data.get('dispatch_address')
+            
+            instance.mode_of_transport = dc_data.get('mode_of_transport', instance.mode_of_transport)
+            
+            d_date = dc_data.get('dispatch_date')
+            if d_date is not None:
+                instance.dispatch_date = d_date if d_date else None
+            
+            d_time = dc_data.get('dispatch_time')
+            if d_time is not None:
+                instance.dispatch_time = d_time if d_time else None
+            
+            instance.delivery_type = dc_data.get('delivery_type', instance.delivery_type)
+            instance.transporter_id = dc_data.get('transporter_id', instance.transporter_id)
+            instance.transporter_name = dc_data.get('transporter_name', instance.transporter_name)
+            
+            instance.vehicle_no = dc_data.get('vehicle_no', instance.vehicle_no)
+            if not instance.vehicle_no and dc_data.get('vehicle_number'):
+                 instance.vehicle_no = dc_data.get('vehicle_number')
 
+            instance.lr_gr_consignment = dc_data.get('lr_gr_consignment', instance.lr_gr_consignment)
+            
         return super().update(instance, validated_data)
 
 # --- Consumption ---
 class InventoryOperationConsumptionSerializer(serializers.ModelSerializer):
-    delivery_challan = serializers.DictField(write_only=True, required=False, allow_null=True)
-    eway_bill = serializers.DictField(write_only=True, required=False, allow_null=True)
-
     class Meta:
         model = InventoryOperationConsumption
         fields = '__all__'
         read_only_fields = ['tenant_id', 'id', 'created_at', 'updated_at']
 
     def create(self, validated_data):
-        dc_data = validated_data.pop('delivery_challan', None)
-        ew_data = validated_data.pop('eway_bill', None)
+        dc_data = validated_data.get('delivery_challan', None)
 
         if dc_data:
-            validated_data['dispatch_address'] = dc_data.get('dispatch_address')
-            validated_data['dispatch_date'] = dc_data.get('dispatch_date')
-        if ew_data:
-            validated_data['vehicle_number'] = ew_data.get('vehicle_number')
-            validated_data['valid_till'] = ew_data.get('valid_till')
+            validated_data['dispatch_from'] = dc_data.get('dispatch_from')
+            if not validated_data.get('dispatch_from'):
+                 validated_data['dispatch_from'] = dc_data.get('dispatch_address')
+
+            validated_data['mode_of_transport'] = dc_data.get('mode_of_transport')
+            
+            d_date = dc_data.get('dispatch_date')
+            validated_data['dispatch_date'] = d_date if d_date else None
+            
+            d_time = dc_data.get('dispatch_time')
+            validated_data['dispatch_time'] = d_time if d_time else None
+            
+            validated_data['delivery_type'] = dc_data.get('delivery_type')
+            validated_data['transporter_id'] = dc_data.get('transporter_id')
+            validated_data['transporter_name'] = dc_data.get('transporter_name')
+            validated_data['vehicle_no'] = dc_data.get('vehicle_no')
+
+            if not validated_data.get('vehicle_no'):
+                 validated_data['vehicle_no'] = dc_data.get('vehicle_number')
+
+            validated_data['lr_gr_consignment'] = dc_data.get('lr_gr_consignment')
 
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
-        dc_data = validated_data.pop('delivery_challan', None)
-        ew_data = validated_data.pop('eway_bill', None)
-
+        dc_data = validated_data.get('delivery_challan', None)
+        
         if dc_data:
-            instance.dispatch_address = dc_data.get('dispatch_address', instance.dispatch_address)
-            instance.dispatch_date = dc_data.get('dispatch_date', instance.dispatch_date)
-        if ew_data:
-            instance.vehicle_number = ew_data.get('vehicle_number', instance.vehicle_number)
-            instance.valid_till = ew_data.get('valid_till', instance.valid_till)
+            instance.dispatch_from = dc_data.get('dispatch_from', instance.dispatch_from)
+            if not instance.dispatch_from and dc_data.get('dispatch_address'):
+                 instance.dispatch_from = dc_data.get('dispatch_address')
+            
+            instance.mode_of_transport = dc_data.get('mode_of_transport', instance.mode_of_transport)
+            
+            d_date = dc_data.get('dispatch_date')
+            if d_date is not None:
+                instance.dispatch_date = d_date if d_date else None
+            
+            d_time = dc_data.get('dispatch_time')
+            if d_time is not None:
+                instance.dispatch_time = d_time if d_time else None
+            
+            instance.delivery_type = dc_data.get('delivery_type', instance.delivery_type)
+            instance.transporter_id = dc_data.get('transporter_id', instance.transporter_id)
+            instance.transporter_name = dc_data.get('transporter_name', instance.transporter_name)
+            
+            instance.vehicle_no = dc_data.get('vehicle_no', instance.vehicle_no)
+            if not instance.vehicle_no and dc_data.get('vehicle_number'):
+                 instance.vehicle_no = dc_data.get('vehicle_number')
 
+            instance.lr_gr_consignment = dc_data.get('lr_gr_consignment', instance.lr_gr_consignment)
+            
         return super().update(instance, validated_data)
 
 # --- Scrap ---
 class InventoryOperationScrapSerializer(serializers.ModelSerializer):
-    delivery_challan = serializers.DictField(write_only=True, required=False, allow_null=True)
-    eway_bill = serializers.DictField(write_only=True, required=False, allow_null=True)
-
     class Meta:
         model = InventoryOperationScrap
         fields = '__all__'
         read_only_fields = ['tenant_id', 'id', 'created_at', 'updated_at']
 
     def create(self, validated_data):
-        dc_data = validated_data.pop('delivery_challan', None)
-        ew_data = validated_data.pop('eway_bill', None)
+        dc_data = validated_data.get('delivery_challan', None)
 
         if dc_data:
-            validated_data['dispatch_address'] = dc_data.get('dispatch_address')
-            validated_data['dispatch_date'] = dc_data.get('dispatch_date')
-        if ew_data:
-            validated_data['vehicle_number'] = ew_data.get('vehicle_number')
-            validated_data['valid_till'] = ew_data.get('valid_till')
+            validated_data['dispatch_from'] = dc_data.get('dispatch_from')
+            if not validated_data.get('dispatch_from'):
+                 validated_data['dispatch_from'] = dc_data.get('dispatch_address')
+
+            validated_data['mode_of_transport'] = dc_data.get('mode_of_transport')
+            
+            d_date = dc_data.get('dispatch_date')
+            validated_data['dispatch_date'] = d_date if d_date else None
+            
+            d_time = dc_data.get('dispatch_time')
+            validated_data['dispatch_time'] = d_time if d_time else None
+            
+            validated_data['delivery_type'] = dc_data.get('delivery_type')
+            validated_data['transporter_id'] = dc_data.get('transporter_id')
+            validated_data['transporter_name'] = dc_data.get('transporter_name')
+            validated_data['vehicle_no'] = dc_data.get('vehicle_no')
+
+            if not validated_data.get('vehicle_no'):
+                 validated_data['vehicle_no'] = dc_data.get('vehicle_number')
+
+            validated_data['lr_gr_consignment'] = dc_data.get('lr_gr_consignment')
 
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
-        dc_data = validated_data.pop('delivery_challan', None)
-        ew_data = validated_data.pop('eway_bill', None)
-
+        dc_data = validated_data.get('delivery_challan', None)
+        
         if dc_data:
-            instance.dispatch_address = dc_data.get('dispatch_address', instance.dispatch_address)
-            instance.dispatch_date = dc_data.get('dispatch_date', instance.dispatch_date)
-        if ew_data:
-            instance.vehicle_number = ew_data.get('vehicle_number', instance.vehicle_number)
-            instance.valid_till = ew_data.get('valid_till', instance.valid_till)
+            instance.dispatch_from = dc_data.get('dispatch_from', instance.dispatch_from)
+            if not instance.dispatch_from and dc_data.get('dispatch_address'):
+                 instance.dispatch_from = dc_data.get('dispatch_address')
+            
+            instance.mode_of_transport = dc_data.get('mode_of_transport', instance.mode_of_transport)
+            
+            d_date = dc_data.get('dispatch_date')
+            if d_date is not None:
+                instance.dispatch_date = d_date if d_date else None
+            
+            d_time = dc_data.get('dispatch_time')
+            if d_time is not None:
+                instance.dispatch_time = d_time if d_time else None
+            
+            instance.delivery_type = dc_data.get('delivery_type', instance.delivery_type)
+            instance.transporter_id = dc_data.get('transporter_id', instance.transporter_id)
+            instance.transporter_name = dc_data.get('transporter_name', instance.transporter_name)
+            
+            instance.vehicle_no = dc_data.get('vehicle_no', instance.vehicle_no)
+            if not instance.vehicle_no and dc_data.get('vehicle_number'):
+                 instance.vehicle_no = dc_data.get('vehicle_number')
 
+            instance.lr_gr_consignment = dc_data.get('lr_gr_consignment', instance.lr_gr_consignment)
+            
         return super().update(instance, validated_data)
 
 # InventoryOperationGRNSerializer removed - replaced by InventoryOperationNewGRNSerializer
 
 # --- Outward ---
 class InventoryOperationOutwardSerializer(serializers.ModelSerializer):
-    delivery_challan = serializers.DictField(write_only=True, required=False, allow_null=True)
-    eway_bill = serializers.DictField(write_only=True, required=False, allow_null=True)
-
     class Meta:
         model = InventoryOperationOutward
         fields = '__all__'
         read_only_fields = ['tenant_id', 'id', 'created_at', 'updated_at']
 
     def create(self, validated_data):
-        dc_data = validated_data.pop('delivery_challan', None)
-        ew_data = validated_data.pop('eway_bill', None)
+        dc_data = validated_data.get('delivery_challan', None)
 
         if dc_data:
-            validated_data['dispatch_address'] = dc_data.get('dispatch_address')
-            validated_data['dispatch_date'] = dc_data.get('dispatch_date')
-        if ew_data:
-            validated_data['vehicle_number'] = ew_data.get('vehicle_number')
-            validated_data['valid_till'] = ew_data.get('valid_till')
+            validated_data['dispatch_from'] = dc_data.get('dispatch_from')
+            if not validated_data.get('dispatch_from'):
+                 validated_data['dispatch_from'] = dc_data.get('dispatch_address')
+
+            validated_data['mode_of_transport'] = dc_data.get('mode_of_transport')
+            
+            d_date = dc_data.get('dispatch_date')
+            validated_data['dispatch_date'] = d_date if d_date else None
+            
+            d_time = dc_data.get('dispatch_time')
+            validated_data['dispatch_time'] = d_time if d_time else None
+            
+            validated_data['delivery_type'] = dc_data.get('delivery_type')
+            validated_data['transporter_id'] = dc_data.get('transporter_id')
+            validated_data['transporter_name'] = dc_data.get('transporter_name')
+            validated_data['vehicle_no'] = dc_data.get('vehicle_no')
+
+            if not validated_data.get('vehicle_no'):
+                 validated_data['vehicle_no'] = dc_data.get('vehicle_number')
+
+            validated_data['lr_gr_consignment'] = dc_data.get('lr_gr_consignment')
 
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
-        dc_data = validated_data.pop('delivery_challan', None)
-        ew_data = validated_data.pop('eway_bill', None)
-
+        dc_data = validated_data.get('delivery_challan', None)
+        
         if dc_data:
-            instance.dispatch_address = dc_data.get('dispatch_address', instance.dispatch_address)
-            instance.dispatch_date = dc_data.get('dispatch_date', instance.dispatch_date)
-        if ew_data:
-            instance.vehicle_number = ew_data.get('vehicle_number', instance.vehicle_number)
-            instance.valid_till = ew_data.get('valid_till', instance.valid_till)
+            instance.dispatch_from = dc_data.get('dispatch_from', instance.dispatch_from)
+            if not instance.dispatch_from and dc_data.get('dispatch_address'):
+                 instance.dispatch_from = dc_data.get('dispatch_address')
+            
+            instance.mode_of_transport = dc_data.get('mode_of_transport', instance.mode_of_transport)
+            
+            d_date = dc_data.get('dispatch_date')
+            if d_date is not None:
+                instance.dispatch_date = d_date if d_date else None
+            
+            d_time = dc_data.get('dispatch_time')
+            if d_time is not None:
+                instance.dispatch_time = d_time if d_time else None
+            
+            instance.delivery_type = dc_data.get('delivery_type', instance.delivery_type)
+            instance.transporter_id = dc_data.get('transporter_id', instance.transporter_id)
+            instance.transporter_name = dc_data.get('transporter_name', instance.transporter_name)
+            
+            instance.vehicle_no = dc_data.get('vehicle_no', instance.vehicle_no)
+            if not instance.vehicle_no and dc_data.get('vehicle_number'):
+                 instance.vehicle_no = dc_data.get('vehicle_number')
 
+            instance.lr_gr_consignment = dc_data.get('lr_gr_consignment', instance.lr_gr_consignment)
+            
         return super().update(instance, validated_data)
 
 # --- New GRN ---

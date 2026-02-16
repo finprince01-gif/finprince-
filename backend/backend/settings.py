@@ -341,7 +341,7 @@ DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL") or EMAIL_HOST_USER or 'webm
 # ============================================================================
 MIGRATION_MODULES = {
     'core': None,
-    'accounting': None,
+    # 'accounting': None,
     'inventory': None,
     'customerportal': None,
     'payroll': None,

@@ -677,8 +677,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                 shipping_bill_date: stateType === 'export' ? formatDate(shippingBillDate) : null,
                 ecommerce_gstin: ecommerceGstin || null,
 
-                // Items (Domestic)
-                items: stateType !== 'export' ? itemRows.map(row => ({
+                // Items (Domestic/INR)
+                items: itemRows.map(row => ({
                     item_code: row.itemCode,
                     item_name: row.itemName,
                     hsn_sac: row.hsnSac,
@@ -692,8 +692,9 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                     cess: parseNum(row.cess),
                     invoice_value: parseNum(row.invoiceValue),
                     sales_ledger: row.salesLedger,
-                    description: row.description
-                })) : [],
+                    description: row.description,
+                    alternate_unit: row.alternateUnit
+                })),
 
                 // Items (Foreign)
                 foreign_items: stateType === 'export' ? itemRows.map(row => ({
