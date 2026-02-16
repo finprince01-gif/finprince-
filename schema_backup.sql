@@ -337,7 +337,9 @@ CREATE TABLE `vendor_master_basicdetail` (
   `contact_person` varchar(100) DEFAULT NULL COMMENT 'Contact person name',
   `email` varchar(255) NOT NULL COMMENT 'Email address',
   `contact_no` varchar(20) NOT NULL COMMENT 'Contact number',
+  `vendor_category` varchar(200) DEFAULT NULL COMMENT 'Vendor category',
   `is_also_customer` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Is this vendor also a customer?',
+  `tcs_applicable` tinyint(1) DEFAULT '0' COMMENT 'Is TCS applicable for this vendor?',
   `is_active` tinyint(1) NOT NULL DEFAULT '1' COMMENT 'Whether this vendor is active',
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
@@ -371,8 +373,13 @@ CREATE TABLE `vendor_master_gstdetails` (
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   `created_by` varchar(100) DEFAULT NULL COMMENT 'Created by user',
   `updated_by` varchar(100) DEFAULT NULL COMMENT 'Updated by user',
+  `reference_name` varchar(200) DEFAULT NULL COMMENT 'Branch reference name',
+  `branch_address` longtext DEFAULT NULL COMMENT 'Branch address',
+  `branch_contact_person` varchar(100) DEFAULT NULL COMMENT 'Branch contact person',
+  `branch_email` varchar(255) DEFAULT NULL COMMENT 'Branch email',
+  `branch_contact_no` varchar(20) DEFAULT NULL COMMENT 'Branch contact number',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `vendor_gstdetails_tenant_gstin_unique` (`tenant_id`,`gstin`),
+  UNIQUE KEY `vendor_gstdetails_tenant_gstin_ref_unique` (`tenant_id`,`gstin`,`reference_name`),
   KEY `vendor_gstdetails_tenant_id_idx` (`tenant_id`),
   KEY `vendor_gstdetails_gstin_idx` (`gstin`),
   KEY `vendor_gstdetails_vendor_basic_detail_id_idx` (`vendor_basic_detail_id`),
@@ -410,13 +417,23 @@ CREATE TABLE `vendor_master_tds` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) NOT NULL COMMENT 'Tenant ID for multi-tenancy',
   `vendor_basic_detail_id` bigint DEFAULT NULL COMMENT 'Foreign key to vendor_master_basicdetail',
+  `pan_number` varchar(10) DEFAULT NULL COMMENT 'PAN Number',
+  `tan_number` varchar(10) DEFAULT NULL COMMENT 'TAN Number',
+  `tds_section` varchar(100) DEFAULT NULL COMMENT 'TDS Section',
+  `tds_rate` varchar(50) DEFAULT NULL COMMENT 'TDS Rate',
+  `penalty_rate` varchar(50) DEFAULT NULL COMMENT 'Penalty Rate',
   `tds_section_applicable` varchar(100) DEFAULT NULL COMMENT 'TDS Section Applicable',
   `enable_automatic_tds_posting` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Enable automatic TDS posting',
   `msme_udyam_no` varchar(50) DEFAULT NULL COMMENT 'MSME Udyam Registration Number',
   `fssai_license_no` varchar(50) DEFAULT NULL COMMENT 'FSSAI License Number',
   `import_export_code` varchar(50) DEFAULT NULL COMMENT 'Import Export Code (IEC)',
   `eou_status` varchar(100) DEFAULT NULL COMMENT 'Export Oriented Unit Status',
-  `is_active` tinyint(1) NOT NULL DEFAULT '1' COMMENT 'Whether this TDS detail is active',
+  `cin_number` varchar(21) DEFAULT NULL COMMENT 'CIN Number',
+  `msme_file` varchar(255) DEFAULT NULL COMMENT 'MSME Certificate',
+  `fssai_file` varchar(255) DEFAULT NULL COMMENT 'FSSAI License',
+  `import_export_file` varchar(255) DEFAULT NULL COMMENT 'IEC Certificate',
+  `eou_file` varchar(255) DEFAULT NULL COMMENT 'EOU Certificate',
+  `is_active` tinyint(1) NOT NULL DEFAULT '1',
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   `created_by` varchar(100) DEFAULT NULL COMMENT 'Created by user',
@@ -1630,6 +1647,16 @@ CREATE TABLE `voucher_sales_invoicedetails` (
   `supporting_document` VARCHAR(100),
   `sales_order_no` VARCHAR(50),
 
+  -- GST-Compliant Fields
+  `place_of_supply` VARCHAR(2) DEFAULT NULL COMMENT 'State code (01-38)',
+  `reverse_charge` VARCHAR(1) DEFAULT 'N' COMMENT 'Y or N',
+  `invoice_type` VARCHAR(50) DEFAULT 'Regular' COMMENT 'Regular, SEZ with payment, etc.',
+  `gst_export_type` VARCHAR(10) DEFAULT NULL COMMENT 'WPAY or WOPAY for exports',
+  `port_code` VARCHAR(6) DEFAULT NULL COMMENT '6-digit port code for exports',
+  `shipping_bill_number` VARCHAR(50) DEFAULT NULL COMMENT 'Shipping bill number for exports',
+  `shipping_bill_date` DATE DEFAULT NULL COMMENT 'Shipping bill date for exports',
+  `ecommerce_gstin` VARCHAR(15) DEFAULT NULL COMMENT 'E-commerce GSTIN',
+
   PRIMARY KEY (`id`),
   KEY `idx_tenant_id` (`tenant_id`),
   KEY `idx_sales_invoice_no` (`sales_invoice_no`)
@@ -1654,11 +1681,13 @@ CREATE TABLE `voucher_sales_items` (
 
   `igst` DECIMAL(18,2) DEFAULT 0.00,
   `cgst` DECIMAL(18,2) DEFAULT 0.00,
+  `sgst` DECIMAL(18,2) DEFAULT 0.00,
   `cess` DECIMAL(18,2) DEFAULT 0.00,
 
   `invoice_value` DECIMAL(18,2) DEFAULT 0.00,
   `sales_ledger` VARCHAR(255),
   `description` LONGTEXT,
+  `alternate_unit` VARCHAR(50),
 
   `invoice_id` BIGINT,
 
@@ -2043,6 +2072,18 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_jobwork` (
   
   -- Items stored as JSON
   `items` JSON DEFAULT NULL COMMENT 'List of items: item_id, item_code, item_name, uom, quantity, rate, taxable_value, consumed_qty, etc.',
+
+  `delivery_challan` JSON DEFAULT NULL,
+  `eway_bill_details` JSON DEFAULT NULL,
+  `dispatch_from` TEXT DEFAULT NULL,
+  `mode_of_transport` VARCHAR(100) DEFAULT NULL,
+  `dispatch_date` DATE DEFAULT NULL,
+  `dispatch_time` TIME DEFAULT NULL,
+  `delivery_type` VARCHAR(100) DEFAULT NULL,
+  `transporter_id` VARCHAR(100) DEFAULT NULL,
+  `transporter_name` VARCHAR(255) DEFAULT NULL,
+  `vehicle_no` VARCHAR(100) DEFAULT NULL,
+  `lr_gr_consignment` VARCHAR(100) DEFAULT NULL,
   
   -- Additional Info
   `posting_note` TEXT DEFAULT NULL COMMENT 'Posting Note',
@@ -2055,11 +2096,7 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_jobwork` (
   `created_by` VARCHAR(100) DEFAULT NULL,
   `updated_by` VARCHAR(100) DEFAULT NULL,
 
-  -- E-way Bill / Delivery Challan
-  `dispatch_address` TEXT DEFAULT NULL,
-  `dispatch_date` DATE DEFAULT NULL,
-  `vehicle_number` VARCHAR(50) DEFAULT NULL,
-  `valid_till` DATE DEFAULT NULL,
+
   
   PRIMARY KEY (`id`),
   KEY `idx_jobwork_tenant` (`tenant_id`),
@@ -2085,13 +2122,24 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_interunit` (
   `goods_to_location` VARCHAR(255) NULL,
   `posting_note` TEXT NULL,
   
+  `irn` VARCHAR(255) DEFAULT NULL,
+  `ack_no` VARCHAR(100) DEFAULT NULL,
+
   `items` JSON DEFAULT NULL COMMENT 'List of items: item_code, quantity, rate, value, etc.',
   
-  -- E-way Bill / Delivery Challan
-  `dispatch_address` TEXT DEFAULT NULL,
+  `delivery_challan` JSON DEFAULT NULL,
+  `eway_bill_details` JSON DEFAULT NULL,
+  `dispatch_from` TEXT DEFAULT NULL,
+  `mode_of_transport` VARCHAR(100) DEFAULT NULL,
   `dispatch_date` DATE DEFAULT NULL,
-  `vehicle_number` VARCHAR(50) DEFAULT NULL,
-  `valid_till` DATE DEFAULT NULL,
+  `dispatch_time` TIME DEFAULT NULL,
+  `delivery_type` VARCHAR(100) DEFAULT NULL,
+  `transporter_id` VARCHAR(100) DEFAULT NULL,
+  `transporter_name` VARCHAR(255) DEFAULT NULL,
+  `vehicle_no` VARCHAR(100) DEFAULT NULL,
+  `lr_gr_consignment` VARCHAR(100) DEFAULT NULL,
+
+
 
   PRIMARY KEY (`id`),
   KEY `idx_ioi_tenant` (`tenant_id`),
@@ -2116,11 +2164,19 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_locationchange` (
   
   `items` JSON DEFAULT NULL COMMENT 'List of items: item_code, quantity, rate, value, etc.',
   
-  -- E-way Bill / Delivery Challan
-  `dispatch_address` TEXT DEFAULT NULL,
+  `delivery_challan` JSON DEFAULT NULL,
+  `eway_bill_details` JSON DEFAULT NULL,
+  `dispatch_from` TEXT DEFAULT NULL,
+  `mode_of_transport` VARCHAR(100) DEFAULT NULL,
   `dispatch_date` DATE DEFAULT NULL,
-  `vehicle_number` VARCHAR(50) DEFAULT NULL,
-  `valid_till` DATE DEFAULT NULL,
+  `dispatch_time` TIME DEFAULT NULL,
+  `delivery_type` VARCHAR(100) DEFAULT NULL,
+  `transporter_id` VARCHAR(100) DEFAULT NULL,
+  `transporter_name` VARCHAR(255) DEFAULT NULL,
+  `vehicle_no` VARCHAR(100) DEFAULT NULL,
+  `lr_gr_consignment` VARCHAR(100) DEFAULT NULL,
+
+
 
   PRIMARY KEY (`id`),
   KEY `idx_iolc_tenant` (`tenant_id`),
@@ -2153,11 +2209,19 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_production` (
 
   `items` JSON DEFAULT NULL COMMENT 'List of items with type (input/output/waste), quantity, rate, etc.',
 
-  -- E-way Bill / Delivery Challan
-  `dispatch_address` TEXT DEFAULT NULL,
+  `delivery_challan` JSON DEFAULT NULL,
+  `eway_bill_details` JSON DEFAULT NULL,
+  `dispatch_from` TEXT DEFAULT NULL,
+  `mode_of_transport` VARCHAR(100) DEFAULT NULL,
   `dispatch_date` DATE DEFAULT NULL,
-  `vehicle_number` VARCHAR(50) DEFAULT NULL,
-  `valid_till` DATE DEFAULT NULL,
+  `dispatch_time` TIME DEFAULT NULL,
+  `delivery_type` VARCHAR(100) DEFAULT NULL,
+  `transporter_id` VARCHAR(100) DEFAULT NULL,
+  `transporter_name` VARCHAR(255) DEFAULT NULL,
+  `vehicle_no` VARCHAR(100) DEFAULT NULL,
+  `lr_gr_consignment` VARCHAR(100) DEFAULT NULL,
+
+
 
   PRIMARY KEY (`id`),
   KEY `idx_iop_tenant` (`tenant_id`),
@@ -2182,11 +2246,19 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_consumption` (
   
   `items` JSON DEFAULT NULL COMMENT 'List of items: item_code, quantity, rate, etc.',
   
-  -- E-way Bill / Delivery Challan
-  `dispatch_address` TEXT DEFAULT NULL,
+  `delivery_challan` JSON DEFAULT NULL,
+  `eway_bill_details` JSON DEFAULT NULL,
+  `dispatch_from` TEXT DEFAULT NULL,
+  `mode_of_transport` VARCHAR(100) DEFAULT NULL,
   `dispatch_date` DATE DEFAULT NULL,
-  `vehicle_number` VARCHAR(50) DEFAULT NULL,
-  `valid_till` DATE DEFAULT NULL,
+  `dispatch_time` TIME DEFAULT NULL,
+  `delivery_type` VARCHAR(100) DEFAULT NULL,
+  `transporter_id` VARCHAR(100) DEFAULT NULL,
+  `transporter_name` VARCHAR(255) DEFAULT NULL,
+  `vehicle_no` VARCHAR(100) DEFAULT NULL,
+  `lr_gr_consignment` VARCHAR(100) DEFAULT NULL,
+
+
 
   PRIMARY KEY (`id`),
   KEY `idx_ioc_tenant` (`tenant_id`),
@@ -2211,11 +2283,19 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_scrap` (
   
   `items` JSON DEFAULT NULL COMMENT 'List of items: item_code, quantity, value, etc.',
   
-  -- E-way Bill / Delivery Challan
-  `dispatch_address` TEXT DEFAULT NULL,
+  `delivery_challan` JSON DEFAULT NULL,
+  `eway_bill_details` JSON DEFAULT NULL,
+  `dispatch_from` TEXT DEFAULT NULL,
+  `mode_of_transport` VARCHAR(100) DEFAULT NULL,
   `dispatch_date` DATE DEFAULT NULL,
-  `vehicle_number` VARCHAR(50) DEFAULT NULL,
-  `valid_till` DATE DEFAULT NULL,
+  `dispatch_time` TIME DEFAULT NULL,
+  `delivery_type` VARCHAR(100) DEFAULT NULL,
+  `transporter_id` VARCHAR(100) DEFAULT NULL,
+  `transporter_name` VARCHAR(255) DEFAULT NULL,
+  `vehicle_no` VARCHAR(100) DEFAULT NULL,
+  `lr_gr_consignment` VARCHAR(100) DEFAULT NULL,
+
+
 
   PRIMARY KEY (`id`),
   KEY `idx_ios_tenant` (`tenant_id`),
@@ -2287,11 +2367,19 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_outward` (
   
   `items` JSON DEFAULT NULL COMMENT 'List of items: item_code, quantity, hsn, etc.',
 
-  -- E-way Bill / Delivery Challan
-  `dispatch_address` TEXT DEFAULT NULL,
+  `delivery_challan` JSON DEFAULT NULL,
+  `eway_bill_details` JSON DEFAULT NULL,
+  `dispatch_from` TEXT DEFAULT NULL,
+  `mode_of_transport` VARCHAR(100) DEFAULT NULL,
   `dispatch_date` DATE DEFAULT NULL,
-  `vehicle_number` VARCHAR(50) DEFAULT NULL,
-  `valid_till` DATE DEFAULT NULL,
+  `dispatch_time` TIME DEFAULT NULL,
+  `delivery_type` VARCHAR(100) DEFAULT NULL,
+  `transporter_id` VARCHAR(100) DEFAULT NULL,
+  `transporter_name` VARCHAR(255) DEFAULT NULL,
+  `vehicle_no` VARCHAR(100) DEFAULT NULL,
+  `lr_gr_consignment` VARCHAR(100) DEFAULT NULL,
+
+
 
   PRIMARY KEY (`id`),
   KEY `idx_ioo_tenant` (`tenant_id`),

@@ -16,6 +16,14 @@ from .models_voucher_purchase import (
     VoucherPurchaseDueDetails, 
     VoucherPurchaseTransitDetails
 )
+from .models_voucher_sales import (
+    VoucherSalesInvoiceDetails,
+    VoucherSalesItems,
+    VoucherSalesItemsForeign,
+    VoucherSalesPaymentDetails,
+    VoucherSalesDispatchDetails,
+    VoucherSalesEwayBill
+)
 
 
 # ============================================================================

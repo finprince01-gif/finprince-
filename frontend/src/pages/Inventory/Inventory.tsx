@@ -1284,9 +1284,9 @@ const InventoryPage: React.FC = () => {
             no_of_boxes: item.noOfBoxes || null
           })),
           delivery_challan: {
-            dispatch_from: dispatchFrom,
+            dispatch_from: dispatchFrom || deliveryChallanAddress,
             mode_of_transport: modeOfTransport,
-            dispatch_date: dispatchDate,
+            dispatch_date: dispatchDate || deliveryChallanDate,
             dispatch_time: dispatchTime,
             delivery_type: deliveryType,
             transporter_id: transporterId,
@@ -1325,9 +1325,9 @@ const InventoryPage: React.FC = () => {
 
             // Maintained for compatibility
             dispatch_address: dispatchFrom || deliveryChallanAddress,
-            dispatch_date: dispatchDate || deliveryChallanDate,
           },
-          eway_bill: (ewayValidationEntries.length > 0 && (ewayValidationEntries[0].updatedVehicleNo || ewayValidationEntries[0].date)) ? {
+          eway_bill: (ewayValidationEntries.length > 0 && (ewayValidationEntries[0].updatedVehicleNo || ewayValidationEntries[0].date || ewayValidationEntries[0].ewayBillNo)) ? {
+            eway_bill_no: ewayValidationEntries[0].ewayBillNo || null,
             vehicle_number: ewayValidationEntries[0].updatedVehicleNo || null,
             valid_till: ewayValidationEntries[0].date || null
           } : null,
@@ -1379,12 +1379,20 @@ const InventoryPage: React.FC = () => {
             remarks: item.remarks || ''
           })),
 
-          delivery_challan: (deliveryChallanAddress || deliveryChallanDate) ? {
-            dispatch_address: deliveryChallanAddress,
-            dispatch_date: deliveryChallanDate || null
-          } : null,
+          delivery_challan: {
+            dispatch_from: dispatchFrom || deliveryChallanAddress,
+            mode_of_transport: modeOfTransport,
+            dispatch_date: dispatchDate || deliveryChallanDate,
+            dispatch_time: dispatchTime,
+            delivery_type: deliveryType,
+            transporter_id: transporterId,
+            transporter_name: transporterName,
+            vehicle_no: vehicleNo,
+            lr_gr_consignment: lrGrConsignment
+          },
 
-          eway_bill: (ewayValidationEntries.length > 0 && (ewayValidationEntries[0].updatedVehicleNo || ewayValidationEntries[0].date)) ? {
+          eway_bill: (ewayValidationEntries.length > 0 && (ewayValidationEntries[0].updatedVehicleNo || ewayValidationEntries[0].date || ewayValidationEntries[0].ewayBillNo)) ? {
+            eway_bill_no: ewayValidationEntries[0].ewayBillNo || null,
             vehicle_number: ewayValidationEntries[0].updatedVehicleNo || null,
             valid_till: ewayValidationEntries[0].date || null
           } : null,
@@ -1468,11 +1476,19 @@ const InventoryPage: React.FC = () => {
 
           items: productionItems,
 
-          delivery_challan: (deliveryChallanAddress || deliveryChallanDate) ? {
-            dispatch_address: deliveryChallanAddress,
-            dispatch_date: deliveryChallanDate || null
-          } : null,
-          eway_bill: (ewayValidationEntries.length > 0 && (ewayValidationEntries[0].updatedVehicleNo || ewayValidationEntries[0].date)) ? {
+          delivery_challan: {
+            dispatch_from: dispatchFrom || deliveryChallanAddress,
+            mode_of_transport: modeOfTransport,
+            dispatch_date: dispatchDate || deliveryChallanDate,
+            dispatch_time: dispatchTime,
+            delivery_type: deliveryType,
+            transporter_id: transporterId,
+            transporter_name: transporterName,
+            vehicle_no: vehicleNo,
+            lr_gr_consignment: lrGrConsignment
+          },
+          eway_bill: (ewayValidationEntries.length > 0 && (ewayValidationEntries[0].updatedVehicleNo || ewayValidationEntries[0].date || ewayValidationEntries[0].ewayBillNo)) ? {
+            eway_bill_no: ewayValidationEntries[0].ewayBillNo || null,
             vehicle_number: ewayValidationEntries[0].updatedVehicleNo || null,
             valid_till: ewayValidationEntries[0].date || null
           } : null,
@@ -1542,7 +1558,8 @@ const InventoryPage: React.FC = () => {
           },
           irn: irn,
           ack_no: ackNo,
-          eway_bill: (ewayValidationEntries.length > 0 && (ewayValidationEntries[0].updatedVehicleNo || ewayValidationEntries[0].date)) ? {
+          eway_bill: (ewayValidationEntries.length > 0 && (ewayValidationEntries[0].updatedVehicleNo || ewayValidationEntries[0].date || ewayValidationEntries[0].ewayBillNo)) ? {
+            eway_bill_no: ewayValidationEntries[0].ewayBillNo || null,
             vehicle_number: ewayValidationEntries[0].updatedVehicleNo || null,
             valid_till: ewayValidationEntries[0].date || null
           } : null,
@@ -1567,11 +1584,19 @@ const InventoryPage: React.FC = () => {
             rate: item.rate || 0,
             value: item.value || 0
           })),
-          delivery_challan: (deliveryChallanAddress || deliveryChallanDate) ? {
-            dispatch_address: deliveryChallanAddress,
-            dispatch_date: deliveryChallanDate || null
-          } : null,
-          eway_bill: (ewayValidationEntries.length > 0 && (ewayValidationEntries[0].updatedVehicleNo || ewayValidationEntries[0].date)) ? {
+          delivery_challan: {
+            dispatch_from: dispatchFrom || deliveryChallanAddress,
+            mode_of_transport: modeOfTransport,
+            dispatch_date: dispatchDate || deliveryChallanDate,
+            dispatch_time: dispatchTime,
+            delivery_type: deliveryType,
+            transporter_id: transporterId,
+            transporter_name: transporterName,
+            vehicle_no: vehicleNo,
+            lr_gr_consignment: lrGrConsignment
+          },
+          eway_bill: (ewayValidationEntries.length > 0 && (ewayValidationEntries[0].updatedVehicleNo || ewayValidationEntries[0].date || ewayValidationEntries[0].ewayBillNo)) ? {
+            eway_bill_no: ewayValidationEntries[0].ewayBillNo || null,
             vehicle_number: ewayValidationEntries[0].updatedVehicleNo || null,
             valid_till: ewayValidationEntries[0].date || null
           } : null,
@@ -5247,7 +5272,7 @@ const InventoryPage: React.FC = () => {
                       </div>
 
                       {/* Delivery Challan Details - For Inter-unit & Outward (Sales/Pur Return) */}
-                      {(issueSlipTab === 'inter-unit' || issueSlipTab === 'outward') && deliveryChallanFieldsJSX}
+                      {issueSlipTab === 'inter-unit' && deliveryChallanFieldsJSX}
 
                       {/* Action Buttons */}
                       <div className="flex gap-3 justify-end border-t border-gray-200 pt-5">

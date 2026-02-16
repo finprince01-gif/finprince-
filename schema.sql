@@ -1681,11 +1681,13 @@ CREATE TABLE `voucher_sales_items` (
 
   `igst` DECIMAL(18,2) DEFAULT 0.00,
   `cgst` DECIMAL(18,2) DEFAULT 0.00,
+  `sgst` DECIMAL(18,2) DEFAULT 0.00,
   `cess` DECIMAL(18,2) DEFAULT 0.00,
 
   `invoice_value` DECIMAL(18,2) DEFAULT 0.00,
   `sales_ledger` VARCHAR(255),
   `description` LONGTEXT,
+  `alternate_unit` VARCHAR(50),
 
   `invoice_id` BIGINT,
 
@@ -2070,6 +2072,18 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_jobwork` (
   
   -- Items stored as JSON
   `items` JSON DEFAULT NULL COMMENT 'List of items: item_id, item_code, item_name, uom, quantity, rate, taxable_value, consumed_qty, etc.',
+
+  `delivery_challan` JSON DEFAULT NULL,
+  `eway_bill_details` JSON DEFAULT NULL,
+  `dispatch_from` TEXT DEFAULT NULL,
+  `mode_of_transport` VARCHAR(100) DEFAULT NULL,
+  `dispatch_date` DATE DEFAULT NULL,
+  `dispatch_time` TIME DEFAULT NULL,
+  `delivery_type` VARCHAR(100) DEFAULT NULL,
+  `transporter_id` VARCHAR(100) DEFAULT NULL,
+  `transporter_name` VARCHAR(255) DEFAULT NULL,
+  `vehicle_no` VARCHAR(100) DEFAULT NULL,
+  `lr_gr_consignment` VARCHAR(100) DEFAULT NULL,
   
   -- Additional Info
   `posting_note` TEXT DEFAULT NULL COMMENT 'Posting Note',
@@ -2082,11 +2096,7 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_jobwork` (
   `created_by` VARCHAR(100) DEFAULT NULL,
   `updated_by` VARCHAR(100) DEFAULT NULL,
 
-  -- E-way Bill / Delivery Challan
-  `dispatch_address` TEXT DEFAULT NULL,
-  `dispatch_date` DATE DEFAULT NULL,
-  `vehicle_number` VARCHAR(50) DEFAULT NULL,
-  `valid_till` DATE DEFAULT NULL,
+
   
   PRIMARY KEY (`id`),
   KEY `idx_jobwork_tenant` (`tenant_id`),
@@ -2112,13 +2122,24 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_interunit` (
   `goods_to_location` VARCHAR(255) NULL,
   `posting_note` TEXT NULL,
   
+  `irn` VARCHAR(255) DEFAULT NULL,
+  `ack_no` VARCHAR(100) DEFAULT NULL,
+
   `items` JSON DEFAULT NULL COMMENT 'List of items: item_code, quantity, rate, value, etc.',
   
-  -- E-way Bill / Delivery Challan
-  `dispatch_address` TEXT DEFAULT NULL,
+  `delivery_challan` JSON DEFAULT NULL,
+  `eway_bill_details` JSON DEFAULT NULL,
+  `dispatch_from` TEXT DEFAULT NULL,
+  `mode_of_transport` VARCHAR(100) DEFAULT NULL,
   `dispatch_date` DATE DEFAULT NULL,
-  `vehicle_number` VARCHAR(50) DEFAULT NULL,
-  `valid_till` DATE DEFAULT NULL,
+  `dispatch_time` TIME DEFAULT NULL,
+  `delivery_type` VARCHAR(100) DEFAULT NULL,
+  `transporter_id` VARCHAR(100) DEFAULT NULL,
+  `transporter_name` VARCHAR(255) DEFAULT NULL,
+  `vehicle_no` VARCHAR(100) DEFAULT NULL,
+  `lr_gr_consignment` VARCHAR(100) DEFAULT NULL,
+
+
 
   PRIMARY KEY (`id`),
   KEY `idx_ioi_tenant` (`tenant_id`),
@@ -2143,11 +2164,19 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_locationchange` (
   
   `items` JSON DEFAULT NULL COMMENT 'List of items: item_code, quantity, rate, value, etc.',
   
-  -- E-way Bill / Delivery Challan
-  `dispatch_address` TEXT DEFAULT NULL,
+  `delivery_challan` JSON DEFAULT NULL,
+  `eway_bill_details` JSON DEFAULT NULL,
+  `dispatch_from` TEXT DEFAULT NULL,
+  `mode_of_transport` VARCHAR(100) DEFAULT NULL,
   `dispatch_date` DATE DEFAULT NULL,
-  `vehicle_number` VARCHAR(50) DEFAULT NULL,
-  `valid_till` DATE DEFAULT NULL,
+  `dispatch_time` TIME DEFAULT NULL,
+  `delivery_type` VARCHAR(100) DEFAULT NULL,
+  `transporter_id` VARCHAR(100) DEFAULT NULL,
+  `transporter_name` VARCHAR(255) DEFAULT NULL,
+  `vehicle_no` VARCHAR(100) DEFAULT NULL,
+  `lr_gr_consignment` VARCHAR(100) DEFAULT NULL,
+
+
 
   PRIMARY KEY (`id`),
   KEY `idx_iolc_tenant` (`tenant_id`),
@@ -2180,11 +2209,19 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_production` (
 
   `items` JSON DEFAULT NULL COMMENT 'List of items with type (input/output/waste), quantity, rate, etc.',
 
-  -- E-way Bill / Delivery Challan
-  `dispatch_address` TEXT DEFAULT NULL,
+  `delivery_challan` JSON DEFAULT NULL,
+  `eway_bill_details` JSON DEFAULT NULL,
+  `dispatch_from` TEXT DEFAULT NULL,
+  `mode_of_transport` VARCHAR(100) DEFAULT NULL,
   `dispatch_date` DATE DEFAULT NULL,
-  `vehicle_number` VARCHAR(50) DEFAULT NULL,
-  `valid_till` DATE DEFAULT NULL,
+  `dispatch_time` TIME DEFAULT NULL,
+  `delivery_type` VARCHAR(100) DEFAULT NULL,
+  `transporter_id` VARCHAR(100) DEFAULT NULL,
+  `transporter_name` VARCHAR(255) DEFAULT NULL,
+  `vehicle_no` VARCHAR(100) DEFAULT NULL,
+  `lr_gr_consignment` VARCHAR(100) DEFAULT NULL,
+
+
 
   PRIMARY KEY (`id`),
   KEY `idx_iop_tenant` (`tenant_id`),
@@ -2209,11 +2246,19 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_consumption` (
   
   `items` JSON DEFAULT NULL COMMENT 'List of items: item_code, quantity, rate, etc.',
   
-  -- E-way Bill / Delivery Challan
-  `dispatch_address` TEXT DEFAULT NULL,
+  `delivery_challan` JSON DEFAULT NULL,
+  `eway_bill_details` JSON DEFAULT NULL,
+  `dispatch_from` TEXT DEFAULT NULL,
+  `mode_of_transport` VARCHAR(100) DEFAULT NULL,
   `dispatch_date` DATE DEFAULT NULL,
-  `vehicle_number` VARCHAR(50) DEFAULT NULL,
-  `valid_till` DATE DEFAULT NULL,
+  `dispatch_time` TIME DEFAULT NULL,
+  `delivery_type` VARCHAR(100) DEFAULT NULL,
+  `transporter_id` VARCHAR(100) DEFAULT NULL,
+  `transporter_name` VARCHAR(255) DEFAULT NULL,
+  `vehicle_no` VARCHAR(100) DEFAULT NULL,
+  `lr_gr_consignment` VARCHAR(100) DEFAULT NULL,
+
+
 
   PRIMARY KEY (`id`),
   KEY `idx_ioc_tenant` (`tenant_id`),
@@ -2238,11 +2283,19 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_scrap` (
   
   `items` JSON DEFAULT NULL COMMENT 'List of items: item_code, quantity, value, etc.',
   
-  -- E-way Bill / Delivery Challan
-  `dispatch_address` TEXT DEFAULT NULL,
+  `delivery_challan` JSON DEFAULT NULL,
+  `eway_bill_details` JSON DEFAULT NULL,
+  `dispatch_from` TEXT DEFAULT NULL,
+  `mode_of_transport` VARCHAR(100) DEFAULT NULL,
   `dispatch_date` DATE DEFAULT NULL,
-  `vehicle_number` VARCHAR(50) DEFAULT NULL,
-  `valid_till` DATE DEFAULT NULL,
+  `dispatch_time` TIME DEFAULT NULL,
+  `delivery_type` VARCHAR(100) DEFAULT NULL,
+  `transporter_id` VARCHAR(100) DEFAULT NULL,
+  `transporter_name` VARCHAR(255) DEFAULT NULL,
+  `vehicle_no` VARCHAR(100) DEFAULT NULL,
+  `lr_gr_consignment` VARCHAR(100) DEFAULT NULL,
+
+
 
   PRIMARY KEY (`id`),
   KEY `idx_ios_tenant` (`tenant_id`),
@@ -2314,11 +2367,19 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_outward` (
   
   `items` JSON DEFAULT NULL COMMENT 'List of items: item_code, quantity, hsn, etc.',
 
-  -- E-way Bill / Delivery Challan
-  `dispatch_address` TEXT DEFAULT NULL,
+  `delivery_challan` JSON DEFAULT NULL,
+  `eway_bill_details` JSON DEFAULT NULL,
+  `dispatch_from` TEXT DEFAULT NULL,
+  `mode_of_transport` VARCHAR(100) DEFAULT NULL,
   `dispatch_date` DATE DEFAULT NULL,
-  `vehicle_number` VARCHAR(50) DEFAULT NULL,
-  `valid_till` DATE DEFAULT NULL,
+  `dispatch_time` TIME DEFAULT NULL,
+  `delivery_type` VARCHAR(100) DEFAULT NULL,
+  `transporter_id` VARCHAR(100) DEFAULT NULL,
+  `transporter_name` VARCHAR(255) DEFAULT NULL,
+  `vehicle_no` VARCHAR(100) DEFAULT NULL,
+  `lr_gr_consignment` VARCHAR(100) DEFAULT NULL,
+
+
 
   PRIMARY KEY (`id`),
   KEY `idx_ioo_tenant` (`tenant_id`),

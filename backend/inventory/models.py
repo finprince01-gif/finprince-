@@ -228,15 +228,25 @@ class InventoryOperationJobWork(BaseModel):
     # Items (Stored as JSON)
     items = models.JSONField(default=list, blank=True, null=True)
 
+    delivery_challan = models.JSONField(default=dict, blank=True, null=True)
+    eway_bill_details = models.JSONField(default=list, blank=True, null=True)
+
     # Additional Info
     posting_note = models.TextField(null=True, blank=True)
     status = models.CharField(max_length=50, default='Draft')
 
-    # E-way Bill / Delivery Challan
-    dispatch_address = models.TextField(null=True, blank=True, help_text="Delivery Challan Address")
-    dispatch_date = models.DateField(null=True, blank=True, help_text="Delivery Challan Date")
-    vehicle_number = models.CharField(max_length=50, null=True, blank=True, help_text="E-Way Bill Vehicle No")
-    valid_till = models.DateField(null=True, blank=True, help_text="E-Way Bill Valid Till")
+
+
+    # Dispatch Details
+    dispatch_from = models.TextField(null=True, blank=True)
+    mode_of_transport = models.CharField(max_length=100, null=True, blank=True)
+    dispatch_date = models.DateField(null=True, blank=True)
+    dispatch_time = models.TimeField(null=True, blank=True)
+    delivery_type = models.CharField(max_length=100, null=True, blank=True)
+    transporter_id = models.CharField(max_length=100, null=True, blank=True)
+    transporter_name = models.CharField(max_length=255, null=True, blank=True)
+    vehicle_no = models.CharField(max_length=100, null=True, blank=True)
+    lr_gr_consignment = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
         db_table = 'inventory_operation_jobwork'
@@ -256,14 +266,27 @@ class InventoryOperationInterUnit(BaseModel):
     
     posting_note = models.TextField(null=True, blank=True)
 
+    irn = models.CharField(max_length=255, null=True, blank=True)
+    ack_no = models.CharField(max_length=100, null=True, blank=True)
+
     # Items (Stored as JSON)
     items = models.JSONField(default=list, blank=True, null=True)
+    
+    delivery_challan = models.JSONField(default=dict, blank=True, null=True)
+    eway_bill_details = models.JSONField(default=list, blank=True, null=True)
 
-    # E-way Bill / Delivery Challan
-    dispatch_address = models.TextField(null=True, blank=True)
+
+
+    # Dispatch Details
+    dispatch_from = models.TextField(null=True, blank=True)
+    mode_of_transport = models.CharField(max_length=100, null=True, blank=True)
     dispatch_date = models.DateField(null=True, blank=True)
-    vehicle_number = models.CharField(max_length=50, null=True, blank=True)
-    valid_till = models.DateField(null=True, blank=True)
+    dispatch_time = models.TimeField(null=True, blank=True)
+    delivery_type = models.CharField(max_length=100, null=True, blank=True)
+    transporter_id = models.CharField(max_length=100, null=True, blank=True)
+    transporter_name = models.CharField(max_length=255, null=True, blank=True)
+    vehicle_no = models.CharField(max_length=100, null=True, blank=True)
+    lr_gr_consignment = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
         db_table = 'inventory_operation_interunit'
@@ -286,11 +309,21 @@ class InventoryOperationLocationChange(BaseModel):
     # Items (Stored as JSON)
     items = models.JSONField(default=list, blank=True, null=True)
 
-    # E-way Bill / Delivery Challan
-    dispatch_address = models.TextField(null=True, blank=True)
+    delivery_challan = models.JSONField(default=dict, blank=True, null=True)
+    eway_bill_details = models.JSONField(default=list, blank=True, null=True)
+
+
+
+    # Dispatch Details
+    dispatch_from = models.TextField(null=True, blank=True)
+    mode_of_transport = models.CharField(max_length=100, null=True, blank=True)
     dispatch_date = models.DateField(null=True, blank=True)
-    vehicle_number = models.CharField(max_length=50, null=True, blank=True)
-    valid_till = models.DateField(null=True, blank=True)
+    dispatch_time = models.TimeField(null=True, blank=True)
+    delivery_type = models.CharField(max_length=100, null=True, blank=True)
+    transporter_id = models.CharField(max_length=100, null=True, blank=True)
+    transporter_name = models.CharField(max_length=255, null=True, blank=True)
+    vehicle_no = models.CharField(max_length=100, null=True, blank=True)
+    lr_gr_consignment = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
         db_table = 'inventory_operation_locationchange'
@@ -320,12 +353,22 @@ class InventoryOperationProduction(BaseModel):
 
     # Items (Stored as JSON)
     items = models.JSONField(default=list, blank=True, null=True)
+    
+    delivery_challan = models.JSONField(default=dict, blank=True, null=True)
+    eway_bill_details = models.JSONField(default=list, blank=True, null=True)
 
-    # E-way Bill / Delivery Challan
-    dispatch_address = models.TextField(null=True, blank=True)
+
+
+    # Dispatch Details
+    dispatch_from = models.TextField(null=True, blank=True)
+    mode_of_transport = models.CharField(max_length=100, null=True, blank=True)
     dispatch_date = models.DateField(null=True, blank=True)
-    vehicle_number = models.CharField(max_length=50, null=True, blank=True)
-    valid_till = models.DateField(null=True, blank=True)
+    dispatch_time = models.TimeField(null=True, blank=True)
+    delivery_type = models.CharField(max_length=100, null=True, blank=True)
+    transporter_id = models.CharField(max_length=100, null=True, blank=True)
+    transporter_name = models.CharField(max_length=255, null=True, blank=True)
+    vehicle_no = models.CharField(max_length=100, null=True, blank=True)
+    lr_gr_consignment = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
         db_table = 'inventory_operation_production'
@@ -347,12 +390,22 @@ class InventoryOperationConsumption(BaseModel):
 
     # Items (Stored as JSON)
     items = models.JSONField(default=list, blank=True, null=True)
+    
+    delivery_challan = models.JSONField(default=dict, blank=True, null=True)
+    eway_bill_details = models.JSONField(default=list, blank=True, null=True)
 
-    # E-way Bill / Delivery Challan
-    dispatch_address = models.TextField(null=True, blank=True)
+
+
+    # Dispatch Details
+    dispatch_from = models.TextField(null=True, blank=True)
+    mode_of_transport = models.CharField(max_length=100, null=True, blank=True)
     dispatch_date = models.DateField(null=True, blank=True)
-    vehicle_number = models.CharField(max_length=50, null=True, blank=True)
-    valid_till = models.DateField(null=True, blank=True)
+    dispatch_time = models.TimeField(null=True, blank=True)
+    delivery_type = models.CharField(max_length=100, null=True, blank=True)
+    transporter_id = models.CharField(max_length=100, null=True, blank=True)
+    transporter_name = models.CharField(max_length=255, null=True, blank=True)
+    vehicle_no = models.CharField(max_length=100, null=True, blank=True)
+    lr_gr_consignment = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
         db_table = 'inventory_operation_consumption'
@@ -374,12 +427,22 @@ class InventoryOperationScrap(BaseModel):
 
     # Items (Stored as JSON)
     items = models.JSONField(default=list, blank=True, null=True)
+    
+    delivery_challan = models.JSONField(default=dict, blank=True, null=True)
+    eway_bill_details = models.JSONField(default=list, blank=True, null=True)
 
-    # E-way Bill / Delivery Challan
-    dispatch_address = models.TextField(null=True, blank=True)
+
+
+    # Dispatch Details
+    dispatch_from = models.TextField(null=True, blank=True)
+    mode_of_transport = models.CharField(max_length=100, null=True, blank=True)
     dispatch_date = models.DateField(null=True, blank=True)
-    vehicle_number = models.CharField(max_length=50, null=True, blank=True)
-    valid_till = models.DateField(null=True, blank=True)
+    dispatch_time = models.TimeField(null=True, blank=True)
+    delivery_type = models.CharField(max_length=100, null=True, blank=True)
+    transporter_id = models.CharField(max_length=100, null=True, blank=True)
+    transporter_name = models.CharField(max_length=255, null=True, blank=True)
+    vehicle_no = models.CharField(max_length=100, null=True, blank=True)
+    lr_gr_consignment = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
         db_table = 'inventory_operation_scrap'
@@ -421,11 +484,21 @@ class InventoryOperationOutward(BaseModel):
     # Items (Stored as JSON)
     items = models.JSONField(default=list, blank=True, null=True)
 
-    # E-way Bill / Delivery Challan
-    dispatch_address = models.TextField(null=True, blank=True)
+    delivery_challan = models.JSONField(default=dict, blank=True, null=True)
+    eway_bill_details = models.JSONField(default=list, blank=True, null=True)
+
+
+
+    # Dispatch Details
+    dispatch_from = models.TextField(null=True, blank=True)
+    mode_of_transport = models.CharField(max_length=100, null=True, blank=True)
     dispatch_date = models.DateField(null=True, blank=True)
-    vehicle_number = models.CharField(max_length=50, null=True, blank=True)
-    valid_till = models.DateField(null=True, blank=True)
+    dispatch_time = models.TimeField(null=True, blank=True)
+    delivery_type = models.CharField(max_length=100, null=True, blank=True)
+    transporter_id = models.CharField(max_length=100, null=True, blank=True)
+    transporter_name = models.CharField(max_length=255, null=True, blank=True)
+    vehicle_no = models.CharField(max_length=100, null=True, blank=True)
+    lr_gr_consignment = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
         db_table = 'inventory_operation_outward'

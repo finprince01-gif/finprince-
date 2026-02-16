@@ -1,6 +1,6 @@
 from django.db import models
 from core.models import BaseModel
-from .models import MasterLedger
+# from .models import MasterLedger
 
 class VoucherSalesInvoiceDetails(BaseModel):
     """
@@ -113,12 +113,14 @@ class VoucherSalesItems(BaseModel):
     taxable_value = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     igst = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     cgst = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    sgst = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     cess = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     invoice_value = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     
     # Extra
     sales_ledger = models.CharField(max_length=255, null=True, blank=True)
     description = models.TextField(null=True, blank=True)
+    alternate_unit = models.CharField(max_length=50, null=True, blank=True)
 
     class Meta:
         db_table = 'voucher_sales_items'
