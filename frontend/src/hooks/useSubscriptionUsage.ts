@@ -26,9 +26,19 @@ export const useSubscriptionUsage = () => {
     }, []);
 
     useEffect(() => {
+        // Only fetch if we have a token (baseline check)
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
         fetchUsage();
         // Poll every minute
-        const interval = setInterval(fetchUsage, 60000);
+        const interval = setInterval(() => {
+            const currentToken = localStorage.getItem('token');
+            if (currentToken) {
+                fetchUsage();
+            }
+        }, 60000);
+        
         return () => clearInterval(interval);
     }, [fetchUsage]);
 
