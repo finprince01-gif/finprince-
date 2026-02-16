@@ -380,16 +380,6 @@ const App: React.FC = () => {
         setCompanyDetails(initialCompanyDetails);
 
         if (isLoggedIn && savedTenantId) {
-          // Refresh user plan in background
-          try {
-            const usage = await apiService.getSubscriptionUsage();
-            if (usage && usage.plan) {
-              localStorage.setItem('userPlan', usage.plan);
-            }
-          } catch (err) {
-            console.error('Failed to refresh user plan:', err);
-          }
-
           const hasCachedData = loadCachedData(savedTenantId);
 
           if (hasCachedData) {
@@ -499,7 +489,8 @@ const App: React.FC = () => {
 
     }
 
-    // Clear authentication data (cookies cleared by server)
+    // Clear authentication data
+    httpClient.clearAuthData();
     localStorage.removeItem('companyName');
     localStorage.removeItem('tenantId');
 

@@ -25,7 +25,7 @@ class SubscriptionUsageView(APIView):
             "plan": plan,
             "used": used,
             "limit": limit if limit != float('inf') else "Unlimited",
-            "cycle_start": cycle_start,
+            "cycle_start": cycle_start.isoformat() if hasattr(cycle_start, 'isoformat') else str(cycle_start),
             "remaining": (limit - used) if limit != float('inf') else "Unlimited"
         })
 
