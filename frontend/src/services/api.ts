@@ -506,12 +506,12 @@ class ApiService {
     async login(email: string | null | undefined, username: string | null | undefined, password: string) {
         const data = await httpClient.post<any>('/api/auth/login/', { email, username, password });
 
-        // Save tokens to localStorage (backup for HttpOnly cookies)
-        if (data.access) {
-            localStorage.setItem('token', data.access);
-        }
-        if (data.refresh) {
-            localStorage.setItem('refreshToken', data.refresh);
+        // Save tokens to memory (cleared on refresh)
+        if (data.access && data.refresh) {
+            httpClient.setTokens(data.access, data.refresh);
+            // Also clear legacy localStorage tokens if present
+            localStorage.removeItem('token');
+            localStorage.removeItem('refreshToken');
         }
 
         // Save tenant and company info

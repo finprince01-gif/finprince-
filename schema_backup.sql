@@ -2496,3 +2496,6 @@ CREATE TABLE service_list (
     INDEX idx_service_code (service_code),
     INDEX idx_service_group (service_group_id)
 ) ENGINE=InnoDB;
+
+ALTER TABLE users
+ADD COLUMN subscription_start_date DATE NULL;

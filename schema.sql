@@ -1746,7 +1746,8 @@ CREATE TABLE `voucher_sales_paymentdetails` (
 
   `posting_note` LONGTEXT,
   `terms_conditions` LONGTEXT,
-  `advance_references` LONGTEXT DEFAULT '[]' COMMENT 'JSON array of advance references',
+   advance_references LONGTEXT COMMENT 'JSON array of advance references',
+
 
   `invoice_id` BIGINT,
 
@@ -2496,3 +2497,6 @@ CREATE TABLE service_list (
     INDEX idx_service_code (service_code),
     INDEX idx_service_group (service_group_id)
 ) ENGINE=InnoDB;
+
+ALTER TABLE users
+ADD COLUMN subscription_start_date DATE NULL;

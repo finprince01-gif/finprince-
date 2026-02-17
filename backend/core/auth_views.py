@@ -81,13 +81,15 @@ class CookieTokenObtainPairView(TokenObtainPairView):
 
 class CookieTokenRefreshView(TokenRefreshView):
     def post(self, request, *args, **kwargs):
-        refresh_token = request.COOKIES.get('refresh_token')
+        # Prioritize refresh token from body (for non-cookie clients)
+        if 'refresh' in request.data:
+            refresh_token = request.data['refresh']
+        else:
+            refresh_token = request.COOKIES.get('refresh_token')
         
         if not refresh_token:
             return Response({'error': 'No refresh token provided'}, status=status.HTTP_401_UNAUTHORIZED)
             
-        # Copy logic to be safe with immutable querydicts if needed, 
-        # though request.data is usually mutable dict in DRF unless using MultiPart
         data = request.data.copy()
         data['refresh'] = refresh_token
         
@@ -111,8 +113,11 @@ class CookieTokenRefreshView(TokenRefreshView):
         response_data = {'success': True}
         if access_token:
             response_data['access'] = access_token
+        # Always return refresh token if generated (it's in token_data)
         if new_refresh:
             response_data['refresh'] = new_refresh
+        elif 'refresh' in token_data: 
+             response_data['refresh'] = token_data['refresh']
             
         response = Response(response_data, status=status.HTTP_200_OK)
 

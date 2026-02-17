@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { showError, showSuccess } from '../../utils/toast';
-
+import { httpClient } from '../../services/httpClient';
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5003';
 
@@ -66,7 +66,7 @@ const PaymentVoucherBulk: React.FC = () => {
 
   const fetchCashBankLedgers = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = httpClient.getToken();
       const response = await fetch(`${API_BASE_URL}/api/ledgers/cash-bank/`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -85,7 +85,7 @@ const PaymentVoucherBulk: React.FC = () => {
 
   const fetchAllLedgers = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = httpClient.getToken();
       const response = await fetch(`${API_BASE_URL}/api/ledgers/`, {
         headers: {
           'Authorization': `Bearer ${token}`,

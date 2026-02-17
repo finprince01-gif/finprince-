@@ -33,6 +33,8 @@ class HttpClient {
     private baseURL = API_BASE_URL;
     private isRefreshing = false;
     private failedQueue: QueueItem[] = [];
+    private accessToken: string | null = null;
+    private refreshToken: string | null = null;
 
     /**
      * PROCESS QUEUE
@@ -51,6 +53,21 @@ class HttpClient {
     }
 
     /**
+     * Set tokens in memory
+     */
+    public setTokens(access: string, refresh: string) {
+        this.accessToken = access;
+        this.refreshToken = refresh;
+    }
+
+    /**
+     * Get access token (for auth checks)
+     */
+    public getToken(): string | null {
+        return this.accessToken;
+    }
+
+    /**
      * CORE REQUEST METHOD
      * Wraps fetch() with auth logic, headers, and error handling.
      */
@@ -63,9 +80,8 @@ class HttpClient {
             headers.set('Content-Type', 'application/json');
         }
 
-        const token = localStorage.getItem('token');
-        if (token) {
-            headers.set('Authorization', `Bearer ${token}`);
+        if (this.accessToken) {
+            headers.set('Authorization', `Bearer ${this.accessToken}`);
         }
 
         try {
@@ -99,11 +115,15 @@ class HttpClient {
                 try {
 
                     // Call backend refresh endpoint
-                    // The backend reads the refresh token from HTTP-only cookies
+                    // The backend reads the refresh token from body (or cookies as fallback)
+                    if (!this.refreshToken) {
+                        throw new Error('No refresh token available');
+                    }
+
                     const refreshResponse = await fetch(`${this.baseURL}/api/auth/refresh/`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        credentials: 'include' // Send cookies (refresh token is in HTTP-only cookie)
+                        body: JSON.stringify({ refresh: this.refreshToken })
                     });
 
                     if (!refreshResponse.ok) {
@@ -114,11 +134,10 @@ class HttpClient {
 
                     // 4. Update Token Storage
                     if (data.access) {
-                        localStorage.setItem('token', data.access);
-
+                        this.accessToken = data.access;
                     }
                     if (data.refresh) {
-                        localStorage.setItem('refreshToken', data.refresh); // Optional if using cookies
+                        this.refreshToken = data.refresh;
                     }
 
                     // 5. Retry Queued Requests
@@ -254,7 +273,9 @@ class HttpClient {
     }
 
     public clearAuthData() {
-        localStorage.removeItem('token');
+        this.accessToken = null;
+        this.refreshToken = null;
+        localStorage.removeItem('token'); // Clean up old storage if present
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('tenantId');
         localStorage.removeItem('companyName');

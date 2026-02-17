@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiService } from '../services/api';
+import { httpClient } from '../services/httpClient';
 
 export interface SubscriptionUsage {
     plan: string;
@@ -27,18 +28,18 @@ export const useSubscriptionUsage = () => {
 
     useEffect(() => {
         // Only fetch if we have a token (baseline check)
-        const token = localStorage.getItem('token');
+        const token = httpClient.getToken();
         if (!token) return;
 
         fetchUsage();
         // Poll every minute
         const interval = setInterval(() => {
-            const currentToken = localStorage.getItem('token');
+            const currentToken = httpClient.getToken();
             if (currentToken) {
                 fetchUsage();
             }
         }, 60000);
-        
+
         return () => clearInterval(interval);
     }, [fetchUsage]);
 

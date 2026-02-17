@@ -161,14 +161,8 @@ const App: React.FC = () => {
   // ============================================================================
 
   // Authentication state - tracks if user is logged in
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
-    const token = localStorage.getItem('token');
-    const loggedOut = localStorage.getItem('loggedOut') === 'true';
-    // Ensure we have a token and user didn't explicitly logout
-    // We also generally expect a tenantId for standard users, but admin might not have one.
-    // For safety, checking token + !loggedOut is the baseline.
-    return !!token && !loggedOut;
-  });
+  // Initialize to false to ensure logout on refresh (tokens are now in memory only)
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
 
   // View state - determines whether to show login or signup page
   const [view, setView] = useState<'login' | 'signup' | 'forgot-password'>('login');
