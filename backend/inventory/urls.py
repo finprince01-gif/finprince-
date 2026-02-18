@@ -40,4 +40,5 @@ router.register('operations/new-grn', InventoryOperationNewGRNViewSet, basename=
 urlpatterns = [
     path('', include(router.urls)),
     path('operations/pending-grns/', PendingGRNListView.as_view(), name='pending-grns-list'),
+    path('operations/next-grn-number/', InventoryOperationNewGRNViewSet.as_view({'get': 'next_grn_number'}), name='next-grn-number'),
 ]

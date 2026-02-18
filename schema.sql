@@ -1,6 +1,4 @@
---create database Finpixe_AI_Accounting;
-
-use Finpixe_AI_Accounting;
+create database Finpixe_AI_Accounting;
 
 -- Table: tenants
 
@@ -321,7 +319,8 @@ CREATE TABLE IF NOT EXISTS `vendor_master_posettings` (
 
   PRIMARY KEY (`id`),
   UNIQUE KEY `vendor_posettings_tenant_name_unique` (`tenant_id`,`name`),
-  KEY `vendor_posettings_tenant_id_idx` (`tenant_id`)
+  KEY `vendor_posettings_tenant_id_idx` (`tenant_id`),
+  CONSTRAINT `vendor_posettings_category_fk` FOREIGN KEY (`category_id`) REFERENCES `vendor_master_category` (`id`) ON DELETE SET NULL
 )
 ENGINE=InnoDB
 DEFAULT CHARSET=utf8mb4
@@ -499,6 +498,7 @@ CREATE TABLE `inventory_master_location` (
   `pincode` VARCHAR(20) NOT NULL DEFAULT '' COMMENT 'Pincode/Zip Code',
   `vendor_name` VARCHAR(255) DEFAULT NULL COMMENT 'Vendor/Agent Name',
   `customer_name` VARCHAR(255) DEFAULT NULL COMMENT 'Customer Name',
+  `location_address` VARCHAR(255) DEFAULT NULL COMMENT 'Location Address Reference',
   `gstin` VARCHAR(15) DEFAULT NULL COMMENT 'GSTIN (Optional)',
   `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
@@ -1391,19 +1391,19 @@ CREATE TABLE `payroll_employee_employment` (
 -- Table structure for table `payroll_employee_salary`
 --
 
-CREATE TABLE `payroll_employee_salary` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `basic_salary` decimal(12,2) NOT NULL,
-  `hra` decimal(12,2) NOT NULL,
-  `created_at` datetime(6) NOT NULL,
-  `updated_at` datetime(6) NOT NULL,
-  `employee_basic_id` bigint NOT NULL,
-  `tenant_id` varchar(36) DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `employee_basic_id` (`employee_basic_id`),
-  KEY `idx_tenant` (`tenant_id`),
-  CONSTRAINT `payroll_employee_sal_employee_basic_id_cdfba561_fk_payroll_e` FOREIGN KEY (`employee_basic_id`) REFERENCES `payroll_employee_basic_details` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  CREATE TABLE `payroll_employee_salary` (
+    `id` bigint NOT NULL AUTO_INCREMENT,
+    `basic_salary` decimal(12,2) NOT NULL,
+    `hra` decimal(12,2) NOT NULL,
+    `created_at` datetime(6) NOT NULL,
+    `updated_at` datetime(6) NOT NULL,
+    `employee_basic_id` bigint NOT NULL,
+    `tenant_id` varchar(36) DEFAULT NULL,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `employee_basic_id` (`employee_basic_id`),
+    KEY `idx_tenant` (`tenant_id`),
+    CONSTRAINT `payroll_employee_sal_employee_basic_id_cdfba561_fk_payroll_e` FOREIGN KEY (`employee_basic_id`) REFERENCES `payroll_employee_basic_details` (`id`)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 --
 -- Table structure for table `payroll_employee_statutory`
@@ -1489,50 +1489,7 @@ CREATE TABLE `payroll_salary_template` (
   UNIQUE KEY `payroll_salary_template_tenant_id_template_name_f5ff8dfa_uniq` (`tenant_id`,`template_name`),
   KEY `payroll_salary_template_tenant_id_27fcb732` (`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-CREATE TABLE IF NOT EXISTS service_list (
-    id INT AUTO_INCREMENT PRIMARY KEY COMMENT 'Unique Service ID',
-    tenant_id VARCHAR(36) NOT NULL COMMENT 'Tenant ID for multi-tenancy',
-    service_code VARCHAR(50) NOT NULL UNIQUE COMMENT 'Service Code (Required)',
-    service_name VARCHAR(255) NOT NULL COMMENT 'Service Name (Required)',
-    service_group VARCHAR(100) NOT NULL COMMENT 'Service Group (Required)',
-    sac_code VARCHAR(20) NOT NULL COMMENT 'SAC Code (Required)',
-    gst_rate DECIMAL(5, 2) NOT NULL DEFAULT 18 COMMENT 'GST Rate (Required)',
-    uom VARCHAR(50) COMMENT 'Unit of Measurement (Optional)',
-    description TEXT COMMENT 'Description (Optional)',
-    expense_ledger VARCHAR(255) NOT NULL COMMENT 'Expense Ledger (Required)',
-    is_active BOOLEAN DEFAULT 1 COMMENT 'Status: 1=Active, 0=Inactive',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'Record Created Date',
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Record Last Updated Date',
-    
-    -- Indexes for better query performance
-    INDEX idx_tenant_id (tenant_id),
-    INDEX idx_service_code (service_code),
-    INDEX idx_service_group (service_group),
-    INDEX idx_is_active (is_active),
-    INDEX idx_created_at (created_at),
-    INDEX idx_tenant_service (tenant_id, service_code)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Service List Master Table';
-
--- Create Service Groups Table
-CREATE TABLE IF NOT EXISTS service_groups (
-    id INT AUTO_INCREMENT PRIMARY KEY COMMENT 'Unique Service Group ID',
-    tenant_id VARCHAR(36) NOT NULL COMMENT 'Tenant ID for multi-tenancy',
-    category VARCHAR(100) NOT NULL COMMENT 'Category (e.g., Professional Services, Technical Support)',
-    group_name VARCHAR(255) NOT NULL COMMENT 'Group Name (Required)',
-    under_subgroup VARCHAR(255) DEFAULT NULL COMMENT 'Subgroup Name / Under (Optional)',
-    is_active BOOLEAN DEFAULT 1 COMMENT 'Status: 1=Active, 0=Inactive',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'Record Created Date',
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Record Last Updated Date',
-    
-    -- Indexes for better query performance
-    INDEX idx_tenant_id (tenant_id),
-    INDEX idx_category (category),
-    INDEX idx_group_name (group_name),
-    INDEX idx_is_active (is_active),
-    INDEX idx_tenant_category (tenant_id, category)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Service Groups Table';
-   
+ 
       
 CREATE TABLE `voucher_sales_dispatchdetails` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
@@ -1739,8 +1696,7 @@ CREATE TABLE `voucher_sales_paymentdetails` (
   `payment_state_cess` DECIMAL(18,2) DEFAULT 0.00,
 
   `payment_invoice_value` DECIMAL(18,2) DEFAULT 0.00,
-  
-  -- Specific Payment Fields
+
   `payment_tds_income_tax` DECIMAL(18,2) DEFAULT 0.00,
   `payment_tds_gst` DECIMAL(18,2) DEFAULT 0.00,
   `payment_advance` DECIMAL(18,2) DEFAULT 0.00,
@@ -1748,8 +1704,7 @@ CREATE TABLE `voucher_sales_paymentdetails` (
 
   `posting_note` LONGTEXT,
   `terms_conditions` LONGTEXT,
-   advance_references LONGTEXT COMMENT 'JSON array of advance references',
-
+  `advance_references` LONGTEXT COMMENT 'JSON array of advance references',
 
   `invoice_id` BIGINT,
 
@@ -1759,6 +1714,7 @@ CREATE TABLE `voucher_sales_paymentdetails` (
 ) ENGINE=InnoDB
 DEFAULT CHARSET=utf8mb4
 COLLATE=utf8mb4_unicode_ci;
+
 
 --
 -- Table: voucher_payment_single
@@ -1908,7 +1864,7 @@ CREATE TABLE voucher_purchase_supplier_details (
   purchase_voucher_no VARCHAR(100),
   vendor_name VARCHAR(255),
   gstin VARCHAR(50),
-  gst_reference VARCHAR(100),
+  grn_reference VARCHAR(100),
   bill_from LONGTEXT,
   ship_from LONGTEXT,
   input_type VARCHAR(50),
@@ -2402,59 +2358,7 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_outward` (
 -- This table has been deprecated and replaced by inventory_operation_new_grn
 -- The old table used location as ForeignKey, the new table uses location_id as BigInt
 
--- ============================================================================
--- RBAC (Role-Based Access Control) Tables
--- ============================================================================
--- Simplified RBAC implementation with only 2 tables + existing users table
--- Total: 3 tables (users + rbac_roles + rbac_user_roles)
 
--- Table: rbac_roles
-
-CREATE TABLE `rbac_roles` (
-  `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
-  `tenant_id` VARCHAR(36) NOT NULL,
-  `name` VARCHAR(100) NOT NULL,
-  `description` TEXT NULL,
-  `permissions` JSON NOT NULL DEFAULT ('{}'),
-  `is_active` BOOLEAN NOT NULL DEFAULT TRUE,
-  `created_at` DATETIME(6) NULL DEFAULT CURRENT_TIMESTAMP(6),
-  `updated_at` DATETIME(6) NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-  
-  INDEX `idx_rbac_roles_tenant` (`tenant_id`),
-  INDEX `idx_rbac_roles_active` (`is_active`),
-  INDEX `idx_rbac_roles_name` (`name`),
-  
-  UNIQUE KEY `unique_role_per_tenant` (`tenant_id`, `name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-COMMENT='Role definitions with hierarchical permissions for RBAC';
-
--- Table: rbac_user_roles
-CREATE TABLE `rbac_user_roles` (
-  `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
-  `tenant_id` VARCHAR(36) NOT NULL,
-  `user_id` BIGINT NOT NULL,
-  `role_id` BIGINT NOT NULL,
-  `username` VARCHAR(150) NULL COMMENT 'Snapshot of username',
-  `email` VARCHAR(254) NULL COMMENT 'Snapshot of email',
-  `phone` VARCHAR(15) NULL COMMENT 'Snapshot of phone',
-  `assigned_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-  `assigned_by_id` BIGINT NULL,
-  `created_at` DATETIME(6) NULL DEFAULT CURRENT_TIMESTAMP(6),
-  `updated_at` DATETIME(6) NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-  
-  INDEX `idx_rbac_user_roles_tenant` (`tenant_id`),
-  INDEX `idx_rbac_user_roles_user` (`user_id`),
-  INDEX `idx_rbac_user_roles_role` (`role_id`),
-  INDEX `idx_rbac_user_roles_assigned_by` (`assigned_by_id`),
-  INDEX `idx_rbac_user_roles_assigned_at` (`assigned_at`),
-  
-  UNIQUE KEY `unique_user_role_per_tenant` (`user_id`, `role_id`, `tenant_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-COMMENT='User-to-Role assignments for RBAC';
-
--- ============================================================================
--- End of RBAC Tables
--- ============================================================================
 
 CREATE TABLE service_group (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -2476,7 +2380,7 @@ CREATE TABLE service_list (
     service_code VARCHAR(50) NOT NULL,
     service_name VARCHAR(255) NOT NULL,
 
-    service_group_id BIGINT UNSIGNED NOT NULL,
+    service_group VARCHAR(100),
 
     sac_code VARCHAR(20),
     gst_rate DECIMAL(5,2) DEFAULT 0.00,
@@ -2489,16 +2393,126 @@ CREATE TABLE service_list (
     created_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
     updated_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
 
-    CONSTRAINT fk_service_group
-        FOREIGN KEY (service_group_id)
-        REFERENCES service_group(id)
-        ON DELETE RESTRICT
-        ON UPDATE CASCADE,
-
     INDEX idx_tenant (tenant_id),
     INDEX idx_service_code (service_code),
-    INDEX idx_service_group (service_group_id)
+    INDEX idx_service_group (service_group)
 ) ENGINE=InnoDB;
+
+-- Table: extracted_invoices
+CREATE TABLE IF NOT EXISTS `extracted_invoices` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+    `tenant_id` VARCHAR(36) NOT NULL,
+    `created_at` DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
+    `updated_at` DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    
+    -- General Details
+    `voucher_date` VARCHAR(20),
+    `invoice_number` VARCHAR(100),
+    `po_number` VARCHAR(100),
+    `po_date` VARCHAR(20),
+    
+    -- Supplier Details
+    `supplier_name` VARCHAR(255),
+    `bill_from_address` TEXT,
+    `ship_from_address` TEXT,
+    `email` VARCHAR(255),
+    `phone` VARCHAR(100),
+    `sales_person` VARCHAR(255),
+    `gstin` VARCHAR(15),
+    `pan` VARCHAR(10),
+    `msme_number` VARCHAR(50),
+    `payment_terms` VARCHAR(255),
+    `delivery_terms` VARCHAR(255),
+    
+    -- Ledger Details
+    `ledger_amount` VARCHAR(50),
+    `ledger_rate` VARCHAR(50),
+    `ledger_amount_dr_cr` VARCHAR(10),
+    `ledger_narration` TEXT,
+    `description_of_ledger` TEXT,
+    `type_of_tax_payment` VARCHAR(100),
+    
+    -- Item Details
+    `item_code` VARCHAR(100),
+    `item_description` TEXT,
+    `quantity` VARCHAR(50),
+    `quantity_uom` VARCHAR(50),
+    `item_rate` VARCHAR(50),
+    `disc_pct` VARCHAR(50),
+    `item_amount` VARCHAR(50),
+    `marks` VARCHAR(255),
+    `no_of_packages` VARCHAR(50),
+    `freight_charges` VARCHAR(50),
+    
+    -- HSN/SAC
+    `hsn_sac_details` VARCHAR(20),
+    
+    -- GST Details
+    `gst_rate` VARCHAR(50),
+    `igst_amount` VARCHAR(50),
+    `cgst_amount` VARCHAR(50),
+    `sgst_utgst_amount` VARCHAR(50),
+    `cess_rate` VARCHAR(50),
+    `cess_amount` VARCHAR(50),
+    `state_cess_rate` VARCHAR(50),
+    `state_cess_amount` VARCHAR(50),
+    `applicable_for_reverse_charge` VARCHAR(10),
+    `taxable_value` VARCHAR(50),
+    `invoice_value` VARCHAR(50),
+    
+    -- Flexible Storage
+    `additional_fields` JSON,
+    
+    INDEX `idx_extracted_tenant` (`tenant_id`),
+    INDEX `idx_extracted_invoice` (`invoice_number`),
+    INDEX `idx_extracted_created` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 
 ALTER TABLE users
 ADD COLUMN subscription_start_date DATE NULL;
+
+-- Table: rbac_roles
+
+CREATE TABLE IF NOT EXISTS `rbac_roles` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` char(36) NOT NULL,
+  `name` varchar(100) NOT NULL COMMENT 'Role name (e.g., Accountant)',
+  `description` longtext COMMENT 'Role description',
+  `permissions` json NOT NULL COMMENT 'Hierarchical permissions structure (page -> tabs)',
+  `is_active` tinyint(1) NOT NULL DEFAULT '1' COMMENT 'Whether this role is active',
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `rbac_roles_tenant_name_unique` (`tenant_id`,`name`),
+  KEY `rbac_roles_tenant_id_idx` (`tenant_id`),
+  CONSTRAINT `rbac_roles_tenant_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='RBAC Roles';
+
+
+-- Table: rbac_user_roles
+
+CREATE TABLE IF NOT EXISTS `rbac_user_roles` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` char(36) NOT NULL,
+  `user_id` bigint NOT NULL COMMENT 'User assigned to this role',
+  `role_id` bigint NOT NULL COMMENT 'Role assigned to the user',
+  `username` varchar(150) DEFAULT NULL COMMENT 'Snapshot of username',
+  `email` varchar(254) DEFAULT NULL COMMENT 'Snapshot of email',
+  `phone` varchar(15) DEFAULT NULL COMMENT 'Snapshot of phone',
+  `assigned_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'When role was assigned',
+  `assigned_by_id` bigint DEFAULT NULL COMMENT 'Admin who assigned this role',
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `rbac_user_roles_unique` (`user_id`,`role_id`,`tenant_id`),
+  KEY `rbac_user_roles_tenant_id_idx` (`tenant_id`),
+  KEY `rbac_user_roles_user_id_idx` (`user_id`),
+  KEY `rbac_user_roles_role_id_idx` (`role_id`),
+  KEY `rbac_user_roles_assigned_by_id_idx` (`assigned_by_id`),
+  CONSTRAINT `rbac_user_roles_user_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `rbac_user_roles_role_fk` FOREIGN KEY (`role_id`) REFERENCES `rbac_roles` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `rbac_user_roles_assigned_by_fk` FOREIGN KEY (`assigned_by_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `rbac_user_roles_tenant_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='RBAC User Role Assignments';
+

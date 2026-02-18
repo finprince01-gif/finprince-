@@ -9,15 +9,30 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from accounting.models import (
-    MasterLedgerGroup, MasterLedger, MasterVoucherConfig, MasterHierarchyRaw,
-    VoucherConfiguration, AmountTransaction
+    MasterLedgerGroup, MasterLedger, MasterHierarchyRaw,
+    AmountTransaction
 )
+from .models import (
+    MasterVoucherSales,
+    MasterVoucherCreditNote,
+    MasterVoucherReceipts,
+    MasterVoucherPurchases,
+    MasterVoucherDebitNote,
+    MasterVoucherPayments,
+    MasterVoucherExpenses,
+    MasterVoucherJournal,
+    MasterVoucherContra
+)
+# Aliases for backward compatibility or specific use cases
+MasterVoucherConfig = MasterVoucherSales
+VoucherConfiguration = MasterVoucherSales
+
 from accounting.serializers import (
     MasterLedgerGroupSerializer, MasterLedgerSerializer,
-    MasterVoucherConfigSerializer, MasterHierarchyRawSerializer,
+    MasterHierarchyRawSerializer,
     AmountTransactionSerializer
 )
-from .serializers import VoucherConfigurationSerializer
+from .serializers import VoucherConfigurationSerializer, MasterVoucherConfigSerializer
 from . import flow
 
 

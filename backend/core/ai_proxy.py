@@ -67,7 +67,7 @@ class APIKeyManager:
         genai.configure(api_key=api_key)
         try:
             # Try a standard model for health check
-            genai.GenerativeModel('gemini-flash-latest').generate_content("test")
+            genai.GenerativeModel('models/gemini-2.5-flash').generate_content("test")
             self.unhealthy_keys.discard(api_key)
             logger.info(f"Rechecked API key {api_key[:10]}... - now healthy")
         except Exception:
@@ -200,7 +200,6 @@ def process_ai_request(request_data: dict) -> dict:
             return {'error': 'AI service busy (No healthy keys). Please try again later.'}
 
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-2.0-flash-exp')
 
         # Build prompt
         if request_data.get('type') == 'agent':
@@ -328,7 +327,7 @@ def process_ai_request(request_data: dict) -> dict:
         logger.info(f"Processing AI request: user={user_id}, tenant={tenant_id}, hash={request_hash}")
 
         # Execute with retry
-        response_text = execute_with_retry(model, prompt, request_data, api_key)
+        response_text = execute_with_retry(prompt, request_data, api_key)
 
         # Record success
         circuit_breaker.record_success()
@@ -354,25 +353,25 @@ def process_ai_request(request_data: dict) -> dict:
         return {'error': f'AI service busy. Error: {str(e)}'}
 
 
-def execute_with_retry(model, prompt: str, request_data: dict, api_key: str) -> str:
+def execute_with_retry(prompt: str, request_data: dict, api_key: str) -> str:
     """Execute AI request with exponential backoff, retry-after respect, and model fallback"""
     max_attempts = 5
     base_delay = 5
     api_key_used = api_key
     
-    # List of models to try in order of preference
-    # We try flash first (fast/cheap), then pro (better), then legacy
     candidate_models = [
-        'gemini-2.0-flash-exp', 
-        'gemini-2.0-flash-lite', 
-        'gemini-2.0-flash', 
-        'gemini-1.5-flash',
-        'gemini-1.5-flash-latest',
-        'gemini-1.5-pro',
-        'gemini-1.5-pro-latest',
-        'gemini-pro-latest',
-        'gemini-1.5-pro-latest',
-        'gemini-pro-latest',
+        'models/gemini-2.5-flash',
+        'models/gemini-2.5-pro',
+        'models/gemini-2.0-flash',
+        'models/gemini-1.5-flash',
+        'models/gemini-1.5-flash-latest',
+        'models/gemini-1.5-flash-001',
+        'models/gemini-1.5-flash-002',
+        'models/gemini-1.5-pro',
+        'models/gemini-1.5-pro-latest',
+        'models/gemini-pro',
+        'models/gemini-1.0-pro',
+        'models/gemini-2.0-flash-exp',
     ]
 
     for attempt in range(max_attempts):

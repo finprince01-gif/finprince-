@@ -146,88 +146,88 @@ class MasterLedger(BaseModel):
     def __str__(self):
         return f"{self.name} ({self.group})"
 
-class MasterVoucherConfig(BaseModel):
-    name = models.CharField(max_length=255, default='__NUMBERING__')
-    
-    sales_enable_auto = models.BooleanField(default=True)
-    sales_prefix = models.CharField(max_length=50, null=True, blank=True)
-    sales_suffix = models.CharField(max_length=50, null=True, blank=True)
-    sales_next_number = models.PositiveBigIntegerField(default=1)
-    sales_padding = models.IntegerField(default=4)
-    sales_preview = models.CharField(max_length=255, null=True, blank=True)
-    
-    purchase_enable_auto = models.BooleanField(default=True)
-    purchase_prefix = models.CharField(max_length=50, null=True, blank=True)
-    purchase_suffix = models.CharField(max_length=50, null=True, blank=True)
-    purchase_next_number = models.PositiveBigIntegerField(default=1)
-    purchase_padding = models.IntegerField(default=4)
-    purchase_preview = models.CharField(max_length=255, null=True, blank=True)
-
-    class Meta:
-        db_table = 'master_voucher_config'
-
-
-class VoucherConfiguration(BaseModel):
-    """
-    Voucher numbering configuration for all voucher types.
-    Stores configuration for automatic voucher number generation.
-    """
-    VOUCHER_TYPE_CHOICES = [
-        ('sales', 'Sales'),
-        ('credit-note', 'Credit Note'),
-        ('receipts', 'Receipts'),
-        ('purchases', 'Purchases'),
-        ('debit-note', 'Debit Note'),
-        ('payments', 'Payments'),
-        ('expenses', 'Expenses'),
-        ('journal', 'Journal'),
-        ('contra', 'Contra'),
-    ]
-    
-    # Voucher Type and Name
-    voucher_type = models.CharField(max_length=50, choices=VOUCHER_TYPE_CHOICES)
-    voucher_name = models.CharField(max_length=255)
-    
-    # Automatic Numbering Series
-    enable_auto_numbering = models.BooleanField(default=True)
-    prefix = models.CharField(max_length=50, null=True, blank=True)
-    suffix = models.CharField(max_length=50, null=True, blank=True)
-    start_from = models.PositiveBigIntegerField(default=1)
-    current_number = models.PositiveBigIntegerField(default=1)
-    required_digits = models.IntegerField(default=4)
-    
-    # Sales-specific fields
-    include_from_existing_series_id = models.BigIntegerField(null=True, blank=True)
-    
-    # Status
-    is_active = models.BooleanField(default=True)
-    
-    class Meta:
-        db_table = 'voucher_configurations'
-        unique_together = ('tenant_id', 'voucher_type', 'voucher_name')
-        indexes = [
-            models.Index(fields=['tenant_id', 'voucher_type']),
-        ]
-    
-    def __str__(self):
-        return f"{self.voucher_name} ({self.voucher_type}) - {self.tenant_id}"
-    
-    def get_next_voucher_number(self):
-        """Generate the next voucher number based on configuration."""
-        if not self.enable_auto_numbering:
-            return None
-        
-        # Format the number with padding
-        padded_number = str(self.current_number).zfill(self.required_digits)
-        
-        # Construct the voucher number
-        voucher_number = f"{self.prefix or ''}{padded_number}{self.suffix or ''}"
-        
-        # Increment current_number for next use
-        self.current_number += 1
-        self.save(update_fields=['current_number', 'updated_at'])
-        
-        return voucher_number
+# class MasterVoucherConfig(BaseModel):
+#     name = models.CharField(max_length=255, default='__NUMBERING__')
+#     
+#     sales_enable_auto = models.BooleanField(default=True)
+#     sales_prefix = models.CharField(max_length=50, null=True, blank=True)
+#     sales_suffix = models.CharField(max_length=50, null=True, blank=True)
+#     sales_next_number = models.PositiveBigIntegerField(default=1)
+#     sales_padding = models.IntegerField(default=4)
+#     sales_preview = models.CharField(max_length=255, null=True, blank=True)
+#     
+#     purchase_enable_auto = models.BooleanField(default=True)
+#     purchase_prefix = models.CharField(max_length=50, null=True, blank=True)
+#     purchase_suffix = models.CharField(max_length=50, null=True, blank=True)
+#     purchase_next_number = models.PositiveBigIntegerField(default=1)
+#     purchase_padding = models.IntegerField(default=4)
+#     purchase_preview = models.CharField(max_length=255, null=True, blank=True)
+# 
+#     class Meta:
+#         db_table = 'master_voucher_config'
+# 
+# 
+# class VoucherConfiguration(BaseModel):
+#     """
+#     Voucher numbering configuration for all voucher types.
+#     Stores configuration for automatic voucher number generation.
+#     """
+#     VOUCHER_TYPE_CHOICES = [
+#         ('sales', 'Sales'),
+#         ('credit-note', 'Credit Note'),
+#         ('receipts', 'Receipts'),
+#         ('purchases', 'Purchases'),
+#         ('debit-note', 'Debit Note'),
+#         ('payments', 'Payments'),
+#         ('expenses', 'Expenses'),
+#         ('journal', 'Journal'),
+#         ('contra', 'Contra'),
+#     ]
+#     
+#     # Voucher Type and Name
+#     voucher_type = models.CharField(max_length=50, choices=VOUCHER_TYPE_CHOICES)
+#     voucher_name = models.CharField(max_length=255)
+#     
+#     # Automatic Numbering Series
+#     enable_auto_numbering = models.BooleanField(default=True)
+#     prefix = models.CharField(max_length=50, null=True, blank=True)
+#     suffix = models.CharField(max_length=50, null=True, blank=True)
+#     start_from = models.PositiveBigIntegerField(default=1)
+#     current_number = models.PositiveBigIntegerField(default=1)
+#     required_digits = models.IntegerField(default=4)
+#     
+#     # Sales-specific fields
+#     include_from_existing_series_id = models.BigIntegerField(null=True, blank=True)
+#     
+#     # Status
+#     is_active = models.BooleanField(default=True)
+#     
+#     class Meta:
+#         db_table = 'voucher_configurations'
+#         unique_together = ('tenant_id', 'voucher_type', 'voucher_name')
+#         indexes = [
+#             models.Index(fields=['tenant_id', 'voucher_type']),
+#         ]
+#     
+#     def __str__(self):
+#         return f"{self.voucher_name} ({self.voucher_type}) - {self.tenant_id}"
+#     
+#     def get_next_voucher_number(self):
+#         """Generate the next voucher number based on configuration."""
+#         if not self.enable_auto_numbering:
+#             return None
+#         
+#         # Format the number with padding
+#         padded_number = str(self.current_number).zfill(self.required_digits)
+#         
+#         # Construct the voucher number
+#         voucher_number = f"{self.prefix or ''}{padded_number}{self.suffix or ''}"
+#         
+#         # Increment current_number for next use
+#         self.current_number += 1
+#         self.save(update_fields=['current_number', 'updated_at'])
+#         
+#         return voucher_number
 
 
 class Voucher(BaseModel):
@@ -519,249 +519,63 @@ class ExtractedInvoice(BaseModel):
 # SALES / RECEIPT VOUCHER MODELS
 # ============================================================================
 
-class ReceiptVoucherType(BaseModel):
-    """
-    Master list of Receipt Voucher Types.
-    Source data for Voucher Name dropdown in Sales Voucher creation.
-    """
-    name = models.CharField(max_length=255)
-    code = models.CharField(max_length=50)
-    description = models.TextField(null=True, blank=True)
-    is_active = models.BooleanField(default=True)
-    display_order = models.IntegerField(default=0)
-    
-    class Meta:
-        db_table = 'receipt_voucher_types'
-        unique_together = ('tenant_id', 'code')
-        ordering = ['display_order', 'name']
-    
-    def __str__(self):
-        return f"{self.name} ({self.code})"
+# ============================================================================
+# SALES / RECEIPT VOUCHER MODELS
+# ============================================================================
+
+# Use the models that match the schema.sql (imported from models_voucher_sales.py)
+# ALIASES TO FIX BACKEND ERROR: Mapping Legacy Code to New Schema
+from .models_voucher_sales import (
+    VoucherSalesInvoiceDetails as SalesVoucher, # Alias SalesVoucher to VoucherSalesInvoiceDetails
+    VoucherSalesItems as SalesVoucherItem, # Alias SalesVoucherItem to VoucherSalesItems
+    VoucherSalesDispatchDetails,
+    VoucherSalesEwayBill,
+    VoucherSalesPaymentDetails
+)
+# COMMENTED OUT LEGACY MODELS TO PREVENT TABLE NOT FOUND ERRORS
+# class ReceiptVoucherType(BaseModel): ... (Already commented above aliasing)
+# class SalesVoucher(BaseModel): ...
+# class SalesVoucherItem(BaseModel): ...
+# class SalesVoucherDocument(BaseModel): ... (Not present in schema as separate table)
+
+# Note: The following models are preserved but might need updates if they rely on the above.
+# SalesInvoice (Phase 1) - lines 771+ are still there.
+
+# class ReceiptVoucherType(BaseModel):
+#     """
+#     Master list of Receipt Voucher Types.
+#     Source data for Voucher Name dropdown in Sales Voucher creation.
+#     """
+#     name = models.CharField(max_length=255)
+#     code = models.CharField(max_length=50)
+#     description = models.TextField(null=True, blank=True)
+#     is_active = models.BooleanField(default=True)
+#     display_order = models.IntegerField(default=0)
+#     
+#     class Meta:
+#         db_table = 'receipt_voucher_types'
+#         unique_together = ('tenant_id', 'code')
+#         ordering = ['display_order', 'name']
+#     
+#     def __str__(self):
+#         return f"{self.name} ({self.code})"
 
 
-class SalesVoucher(BaseModel):
-    """
-    Sales/Receipt Voucher with strict validation rules.
-    Implements multi-step form workflow with mandatory validations.
-    """
-    TAX_TYPE_CHOICES = [
-        ('within_state', 'Within State'),
-        ('other_state', 'Other State'),
-        ('export', 'Export'),
-    ]
-    
-    STATUS_CHOICES = [
-        ('draft', 'Draft'),
-        ('completed', 'Completed'),
-        ('cancelled', 'Cancelled'),
-    ]
-    
-    # Header Section - Invoice Details Tab
-    date = models.DateField(help_text="Must be today or past date, no future dates allowed")
-    voucher_type = models.ForeignKey(
-        ReceiptVoucherType, 
-        on_delete=models.PROTECT,
-        help_text="From master list of Receipt Voucher Types"
-    )
-    sales_invoice_number = models.CharField(
-        max_length=50, 
-        help_text="Auto-generated, sequential, read-only"
-    )
-    voucher_name = models.CharField(max_length=100, null=True, blank=True)
-    outward_slip_no = models.CharField(max_length=50, null=True, blank=True)
+# class SalesVoucher(BaseModel):
+#     """
+#     Sales/Receipt Voucher with strict validation rules.
+#     Implements multi-step form workflow with mandatory validations.
+#     """
+#     # ... (Legacy content removed to use Alias)
+#     pass
 
-    customer = models.ForeignKey(
-        MasterLedger, 
-        on_delete=models.PROTECT, 
-        related_name='sales_vouchers',
-        help_text="Customer from Customer Module"
-    )
-    
-    # Address Fields (Auto-fetched from Customer Module)
-    bill_to_address = models.TextField(help_text="Auto-fetched, read-only")
-    bill_to_gstin = models.CharField(max_length=15, null=True, blank=True)
-    bill_to_contact = models.CharField(max_length=255, null=True, blank=True)
-    bill_to_state = models.CharField(max_length=100, null=True, blank=True)
-    bill_to_country = models.CharField(max_length=100, default='India')
-    
-    ship_to_address = models.TextField(help_text="Auto-fetched, editable, does not update customer master")
-    ship_to_state = models.CharField(max_length=100, null=True, blank=True)
-    ship_to_country = models.CharField(max_length=100, default='India')
-    
-    # Tax Type (Auto-determined based on address logic, not manually editable)
-    tax_type = models.CharField(
-        max_length=20, 
-        choices=TAX_TYPE_CHOICES,
-        help_text="Auto-determined: Within State if User State = Bill To State, Other State if different states in India, Export if Bill To Country != India"
-    )
-    
-    # GST-Compliant Fields for GSTR1
-    place_of_supply = models.CharField(
-        max_length=2,
-        null=True,
-        blank=True,
-        help_text="State code (01-38) for Place of Supply as per GST"
-    )
-    reverse_charge = models.CharField(
-        max_length=1,
-        default='N',
-        help_text="Y or N - Reverse charge applicable"
-    )
-    invoice_type = models.CharField(
-        max_length=50,
-        default='Regular',
-        help_text="Regular, SEZ with payment, SEZ without payment, Deemed Export"
-    )
-    export_type = models.CharField(
-        max_length=10,
-        null=True,
-        blank=True,
-        help_text="WPAY (With Payment) or WOPAY (Without Payment) for exports"
-    )
-    port_code = models.CharField(
-        max_length=6,
-        null=True,
-        blank=True,
-        help_text="6-digit port code for exports (e.g., INBLR1)"
-    )
-    shipping_bill_number = models.CharField(
-        max_length=50,
-        null=True,
-        blank=True,
-        help_text="Shipping bill number for exports"
-    )
-    shipping_bill_date = models.DateField(
-        null=True,
-        blank=True,
-        help_text="Shipping bill date for exports"
-    )
-    ecommerce_gstin = models.CharField(
-        max_length=15,
-        null=True,
-        blank=True,
-        help_text="GSTIN of e-commerce operator if applicable"
-    )
-    
-    # Workflow tracking
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
-    current_step = models.IntegerField(default=1, help_text="Track which tab user is on (1-5)")
-    
-    # Totals (calculated from items)
-    total_taxable_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    total_cgst = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    total_sgst = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    total_igst = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    grand_total = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    
-    # Additional fields for other tabs (to be populated in later steps)
-    payment_details = models.JSONField(null=True, blank=True, help_text="Payment Details tab data")
-    dispatch_details = models.JSONField(null=True, blank=True, help_text="Dispatch Details tab data")
-    einvoice_details = models.JSONField(null=True, blank=True, help_text="E-Invoice & E-way Bill Details tab data")
-    
-    class Meta:
-        db_table = 'sales_vouchers'
-        unique_together = ('tenant_id', 'sales_invoice_number')
-        ordering = ['-date', '-created_at']
-        indexes = [
-            models.Index(fields=['tenant_id', 'date']),
-            models.Index(fields=['sales_invoice_number']),
-            models.Index(fields=['customer', 'tenant_id']),
-        ]
-    
-    def __str__(self):
-        return f"{self.sales_invoice_number} - {self.customer.name}"
-    
-    def clean(self):
-        """Validate that date is not in future"""
-        from django.core.exceptions import ValidationError
-        from django.utils import timezone
-        
-        if self.date and self.date > timezone.now().date():
-            raise ValidationError({
-                'date': 'Future dates are not allowed. Date must be today or a past date.'
-            })
+# class SalesVoucherItem(BaseModel):
+#     # ... (Legacy content removed to use Alias)
+#     pass
 
-
-class SalesVoucherItem(BaseModel):
-    """
-    Line items for sales voucher (Items & Tax Details tab).
-    Stores item details with tax calculations.
-    """
-    sales_voucher = models.ForeignKey(
-        SalesVoucher, 
-        on_delete=models.CASCADE, 
-        related_name='items'
-    )
-    
-    # Item Details
-    item_name = models.CharField(max_length=255)
-    hsn_code = models.CharField(max_length=20, null=True, blank=True)
-    quantity = models.DecimalField(max_digits=15, decimal_places=3)
-    unit = models.CharField(max_length=50, null=True, blank=True)
-    rate = models.DecimalField(max_digits=15, decimal_places=2)
-    
-    # Tax Calculations
-    taxable_amount = models.DecimalField(max_digits=15, decimal_places=2)
-    cgst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    cgst_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    sgst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    sgst_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    igst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    igst_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    total_amount = models.DecimalField(max_digits=15, decimal_places=2)
-    
-    # Line item order
-    line_number = models.IntegerField(default=1)
-    
-    class Meta:
-        db_table = 'sales_voucher_items'
-        ordering = ['line_number']
-        indexes = [
-            models.Index(fields=['sales_voucher', 'tenant_id']),
-        ]
-    
-    def __str__(self):
-        return f"{self.item_name} - {self.quantity} x {self.rate}"
-
-
-class SalesVoucherDocument(BaseModel):
-    """
-    Supporting documents for sales voucher.
-    Allowed formats: JPG, JPEG, PDF only.
-    Multiple uploads allowed.
-    """
-    ALLOWED_FILE_TYPES = ['jpg', 'jpeg', 'pdf']
-    
-    sales_voucher = models.ForeignKey(
-        SalesVoucher, 
-        on_delete=models.CASCADE, 
-        related_name='documents'
-    )
-    
-    file_name = models.CharField(max_length=255)
-    file_path = models.CharField(max_length=500)
-    file_type = models.CharField(max_length=10, help_text="jpg, jpeg, or pdf only")
-    file_size = models.IntegerField(help_text="File size in bytes")
-    uploaded_at = models.DateTimeField(auto_now_add=True)
-    
-    class Meta:
-        db_table = 'sales_voucher_documents'
-        ordering = ['uploaded_at']
-        indexes = [
-            models.Index(fields=['sales_voucher', 'tenant_id']),
-        ]
-    
-    def __str__(self):
-        return f"{self.file_name} ({self.file_type})"
-    
-    def clean(self):
-        """Validate file type"""
-        from django.core.exceptions import ValidationError
-        
-        if self.file_type and self.file_type.lower() not in self.ALLOWED_FILE_TYPES:
-            raise ValidationError({
-                'file_type': f'Only {", ".join(self.ALLOWED_FILE_TYPES).upper()} files are allowed.'
-            })
+# class SalesVoucherDocument(BaseModel):
+#     # ... (Legacy content removed to use Alias)
+#     pass
 
 
 # ============================================================================
@@ -796,7 +610,7 @@ class SalesInvoice(BaseModel):
     
     # Voucher Type
     voucher_type = models.ForeignKey(
-        ReceiptVoucherType,
+        'masters.MasterVoucherReceipts',
         on_delete=models.PROTECT,
         related_name='sales_invoices',
         help_text="Sales voucher type"
@@ -888,254 +702,3 @@ class SalesInvoice(BaseModel):
             raise ValidationError({
                 'invoice_date': 'Future dates not allowed'
             })
-"""
-Django Models for Separate Voucher Master Tables
-Each voucher type has its own dedicated table
-"""
-from django.db import models
-
-
-class MasterVoucherSales(models.Model):
-    """Sales Voucher Master"""
-    tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
-    voucher_name = models.CharField(max_length=100, help_text="Voucher name")
-    prefix = models.CharField(max_length=20, blank=True, null=True, help_text="Prefix for voucher number")
-    suffix = models.CharField(max_length=20, blank=True, null=True, help_text="Suffix for voucher number")
-    start_from = models.IntegerField(default=1, help_text="Starting number")
-    current_number = models.IntegerField(default=1, help_text="Current number in sequence")
-    required_digits = models.IntegerField(default=4, help_text="Number of digits for padding")
-    enable_auto_numbering = models.BooleanField(default=True, help_text="Enable automatic numbering")
-    include_from_existing_series = models.CharField(max_length=200, blank=True, null=True, help_text="Include from existing series")
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.CharField(max_length=100, blank=True, null=True)
-    updated_by = models.CharField(max_length=100, blank=True, null=True)
-
-    class Meta:
-        db_table = 'master_voucher_sales'
-        verbose_name = 'Sales Voucher Master'
-        verbose_name_plural = 'Sales Voucher Masters'
-        indexes = [
-            models.Index(fields=['tenant_id']),
-            models.Index(fields=['voucher_name']),
-        ]
-
-
-class MasterVoucherCreditNote(models.Model):
-    """Credit Note Voucher Master"""
-    tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
-    voucher_name = models.CharField(max_length=100, help_text="Voucher name")
-    prefix = models.CharField(max_length=20, blank=True, null=True, help_text="Prefix for voucher number")
-    suffix = models.CharField(max_length=20, blank=True, null=True, help_text="Suffix for voucher number")
-    start_from = models.IntegerField(default=1, help_text="Starting number")
-    current_number = models.IntegerField(default=1, help_text="Current number in sequence")
-    required_digits = models.IntegerField(default=4, help_text="Number of digits for padding")
-    enable_auto_numbering = models.BooleanField(default=True, help_text="Enable automatic numbering")
-    include_from_existing_series = models.CharField(max_length=200, blank=True, null=True, help_text="Include from existing series")
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.CharField(max_length=100, blank=True, null=True)
-    updated_by = models.CharField(max_length=100, blank=True, null=True)
-
-    class Meta:
-        db_table = 'master_voucher_creditnote'
-        verbose_name = 'Credit Note Voucher Master'
-        verbose_name_plural = 'Credit Note Voucher Masters'
-        indexes = [
-            models.Index(fields=['tenant_id']),
-            models.Index(fields=['voucher_name']),
-        ]
-
-
-class MasterVoucherReceipts(models.Model):
-    """Receipts Voucher Master"""
-    tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
-    voucher_name = models.CharField(max_length=100, help_text="Voucher name")
-    prefix = models.CharField(max_length=20, blank=True, null=True, help_text="Prefix for voucher number")
-    suffix = models.CharField(max_length=20, blank=True, null=True, help_text="Suffix for voucher number")
-    start_from = models.IntegerField(default=1, help_text="Starting number")
-    current_number = models.IntegerField(default=1, help_text="Current number in sequence")
-    required_digits = models.IntegerField(default=4, help_text="Number of digits for padding")
-    enable_auto_numbering = models.BooleanField(default=True, help_text="Enable automatic numbering")
-    include_from_existing_series = models.CharField(max_length=200, blank=True, null=True, help_text="Include from existing series")
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.CharField(max_length=100, blank=True, null=True)
-    updated_by = models.CharField(max_length=100, blank=True, null=True)
-
-    class Meta:
-        db_table = 'master_voucher_receipts'
-        verbose_name = 'Receipts Voucher Master'
-        verbose_name_plural = 'Receipts Voucher Masters'
-        indexes = [
-            models.Index(fields=['tenant_id']),
-            models.Index(fields=['voucher_name']),
-        ]
-
-
-class MasterVoucherPurchases(models.Model):
-    """Purchases Voucher Master"""
-    tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
-    voucher_name = models.CharField(max_length=100, help_text="Voucher name")
-    prefix = models.CharField(max_length=20, blank=True, null=True, help_text="Prefix for voucher number")
-    suffix = models.CharField(max_length=20, blank=True, null=True, help_text="Suffix for voucher number")
-    start_from = models.IntegerField(default=1, help_text="Starting number")
-    current_number = models.IntegerField(default=1, help_text="Current number in sequence")
-    required_digits = models.IntegerField(default=4, help_text="Number of digits for padding")
-    enable_auto_numbering = models.BooleanField(default=True, help_text="Enable automatic numbering")
-    include_from_existing_series = models.CharField(max_length=200, blank=True, null=True, help_text="Include from existing series")
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.CharField(max_length=100, blank=True, null=True)
-    updated_by = models.CharField(max_length=100, blank=True, null=True)
-
-    class Meta:
-        db_table = 'master_voucher_purchases'
-        verbose_name = 'Purchases Voucher Master'
-        verbose_name_plural = 'Purchases Voucher Masters'
-        indexes = [
-            models.Index(fields=['tenant_id']),
-            models.Index(fields=['voucher_name']),
-        ]
-
-
-class MasterVoucherDebitNote(models.Model):
-    """Debit Note Voucher Master"""
-    tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
-    voucher_name = models.CharField(max_length=100, help_text="Voucher name")
-    prefix = models.CharField(max_length=20, blank=True, null=True, help_text="Prefix for voucher number")
-    suffix = models.CharField(max_length=20, blank=True, null=True, help_text="Suffix for voucher number")
-    start_from = models.IntegerField(default=1, help_text="Starting number")
-    current_number = models.IntegerField(default=1, help_text="Current number in sequence")
-    required_digits = models.IntegerField(default=4, help_text="Number of digits for padding")
-    enable_auto_numbering = models.BooleanField(default=True, help_text="Enable automatic numbering")
-    include_from_existing_series = models.CharField(max_length=200, blank=True, null=True, help_text="Include from existing series")
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.CharField(max_length=100, blank=True, null=True)
-    updated_by = models.CharField(max_length=100, blank=True, null=True)
-
-    class Meta:
-        db_table = 'master_voucher_debitnote'
-        verbose_name = 'Debit Note Voucher Master'
-        verbose_name_plural = 'Debit Note Voucher Masters'
-        indexes = [
-            models.Index(fields=['tenant_id']),
-            models.Index(fields=['voucher_name']),
-        ]
-
-
-class MasterVoucherPayments(models.Model):
-    """Payments Voucher Master"""
-    tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
-    voucher_name = models.CharField(max_length=100, help_text="Voucher name")
-    prefix = models.CharField(max_length=20, blank=True, null=True, help_text="Prefix for voucher number")
-    suffix = models.CharField(max_length=20, blank=True, null=True, help_text="Suffix for voucher number")
-    start_from = models.IntegerField(default=1, help_text="Starting number")
-    current_number = models.IntegerField(default=1, help_text="Current number in sequence")
-    required_digits = models.IntegerField(default=4, help_text="Number of digits for padding")
-    enable_auto_numbering = models.BooleanField(default=True, help_text="Enable automatic numbering")
-    include_from_existing_series = models.CharField(max_length=200, blank=True, null=True, help_text="Include from existing series")
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.CharField(max_length=100, blank=True, null=True)
-    updated_by = models.CharField(max_length=100, blank=True, null=True)
-
-    class Meta:
-        db_table = 'master_voucher_payments'
-        verbose_name = 'Payments Voucher Master'
-        verbose_name_plural = 'Payments Voucher Masters'
-        indexes = [
-            models.Index(fields=['tenant_id']),
-            models.Index(fields=['voucher_name']),
-        ]
-
-
-class MasterVoucherExpenses(models.Model):
-    """Expenses Voucher Master"""
-    tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
-    voucher_name = models.CharField(max_length=100, help_text="Voucher name")
-    prefix = models.CharField(max_length=20, blank=True, null=True, help_text="Prefix for voucher number")
-    suffix = models.CharField(max_length=20, blank=True, null=True, help_text="Suffix for voucher number")
-    start_from = models.IntegerField(default=1, help_text="Starting number")
-    current_number = models.IntegerField(default=1, help_text="Current number in sequence")
-    required_digits = models.IntegerField(default=4, help_text="Number of digits for padding")
-    enable_auto_numbering = models.BooleanField(default=True, help_text="Enable automatic numbering")
-    include_from_existing_series = models.CharField(max_length=200, blank=True, null=True, help_text="Include from existing series")
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.CharField(max_length=100, blank=True, null=True)
-    updated_by = models.CharField(max_length=100, blank=True, null=True)
-
-    class Meta:
-        db_table = 'master_voucher_expenses'
-        verbose_name = 'Expenses Voucher Master'
-        verbose_name_plural = 'Expenses Voucher Masters'
-        indexes = [
-            models.Index(fields=['tenant_id']),
-            models.Index(fields=['voucher_name']),
-        ]
-
-
-class MasterVoucherJournal(models.Model):
-    """Journal Voucher Master"""
-    tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
-    voucher_name = models.CharField(max_length=100, help_text="Voucher name")
-    prefix = models.CharField(max_length=20, blank=True, null=True, help_text="Prefix for voucher number")
-    suffix = models.CharField(max_length=20, blank=True, null=True, help_text="Suffix for voucher number")
-    start_from = models.IntegerField(default=1, help_text="Starting number")
-    current_number = models.IntegerField(default=1, help_text="Current number in sequence")
-    required_digits = models.IntegerField(default=4, help_text="Number of digits for padding")
-    enable_auto_numbering = models.BooleanField(default=True, help_text="Enable automatic numbering")
-    include_from_existing_series = models.CharField(max_length=200, blank=True, null=True, help_text="Include from existing series")
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.CharField(max_length=100, blank=True, null=True)
-    updated_by = models.CharField(max_length=100, blank=True, null=True)
-
-    class Meta:
-        db_table = 'master_voucher_journal'
-        verbose_name = 'Journal Voucher Master'
-        verbose_name_plural = 'Journal Voucher Masters'
-        indexes = [
-            models.Index(fields=['tenant_id']),
-            models.Index(fields=['voucher_name']),
-        ]
-
-
-class MasterVoucherContra(models.Model):
-    """Contra Voucher Master"""
-    tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
-    voucher_name = models.CharField(max_length=100, help_text="Voucher name")
-    prefix = models.CharField(max_length=20, blank=True, null=True, help_text="Prefix for voucher number")
-    suffix = models.CharField(max_length=20, blank=True, null=True, help_text="Suffix for voucher number")
-    start_from = models.IntegerField(default=1, help_text="Starting number")
-    current_number = models.IntegerField(default=1, help_text="Current number in sequence")
-    required_digits = models.IntegerField(default=4, help_text="Number of digits for padding")
-    enable_auto_numbering = models.BooleanField(default=True, help_text="Enable automatic numbering")
-    include_from_existing_series = models.CharField(max_length=200, blank=True, null=True, help_text="Include from existing series")
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.CharField(max_length=100, blank=True, null=True)
-    updated_by = models.CharField(max_length=100, blank=True, null=True)
-
-    class Meta:
-        db_table = 'master_voucher_contra'
-        verbose_name = 'Contra Voucher Master'
-        verbose_name_plural = 'Contra Voucher Masters'
-        indexes = [
-            models.Index(fields=['tenant_id']),
-            models.Index(fields=['voucher_name']),
-        ]
-
-from .models_voucher_sales import *
-from .models_voucher_payment import *

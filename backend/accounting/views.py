@@ -4,11 +4,11 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from core.utils import TenantQuerysetMixin, IsTenantMember
 from .models import (
-    MasterLedgerGroup, MasterLedger, MasterVoucherConfig, MasterHierarchyRaw,
+    MasterLedgerGroup, MasterLedger, MasterHierarchyRaw,
     Voucher, JournalEntry
 )
 from .serializers import (
-    MasterLedgerGroupSerializer, MasterLedgerSerializer, MasterVoucherConfigSerializer,
+    MasterLedgerGroupSerializer, MasterLedgerSerializer,
     MasterHierarchyRawSerializer, VoucherSerializer, JournalEntrySerializer
 )
 
@@ -140,11 +140,7 @@ class MasterLedgerViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
             raise
 
 
-class MasterVoucherConfigViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
-    queryset = MasterVoucherConfig.objects.all()
-    serializer_class = MasterVoucherConfigSerializer
-    permission_classes = [IsAuthenticated, IsTenantMember]
-    required_permission = 'MASTERS_VOUCHER_CONFIG'
+# MasterVoucherConfigViewSet removed (deprecated)
 
 
 class MasterHierarchyRawViewSet(viewsets.ReadOnlyModelViewSet):

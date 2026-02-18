@@ -11,8 +11,8 @@ from .api import (
     CustomerMastersSalesOrderViewSet,
     CustomerMasterCustomerViewSet,
     CustomerTransactionViewSet,
-    CustomerSalesQuotationViewSet,
-    CustomerSalesOrderViewSet,
+    # CustomerSalesQuotationViewSet,
+    # CustomerSalesOrderViewSet,
     CustomerMasterLongTermContractViewSet,
     CustomerTransactionSalesQuotationGeneralViewSet,
     CustomerTransactionSalesQuotationSpecificViewSet,
@@ -27,8 +27,8 @@ router.register(r'sales-quotation-series', CustomerMastersSalesQuotationViewSet,
 router.register(r'sales-order-series', CustomerMastersSalesOrderViewSet, basename='sales-order-series')
 router.register(r'customer-master', CustomerMasterCustomerViewSet, basename='customer-master')
 router.register(r'transactions', CustomerTransactionViewSet, basename='customer-transaction')
-router.register(r'quotations', CustomerSalesQuotationViewSet, basename='sales-quotation')
-router.register(r'orders', CustomerSalesOrderViewSet, basename='sales-order')
+# router.register(r'quotations', CustomerSalesQuotationViewSet, basename='sales-quotation')
+# router.register(r'orders', CustomerSalesOrderViewSet, basename='sales-order')
 router.register(r'long-term-contracts', CustomerMasterLongTermContractViewSet, basename='long-term-contract')
 router.register(r'sales-quotations-general', CustomerTransactionSalesQuotationGeneralViewSet, basename='sales-quotation-general')
 router.register(r'sales-quotations-specific', CustomerTransactionSalesQuotationSpecificViewSet, basename='sales-quotation-specific')

@@ -364,14 +364,17 @@ class AIReportExcelView(BaseExcelView):
         if not query:
             return Response({'error': 'Query is required'}, status=400)
             
-        api_key = os.environ.get("GEMINI_API_KEY")
-        if not api_key or not genai:
-             return Response({'error': 'AI service not configured'}, status=503)
+        if not genai:
+             return Response({'error': 'AI service not available'}, status=503)
 
         try:
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            from .ai_proxy import execute_with_retry, api_key_manager
             
+            # Get healthy key from manager
+            api_key = api_key_manager.get_healthy_key()
+            if not api_key:
+                 return Response({'error': 'AI service busy (No healthy keys)'}, status=503)
+
             # 1. Ask AI to interpret the query into parameters
             current_date = datetime.date.today().isoformat()
             prompt = f"""
@@ -388,8 +391,8 @@ class AIReportExcelView(BaseExcelView):
             Return ONLY the JSON.
             """
             
-            response = model.generate_content(prompt)
-            text = response.text.replace('```json', '').replace('```', '').strip()
+            text = execute_with_retry(prompt, {}, api_key)
+            text = text.replace('```json', '').replace('```', '').strip()
             params = json.loads(text)
             
             # 2. Map params to request query params

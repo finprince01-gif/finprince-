@@ -18,6 +18,13 @@
  * 3. Refresh Logic: Pauses requests, refreshes token, retries queue
  */
 
+import {
+    getAccessToken,
+    getRefreshToken,
+    setTokens,
+    clearTokens
+} from './authService';
+
 // Environment configuration
 // In development, use empty string to let Vite proxy handle requests
 // In production, use the full API URL from environment variable
@@ -33,8 +40,6 @@ class HttpClient {
     private baseURL = API_BASE_URL;
     private isRefreshing = false;
     private failedQueue: QueueItem[] = [];
-    private accessToken: string | null = null;
-    private refreshToken: string | null = null;
 
     /**
      * PROCESS QUEUE
@@ -53,18 +58,68 @@ class HttpClient {
     }
 
     /**
-     * Set tokens in memory
+     * Set tokens in memory (Delegates to authService)
      */
     public setTokens(access: string, refresh: string) {
-        this.accessToken = access;
-        this.refreshToken = refresh;
+        setTokens(access, refresh);
     }
 
     /**
      * Get access token (for auth checks)
      */
     public getToken(): string | null {
-        return this.accessToken;
+        return getAccessToken();
+    }
+
+    /**
+     * PERFORM REFRESH
+     * Refreshes the access token and processes the queue.
+     */
+    private async performRefresh(): Promise<void> {
+        // Guard: If already refreshing, let the current process handle it
+        // (Though the caller usually checks this, double safety is good)
+        if (this.isRefreshing) {
+            return;
+        }
+
+        this.isRefreshing = true;
+
+        try {
+            const storedRefresh = getRefreshToken();
+            if (!storedRefresh) {
+                // If no refresh token, we cannot restore session.
+                // In this case, we just stop. The caller (request) will fail naturally or be rejected.
+                throw new Error('No refresh token provided');
+            }
+
+            const refreshResponse = await fetch(`${this.baseURL}/api/auth/refresh/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ refresh: storedRefresh })
+            });
+
+            if (!refreshResponse.ok) {
+                throw new Error('Refresh failed');
+            }
+
+            const data = await refreshResponse.json();
+
+            if (data.access) {
+                const newRefresh = data.refresh || storedRefresh;
+                setTokens(data.access, newRefresh);
+                this.processQueue(null);
+            } else {
+                throw new Error('No access token in refresh response');
+            }
+
+        } catch (error) {
+            console.error('❌ Session expired. Logging out.');
+            this.processQueue(error as Error);
+            this.logout();
+            throw error;
+        } finally {
+            this.isRefreshing = false;
+        }
     }
 
     /**
@@ -74,14 +129,33 @@ class HttpClient {
     private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
         const url = `${this.baseURL}${endpoint}`;
 
+        // 0. Pre-Emptive Refresh (Prevent initial 401s)
+        // If we have no access token but do have a refresh token, restore session BEFORE requesting.
+        const initialToken = getAccessToken();
+        const storedRefresh = getRefreshToken();
+
+        if (!initialToken && storedRefresh && !endpoint.includes('/auth/')) {
+            if (!this.isRefreshing) {
+                this.performRefresh().catch(() => { });
+            }
+
+            return new Promise((resolve, reject) => {
+                this.failedQueue.push({
+                    resolve: () => resolve(this.request(endpoint, options)),
+                    reject
+                });
+            });
+        }
+
         // 1. Prepare Headers (Inject Bearer Token)
         const headers = new Headers(options.headers || {});
         if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
             headers.set('Content-Type', 'application/json');
         }
 
-        if (this.accessToken) {
-            headers.set('Authorization', `Bearer ${this.accessToken}`);
+        const token = getAccessToken();
+        if (token) {
+            headers.set('Authorization', `Bearer ${token}`);
         }
 
         try {
@@ -89,13 +163,17 @@ class HttpClient {
             const response = await fetch(url, {
                 ...options,
                 headers,
-                credentials: 'include', // Include cookies (needed for refresh endpoint if using cookies)
+                // credentials: 'include', // REMOVED: Do not mix cookie auth with header auth
             });
 
             // 3. Handle Unauthorized (401)
             if (response.status === 401) {
                 // Avoid infinite loops: Don't refresh if the failed request WAS a refresh attempt
                 if (endpoint.includes('/auth/refresh') || endpoint.includes('/auth/login')) {
+                    // Try to clear tokens if refresh failed - explicitly requested requirement: "If refresh fails: Clear tokens, Redirect to /login"
+                    if (endpoint.includes('/auth/refresh')) {
+                        this.logout();
+                    }
                     throw new Error('Authentication failed');
                 }
 
@@ -110,49 +188,13 @@ class HttpClient {
                 }
 
                 // START REFRESH FLOW
-                this.isRefreshing = true;
-
+                // Logic extracted to performRefresh()
                 try {
-
-                    // Call backend refresh endpoint
-                    // The backend reads the refresh token from body (or cookies as fallback)
-                    if (!this.refreshToken) {
-                        throw new Error('No refresh token available');
-                    }
-
-                    const refreshResponse = await fetch(`${this.baseURL}/api/auth/refresh/`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ refresh: this.refreshToken })
-                    });
-
-                    if (!refreshResponse.ok) {
-                        throw new Error('Refresh failed');
-                    }
-
-                    const data = await refreshResponse.json();
-
-                    // 4. Update Token Storage
-                    if (data.access) {
-                        this.accessToken = data.access;
-                    }
-                    if (data.refresh) {
-                        this.refreshToken = data.refresh;
-                    }
-
-                    // 5. Retry Queued Requests
-                    this.processQueue(null);
-
-                    // 6. Retry Original Request immediately
+                    await this.performRefresh();
+                    // Retry Original Request
                     return this.request<T>(endpoint, options);
-
                 } catch (refreshError) {
-                    console.error('❌ Session expired. Logging out.');
-                    this.processQueue(refreshError as Error);
-                    this.logout();
                     throw refreshError;
-                } finally {
-                    this.isRefreshing = false;
                 }
             }
 
@@ -273,10 +315,7 @@ class HttpClient {
     }
 
     public clearAuthData() {
-        this.accessToken = null;
-        this.refreshToken = null;
-        localStorage.removeItem('token'); // Clean up old storage if present
-        localStorage.removeItem('refreshToken');
+        clearTokens();
         localStorage.removeItem('tenantId');
         localStorage.removeItem('companyName');
     }

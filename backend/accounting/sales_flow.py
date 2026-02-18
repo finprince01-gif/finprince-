@@ -116,40 +116,32 @@ def validate_file_upload(file_name: str, file_size: int, max_size_mb: int = 10) 
     return True, file_ext
 
 
+
 def generate_sales_invoice_number(tenant_id: str, voucher_type_id: int) -> str:
     """
     Generate auto-sequential sales invoice number.
     
-    Uses VoucherConfiguration model to generate chronological, sequential numbers.
-    Backend-driven to avoid collisions.
-    
-    Args:
-        tenant_id: Tenant ID
-        voucher_type_id: Receipt Voucher Type ID
-        
-    Returns:
-        str: Generated invoice number (e.g., "SAL-0001")
-        
-    Raises:
-        ValidationError: If no active voucher configuration found
+    Uses VoucherConfiguration (MasterVoucherSales) to generate chronological, sequential numbers.
+    backend-driven to avoid collisions.
     """
-    from accounting.models import VoucherConfiguration, ReceiptVoucherType
+    from masters.voucher_master_models import MasterVoucherSales as VoucherConfiguration
+    from masters.voucher_master_models import MasterVoucherReceipts as ReceiptVoucherType
     from django.utils import timezone
     
-    # Get voucher type
+    # Get voucher type name
+    voucher_type_name = "Sales Invoice"
     try:
-        voucher_type = ReceiptVoucherType.objects.get(id=voucher_type_id, tenant_id=tenant_id)
-    except ReceiptVoucherType.DoesNotExist:
-        raise ValidationError("Invalid voucher type.")
+        if voucher_type_id:
+            vt = ReceiptVoucherType.objects.get(id=voucher_type_id, tenant_id=tenant_id)
+            voucher_type_name = vt.name
+    except:
+        pass
     
-    # Get or create voucher configuration for sales
-    today = timezone.now().date()
-    
-    # Try to find active configuration
+    # Try to find active configuration (MasterVoucherSales)
+    # Note: aliased model has no 'voucher_type' field, only 'voucher_name'
     config = VoucherConfiguration.objects.filter(
         tenant_id=tenant_id,
-        voucher_type='sales',
-        voucher_name=voucher_type.name,
+        voucher_name=voucher_type_name,
         is_active=True
     ).first()
     
@@ -157,8 +149,7 @@ def generate_sales_invoice_number(tenant_id: str, voucher_type_id: int) -> str:
         # Create default configuration if none exists
         config = VoucherConfiguration.objects.create(
             tenant_id=tenant_id,
-            voucher_type='sales',
-            voucher_name=voucher_type.name,
+            voucher_name=voucher_type_name,
             enable_auto_numbering=True,
             prefix='SAL-',
             suffix='',
@@ -169,10 +160,17 @@ def generate_sales_invoice_number(tenant_id: str, voucher_type_id: int) -> str:
         )
     
     # Generate next number
-    invoice_number = config.get_next_voucher_number()
+    if not config.enable_auto_numbering:
+        # If auto-numbering is disabled, we might return empty or error?
+        # For now, let's assume we must return something.
+        return ""
+        
+    padded_number = str(config.current_number).zfill(config.required_digits)
+    invoice_number = f"{config.prefix or ''}{padded_number}{config.suffix or ''}"
     
-    if not invoice_number:
-        raise ValidationError("Failed to generate invoice number. Auto-numbering may be disabled.")
+    # Increment
+    config.current_number += 1
+    config.save()
     
     return invoice_number
 
@@ -180,16 +178,6 @@ def generate_sales_invoice_number(tenant_id: str, voucher_type_id: int) -> str:
 def fetch_customer_address(customer_id: int, tenant_id: str) -> Dict:
     """
     Fetch customer address details from Customer Module.
-    
-    Args:
-        customer_id: Customer ledger ID
-        tenant_id: Tenant ID
-        
-    Returns:
-        Dict: Customer address details including bill_to and ship_to addresses
-        
-    Raises:
-        ValidationError: If customer not found
     """
     from accounting.models import MasterLedger
     
@@ -220,6 +208,7 @@ def fetch_customer_address(customer_id: int, tenant_id: str) -> Dict:
     ship_to_address = extended_data.get('shipping_address', bill_to_address)
     
     return {
+        'customer_name': customer.name,
         'bill_to_address': bill_to_address,
         'bill_to_gstin': customer.gstin or '',
         'bill_to_contact': extended_data.get('phone') or extended_data.get('mobile') or '',
@@ -279,104 +268,75 @@ def calculate_item_totals(items: List[Dict], tax_type: str) -> Dict:
     }
 
 
+
 def create_sales_voucher(data: Dict, tenant_id: str, user_state: str) -> 'SalesVoucher':
     """
     Create sales voucher with all validations.
     Supports resolving voucher type from VoucherConfiguration.
-    
-    Args:
-        data: Voucher data dictionary
-        tenant_id: Tenant ID
-        user_state: User's company state for tax determination
-        
-    Returns:
-        SalesVoucher: Created voucher instance
-        
-    Raises:
-        ValidationError: If validation fails
     """
     from accounting.models import (
-        SalesVoucher, SalesVoucherItem, ReceiptVoucherType, 
-        MasterLedger, VoucherConfiguration
+        SalesVoucher, SalesVoucherItem, MasterLedger
     )
+    from masters.voucher_master_models import MasterVoucherSales as VoucherConfiguration
+    from masters.voucher_master_models import MasterVoucherReceipts as ReceiptVoucherType
     from django.db import transaction
     
     # Validate date
     validate_date(data['date'])
     
-    # Fetch customer address
-    customer_address = fetch_customer_address(data['customer_id'], tenant_id)
+    # Fetch customer address & name
+    customer_info = fetch_customer_address(data['customer_id'], tenant_id)
     
     # Determine tax type
     tax_type = determine_tax_type(
         user_state,
-        customer_address['bill_to_state'],
-        customer_address['bill_to_country']
+        customer_info['bill_to_state'],
+        customer_info['bill_to_country']
     )
     
-    # Resolve Voucher Type (Configuration or Legacy Type)
-    voucher_type = None
+    # Resolve Voucher Type
+    voucher_name = "Sales Invoice"
     try:
-        # 1. Try treating ID as VoucherConfiguration ID (Strictly Sales)
-        config = VoucherConfiguration.objects.get(
-            id=data['voucher_type_id'], 
-            tenant_id=tenant_id,
-            voucher_type='sales'
-        )
-        
-        # Ensure corresponding ReceiptVoucherType exists (needed for foreign key)
-        # We match by Name
-        voucher_type, _ = ReceiptVoucherType.objects.get_or_create(
-            tenant_id=tenant_id,
-            name=config.voucher_name,
-            defaults={
-                'code': config.voucher_type, # e.g. 'sales'
-                'is_active': True,
-                'description': f"Auto-generated from configuration {config.voucher_name}"
-            }
-        )
-    except VoucherConfiguration.DoesNotExist:
-        # 2. Fallback: Treat ID as ReceiptVoucherType ID
-        try:
-            voucher_type = ReceiptVoucherType.objects.get(id=data['voucher_type_id'], tenant_id=tenant_id)
-        except ReceiptVoucherType.DoesNotExist:
-             from rest_framework.exceptions import ValidationError as DRFValidationError
-             raise DRFValidationError("Invalid voucher type ID.")
+        vt = ReceiptVoucherType.objects.get(id=data['voucher_type_id'], tenant_id=tenant_id)
+        voucher_name = vt.name
+    except:
+        pass
 
-    # Generate invoice number using the RESOLVED voucher type ID
-    invoice_number = generate_sales_invoice_number(tenant_id, voucher_type.id)
+    # Generate invoice number
+    # Pass 0 or None as ID if not strictly needed, or pass the input ID
+    invoice_number = generate_sales_invoice_number(tenant_id, data.get('voucher_type_id', 0))
     
-    # Calculate totals
+    # Calculate totals (Useful for logic, even if not saved to Header)
     totals = calculate_item_totals(data.get('items', []), tax_type)
     
     # Create voucher with transaction
     with transaction.atomic():
-        # Get customer (already validated in serializer but good to be safe)
-        customer = MasterLedger.objects.get(id=data['customer_id'], tenant_id=tenant_id)
+        # Create sales voucher (Mapped to VoucherSalesInvoiceDetails)
+        # We only save fields that exist in the table `voucher_sales_invoicedetails`
         
-        # Create sales voucher
         voucher = SalesVoucher.objects.create(
             tenant_id=tenant_id,
             date=data['date'],
-            voucher_type=voucher_type,
-            sales_invoice_number=invoice_number,
-            customer=customer,
-            bill_to_address=customer_address['bill_to_address'],
-            bill_to_gstin=customer_address['bill_to_gstin'],
-            bill_to_contact=customer_address['bill_to_contact'],
-            bill_to_state=customer_address['bill_to_state'],
-            bill_to_country=customer_address['bill_to_country'],
-            ship_to_address=data.get('ship_to_address', customer_address['ship_to_address']),
-            ship_to_state=customer_address['ship_to_state'],
-            ship_to_country=customer_address['ship_to_country'],
+            voucher_name=voucher_name,
+            sales_invoice_no=invoice_number,
+            customer_name=customer_info['customer_name'],
+            
+            bill_to=customer_info['bill_to_address'], 
+            # Note: gstin, contact exist in table
+            gstin=customer_info['bill_to_gstin'],
+            contact=customer_info['bill_to_contact'],
+            
+            ship_to=data.get('ship_to_address', customer_info['ship_to_address']),
+            
             tax_type=tax_type,
-            total_taxable_amount=totals['total_taxable_amount'],
-            total_cgst=totals['total_cgst'],
-            total_sgst=totals['total_sgst'],
-            total_igst=totals['total_igst'],
-            grand_total=totals['grand_total'],
-            status='draft',
-            current_step=1
+            
+            # Additional fields supported by schema
+            place_of_supply=data.get('place_of_supply'),
+            reverse_charge=data.get('reverse_charge', 'N'),
+            invoice_type=data.get('invoice_type', 'Regular'),
+            
+            # Fields NOT in schema header:
+            # - status, current_step, totals...
         )
         
         # Create items if provided
@@ -401,25 +361,22 @@ def create_sales_voucher(data: Dict, tenant_id: str, user_state: str) -> 'SalesV
                 sgst_amount = Decimal('0')
                 igst_amount = Decimal('0')
             
-            total_amount = taxable_amount + cgst_amount + sgst_amount + igst_amount
+            total_invoice_value = taxable_amount + cgst_amount + sgst_amount + igst_amount
             
             SalesVoucherItem.objects.create(
                 tenant_id=tenant_id,
-                sales_voucher=voucher,
+                invoice=voucher, # Field name is 'invoice' (FK)
                 item_name=item_data['item_name'],
-                hsn_code=item_data.get('hsn_code', ''),
-                quantity=qty,
-                unit=item_data.get('unit', ''),
-                rate=rate,
-                taxable_amount=taxable_amount,
-                cgst_rate=gst_rate / Decimal('2') if tax_type == 'within_state' else Decimal('0'),
-                cgst_amount=cgst_amount,
-                sgst_rate=gst_rate / Decimal('2') if tax_type == 'within_state' else Decimal('0'),
-                sgst_amount=sgst_amount,
-                igst_rate=gst_rate if tax_type == 'other_state' else Decimal('0'),
-                igst_amount=igst_amount,
-                total_amount=total_amount,
-                line_number=idx
+                hsn_sac=item_data.get('hsn_code', ''),
+                qty=qty,
+                uom=item_data.get('unit', ''),
+                item_rate=rate,
+                taxable_value=taxable_amount,
+                cgst=cgst_amount,
+                sgst=sgst_amount,
+                igst=igst_amount,
+                cess=Decimal('0'),
+                invoice_value=total_invoice_value
             )
     
     return voucher

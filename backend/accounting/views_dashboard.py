@@ -1,3 +1,4 @@
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -26,13 +27,14 @@ class DashboardAnalyticsView(APIView):
         six_months_ago = today - datetime.timedelta(days=180)
 
         # 1. Revenue Trend (Sales Vouchers)
-        # Filter: Status completed (approved), group by month
+        # Join with payment_details to get grand total (payment_invoice_value)
         revenue_qs = SalesVoucher.objects.filter(
             tenant_id=tenant_id,
-            status__in=['completed'],
+            # status__in=['completed'], # Status missing in current model
             date__gte=six_months_ago
         ).annotate(
-            month=TruncMonth('date')
+            month=TruncMonth('date'),
+            grand_total=F('payment_details__payment_invoice_value')
         ).values('month').annotate(
             total_revenue=Sum('grand_total')
         ).order_by('month')
@@ -159,24 +161,37 @@ class DashboardAnalyticsView(APIView):
             expense_breakdown.append({"name": "Others", "value": others_val})
 
         # 5. AR Aging (Outstanding Receivables)
-        # Fetch All COMPLETED Sales Vouchers (not just recent)
-        all_sales = SalesVoucher.objects.filter(tenant_id=tenant_id, status='completed').values('sales_invoice_number', 'date', 'grand_total', 'payment_details')
+        # Fetch All Sales Vouchers (not just recent)
+        # Join with payment_details for grand total
+        all_sales = SalesVoucher.objects.filter(
+            tenant_id=tenant_id
+        ).select_related('payment_details').values(
+            'sales_invoice_no', 
+            'date', 
+            'payment_details__payment_invoice_value',
+            'payment_details__advance_references'
+        )
         
         # Calculate outstanding for each
         ar_buckets = {"0-30": 0, "31-60": 0, "61-90": 0, "90+": 0}
         
         for sale in all_sales:
-             total = float(sale['grand_total'] or 0)
-             # Parse payments. Assuming payment_details is list of payments or link
-             # Ideally check VoucherReceipts, but querying all receipts is expensive.
-             # We'll use a heuristic: if payment_details is empty, full amount.
-             # If populated, sum amounts.
-             # NOTE: payment_details structure unknown, assuming list of objects with amount.
+             total = float(sale['payment_details__payment_invoice_value'] or 0)
+             
+             # Calculate paid amount from advance_references (JSON)
              paid = 0
-             p_details = sale['payment_details']
-             if p_details and isinstance(p_details, list):
-                 for p in p_details:
-                     paid += float(p.get('amount', 0) or 0)
+             try:
+                 import json
+                 p_details = sale['payment_details__advance_references']
+                 if p_details:
+                     if isinstance(p_details, str):
+                         p_details = json.loads(p_details)
+                     
+                     if isinstance(p_details, list):
+                         for p in p_details:
+                             paid += float(p.get('amount', 0) or 0)
+             except Exception:
+                 pass
              
              outstanding = total - paid
              if outstanding > 1: # Ignore dust

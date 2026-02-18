@@ -2,7 +2,7 @@ import uuid
 import logging
 from rest_framework import serializers
 from .models import (
-    MasterLedgerGroup, MasterLedger, MasterVoucherConfig, MasterHierarchyRaw,
+    MasterLedgerGroup, MasterLedger, MasterHierarchyRaw,
     Voucher, JournalEntry, AmountTransaction
 )
 from .models_question import Answer, Question
@@ -202,11 +202,7 @@ class MasterLedgerSerializer(TenantModelSerializerMixin, serializers.ModelSerial
         return instance
 
 
-class MasterVoucherConfigSerializer(TenantModelSerializerMixin, serializers.ModelSerializer):
-    class Meta:
-        model = MasterVoucherConfig
-        fields = '__all__'
-        read_only_fields = ['id', 'tenant_id', 'created_at', 'updated_at']
+# MasterVoucherConfigSerializer removed
 
 
 class MasterHierarchyRawSerializer(serializers.ModelSerializer):

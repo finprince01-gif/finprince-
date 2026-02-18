@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.core.exceptions import PermissionDenied
 
-from accounting.models import (
+from .models import (
     MasterVoucherSales,
     MasterVoucherCreditNote,
     MasterVoucherReceipts,

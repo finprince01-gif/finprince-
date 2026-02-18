@@ -11,8 +11,8 @@ from .database import (
     CustomerMastersSalesOrder,
     CustomerMasterCustomer,
     CustomerTransaction,
-    CustomerSalesQuotation,
-    CustomerSalesOrder,
+    # CustomerSalesQuotation,
+    # CustomerSalesOrder,
     CustomerMasterLongTermContractBasicDetail,
     CustomerMasterLongTermContractProductService,
     CustomerMasterLongTermContractTermsCondition,
@@ -680,35 +680,35 @@ class CustomerTransactionSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
-class CustomerSalesQuotationSerializer(serializers.ModelSerializer):
-    """Serializer for Sales Quotation"""
-    
-    class Meta:
-        model = CustomerSalesQuotation
-        fields = [
-            'id', 'tenant_id', 'customer_id', 'quotation_number',
-            'quotation_date', 'valid_until',
-            'subtotal', 'tax_amount', 'discount_amount', 'total_amount',
-            'status', 'terms_and_conditions', 'notes',
-            'created_at', 'updated_at'
-        ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+# class CustomerSalesQuotationSerializer(serializers.ModelSerializer):
+#     """Serializer for Sales Quotation"""
+#     
+#     class Meta:
+#         # model = CustomerSalesQuotation
+#         fields = [
+#             'id', 'tenant_id', 'customer_id', 'quotation_number',
+#             'quotation_date', 'valid_until',
+#             'subtotal', 'tax_amount', 'discount_amount', 'total_amount',
+#             'status', 'terms_and_conditions', 'notes',
+#             'created_at', 'updated_at'
+#         ]
+#         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
-class CustomerSalesOrderSerializer(serializers.ModelSerializer):
-    """Serializer for Sales Order"""
-    
-    class Meta:
-        model = CustomerSalesOrder
-        fields = [
-            'id', 'tenant_id', 'customer_id', 'order_number',
-            'order_date', 'expected_delivery_date',
-            'quotation_reference', 'po_number',
-            'subtotal', 'tax_amount', 'discount_amount', 'shipping_charges', 'total_amount',
-            'status', 'notes',
-            'created_at', 'updated_at'
-        ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+# class CustomerSalesOrderSerializer(serializers.ModelSerializer):
+#     """Serializer for Sales Order"""
+#     
+#     class Meta:
+#         # model = CustomerSalesOrder
+#         fields = [
+#             'id', 'tenant_id', 'customer_id', 'order_number',
+#             'order_date', 'expected_delivery_date',
+#             'quotation_reference', 'po_number',
+#             'subtotal', 'tax_amount', 'discount_amount', 'shipping_charges', 'total_amount',
+#             'status', 'notes',
+#             'created_at', 'updated_at'
+#         ]
+#         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
 # ============================================================================

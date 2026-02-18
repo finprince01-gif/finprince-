@@ -71,6 +71,7 @@ def create_vendor_banking(data: Dict) -> Dict:
 def update_vendor_banking(banking_id: int, data: Dict) -> Dict:
     """
     Update an existing vendor banking record.
+    Supports partial updates by using COALESCE.
     """
     # Resolve vendor_id - handle different possible formats
     vendor_id = data.get('vendor_basic_detail_id') or data.get('vendor_basic_detail')
@@ -79,10 +80,16 @@ def update_vendor_banking(banking_id: int, data: Dict) -> Dict:
 
     query = """
         UPDATE vendor_master_banking
-        SET bank_account_no = %s, bank_name = %s, ifsc_code = %s,
-            branch_name = %s, swift_code = %s, vendor_branch = %s,
-            account_type = %s, is_active = %s,
-            updated_at = NOW(), updated_by = %s,
+        SET bank_account_no = COALESCE(%s, bank_account_no),
+            bank_name = COALESCE(%s, bank_name),
+            ifsc_code = COALESCE(%s, ifsc_code),
+            branch_name = COALESCE(%s, branch_name),
+            swift_code = COALESCE(%s, swift_code),
+            vendor_branch = COALESCE(%s, vendor_branch),
+            account_type = COALESCE(%s, account_type),
+            is_active = COALESCE(%s, is_active),
+            updated_at = NOW(),
+            updated_by = %s,
             vendor_basic_detail_id = COALESCE(%s, vendor_basic_detail_id)
         WHERE id = %s
     """
@@ -94,8 +101,8 @@ def update_vendor_banking(banking_id: int, data: Dict) -> Dict:
         data.get('branch_name'),
         data.get('swift_code'),
         data.get('vendor_branch'),
-        data.get('account_type', 'current'),
-        data.get('is_active', True),
+        data.get('account_type'),
+        data.get('is_active'),
         data.get('updated_by'),
         vendor_id,
         banking_id,
@@ -139,7 +146,7 @@ def get_vendor_banking_by_id(banking_id: int) -> Optional[Dict]:
                 return {
                     'id': row[0],
                     'tenant_id': row[1],
-                    'vendor_basic_detail_id': row[2],
+                    'vendor_basic_detail': row[2],
                     'bank_account_no': row[3],
                     'bank_name': row[4],
                     'ifsc_code': row[5],
@@ -188,7 +195,7 @@ def get_vendor_banking_by_vendor(vendor_basic_detail_id: int) -> List[Dict]:
                 results.append({
                     'id': row[0],
                     'tenant_id': row[1],
-                    'vendor_basic_detail_id': row[2],
+                    'vendor_basic_detail': row[2],
                     'bank_account_no': row[3],
                     'bank_name': row[4],
                     'ifsc_code': row[5],
@@ -238,7 +245,7 @@ def list_vendor_banking_by_tenant(tenant_id: str) -> List[Dict]:
                 results.append({
                     'id': row[0],
                     'tenant_id': row[1],
-                    'vendor_basic_detail_id': row[2],
+                    'vendor_basic_detail': row[2],
                     'bank_account_no': row[3],
                     'bank_name': row[4],
                     'ifsc_code': row[5],

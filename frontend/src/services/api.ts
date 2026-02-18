@@ -534,6 +534,7 @@ class ApiService {
         selectedPlan: string;
         logoFile?: File | null;
     }) {
+        let data: any;
         if (userData.logoFile) {
             const formData = new FormData();
             formData.append('username', userData.username);
@@ -543,17 +544,34 @@ class ApiService {
             formData.append('phone', userData.phone);
             formData.append('selected_plan', userData.selectedPlan);
             formData.append('logo', userData.logoFile);
-            return httpClient.postFormData('/api/auth/register/', formData);
+            data = await httpClient.postFormData('/api/auth/register/', formData);
+        } else {
+            data = await httpClient.post('/api/auth/register/', {
+                username: userData.username,
+                company_name: userData.companyName,
+                email: userData.email,
+                password: userData.password,
+                phone: userData.phone,
+                selected_plan: userData.selectedPlan,
+            });
         }
 
-        return httpClient.post('/api/auth/register/', {
-            username: userData.username,
-            company_name: userData.companyName,
-            email: userData.email,
-            password: userData.password,
-            phone: userData.phone,
-            selected_plan: userData.selectedPlan,
-        });
+        // Auto-login handling
+        if (data.access && data.refresh) {
+            httpClient.setTokens(data.access, data.refresh);
+            localStorage.removeItem('token');
+            localStorage.removeItem('refreshToken');
+        }
+
+        // Save tenant/company info if returned
+        if (data.user) {
+            httpClient.saveAuthData({
+                tenant_id: data.user.tenant_id || data.user.tenantId,
+                company_name: data.user.company_name || data.user.companyName,
+            });
+        }
+
+        return data;
     }
 
     async logout() {

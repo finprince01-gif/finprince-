@@ -66,14 +66,18 @@ def extract_invoice(request):
     uploaded_file = request.FILES['file']
     
     try:
-        # OCR using Gemini Vision
-        model = genai.GenerativeModel('gemini-1.5-flash-latest')
-        
+        from core.ai_proxy import execute_with_retry, api_key_manager
+
+        # Get healthy key
+        api_key = api_key_manager.get_healthy_key()
+        if not api_key:
+             return JsonResponse({'error': 'AI service busy (No healthy keys)'}, status=503)
+
         # Read file bytes
         file_bytes = uploaded_file.read()
         
         # Construct prompt for the 109 fields
-        prompt = f"""
+        prompt_text = f"""
         Extract invoice data from this image. 
         Structure the output as a JSON object where the keys are exactly from this list:
         {json.dumps(FIELD_HEADERS)}
@@ -85,13 +89,12 @@ def extract_invoice(request):
         - Search for "Supplier Address - Bill from", "Supplier Address - Ship from", "GSTIN", "PAN", etc.
         """
         
-        response = model.generate_content([
-            prompt,
+        # Use robust execute_with_retry
+        # Note: execute_with_retry accepts list for multimodal input
+        raw_text = execute_with_retry([
+            prompt_text,
             {'mime_type': uploaded_file.content_type, 'data': file_bytes}
-        ])
-        
-        # Parse Gemini response (cleaning up potential markdown code blocks)
-        raw_text = response.text.strip()
+        ], {}, api_key)
         if raw_text.startswith('```json'):
             raw_text = raw_text[7:-3].strip()
         elif raw_text.startswith('```'):

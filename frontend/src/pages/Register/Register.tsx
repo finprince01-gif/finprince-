@@ -94,8 +94,7 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
       });
 
       if ((response as any).access && (response as any).refresh) {
-        localStorage.setItem('token', (response as any).access);
-        localStorage.setItem('refreshToken', (response as any).refresh);
+        // Tokens are handled by apiService
         if ((response as any).user) {
           const user = (response as any).user;
           localStorage.setItem('user', JSON.stringify(user));

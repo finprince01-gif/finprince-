@@ -39,29 +39,11 @@ def get_invoice_usage(user):
     if not tenant_id:
         return 0
 
-    # Only count from AI Extractions (ExtractedInvoice) and Scanner
+    # Only count from AI Extractions. 
+    # Tracking is moving to Local Storage on the frontend.
     count_extracted = 0
-    try:
-        from .models import ExtractedInvoice
-        count_extracted = ExtractedInvoice.objects.filter(
-            tenant_id=tenant_id,
-            created_at__gte=cycle_start
-        ).count()
-    except ImportError:
-        pass
     
-    # Count from Scanner if it exists as a separate model
-    count_scanned = 0
-    try:
-        from .models import ScannedInvoice
-        count_scanned = ScannedInvoice.objects.filter(
-            tenant_id=tenant_id,
-            created_at__gte=cycle_start
-        ).count()
-    except ImportError:
-        pass
-    
-    return count_extracted + count_scanned
+    return count_extracted
 
 def check_subscription_limit(user, increment=1):
     """

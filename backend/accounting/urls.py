@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework import routers
 from .views import (
-    MasterLedgerGroupViewSet, MasterLedgerViewSet, MasterVoucherConfigViewSet,
+    MasterLedgerGroupViewSet, MasterLedgerViewSet,
     MasterHierarchyRawViewSet, VoucherViewSet, JournalEntryViewSet
 )
 from .views_questions import LedgerQuestionsView, LedgerCreateWithQuestionsView

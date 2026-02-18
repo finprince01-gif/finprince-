@@ -66,6 +66,7 @@ class InventoryLocation(BaseModel):
     
     vendor_name = models.CharField(max_length=255, null=True, blank=True, help_text="Vendor/Agent Name")
     customer_name = models.CharField(max_length=255, null=True, blank=True, help_text="Customer Name")
+    location_address = models.CharField(max_length=255, null=True, blank=True, help_text="Location Address Reference")
     
     gstin = models.CharField(
         max_length=15,

@@ -1,6 +1,8 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import action
+import re
 
 from .models import (
     InventoryMasterCategory, InventoryLocation, InventoryItem, InventoryUnit,
@@ -277,6 +279,35 @@ class InventoryOperationNewGRNViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         tenant_id = get_tenant_from_request(self.request)
         serializer.save(tenant_id=tenant_id)
+
+    @action(detail=False, methods=['get'], url_path='next-grn-number')
+    def next_grn_number(self, request):
+        """
+        Generate the next GRN number for the tenant.
+        """
+        tenant_id = get_tenant_from_request(self.request)
+        
+        # 1. Fetch the last GRN for this tenant
+        last_grn = InventoryOperationNewGRN.objects.filter(
+            tenant_id=tenant_id
+        ).order_by('-id').first()
+
+        if last_grn and last_grn.grn_no:
+            # 2. Extract numeric suffix if it exists
+            match = re.search(r'(\d+)$', last_grn.grn_no)
+            if match:
+                num_str = match.group(1)
+                num = int(num_str) + 1
+                prefix = last_grn.grn_no[:match.start()]
+                # Preserve padding (e.g., GRN-0001 -> GRN-0002)
+                next_no = f"{prefix}{num:0{len(num_str)}d}"
+            else:
+                next_no = f"{last_grn.grn_no}-1"
+        else:
+            # 3. Default for first entry
+            next_no = "GRN-0001"
+
+        return Response({'next_grn_no': next_no})
 
 from rest_framework import generics
 from accounting.models_voucher_purchase import VoucherPurchaseSupplierDetails

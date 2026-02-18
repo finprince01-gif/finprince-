@@ -9,8 +9,8 @@ from .models import (
     CustomerMastersSalesQuotation,
     CustomerMasterCustomer,
     CustomerTransaction,
-    CustomerSalesQuotation,
-    CustomerSalesOrder
+    # CustomerSalesQuotation,
+    # CustomerSalesOrder
 )
 
 
@@ -53,17 +53,17 @@ class CustomerTransactionAdmin(admin.ModelAdmin):
     readonly_fields = ['created_at', 'updated_at']
 
 
-@admin.register(CustomerSalesQuotation)
-class CustomerSalesQuotationAdmin(admin.ModelAdmin):
-    list_display = ['quotation_number', 'customer_id', 'quotation_date', 'total_amount', 'status']
-    list_filter = ['status', 'quotation_date']
-    search_fields = ['quotation_number']
-    readonly_fields = ['created_at', 'updated_at']
-
-
-@admin.register(CustomerSalesOrder)
-class CustomerSalesOrderAdmin(admin.ModelAdmin):
-    list_display = ['order_number', 'customer_id', 'order_date', 'total_amount', 'status']
-    list_filter = ['status', 'order_date']
-    search_fields = ['order_number', 'po_number', 'quotation_reference']
-    readonly_fields = ['created_at', 'updated_at']
+# @admin.register(CustomerSalesQuotation)
+# class CustomerSalesQuotationAdmin(admin.ModelAdmin):
+#     list_display = ['quotation_number', 'customer_id', 'quotation_date', 'total_amount', 'status']
+#     list_filter = ['status', 'quotation_date']
+#     search_fields = ['quotation_number']
+#     readonly_fields = ['created_at', 'updated_at']
+# 
+# 
+# @admin.register(CustomerSalesOrder)
+# class CustomerSalesOrderAdmin(admin.ModelAdmin):
+#     list_display = ['order_number', 'customer_id', 'order_date', 'total_amount', 'status']
+#     list_filter = ['status', 'order_date']
+#     search_fields = ['order_number', 'po_number', 'quotation_reference']
+#     readonly_fields = ['created_at', 'updated_at']

@@ -16,10 +16,11 @@ import os
 from accounting.models import (
     SalesVoucher,
     SalesVoucherItem,
-    SalesVoucherDocument,
-    ReceiptVoucherType,
+    # ReceiptVoucherType, # Removed from here
     MasterLedger
 )
+from masters.voucher_master_models import MasterVoucherReceipts as ReceiptVoucherType
+
 from accounting.sales_serializers import (
     SalesVoucherSerializer,
     SalesVoucherListSerializer,
