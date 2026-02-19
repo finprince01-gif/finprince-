@@ -238,6 +238,10 @@ class ApiService {
         return httpClient.post<any>('/api/inventory/operations/outward/', data);
     }
 
+    async getOutwardSlips() {
+        return httpClient.get<any[]>('/api/inventory/operations/outward/');
+    }
+
     /**
      * Get Pending GRNs for reference in Vouchers
      */
@@ -274,8 +278,10 @@ class ApiService {
         return httpClient.get<any[]>(url);
     }
 
-    // ============================================================================
-    // MASTERS - VOUCHER CONFIG
+    async getHierarchy() {
+        return httpClient.get<any[]>('/api/hierarchy/');
+    }
+
     // ============================================================================
 
     async getVoucherNumbering() {

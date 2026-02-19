@@ -41,21 +41,27 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
     const [isIssueSlipModalOpen, setIsIssueSlipModalOpen] = useState(false);
     const [inventoryItems, setInventoryItems] = useState<any[]>([]);
     const [locations, setLocations] = useState<any[]>([]);
+    const [ledgers, setLedgers] = useState<any[]>([]);
+    const [hierarchy, setHierarchy] = useState<any[]>([]);
 
     React.useEffect(() => {
-        const fetchInventoryData = async () => {
+        const fetchAllData = async () => {
             try {
-                const [items, locs] = await Promise.all([
+                const [items, locs, ledgersData, hierarchyData] = await Promise.all([
                     apiService.getStockItems(),
-                    apiService.getInventoryLocations().catch(() => [])
+                    apiService.getInventoryLocations().catch(() => []),
+                    apiService.getLedgers().catch(() => []),
+                    apiService.getHierarchy().catch(() => [])
                 ]);
                 setInventoryItems(items);
                 setLocations(locs);
+                setLedgers(ledgersData);
+                setHierarchy(hierarchyData);
             } catch (error) {
                 console.error('Error fetching inventory data:', error);
             }
         };
-        fetchInventoryData();
+        fetchAllData();
     }, []);
 
     const itemCodeOptions = useMemo(() => {
@@ -65,6 +71,25 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
     const itemNameOptions = useMemo(() => {
         return inventoryItems.map(item => item.name || item.item_name).filter(Boolean);
     }, [inventoryItems]);
+
+    const salesLedgerOptions = useMemo(() => {
+        const userLedgers = ledgers.map(l => l.name);
+
+        // Extract leaf nodes or relevant names from hierarchy
+        const hierarchyLedgers = new Set<string>();
+        hierarchy.forEach(row => {
+            // Collect all unique names from all levels of the hierarchy
+            if (row.ledger_1) hierarchyLedgers.add(row.ledger_1);
+            if (row.sub_group_3_1) hierarchyLedgers.add(row.sub_group_3_1);
+            if (row.sub_group_2_1) hierarchyLedgers.add(row.sub_group_2_1);
+            if (row.sub_group_1_1) hierarchyLedgers.add(row.sub_group_1_1);
+            if (row.group_1) hierarchyLedgers.add(row.group_1);
+            if (row.major_group_1) hierarchyLedgers.add(row.major_group_1);
+        });
+
+        // Combine and remove duplicates
+        return Array.from(new Set([...userLedgers, ...Array.from(hierarchyLedgers)]));
+    }, [ledgers, hierarchy]);
 
     // Populate from AI Extraction
     React.useEffect(() => {
@@ -114,7 +139,50 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [salesInvoiceNo, setSalesInvoiceNo] = useState('');
     const [voucherName, setVoucherName] = useState('');
+    const [salesVoucherConfigs, setSalesVoucherConfigs] = useState<any[]>([]);
+
+    React.useEffect(() => {
+        const fetchSalesConfigs = async () => {
+            try {
+                const data = await httpClient.get<any[]>('/api/masters/voucher-configurations/?voucher_type=sales').catch(() => []);
+                if (Array.isArray(data) && data.length > 0) {
+                    setSalesVoucherConfigs(data);
+                    if (data.length === 1 && !voucherName) {
+                        setVoucherName(data[0].voucher_name);
+                    }
+                } else {
+                    setSalesVoucherConfigs([{ voucher_name: 'Main' }]);
+                    if (!voucherName) setVoucherName('Main');
+                }
+            } catch (e) {
+                setSalesVoucherConfigs([{ voucher_name: 'Main' }]);
+                if (!voucherName) setVoucherName('Main');
+            }
+        };
+        fetchSalesConfigs();
+    }, []);
+
     const [outwardSlipNo, setOutwardSlipNo] = useState('');
+    const [outwardSlipOptions, setOutwardSlipOptions] = useState<string[]>([]);
+
+    // Fetch Outward Slips
+    React.useEffect(() => {
+        const fetchOutwardSlips = async () => {
+            try {
+                const data = await httpClient.get<any[]>('/api/inventory/operations/outward/').catch(() => []);
+                if (Array.isArray(data)) {
+                    // Assuming the field is 'outward_slip_no' or 'slip_no' or 'id'
+                    const options = data.map(item => item.outward_slip_no || item.slip_no || item.id || '').filter(Boolean);
+                    // Deduplicate
+                    setOutwardSlipOptions([...new Set(options)]);
+                }
+            } catch (e) {
+                console.error('Failed to fetch outward slips', e);
+            }
+        };
+        fetchOutwardSlips();
+    }, []);
+
     const [customerName, setCustomerName] = useState('');
     const [billToAddress1, setBillToAddress1] = useState('');
     const [billToAddress2, setBillToAddress2] = useState('');
@@ -469,6 +537,27 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
         }
     ]);
 
+    const [foreignItemRows, setForeignItemRows] = useState<ItemRow[]>([
+        {
+            id: 1,
+            itemCode: '',
+            itemName: '',
+            hsnSac: '',
+            qty: '',
+            uom: '',
+            alternateUnit: '',
+            itemRate: '',
+            taxableValue: '',
+            igst: '',
+            cgst: '',
+            sgst: '',
+            cess: '',
+            invoiceValue: '',
+            salesLedger: '',
+            description: ''
+        }
+    ]);
+
     // Payment Details State
     const [paymentTaxableValue, setPaymentTaxableValue] = useState('0.00');
     const [paymentIgst, setPaymentIgst] = useState('0.00');
@@ -517,6 +606,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
     const [beyondPortPortOfLoading, setBeyondPortPortOfLoading] = useState('');
     const [beyondPortPortOfDischarge, setBeyondPortPortOfDischarge] = useState('');
     const [beyondPortFinalDestination, setBeyondPortFinalDestination] = useState('');
+    const [beyondPortOrigin, setBeyondPortOrigin] = useState('');
     const [beyondPortOriginCountry, setBeyondPortOriginCountry] = useState('');
     const [beyondPortDestCountry, setBeyondPortDestCountry] = useState('');
 
@@ -697,7 +787,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                 })),
 
                 // Items (Foreign)
-                foreign_items: stateType === 'export' ? itemRows.map(row => ({
+                foreign_items: stateType === 'export' ? foreignItemRows.map(row => ({
                     description: row.description,
                     quantity: parseNum(row.qty),
                     uqc: row.uom, // mapped from frontend state alias if any, using uom as placeholder
@@ -914,6 +1004,66 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
         }
     };
 
+    // Foreign Item Row Handlers
+    const handleForeignItemRowChange = (id: number, field: keyof ItemRow, value: string) => {
+        setForeignItemRows(foreignItemRows.map(row => {
+            if (row.id === id) {
+                // Prevent negative values for specific numeric fields
+                let cleanValue = value;
+                if (['qty', 'itemRate'].includes(field)) {
+                    if (parseFloat(value) < 0) {
+                        cleanValue = '0';
+                    }
+                }
+                let updatedRow = { ...row, [field]: cleanValue };
+
+                // Auto-calculate amount when qty or rate changes
+                if (field === 'qty' || field === 'itemRate') {
+                    const qty = parseFloat(field === 'qty' ? value : updatedRow.qty) || 0;
+                    const rate = parseFloat(field === 'itemRate' ? value : updatedRow.itemRate) || 0;
+                    updatedRow.invoiceValue = (qty * rate).toFixed(2);
+                }
+
+                return updatedRow;
+            }
+            return row;
+        }));
+    };
+
+    const handleAddForeignItemRow = () => {
+        const newRow: ItemRow = {
+            id: foreignItemRows.length + 1 + Date.now(), // Ensure unique ID
+            itemCode: '',
+            itemName: '',
+            hsnSac: '',
+            qty: '',
+            uom: '',
+            itemRate: '',
+            taxableValue: '',
+            igst: '',
+            cgst: '',
+            sgst: '',
+            cess: '',
+            invoiceValue: '',
+            salesLedger: '',
+            description: '',
+            alternateUnit: ''
+        };
+        setForeignItemRows([...foreignItemRows, newRow]);
+    };
+
+    const handleDeleteForeignItemRow = (id: number) => {
+        if (foreignItemRows.length > 1) {
+            setForeignItemRows(foreignItemRows.filter(row => row.id !== id));
+        }
+    };
+
+    const handleDeleteSelectedForeignItems = () => {
+        if (foreignItemRows.length > 1) {
+            setForeignItemRows([foreignItemRows[0]]);
+        }
+    };
+
     const calculateTotals = () => {
         const totals = itemRows.reduce((acc, row) => {
             return {
@@ -994,6 +1144,18 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Sales Invoice Series
+                                </label>
+                                <SearchableDropdown
+                                    value={voucherName}
+                                    onChange={setVoucherName}
+                                    options={salesVoucherConfigs.map(c => c.voucher_name)}
+                                    placeholder="Select series"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Sales Invoice No. <span className="text-red-500">*</span>
                                 </label>
                                 <input
@@ -1003,19 +1165,6 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                     className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                     placeholder="Enter invoice number"
                                     required
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Sales Invoice Series
-                                </label>
-                                <input
-                                    type="text"
-                                    value={voucherName}
-                                    onChange={(e) => setVoucherName(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                    placeholder="Enter sales invoice series"
                                 />
                             </div>
 
@@ -1100,12 +1249,12 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Outward Slip No.
                                 </label>
-                                <input
-                                    type="text"
+                                <SearchableDropdown
                                     value={outwardSlipNo}
-                                    onChange={(e) => setOutwardSlipNo(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                    placeholder="Enter slip no"
+                                    onChange={setOutwardSlipNo}
+                                    options={outwardSlipOptions}
+                                    placeholder="Select or enter slip no"
+                                    disabled={false}
                                 />
                             </div>
                         </div>
@@ -1552,60 +1701,90 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
-                                    {itemRows.map((row) => (
-                                        <tr key={row.id} className="hover:bg-gray-50">
-                                            <td className="px-3 py-2 text-center border-r border-gray-200">
-                                                <input
-                                                    type="checkbox"
-                                                    className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
-                                                />
-                                            </td>
-                                            <td className="px-3 py-2 border-r border-gray-200">
-                                                <input
-                                                    type="text"
-                                                    value={row.description}
-                                                    onChange={(e) => handleItemRowChange(row.id, 'description', e.target.value)}
-                                                    className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm bg-transparent"
-                                                    placeholder="Item description"
-                                                />
-                                            </td>
-                                            <td className="px-3 py-2 border-r border-gray-200">
-                                                <input
-                                                    type="text"
-                                                    value={row.qty}
-                                                    onChange={(e) => handleItemRowChange(row.id, 'qty', e.target.value)}
-                                                    className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent"
-                                                    placeholder="0"
-                                                />
-                                            </td>
-                                            <td className="px-3 py-2 border-r border-gray-200">
-                                                <input
-                                                    type="text"
-                                                    value={row.uom}
-                                                    onChange={(e) => handleItemRowChange(row.id, 'uom', e.target.value)}
-                                                    className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent"
-                                                    placeholder="UQC"
-                                                />
-                                            </td>
-                                            <td className="px-3 py-2 border-r border-gray-200">
-                                                <input
-                                                    type="number"
-                                                    value={row.itemRate}
-                                                    onChange={(e) => handleItemRowChange(row.id, 'itemRate', e.target.value)}
-                                                    className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent"
-                                                    placeholder="0.00"
-                                                />
-                                            </td>
-                                            <td className="px-3 py-2">
-                                                <input
-                                                    type="text"
-                                                    value={row.invoiceValue}
-                                                    readOnly
-                                                    className="w-full px-2 py-1.5 bg-gray-50 border-0 rounded text-sm font-medium text-center text-gray-700"
-                                                    placeholder="0.00"
-                                                />
-                                            </td>
-                                        </tr>
+                                    {foreignItemRows.map((row) => (
+                                        <React.Fragment key={row.id}>
+                                            <tr className="hover:bg-gray-50">
+                                                <td className="px-3 py-2 text-center border-r border-gray-200">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                                                    />
+                                                </td>
+                                                <td className="px-3 py-2 border-r border-gray-200">
+                                                    <input
+                                                        type="text"
+                                                        value={row.description}
+                                                        onChange={(e) => handleForeignItemRowChange(row.id, 'description', e.target.value)}
+                                                        className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm bg-transparent"
+                                                        placeholder="Item description"
+                                                    />
+                                                </td>
+                                                <td className="px-3 py-2 border-r border-gray-200">
+                                                    <input
+                                                        type="text"
+                                                        value={row.qty}
+                                                        onChange={(e) => handleForeignItemRowChange(row.id, 'qty', e.target.value)}
+                                                        className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent"
+                                                        placeholder="0"
+                                                    />
+                                                </td>
+                                                <td className="px-3 py-2 border-r border-gray-200">
+                                                    <input
+                                                        type="text"
+                                                        value={row.uom}
+                                                        onChange={(e) => handleForeignItemRowChange(row.id, 'uom', e.target.value)}
+                                                        className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent"
+                                                        placeholder="UQC"
+                                                    />
+                                                </td>
+                                                <td className="px-3 py-2 border-r border-gray-200">
+                                                    <input
+                                                        type="number"
+                                                        value={row.itemRate}
+                                                        onChange={(e) => handleForeignItemRowChange(row.id, 'itemRate', e.target.value)}
+                                                        className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent"
+                                                        placeholder="0.00"
+                                                    />
+                                                </td>
+                                                <td className="px-3 py-2">
+                                                    <input
+                                                        type="text"
+                                                        value={row.invoiceValue}
+                                                        readOnly
+                                                        className="w-full px-2 py-1.5 bg-gray-50 border-0 rounded text-sm font-medium text-center text-gray-700"
+                                                        placeholder="0.00"
+                                                    />
+                                                </td>
+                                            </tr>
+                                            {/* Sales Ledger and Description row for Foreign Currency */}
+                                            <tr className="border-b border-gray-200 bg-gray-50">
+                                                <td colSpan={3} className="px-2 py-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <label className="text-xs font-medium text-gray-700 whitespace-nowrap">Sales Ledger:</label>
+                                                        <div className="flex-1">
+                                                            <SearchableDropdown
+                                                                options={salesLedgerOptions}
+                                                                value={row.salesLedger}
+                                                                onChange={(val) => handleForeignItemRowChange(row.id, 'salesLedger', val)}
+                                                                placeholder="Select sales ledger"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td colSpan={3} className="px-2 py-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <label className="text-xs font-medium text-gray-700 whitespace-nowrap">Description:</label>
+                                                        <input
+                                                            type="text"
+                                                            value={row.description}
+                                                            onChange={(e) => handleForeignItemRowChange(row.id, 'description', e.target.value)}
+                                                            className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500"
+                                                            placeholder="Enter description"
+                                                        />
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </React.Fragment>
                                     ))}
                                 </tbody>
                             </table>
@@ -1615,7 +1794,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                         <div className="flex items-center justify-between pt-2">
                             <button
                                 type="button"
-                                onClick={handleAddItemRow}
+                                onClick={handleAddForeignItemRow}
                                 className="px-4 py-2 text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-2 transition-colors"
                             >
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1627,7 +1806,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                             <div className="flex items-center gap-4">
                                 <button
                                     type="button"
-                                    onClick={handleDeleteSelectedItems}
+                                    onClick={handleDeleteSelectedForeignItems}
                                     className="px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-[4px] transition-colors font-medium flex items-center gap-2"
                                 >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1853,13 +2032,14 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                 <td colSpan={4} className="px-2 py-2">
                                                     <div className="flex items-center gap-2">
                                                         <label className="text-xs font-medium text-gray-700 whitespace-nowrap">Sales Ledger:</label>
-                                                        <input
-                                                            type="text"
-                                                            value={row.salesLedger}
-                                                            onChange={(e) => handleItemRowChange(row.id, 'salesLedger', e.target.value)}
-                                                            className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500"
-                                                            placeholder="Select sales ledger"
-                                                        />
+                                                        <div className="flex-1">
+                                                            <SearchableDropdown
+                                                                options={salesLedgerOptions}
+                                                                value={row.salesLedger}
+                                                                onChange={(val) => handleItemRowChange(row.id, 'salesLedger', val)}
+                                                                placeholder="Select sales ledger"
+                                                            />
+                                                        </div>
                                                     </div>
                                                 </td>
                                                 <td colSpan={stateType === 'within' ? 10 : 9} className="px-2 py-2">
@@ -2300,35 +2480,37 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                 </div>
 
                                 {/* Upload Document */}
-                                <div className="mt-6">
-                                    <input
-                                        type="file"
-                                        id="dispatch-doc"
-                                        onChange={(e) => {
-                                            const file = e.target.files?.[0];
-                                            if (file) setDispatchDocument(file);
-                                        }}
-                                        className="hidden"
-                                        accept=".jpg,.jpeg,.pdf"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => document.getElementById('dispatch-doc')?.click()}
-                                        className="w-full h-40 border-2 border-dashed border-gray-300 hover:border-indigo-500 bg-gray-50 hover:bg-indigo-50/50 text-gray-600 rounded-[4px] transition-colors flex flex-col items-center justify-center gap-2"
-                                    >
-                                        <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                                        </svg>
-                                        <span className="text-sm font-medium">UPLOAD DOCUMENT</span>
-                                        {dispatchDocument && (
-                                            <span className="text-xs mt-2 text-indigo-600 font-medium">✓ {dispatchDocument.name}</span>
-                                        )}
-                                    </button>
-                                </div>
+                                {!['Air', 'Sea', 'Rail'].includes(modeOfTransport) && (
+                                    <div className="mt-6">
+                                        <input
+                                            type="file"
+                                            id="dispatch-doc"
+                                            onChange={(e) => {
+                                                const file = e.target.files?.[0];
+                                                if (file) setDispatchDocument(file);
+                                            }}
+                                            className="hidden"
+                                            accept=".jpg,.jpeg,.pdf"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => document.getElementById('dispatch-doc')?.click()}
+                                            className="w-full h-40 border-2 border-dashed border-gray-300 hover:border-indigo-500 bg-gray-50 hover:bg-indigo-50/50 text-gray-600 rounded-[4px] transition-colors flex flex-col items-center justify-center gap-2"
+                                        >
+                                            <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                            </svg>
+                                            <span className="text-sm font-medium">UPLOAD DOCUMENT</span>
+                                            {dispatchDocument && (
+                                                <span className="text-xs mt-2 text-indigo-600 font-medium">✓ {dispatchDocument.name}</span>
+                                            )}
+                                        </button>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Right Column */}
-                            <div className="space-y-4">
+                            <div className={`space-y-4 ${['Air', 'Sea', 'Rail'].includes(modeOfTransport) ? 'hidden' : ''}`}>
                                 {/* Delivery Type */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -2424,58 +2606,119 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                 {/* UPTO PORT Section */}
                                 <div>
                                     <h3 className="text-lg font-semibold text-gray-800 mb-4">UPTO PORT</h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {/* Col 1 */}
                                         <div className="space-y-4">
+                                            {/* Delivery Type */}
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                    Shipping Bill No.
+                                                    Delivery Type
+                                                </label>
+                                                <select
+                                                    value={deliveryType}
+                                                    onChange={(e) => {
+                                                        setDeliveryType(e.target.value);
+                                                        // If Courier is selected, disable other fields
+                                                        if (e.target.value === 'Courier') {
+                                                            setTransporterId('');
+                                                            setTransporterName('');
+                                                            setVehicleNo('');
+                                                        }
+                                                    }}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                                >
+                                                    <option value="">Select</option>
+                                                    <option value="Self">Self</option>
+                                                    <option value="Third Party">Third Party</option>
+                                                    <option value="Courier">Courier</option>
+                                                </select>
+                                            </div>
+
+                                            {/* Transporter ID/GSTIN */}
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Transporter ID/GSTIN
                                                 </label>
                                                 <input
                                                     type="text"
-                                                    value={uptoPortShippingBillNo}
-                                                    onChange={(e) => setUptoPortShippingBillNo(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                    value={transporterId}
+                                                    onChange={(e) => setTransporterId(e.target.value)}
+                                                    disabled={deliveryType === 'Courier'}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                                                 />
                                             </div>
 
+                                            {/* Transporter Name */}
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                    Ship/Port Code
+                                                    Transporter Name
                                                 </label>
                                                 <input
                                                     type="text"
-                                                    value={uptoPortShipPortCode}
-                                                    onChange={(e) => setUptoPortShipPortCode(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                    value={transporterName}
+                                                    onChange={(e) => setTransporterName(e.target.value)}
+                                                    disabled={deliveryType === 'Courier'}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                                                 />
                                             </div>
                                         </div>
 
+                                        {/* Col 2 */}
                                         <div className="space-y-4">
+                                            {/* Vehicle No. */}
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                    Shipping Bill Date
-                                                </label>
-                                                <input
-                                                    type="date"
-                                                    value={uptoPortShippingBillDate}
-                                                    onChange={(e) => setUptoPortShippingBillDate(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                />
-                                            </div>
-
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                    Origin
+                                                    Vehicle No.
                                                 </label>
                                                 <input
                                                     type="text"
-                                                    value={uptoPortOrigin}
-                                                    onChange={(e) => setUptoPortOrigin(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                    placeholder="City"
+                                                    value={vehicleNo}
+                                                    onChange={(e) => setVehicleNo(e.target.value)}
+                                                    disabled={deliveryType === 'Courier'}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                                                 />
                                             </div>
+
+                                            {/* LR/GR/Consignment */}
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    LR/GR/Consignment
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={lrGrConsignment}
+                                                    onChange={(e) => setLrGrConsignment(e.target.value)}
+                                                    disabled={false}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Col 3 - Upload Document */}
+                                        <div className="h-full">
+                                            <input
+                                                type="file"
+                                                id="dispatch-doc-upto"
+                                                onChange={(e) => {
+                                                    const file = e.target.files?.[0];
+                                                    if (file) setDispatchDocument(file);
+                                                }}
+                                                className="hidden"
+                                                accept=".jpg,.jpeg,.pdf"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => document.getElementById('dispatch-doc-upto')?.click()}
+                                                className="w-full h-full min-h-[200px] border-2 border-dashed border-gray-300 hover:border-indigo-500 bg-gray-50 hover:bg-indigo-50/50 text-gray-600 rounded-[4px] transition-colors flex flex-col items-center justify-center gap-2"
+                                            >
+                                                <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                                </svg>
+                                                <span className="text-sm font-medium">UPLOAD DOCUMENT</span>
+                                                {dispatchDocument && (
+                                                    <span className="text-xs mt-2 text-indigo-600 font-medium">✓ {dispatchDocument.name}</span>
+                                                )}
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -2499,12 +2742,58 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
 
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Shipping Bill Date
+                                                </label>
+                                                <input
+                                                    type="date"
+                                                    value={beyondPortShippingBillDate}
+                                                    onChange={(e) => setBeyondPortShippingBillDate(e.target.value)}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
                                                     Ship/Port Code
                                                 </label>
                                                 <input
                                                     type="text"
                                                     value={beyondPortShipPortCode}
                                                     onChange={(e) => setBeyondPortShipPortCode(e.target.value)}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Origin
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={beyondPortOrigin}
+                                                    onChange={(e) => setBeyondPortOrigin(e.target.value)}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2"
+                                                    placeholder="City"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    value={beyondPortOriginCountry}
+                                                    onChange={(e) => setBeyondPortOriginCountry(e.target.value)}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                    placeholder="Country"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Vessel/Flight No.
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={beyondPortVesselFlightNo}
+                                                    onChange={(e) => setBeyondPortVesselFlightNo(e.target.value)}
                                                     className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                 />
                                             </div>
@@ -2523,58 +2812,6 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
 
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                    Final Destination
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={beyondPortFinalDestination}
-                                                    onChange={(e) => setBeyondPortFinalDestination(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                    placeholder="City"
-                                                />
-                                            </div>
-
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                    Origin
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={beyondPortOriginCountry}
-                                                    onChange={(e) => setBeyondPortOriginCountry(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                    placeholder="Country"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-4">
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                    Shipping Bill Date
-                                                </label>
-                                                <input
-                                                    type="date"
-                                                    value={beyondPortShippingBillDate}
-                                                    onChange={(e) => setBeyondPortShippingBillDate(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                />
-                                            </div>
-
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                    Vessel/Flight No.
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={beyondPortVesselFlightNo}
-                                                    onChange={(e) => setBeyondPortVesselFlightNo(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                />
-                                            </div>
-
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">
                                                     Port of Discharge
                                                 </label>
                                                 <input
@@ -2585,12 +2822,31 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                 />
                                             </div>
 
-
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Final Destination
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={beyondPortFinalDestination}
+                                                    onChange={(e) => setBeyondPortFinalDestination(e.target.value)}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2"
+                                                    placeholder="City"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    value={beyondPortDestCountry}
+                                                    onChange={(e) => setBeyondPortDestCountry(e.target.value)}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                    placeholder="Country"
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         )}
+
 
                         {/* Conditional Rail Details */}
                         {modeOfTransport === 'Rail' && (
@@ -2598,18 +2854,43 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                 {/* UPTO PORT Section for Rail */}
                                 <div>
                                     <h3 className="text-lg font-semibold text-gray-800 mb-4">UPTO PORT</h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {/* Col 1 */}
                                         <div className="space-y-4">
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">
                                                     Delivery Type
                                                 </label>
+                                                <select
+                                                    value={deliveryType}
+                                                    onChange={(e) => {
+                                                        setDeliveryType(e.target.value);
+                                                        // If Courier is selected, disable other fields
+                                                        if (e.target.value === 'Courier') {
+                                                            setTransporterId('');
+                                                            setTransporterName('');
+                                                            setVehicleNo('');
+                                                        }
+                                                    }}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                                >
+                                                    <option value="">Select</option>
+                                                    <option value="Self">Self</option>
+                                                    <option value="Third Party">Third Party</option>
+                                                    <option value="Courier">Courier</option>
+                                                </select>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Transporter ID/GSTIN
+                                                </label>
                                                 <input
                                                     type="text"
-                                                    value={railUptoPortDeliveryType}
-                                                    onChange={(e) => setRailUptoPortDeliveryType(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                    placeholder="Self/Third Party"
+                                                    value={transporterId}
+                                                    onChange={(e) => setTransporterId(e.target.value)}
+                                                    disabled={deliveryType === 'Courier'}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                                                 />
                                             </div>
 
@@ -2619,35 +2900,26 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                 </label>
                                                 <input
                                                     type="text"
-                                                    value={railUptoPortTransporterName}
-                                                    onChange={(e) => setRailUptoPortTransporterName(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                    value={transporterName}
+                                                    onChange={(e) => setTransporterName(e.target.value)}
+                                                    disabled={deliveryType === 'Courier'}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                                                 />
                                             </div>
+                                        </div>
 
+                                        {/* Col 2 */}
+                                        <div className="space-y-4">
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">
                                                     Vehicle No.
                                                 </label>
                                                 <input
                                                     type="text"
-                                                    value={railUptoPortVehicleNo}
-                                                    onChange={(e) => setRailUptoPortVehicleNo(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-4">
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                    Transporter ID/GSTIN
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={railUptoPortTransporterId}
-                                                    onChange={(e) => setRailUptoPortTransporterId(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                    value={vehicleNo}
+                                                    onChange={(e) => setVehicleNo(e.target.value)}
+                                                    disabled={deliveryType === 'Courier'}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                                                 />
                                             </div>
 
@@ -2657,11 +2929,38 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                 </label>
                                                 <input
                                                     type="text"
-                                                    value={railUptoPortLrGrConsignment}
-                                                    onChange={(e) => setRailUptoPortLrGrConsignment(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                    value={lrGrConsignment}
+                                                    onChange={(e) => setLrGrConsignment(e.target.value)}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                                                 />
                                             </div>
+                                        </div>
+
+                                        {/* Col 3 - Upload Document */}
+                                        <div className="h-full">
+                                            <input
+                                                type="file"
+                                                id="dispatch-doc-rail"
+                                                onChange={(e) => {
+                                                    const file = e.target.files?.[0];
+                                                    if (file) setDispatchDocument(file);
+                                                }}
+                                                className="hidden"
+                                                accept=".jpg,.jpeg,.pdf"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => document.getElementById('dispatch-doc-rail')?.click()}
+                                                className="w-full h-full min-h-[200px] border-2 border-dashed border-gray-300 hover:border-indigo-500 bg-gray-50 hover:bg-indigo-50/50 text-gray-600 rounded-[4px] transition-colors flex flex-col items-center justify-center gap-2"
+                                            >
+                                                <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                                </svg>
+                                                <span className="text-sm font-medium">UPLOAD DOCUMENT</span>
+                                                {dispatchDocument && (
+                                                    <span className="text-xs mt-2 text-indigo-600 font-medium">✓ {dispatchDocument.name}</span>
+                                                )}
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -2685,6 +2984,18 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
 
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Railway Receipt Date
+                                                </label>
+                                                <input
+                                                    type="date"
+                                                    value={railBeyondPortRailwayReceiptDate}
+                                                    onChange={(e) => setRailBeyondPortRailwayReceiptDate(e.target.value)}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
                                                     Origin
                                                 </label>
                                                 <input
@@ -2698,12 +3009,27 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
 
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                    Rail No.
+                                                    Origin Country
                                                 </label>
                                                 <input
                                                     type="text"
-                                                    value={railBeyondPortRailNo}
-                                                    onChange={(e) => setRailBeyondPortRailNo(e.target.value)}
+                                                    value={railBeyondPortOriginCountry}
+                                                    onChange={(e) => setRailBeyondPortOriginCountry(e.target.value)}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                    placeholder="Country"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    FNR No.
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={railBeyondPortFnrNo}
+                                                    onChange={(e) => setRailBeyondPortFnrNo(e.target.value)}
                                                     className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                 />
                                             </div>
@@ -2722,46 +3048,6 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
 
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                    Final Destination
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={railBeyondPortFinalDestination}
-                                                    onChange={(e) => setRailBeyondPortFinalDestination(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                    placeholder="City"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-4">
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                    Railway Receipt Date
-                                                </label>
-                                                <input
-                                                    type="date"
-                                                    value={railBeyondPortRailwayReceiptDate}
-                                                    onChange={(e) => setRailBeyondPortRailwayReceiptDate(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                />
-                                            </div>
-
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                    Origin Country
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={railBeyondPortOriginCountry}
-                                                    onChange={(e) => setRailBeyondPortOriginCountry(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                    placeholder="Country"
-                                                />
-                                            </div>
-
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">
                                                     Station of Discharge
                                                 </label>
                                                 <input
@@ -2774,22 +3060,22 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
 
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                    FNR No.
+                                                    Final Destination
                                                 </label>
                                                 <input
                                                     type="text"
-                                                    value={railBeyondPortFnrNo}
-                                                    onChange={(e) => setRailBeyondPortFnrNo(e.target.value)}
+                                                    value={railBeyondPortFinalDestination}
+                                                    onChange={(e) => setRailBeyondPortFinalDestination(e.target.value)}
                                                     className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                    placeholder="City"
                                                 />
                                             </div>
-
-
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         )}
+
 
                         {/* Action Buttons */}
                         <div className="flex justify-end">

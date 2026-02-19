@@ -22,20 +22,22 @@ type MasterSubTab = 'Category' | 'Sales Quotation & Order' | 'Customer' | 'Long-
 type TransactionSubTab = 'Sales Quotation' | 'Sales Order' | 'Sales' | 'Receipt';
 type SalesQuotationSubTab = 'General Customer Quote' | 'Specific Customer Quote';
 type SalesOrderSubTab = 'Pending & Cancelled' | 'Executed';
-type SalesCategory = 'Stock-in-Trade' | 'Finished Goods' | 'Services';
+type SalesCategory = 'Export' | 'Within Country (B2B)' | 'Within Country (B2C)';
 type TransactionType = 'Sales' | 'Receipt' | 'Purchase' | 'Payment' | 'Debit Note' | 'Credit Note';
 type PurchaseStatus = 'Paid' | 'Unpaid' | 'Partially Paid' | 'Approved';
-type SalesStatus = 'Not Due' | 'Due' | 'Partially Received' | 'Received';
+type SalesStatus = 'Not Due' | 'Due' | 'Partially Received' | 'Received' | 'Utilized' | 'Not Utilized';
 
 interface AgingData {
     customerId: string;
     customerCode: string;
     customerName: string;
+    subCategory: string;
     notDue: number;
     days0to45: number;
     days45to90: number;
     months6: number;
     year1: number;
+    is_also_vendor?: boolean;
 }
 
 interface LedgerEntry {
@@ -4046,11 +4048,11 @@ const ReceiptContent: React.FC = () => {
                                                     <div className="space-y-2">
                                                         <div>
                                                             <label className="text-[10px] text-gray-500 block mb-1">Start Date</label>
-                                                            <input type="date" value={dateFilter.start} onChange={(e) => setDateFilter({ ...dateFilter, start: e.target.value })} className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500" />
+                                                            <input type="date" value={dateFilter.start} onChange={(e) => setDateFilter({ ...dateFilter, start: e.target.value })} max={new Date().toISOString().split('T')[0]} className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500" />
                                                         </div>
                                                         <div>
                                                             <label className="text-[10px] text-gray-500 block mb-1">End Date</label>
-                                                            <input type="date" value={dateFilter.end} onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })} className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500" />
+                                                            <input type="date" value={dateFilter.end} onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })} max={new Date().toISOString().split('T')[0]} className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500" />
                                                         </div>
                                                     </div>
                                                 </div>
@@ -4177,6 +4179,7 @@ const ReceiptContent: React.FC = () => {
                                         type="date"
                                         value={postFormData.dateOfReceipt}
                                         onChange={(e) => handleFormChange('dateOfReceipt', e.target.value)}
+                                        max={new Date().toISOString().split('T')[0]}
                                         className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                         required
                                     />
@@ -5149,7 +5152,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
 
 // Customer Ledger View Component
 interface CustomerLedgerViewProps {
-    customer: { id: string; name: string };
+    customer: { id: string; name: string; is_also_vendor?: boolean };
     onBack: () => void;
 }
 
@@ -5165,7 +5168,10 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
     // View state
     const [viewMode, setViewMode] = useState<'invoice-wise' | 'month-wise'>('invoice-wise');
     const [showNetOffModal, setShowNetOffModal] = useState(false);
-    const [monthFilter, setMonthFilter] = useState('');
+    const [monthFilter, setMonthFilter] = useState<string[]>([]);
+    const [selectedMonthView, setSelectedMonthView] = useState<string | null>(null);
+    const [showMonthDropdown, setShowMonthDropdown] = useState(false);
+
 
     // Filter visibility state
     const [activeFilter, setActiveFilter] = useState<string | null>(null);
@@ -5176,6 +5182,31 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
 
     // Mock ledger data
     const mockLedgerData: LedgerEntry[] = [
+        // April 2025
+        { id: 'a1', date: '2025-04-05', postFrom: 'Sales', ledger: 'INV-2025-001', status: 'Not Due', debit: 50000, credit: 0, runningBalance: 50000 },
+        { id: 'a2', date: '2025-04-12', postFrom: 'Receipt', ledger: 'RCP-2025-001', status: 'Received', debit: 0, credit: 30000, runningBalance: 20000 },
+        { id: 'a3', date: '2025-04-20', postFrom: 'Sales', ledger: 'INV-2025-002', status: 'Due', debit: 100000, credit: 0, runningBalance: 120000 },
+        { id: 'a4', date: '2025-04-28', postFrom: 'Receipt', ledger: 'RCP-2025-002', status: 'Received', debit: 0, credit: 90000, runningBalance: 30000 },
+
+        // May 2025
+        { id: 'm1', date: '2025-05-03', postFrom: 'Sales', ledger: 'INV-2025-003', status: 'Not Due', debit: 80000, credit: 0, runningBalance: 110000 },
+        { id: 'm2', date: '2025-05-10', postFrom: 'Receipt', ledger: 'RCP-2025-003', status: 'Received', debit: 0, credit: 60000, runningBalance: 50000 },
+        { id: 'm3', date: '2025-05-18', postFrom: 'Sales', ledger: 'INV-2025-004', status: 'Due', debit: 120000, credit: 0, runningBalance: 170000 },
+        { id: 'm4', date: '2025-05-25', postFrom: 'Receipt', ledger: 'RCP-2025-004', status: 'Received', debit: 0, credit: 120000, runningBalance: 50000 },
+
+        // June 2025
+        { id: 'j1', date: '2025-06-05', postFrom: 'Sales', ledger: 'INV-2025-005', status: 'Not Due', debit: 90000, credit: 0, runningBalance: 140000 },
+        { id: 'j2', date: '2025-06-15', postFrom: 'Receipt', ledger: 'RCP-2025-005', status: 'Received', debit: 0, credit: 40000, runningBalance: 100000 },
+        { id: 'j3', date: '2025-06-22', postFrom: 'Sales', ledger: 'INV-2025-006', status: 'Due', debit: 90000, credit: 0, runningBalance: 190000 },
+        { id: 'j4', date: '2025-06-30', postFrom: 'Receipt', ledger: 'RCP-2025-006', status: 'Received', debit: 0, credit: 60000, runningBalance: 130000 },
+
+        // July 2025
+        { id: 'jl1', date: '2025-07-08', postFrom: 'Sales', ledger: 'INV-2025-007', status: 'Not Due', debit: 110000, credit: 0, runningBalance: 240000 },
+        { id: 'jl2', date: '2025-07-14', postFrom: 'Receipt', ledger: 'RCP-2025-007', status: 'Received', debit: 0, credit: 90000, runningBalance: 150000 },
+        { id: 'jl3', date: '2025-07-20', postFrom: 'Sales', ledger: 'INV-2025-008', status: 'Due', debit: 110000, credit: 0, runningBalance: 260000 },
+        { id: 'jl4', date: '2025-07-28', postFrom: 'Receipt', ledger: 'RCP-2025-008', status: 'Received', debit: 0, credit: 110000, runningBalance: 150000 },
+
+        // January 2026
         { id: '1', date: '2026-01-05', postFrom: 'Sales', ledger: 'INV-2026-001', status: 'Not Due', debit: 50000, credit: 0, runningBalance: 50000 },
         { id: '2', date: '2026-01-10', postFrom: 'Receipt', ledger: 'RCP-2026-001', status: 'Received', debit: 0, credit: 25000, runningBalance: 25000 },
         { id: '3', date: '2026-01-12', postFrom: 'Sales', ledger: 'INV-2026-002', status: 'Due', debit: 35000, credit: 0, runningBalance: 60000 },
@@ -5204,9 +5235,33 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
         { month: 'January 2026', debit: 85000, credit: 50000, closingBalance: 315000 },
     ];
 
+    const handleMonthClick = (month: string) => {
+        // Parse month to get date range
+        const monthMap: { [key: string]: string } = {
+            'January': '01', 'February': '02', 'March': '03', 'April': '04',
+            'May': '05', 'June': '06', 'July': '07', 'August': '08',
+            'September': '09', 'October': '10', 'November': '11', 'December': '12'
+        };
+
+        const parts = month.split(' ');
+        const monthName = parts[0];
+        const year = parts[1];
+        const monthNum = monthMap[monthName];
+
+        if (monthNum && year) {
+            const startDate = `${year}-${monthNum}-01`;
+            const lastDay = new Date(parseInt(year), parseInt(monthNum), 0).getDate();
+            const endDate = `${year}-${monthNum}-${lastDay.toString().padStart(2, '0')}`;
+
+            setDateFilter({ start: startDate, end: endDate });
+            setSelectedMonthView(month);
+            setViewMode('invoice-wise');
+        }
+    };
+
     const MonthLedgerView: React.FC = () => {
         const filteredMonthData = mockMonthLedgerData.filter(entry =>
-            entry.month.toLowerCase().includes(monthFilter.toLowerCase())
+            monthFilter.length === 0 || monthFilter.includes(entry.month)
         );
 
         const totalDebit = filteredMonthData.reduce((sum, item) => sum + item.debit, 0);
@@ -5226,11 +5281,20 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-100">
                             {filteredMonthData.map((entry, index) => (
-                                <tr key={index} className="hover:bg-gray-50 transition-colors group">
-                                    <td className="px-6 py-5 whitespace-nowrap text-sm font-bold text-gray-700">{entry.month}</td>
+                                <tr
+                                    key={index}
+                                    onClick={() => handleMonthClick(entry.month)}
+                                    className="hover:bg-indigo-50 transition-colors group cursor-pointer"
+                                >
+                                    <td className="px-6 py-5 whitespace-nowrap text-sm font-bold text-gray-700 group-hover:text-indigo-600">{entry.month}</td>
                                     <td className="px-6 py-5 whitespace-nowrap text-sm text-right text-gray-600 font-medium">₹{entry.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                     <td className="px-6 py-5 whitespace-nowrap text-sm text-right text-gray-600 font-medium">₹{entry.credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                    <td className="px-6 py-5 whitespace-nowrap text-sm text-right font-bold text-gray-900">₹{entry.closingBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                    <td className="px-6 py-5 whitespace-nowrap text-sm text-right font-bold text-gray-900">
+                                        ₹{Math.abs(entry.closingBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                        <span className="ml-1 text-gray-500 text-xs font-normal">
+                                            {entry.closingBalance >= 0 ? 'Dr' : 'Cr'}
+                                        </span>
+                                    </td>
                                 </tr>
                             ))}
                             {filteredMonthData.length === 0 && (
@@ -5288,11 +5352,13 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
         if (status === 'Due') return 'bg-indigo-100 text-indigo-800';
         if (status === 'Partially Received') return 'bg-yellow-100 text-yellow-800';
         if (status === 'Received') return 'bg-green-100 text-green-800';
+        if (status === 'Utilized') return 'bg-green-100 text-green-800';
+        if (status === 'Not Utilized') return 'bg-gray-100 text-gray-800';
         return 'bg-gray-100 text-gray-800';
     };
 
     const postFromOptions: TransactionType[] = ['Sales', 'Receipt', 'Purchase', 'Payment', 'Debit Note', 'Credit Note'];
-    const statusOptions = ['Paid', 'Unpaid', 'Partially Paid', 'Approved', 'Not Due', 'Due', 'Partially Received', 'Received'];
+    const statusOptions = ['Not Due', 'Due', 'Partially Received', 'Received', 'Utilized', 'Not Utilized'];
 
     return (
         <div className="text-left">
@@ -5304,33 +5370,79 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
                 </button>
                 <div className="flex gap-3">
                     {viewMode === 'month-wise' && (
-                        <div className="relative">
-                            <select
-                                value={monthFilter}
-                                onChange={(e) => setMonthFilter(e.target.value)}
-                                className="pl-3 pr-8 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-48 appearance-none bg-white cursor-pointer"
+                        <div className="relative month-dropdown-container">
+                            <button
+                                onClick={() => setShowMonthDropdown(!showMonthDropdown)}
+                                className="pl-3 pr-8 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-48 bg-white cursor-pointer text-left"
                             >
-                                <option value="">Select Month</option>
-                                {mockMonthLedgerData.map((entry, index) => (
-                                    <option key={index} value={entry.month}>
-                                        {entry.month}
-                                    </option>
-                                ))}
-                            </select>
+                                {monthFilter.length === 0 ? 'Select Month' : `${monthFilter.length} month(s) selected`}
+                            </button>
                             <ChevronDown className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none" />
+
+                            {showMonthDropdown && (
+                                <div className="absolute z-50 top-full mt-1 w-48 bg-white border border-gray-300 rounded-[4px] shadow-lg max-h-64 overflow-y-auto">
+                                    <div className="p-2">
+                                        <label className="flex items-center px-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={monthFilter.length === mockMonthLedgerData.length}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setMonthFilter(mockMonthLedgerData.map(m => m.month));
+                                                    } else {
+                                                        setMonthFilter([]);
+                                                    }
+                                                }}
+                                                className="mr-2 rounded text-indigo-600 focus:ring-indigo-500"
+                                            />
+                                            <span className="text-sm font-medium">Select All</span>
+                                        </label>
+                                        <div className="border-t border-gray-200 my-1"></div>
+                                        {mockMonthLedgerData.map((entry, index) => (
+                                            <label key={index} className="flex items-center px-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={monthFilter.includes(entry.month)}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) {
+                                                            setMonthFilter([...monthFilter, entry.month]);
+                                                        } else {
+                                                            setMonthFilter(monthFilter.filter(m => m !== entry.month));
+                                                        }
+                                                    }}
+                                                    className="mr-2 rounded text-indigo-600 focus:ring-indigo-500"
+                                                />
+                                                <span className="text-sm">{entry.month}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
+                    {customer.is_also_vendor && (
+                        <button
+                            onClick={() => setShowNetOffModal(true)}
+                            className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-[4px] hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                        >
+                            Net Off
+                        </button>
+                    )}
                     <button
-                        onClick={() => setShowNetOffModal(true)}
-                        className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-[4px] hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                    >
-                        Net Off
-                    </button>
-                    <button
-                        onClick={() => setViewMode(viewMode === 'invoice-wise' ? 'month-wise' : 'invoice-wise')}
+                        onClick={() => {
+                            if (selectedMonthView) {
+                                // Clear month filter and go back to month view
+                                setDateFilter({ start: '', end: '' });
+                                setSelectedMonthView(null);
+                                setViewMode('month-wise');
+                            } else {
+                                // Normal toggle
+                                setViewMode(viewMode === 'invoice-wise' ? 'month-wise' : 'invoice-wise');
+                            }
+                        }}
                         className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-[4px] hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 min-w-[140px]"
                     >
-                        {viewMode === 'invoice-wise' ? 'Month View' : 'Invoice-wise view'}
+                        {selectedMonthView ? 'Back' : (viewMode === 'invoice-wise' ? 'Month View' : 'Invoice-wise view')}
                     </button>
                 </div>
             </div>
@@ -5362,11 +5474,11 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
                                                         <div className="space-y-2">
                                                             <div>
                                                                 <label className="text-[10px] text-gray-500 block mb-1">Start Date</label>
-                                                                <input type="date" value={dateFilter.start} onChange={(e) => setDateFilter({ ...dateFilter, start: e.target.value })} className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500" />
+                                                                <input type="date" value={dateFilter.start} onChange={(e) => setDateFilter({ ...dateFilter, start: e.target.value })} max={new Date().toISOString().split('T')[0]} className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500" />
                                                             </div>
                                                             <div>
                                                                 <label className="text-[10px] text-gray-500 block mb-1">End Date</label>
-                                                                <input type="date" value={dateFilter.end} onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })} className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500" />
+                                                                <input type="date" value={dateFilter.end} onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })} max={new Date().toISOString().split('T')[0]} className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500" />
                                                             </div>
                                                         </div>
                                                     </div>
@@ -5535,11 +5647,13 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
 
 
             {/* Net Off Modal */}
-            <NetOffModal
-                isOpen={showNetOffModal}
-                onClose={() => setShowNetOffModal(false)}
-                customerName={customer.name}
-            />
+            {customer.is_also_vendor && (
+                <NetOffModal
+                    isOpen={showNetOffModal}
+                    onClose={() => setShowNetOffModal(false)}
+                    customerName={customer.name}
+                />
+            )}
         </div>
     );
 };
@@ -5547,9 +5661,9 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
 // Sales Content Component with Aging Buckets
 const SalesContent: React.FC = () => {
     const [viewMode, setViewMode] = useState<'dashboard' | 'list'>('dashboard');
-    const [activeCategory, setActiveCategory] = useState<SalesCategory>('Stock-in-Trade');
+    const [activeCategory, setActiveCategory] = useState<SalesCategory>('Export');
     const [showLedgerView, setShowLedgerView] = useState(false);
-    const [selectedCustomer, setSelectedCustomer] = useState<{ id: string, name: string } | null>(null);
+    const [selectedCustomer, setSelectedCustomer] = useState<{ id: string, name: string, is_also_vendor?: boolean } | null>(null);
 
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -5561,16 +5675,19 @@ const SalesContent: React.FC = () => {
                 customerId: '1',
                 customerCode: 'CUST-001',
                 customerName: 'Acme Corporation',
+                subCategory: 'Retail',
                 notDue: 50000,
                 days0to45: 25000,
                 days45to90: 15000,
                 months6: 10000,
-                year1: 5000
+                year1: 5000,
+                is_also_vendor: true
             },
             {
                 customerId: '2',
                 customerCode: 'CUST-002',
                 customerName: 'Global Traders Pvt Ltd',
+                subCategory: 'Wholesale',
                 notDue: 75000,
                 days0to45: 0,
                 days45to90: 30000,
@@ -5581,6 +5698,7 @@ const SalesContent: React.FC = () => {
                 customerId: '3',
                 customerCode: 'CUST-003',
                 customerName: 'TechVision Solutions',
+                subCategory: 'Technology',
                 notDue: 0,
                 days0to45: 45000,
                 days45to90: 0,
@@ -5591,6 +5709,7 @@ const SalesContent: React.FC = () => {
                 customerId: '4',
                 customerCode: 'CUST-004',
                 customerName: 'Sunrise Enterprises',
+                subCategory: 'Manufacturing',
                 notDue: 120000,
                 days0to45: 35000,
                 days45to90: 18000,
@@ -5601,6 +5720,7 @@ const SalesContent: React.FC = () => {
                 customerId: '5',
                 customerCode: 'CUST-005',
                 customerName: 'Metro Supplies Inc',
+                subCategory: 'Distribution',
                 notDue: 0,
                 days0to45: 0,
                 days45to90: 42000,
@@ -5616,9 +5736,9 @@ const SalesContent: React.FC = () => {
         return `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     };
 
-    const handleViewCustomer = (customerId: string, customerName: string) => {
+    const handleViewCustomer = (customerId: string, customerName: string, isVendor?: boolean) => {
         // Navigate to Customer Ledger View
-        setSelectedCustomer({ id: customerId, name: customerName });
+        setSelectedCustomer({ id: customerId, name: customerName, is_also_vendor: isVendor });
         setShowLedgerView(true);
     };
 
@@ -5648,7 +5768,7 @@ const SalesContent: React.FC = () => {
         setViewMode('list');
     };
 
-    const categories: SalesCategory[] = ['Stock-in-Trade', 'Finished Goods', 'Services'];
+    const categories: SalesCategory[] = ['Export', 'Within Country (B2B)', 'Within Country (B2C)'];
     const currentData = getMockData(activeCategory);
 
     // Filter data based on search term
@@ -5670,9 +5790,9 @@ const SalesContent: React.FC = () => {
                         <h3 className="text-xl font-bold text-gray-900">Sales - Customer Aging</h3>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {/* Stock-in-Trade Card */}
+                        {/* Export Card */}
                         <div
-                            onClick={() => handleCardClick('Stock-in-Trade')}
+                            onClick={() => handleCardClick('Export')}
                             className="bg-white p-6 rounded-[4px] border border-gray-200 hover:border-indigo-500 hover:shadow-md cursor-pointer transition-all group"
                         >
                             <div className="flex items-center justify-between mb-4">
@@ -5682,13 +5802,13 @@ const SalesContent: React.FC = () => {
                                 </div>
                                 <ChevronLeft className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transform rotate-180 transition-all opacity-0 group-hover:opacity-100" />
                             </div>
-                            <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">Stock-in-Trade</h3>
-                            <p className="text-sm text-gray-500 mt-2">View stock-in-trade aging.</p>
+                            <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">Export</h3>
+                            <p className="text-sm text-gray-500 mt-2">View export sales aging.</p>
                         </div>
 
-                        {/* Finished Goods Card */}
+                        {/* Within Country (B2B) Card */}
                         <div
-                            onClick={() => handleCardClick('Finished Goods')}
+                            onClick={() => handleCardClick('Within Country (B2B)')}
                             className="bg-white p-6 rounded-[4px] border border-gray-200 hover:border-indigo-500 hover:shadow-md cursor-pointer transition-all group"
                         >
                             <div className="flex items-center justify-between mb-4">
@@ -5697,13 +5817,13 @@ const SalesContent: React.FC = () => {
                                 </div>
                                 <ChevronLeft className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transform rotate-180 transition-all opacity-0 group-hover:opacity-100" />
                             </div>
-                            <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">Finished Goods</h3>
-                            <p className="text-sm text-gray-500 mt-2">View finished goods aging.</p>
+                            <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">Within Country (B2B)</h3>
+                            <p className="text-sm text-gray-500 mt-2">View B2B sales aging.</p>
                         </div>
 
-                        {/* Services Card */}
+                        {/* Within Country (B2C) Card */}
                         <div
-                            onClick={() => handleCardClick('Services')}
+                            onClick={() => handleCardClick('Within Country (B2C)')}
                             className="bg-white p-6 rounded-[4px] border border-gray-200 hover:border-indigo-500 hover:shadow-md cursor-pointer transition-all group"
                         >
                             <div className="flex items-center justify-between mb-4">
@@ -5712,8 +5832,8 @@ const SalesContent: React.FC = () => {
                                 </div>
                                 <ChevronLeft className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transform rotate-180 transition-all opacity-0 group-hover:opacity-100" />
                             </div>
-                            <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">Services</h3>
-                            <p className="text-sm text-gray-500 mt-2">View services aging.</p>
+                            <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">Within Country (B2C)</h3>
+                            <p className="text-sm text-gray-500 mt-2">View B2C sales aging.</p>
                         </div>
                     </div>
                 </div>
@@ -5758,6 +5878,9 @@ const SalesContent: React.FC = () => {
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
                                             Customer Name
                                         </th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
+                                            Sub Category
+                                        </th>
 
                                         {/* Aging Buckets */}
                                         <th colSpan={5} className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-indigo-50 border-b border-gray-200">
@@ -5768,6 +5891,7 @@ const SalesContent: React.FC = () => {
                                         </th>
                                     </tr>
                                     <tr>
+                                        <th className="border-r border-gray-200"></th>
                                         <th className="border-r border-gray-200"></th>
                                         <th className="border-r border-gray-200"></th>
                                         <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-indigo-50 border-r border-gray-200">
@@ -5797,6 +5921,9 @@ const SalesContent: React.FC = () => {
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-100">
                                                 {customer.customerName}
                                             </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-100">
+                                                {customer.subCategory}
+                                            </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-600 border-r border-gray-100">
                                                 {customer.notDue > 0 ? formatCurrency(customer.notDue) : '-'}
                                             </td>
@@ -5815,7 +5942,7 @@ const SalesContent: React.FC = () => {
                                             <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium border-l border-gray-100">
                                                 <div className="flex items-center justify-center space-x-3">
                                                     <button
-                                                        onClick={() => handleViewCustomer(customer.customerId, customer.customerName)}
+                                                        onClick={() => handleViewCustomer(customer.customerId, customer.customerName, customer.is_also_vendor)}
                                                         className="text-indigo-600 hover:text-indigo-900"
                                                         title="View Ledger"
                                                     >
@@ -5834,7 +5961,7 @@ const SalesContent: React.FC = () => {
                                     ))}
                                     {filteredData.length === 0 && (
                                         <tr>
-                                            <td colSpan={8} className="px-6 py-12 text-center text-gray-500 text-sm">
+                                            <td colSpan={9} className="px-6 py-12 text-center text-gray-500 text-sm">
                                                 No customers found matching your search.
                                             </td>
                                         </tr>
