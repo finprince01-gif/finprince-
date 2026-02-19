@@ -111,8 +111,8 @@ export const initialVouchers: Voucher[] = [
     type: 'Journal',
     date: '2024-01-25',
     entries: [
-      { ledger: 'Salary', debit: 50000, credit: 0 },
-      { ledger: 'Cash', debit: 0, credit: 50000 }
+      { ledger: 'Salary', note: '', refNo: '', debit: 50000, credit: 0 },
+      { ledger: 'Cash', note: '', refNo: '', debit: 0, credit: 50000 }
     ],
     totalDebit: 50000,
     totalCredit: 50000,

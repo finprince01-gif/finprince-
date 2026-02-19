@@ -306,7 +306,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [purchaseDescription, setPurchaseDescription] = useState('');
   const [selectedPurchaseItems, setSelectedPurchaseItems] = useState<string[]>([]);
   const [purchaseItems, setPurchaseItems] = useState([
-    { id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '' }
+    { id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '' }
   ]);
 
   // Purchase Due Details State
@@ -331,6 +331,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [purchaseTransitReceivedIn, setPurchaseTransitReceivedIn] = useState(''); // Equivalent to Dispatch From
   const [purchaseTransitReceiptDate, setPurchaseTransitReceiptDate] = useState(getTodayDate());
   const [purchaseTransitReceiptTime, setPurchaseTransitReceiptTime] = useState('');
+  const [purchaseTransitReceivedQty, setPurchaseTransitReceivedQty] = useState('');
+  const [purchaseTransitReceivedUqc, setPurchaseTransitReceivedUqc] = useState('');
 
   // Basic / Road Details (Right Column)
   const [purchaseTransitDeliveryType, setPurchaseTransitDeliveryType] = useState('Self');
@@ -420,11 +422,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   // Mock Data for Verification
   const mockPurchaseOrders: Record<string, typeof purchaseItems> = {
     'PO-001': [
-      { id: '1', itemCode: 'ITM001', itemName: 'Dell Laptop', hsnSac: '8471', qty: 2, uom: 'Nos', rate: 50000, taxableValue: 100000, igst: 18000, cgst: 0, sgst: 0, cess: 0, invoiceValue: 118000, description: '' },
-      { id: '2', itemCode: 'ITM002', itemName: 'Wireless Mouse', hsnSac: '8471', qty: 5, uom: 'Nos', rate: 500, taxableValue: 2500, igst: 450, cgst: 0, sgst: 0, cess: 0, invoiceValue: 2950, description: '' }
+      { id: '1', itemCode: 'ITM001', itemName: 'Dell Laptop', hsnSac: '8471', qty: 2, uom: 'Nos', rate: 50000, taxableValue: 100000, foreignRate: 0, foreignAmount: 0, igst: 18000, cgst: 0, sgst: 0, cess: 0, invoiceValue: 118000, description: '' },
+      { id: '2', itemCode: 'ITM002', itemName: 'Wireless Mouse', hsnSac: '8471', qty: 5, uom: 'Nos', rate: 500, taxableValue: 2500, foreignRate: 0, foreignAmount: 0, igst: 450, cgst: 0, sgst: 0, cess: 0, invoiceValue: 2950, description: '' }
     ],
     'PO-002': [
-      { id: '1', itemCode: 'ITM003', itemName: 'Office Chair', hsnSac: '9403', qty: 10, uom: 'Nos', rate: 4500, taxableValue: 45000, igst: 8100, cgst: 0, sgst: 0, cess: 0, invoiceValue: 53100, description: '' }
+      { id: '1', itemCode: 'ITM003', itemName: 'Office Chair', hsnSac: '9403', qty: 10, uom: 'Nos', rate: 4500, taxableValue: 45000, foreignRate: 0, foreignAmount: 0, igst: 8100, cgst: 0, sgst: 0, cess: 0, invoiceValue: 53100, description: '' }
     ]
   };
 
@@ -1452,7 +1454,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     const item = { ...newItems[index] };
 
     // Update field
-    if (['qty', 'rate', 'igst', 'cgst', 'sgst', 'cess'].includes(field)) {
+    if (['qty', 'rate', 'foreignRate', 'igst', 'cgst', 'sgst', 'cess'].includes(field)) {
       (item as any)[field] = Math.max(0, typeof value === 'string' ? parseFloat(value) || 0 : value);
     } else {
       (item as any)[field] = value;
@@ -1480,8 +1482,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     }
 
 
-    // Auto-calculate Taxable Value (Qty * Rate) and Taxes
-    if (field === 'qty' || field === 'rate' || field === 'itemCode' || field === 'itemName') { // Recalculate if item changes too (in case rate updated)
+    // Auto-calculate Taxable Value (Qty * Rate) and Taxes (INR)
+    if (field === 'qty' || field === 'rate' || field === 'itemCode' || field === 'itemName') {
       const qty = parseFloat(item.qty.toString()) || 0;
       const rate = parseFloat(item.rate.toString()) || 0;
       item.taxableValue = qty * rate;
@@ -1504,6 +1506,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         item.cgst = totalTax / 2;
         item.sgst = totalTax / 2;
       }
+    }
+
+    // Auto-calculate Foreign Amount (Qty * Foreign Rate)
+    if (field === 'qty' || field === 'foreignRate') {
+      const qty = parseFloat(item.qty.toString()) || 0;
+      const fRate = parseFloat(item.foreignRate?.toString() || '0') || 0;
+      item.foreignAmount = qty * fRate;
     }
 
     // Auto-calculate Invoice Value (Taxable + Taxes)
@@ -1547,6 +1556,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       uom: '',
       rate: 0,
       taxableValue: 0,
+      foreignRate: 0,
+      foreignAmount: 0,
       igst: 0,
       cgst: 0,
       sgst: 0,
@@ -1579,6 +1590,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         uom: '',
         rate: 0,
         taxableValue: 0,
+        foreignRate: 0,
+        foreignAmount: 0,
         igst: 0,
         cgst: 0,
         sgst: 0,
@@ -1969,8 +1982,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           <input
                             type="number"
                             min="0"
-                            value={row.rate}
-                            onChange={(e) => handlePurchaseItemChange(index, 'rate', e.target.value)}
+                            value={row.foreignRate || ''}
+                            onChange={(e) => handlePurchaseItemChange(index, 'foreignRate', e.target.value)}
                             className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent"
                             placeholder="0.00"
                           />
@@ -1978,7 +1991,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         <td className="px-3 py-2">
                           <input
                             type="text"
-                            value={row.taxableValue}
+                            value={row.foreignAmount || 0}
                             readOnly
                             className="w-full px-2 py-1.5 bg-gray-50 border-0 rounded text-sm font-medium text-center text-gray-700"
                           />
@@ -2385,10 +2398,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           {
             purchaseActiveTab === 'transit' && (
               <div className="space-y-6">
-                {/* Main Two-Column Layout (Matching SalesVoucher structure) */}
+                {/* Top Section: Common to all modes */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-6 rounded-[4px] border border-gray-200">
-
-                  {/* Left Column */}
+                  {/* Left Column: Location & Mode */}
                   <div className="space-y-4">
                     {/* Received In / Dispatch From */}
                     <div>
@@ -2429,11 +2441,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         <option value="Rail">Rail</option>
                       </select>
                     </div>
+                  </div>
 
-                    {/* Receipt Date */}
+                  {/* Right Column: Date, Time, Qty */}
+                  <div className="space-y-4">
+                    {/* Received Date */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Receipt Date
+                        Received Date
                       </label>
                       <input
                         type="date"
@@ -2443,10 +2458,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       />
                     </div>
 
-                    {/* Receipt Time */}
+                    {/* Received Time */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Receipt Time
+                        Received Time
                       </label>
                       <input
                         type="time"
@@ -2456,358 +2471,492 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       />
                     </div>
 
-                    {/* Upload Document */}
-                    <div className="mt-6">
-                      <input
-                        type="file"
-                        id="transit-doc"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) setPurchaseTransitDocument(file);
-                        }}
-                        className="hidden"
-                        accept=".jpg,.jpeg,.pdf"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => document.getElementById('transit-doc')?.click()}
-                        className="w-full h-40 border-2 border-dashed border-gray-300 hover:border-indigo-500 bg-white hover:bg-indigo-50/50 text-gray-600 rounded-[4px] transition-colors flex flex-col items-center justify-center gap-2"
-                      >
-                        <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                        </svg>
-                        <span className="text-sm font-medium">UPLOAD DOCUMENT</span>
-                        {purchaseTransitDocument && (
-                          <span className="text-xs mt-2 text-indigo-600 font-medium">✓ {purchaseTransitDocument.name}</span>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Right Column (Transport Details) */}
-                  <div className="space-y-4">
-                    {/* Delivery Type */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Delivery Type
-                      </label>
-                      <select
-                        value={purchaseTransitDeliveryType}
-                        onChange={(e) => {
-                          setPurchaseTransitDeliveryType(e.target.value);
-                          if (e.target.value === 'Courier') {
-                            setPurchaseTransitTransporterId('');
-                            setPurchaseTransitTransporterName('');
-                            setPurchaseTransitVehicleNo('');
-                            setPurchaseTransitLrGrConsignment('');
-                          }
-                        }}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                      >
-                        <option value="Self">Self</option>
-                        <option value="Third Party">Third Party</option>
-                        <option value="Courier">Courier</option>
-                      </select>
-                    </div>
-
-
-
-                    {/* Transporter ID/GSTIN */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Transporter ID/GSTIN
-                      </label>
-                      <input
-                        type="text"
-                        value={purchaseTransitTransporterId}
-                        onChange={(e) => setPurchaseTransitTransporterId(e.target.value)}
-                        disabled={purchaseTransitDeliveryType === 'Courier'}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                        placeholder=""
-                      />
-                    </div>
-
-                    {/* Transporter Name */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Transporter Name
-                      </label>
-                      <input
-                        type="text"
-                        value={purchaseTransitTransporterName}
-                        onChange={(e) => setPurchaseTransitTransporterName(e.target.value)}
-                        disabled={purchaseTransitDeliveryType === 'Courier'}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                        placeholder=""
-                      />
-                    </div>
-
-                    {/* Vehicle No. */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Vehicle No.
-                      </label>
-                      <input
-                        type="text"
-                        value={purchaseTransitVehicleNo}
-                        onChange={(e) => setPurchaseTransitVehicleNo(e.target.value)}
-                        disabled={purchaseTransitDeliveryType === 'Courier'}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                        placeholder=""
-                      />
-                    </div>
-
-                    {/* LR/GR/Consignment */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        LR/GR/Consignment
-                      </label>
-                      <input
-                        type="text"
-                        value={purchaseTransitLrGrConsignment}
-                        onChange={(e) => setPurchaseTransitLrGrConsignment(e.target.value)}
-                        disabled={purchaseTransitDeliveryType === 'Courier'}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                        placeholder=""
-                      />
+                    {/* Received Quantity & UQC */}
+                    <div className="flex gap-4">
+                      <div className="flex-1">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Received Quantity
+                        </label>
+                        <input
+                          type="number"
+                          value={purchaseTransitReceivedQty}
+                          onChange={(e) => setPurchaseTransitReceivedQty(e.target.value)}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                          placeholder="Qty"
+                        />
+                      </div>
+                      <div className="w-1/3">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          UQC
+                        </label>
+                        <input
+                          type="text"
+                          value={purchaseTransitReceivedUqc}
+                          onChange={(e) => setPurchaseTransitReceivedUqc(e.target.value)}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                          placeholder="UQC"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Air/Sea Mode */}
-                {(purchaseTransitMode === 'Air' || purchaseTransitMode === 'Sea') && (
+                {/* Mode Specific Sections: Air, Sea, or Rail */}
+                {(purchaseTransitMode === 'Air' || purchaseTransitMode === 'Sea' || purchaseTransitMode === 'Rail') ? (
                   <div className="space-y-6 mt-6">
-                    {/* Upto PORT (Consolidated for Air/Sea) */}
+                    {/* From PORT Section */}
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-800 mb-4">UPTO PORT</h3>
+                      <h3 className="text-lg font-bold text-indigo-700 mb-4">From PORT</h3>
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-gray-50 p-6 rounded-[4px] border border-gray-200">
+                        {/* Col 1: Transporter Details */}
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Delivery Type
+                            </label>
+                            <select
+                              value={purchaseTransitDeliveryType}
+                              onChange={(e) => {
+                                setPurchaseTransitDeliveryType(e.target.value);
+                                if (e.target.value === 'Courier') {
+                                  setPurchaseTransitTransporterId('');
+                                  setPurchaseTransitTransporterName('');
+                                  setPurchaseTransitVehicleNo('');
+                                  setPurchaseTransitLrGrConsignment('');
+                                }
+                              }}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                            >
+                              <option value="Self">Self</option>
+                              <option value="Third Party">Third Party</option>
+                              <option value="Courier">Courier</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Transporter ID/GSTIN
+                            </label>
+                            <input
+                              type="text"
+                              value={purchaseTransitTransporterId}
+                              onChange={(e) => setPurchaseTransitTransporterId(e.target.value)}
+                              disabled={purchaseTransitDeliveryType === 'Courier'}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Transporter Name
+                            </label>
+                            <input
+                              type="text"
+                              value={purchaseTransitTransporterName}
+                              onChange={(e) => setPurchaseTransitTransporterName(e.target.value)}
+                              disabled={purchaseTransitDeliveryType === 'Courier'}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Col 2: Vehicle & LR */}
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Vehicle No.
+                            </label>
+                            <input
+                              type="text"
+                              value={purchaseTransitVehicleNo}
+                              onChange={(e) => setPurchaseTransitVehicleNo(e.target.value)}
+                              disabled={purchaseTransitDeliveryType === 'Courier'}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              LR/GR/Consignment No
+                            </label>
+                            <input
+                              type="text"
+                              value={purchaseTransitLrGrConsignment}
+                              onChange={(e) => setPurchaseTransitLrGrConsignment(e.target.value)}
+                              disabled={purchaseTransitDeliveryType === 'Courier'}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Col 3: Upload Document */}
+                        <div className="flex items-start justify-center">
+                          <div className="w-full">
+                            <input
+                              type="file"
+                              id="transit-doc"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) setPurchaseTransitDocument(file);
+                              }}
+                              className="hidden"
+                              accept=".jpg,.jpeg,.pdf"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => document.getElementById('transit-doc')?.click()}
+                              className="w-full h-48 border-2 border-dashed border-gray-300 hover:border-indigo-500 bg-white hover:bg-indigo-50/50 text-gray-600 rounded-[4px] transition-colors flex flex-col items-center justify-center gap-2"
+                            >
+                              <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                              </svg>
+                              <span className="text-sm font-medium">UPLOAD DOCUMENT</span>
+                              {purchaseTransitDocument && (
+                                <span className="text-xs mt-2 text-indigo-600 font-medium">✓ {purchaseTransitDocument.name}</span>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Upto PORT (Conditional) */}
+                    <div>
+                      <h3 className="text-lg font-bold text-indigo-700 mb-4">Upto PORT</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-6 rounded-[4px] border border-gray-200">
-                        <div className="space-y-4">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Bill of Lading No.</label>
-                            <input
-                              type="text"
-                              value={purchaseTransitUptoPortBolNo}
-                              onChange={(e) => setPurchaseTransitUptoPortBolNo(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Bill No.</label>
-                            <input
-                              type="text"
-                              value={purchaseTransitUptoPortShippingBillNo}
-                              onChange={(e) => setPurchaseTransitUptoPortShippingBillNo(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Bill Date</label>
-                            <input
-                              type="date"
-                              value={purchaseTransitUptoPortShippingBillDate}
-                              onChange={(e) => setPurchaseTransitUptoPortShippingBillDate(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Ship/Port Code</label>
-                            <input
-                              type="text"
-                              value={purchaseTransitUptoPortShipPortCode}
-                              onChange={(e) => setPurchaseTransitUptoPortShipPortCode(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Origin</label>
-                            <input
-                              type="text"
-                              value={purchaseTransitUptoPortOriginCity}
-                              onChange={(e) => setPurchaseTransitUptoPortOriginCity(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2"
-                              placeholder="City"
-                            />
-                            <input
-                              type="text"
-                              value={purchaseTransitUptoPortOriginCountry}
-                              onChange={(e) => setPurchaseTransitUptoPortOriginCountry(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                              placeholder="Country"
-                            />
-                          </div>
+                        {/* AIR / SEA Layout */}
+                        {(purchaseTransitMode === 'Air' || purchaseTransitMode === 'Sea') && (
+                          <>
+                            <div className="space-y-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Bill of Lading No.</label>
+                                <input
+                                  type="text"
+                                  value={purchaseTransitUptoPortBolNo}
+                                  onChange={(e) => setPurchaseTransitUptoPortBolNo(e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Bill No.</label>
+                                <input
+                                  type="text"
+                                  value={purchaseTransitUptoPortShippingBillNo}
+                                  onChange={(e) => setPurchaseTransitUptoPortShippingBillNo(e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Bill Date</label>
+                                <input
+                                  type="date"
+                                  value={purchaseTransitUptoPortShippingBillDate}
+                                  onChange={(e) => setPurchaseTransitUptoPortShippingBillDate(e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Ship/Port Code</label>
+                                <input
+                                  type="text"
+                                  value={purchaseTransitUptoPortShipPortCode}
+                                  onChange={(e) => setPurchaseTransitUptoPortShipPortCode(e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Origin</label>
+                                <input
+                                  type="text"
+                                  value={purchaseTransitUptoPortOriginCity}
+                                  onChange={(e) => setPurchaseTransitUptoPortOriginCity(e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2"
+                                  placeholder="City"
+                                />
+                                <input
+                                  type="text"
+                                  value={purchaseTransitUptoPortOriginCountry}
+                                  onChange={(e) => setPurchaseTransitUptoPortOriginCountry(e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                  placeholder="Country"
+                                />
+                              </div>
+                            </div>
+                            <div className="space-y-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Bill of Lading Date</label>
+                                <input
+                                  type="date"
+                                  value={purchaseTransitUptoPortBolDate}
+                                  onChange={(e) => setPurchaseTransitUptoPortBolDate(e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Vessel/Flight No.</label>
+                                <input
+                                  type="text"
+                                  value={purchaseTransitUptoPortVesselFlightNo}
+                                  onChange={(e) => setPurchaseTransitUptoPortVesselFlightNo(e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Port of Loading</label>
+                                <input
+                                  type="text"
+                                  value={purchaseTransitUptoPortPortOfLoading}
+                                  onChange={(e) => setPurchaseTransitUptoPortPortOfLoading(e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Port of Discharge</label>
+                                <input
+                                  type="text"
+                                  value={purchaseTransitUptoPortPortOfDischarge}
+                                  onChange={(e) => setPurchaseTransitUptoPortPortOfDischarge(e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Final Destination</label>
+                                <input
+                                  type="text"
+                                  value={purchaseTransitUptoPortFinalDestCity}
+                                  onChange={(e) => setPurchaseTransitUptoPortFinalDestCity(e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2"
+                                  placeholder="City"
+                                />
+                                <input
+                                  type="text"
+                                  value={purchaseTransitUptoPortFinalDestCountry}
+                                  onChange={(e) => setPurchaseTransitUptoPortFinalDestCountry(e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                  placeholder="Country"
+                                />
+                              </div>
+                            </div>
+                          </>
+                        )}
+
+                        {/* RAIL Layout */}
+                        {purchaseTransitMode === 'Rail' && (
+                          <>
+                            <div className="space-y-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Bill of Lading No.</label>
+                                <input
+                                  type="text"
+                                  value={purchaseTransitUptoPortBolNo}
+                                  onChange={(e) => setPurchaseTransitUptoPortBolNo(e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Railway Receipt No.</label>
+                                <input
+                                  type="text"
+                                  value={purchaseTransitUptoPortRrNo}
+                                  onChange={(e) => setPurchaseTransitUptoPortRrNo(e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Railway Receipt Date</label>
+                                <input
+                                  type="date"
+                                  value={purchaseTransitUptoPortRrDate}
+                                  onChange={(e) => setPurchaseTransitUptoPortRrDate(e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Origin</label>
+                                <input
+                                  type="text"
+                                  value={purchaseTransitUptoPortOriginCity}
+                                  onChange={(e) => setPurchaseTransitUptoPortOriginCity(e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2"
+                                  placeholder="City"
+                                />
+                                <input
+                                  type="text"
+                                  value={purchaseTransitUptoPortOriginCountry}
+                                  onChange={(e) => setPurchaseTransitUptoPortOriginCountry(e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                  placeholder="Country"
+                                />
+                              </div>
+                            </div>
+                            <div className="space-y-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Bill of Lading Date</label>
+                                <input
+                                  type="date"
+                                  value={purchaseTransitUptoPortBolDate}
+                                  onChange={(e) => setPurchaseTransitUptoPortBolDate(e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">FNR No.</label>
+                                <input
+                                  type="text"
+                                  value={purchaseTransitUptoPortFnrNo}
+                                  onChange={(e) => setPurchaseTransitUptoPortFnrNo(e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Station of Loading</label>
+                                <input
+                                  type="text"
+                                  value={purchaseTransitUptoPortStationLoading}
+                                  onChange={(e) => setPurchaseTransitUptoPortStationLoading(e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Station of Discharge</label>
+                                <input
+                                  type="text"
+                                  value={purchaseTransitUptoPortStationDischarge}
+                                  onChange={(e) => setPurchaseTransitUptoPortStationDischarge(e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Final Destination</label>
+                                <input
+                                  type="text"
+                                  value={purchaseTransitUptoPortFinalDestCity}
+                                  onChange={(e) => setPurchaseTransitUptoPortFinalDestCity(e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2"
+                                  placeholder="City"
+                                />
+                                <input
+                                  type="text"
+                                  value={purchaseTransitUptoPortFinalDestCountry}
+                                  onChange={(e) => setPurchaseTransitUptoPortFinalDestCountry(e.target.value)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                  placeholder="Country"
+                                />
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* Default/Road Layout */
+                  <div className="space-y-6 mt-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-6 rounded-[4px] border border-gray-200">
+                      {/* Left: Transporter Details */}
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Delivery Type
+                          </label>
+                          <select
+                            value={purchaseTransitDeliveryType}
+                            onChange={(e) => {
+                              setPurchaseTransitDeliveryType(e.target.value);
+                              if (e.target.value === 'Courier') {
+                                setPurchaseTransitTransporterId('');
+                                setPurchaseTransitTransporterName('');
+                                setPurchaseTransitVehicleNo('');
+                                setPurchaseTransitLrGrConsignment('');
+                              }
+                            }}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                          >
+                            <option value="Self">Self</option>
+                            <option value="Third Party">Third Party</option>
+                            <option value="Courier">Courier</option>
+                          </select>
                         </div>
-                        <div className="space-y-4">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Bill of Lading Date</label>
-                            <input
-                              type="date"
-                              value={purchaseTransitUptoPortBolDate}
-                              onChange={(e) => setPurchaseTransitUptoPortBolDate(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Vessel/Flight No.</label>
-                            <input
-                              type="text"
-                              value={purchaseTransitUptoPortVesselFlightNo}
-                              onChange={(e) => setPurchaseTransitUptoPortVesselFlightNo(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Port of Loading</label>
-                            <input
-                              type="text"
-                              value={purchaseTransitUptoPortPortOfLoading}
-                              onChange={(e) => setPurchaseTransitUptoPortPortOfLoading(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Port of Discharge</label>
-                            <input
-                              type="text"
-                              value={purchaseTransitUptoPortPortOfDischarge}
-                              onChange={(e) => setPurchaseTransitUptoPortPortOfDischarge(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Final Destination</label>
-                            <input
-                              type="text"
-                              value={purchaseTransitUptoPortFinalDestCity}
-                              onChange={(e) => setPurchaseTransitUptoPortFinalDestCity(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2"
-                              placeholder="City"
-                            />
-                            <input
-                              type="text"
-                              value={purchaseTransitUptoPortFinalDestCountry}
-                              onChange={(e) => setPurchaseTransitUptoPortFinalDestCountry(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                              placeholder="Country"
-                            />
-                          </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Transporter ID/GSTIN
+                          </label>
+                          <input
+                            type="text"
+                            value={purchaseTransitTransporterId}
+                            onChange={(e) => setPurchaseTransitTransporterId(e.target.value)}
+                            disabled={purchaseTransitDeliveryType === 'Courier'}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                          />
                         </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Transporter Name
+                          </label>
+                          <input
+                            type="text"
+                            value={purchaseTransitTransporterName}
+                            onChange={(e) => setPurchaseTransitTransporterName(e.target.value)}
+                            disabled={purchaseTransitDeliveryType === 'Courier'}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Vehicle No.
+                          </label>
+                          <input
+                            type="text"
+                            value={purchaseTransitVehicleNo}
+                            onChange={(e) => setPurchaseTransitVehicleNo(e.target.value)}
+                            disabled={purchaseTransitDeliveryType === 'Courier'}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            LR/GR/Consignment
+                          </label>
+                          <input
+                            type="text"
+                            value={purchaseTransitLrGrConsignment}
+                            onChange={(e) => setPurchaseTransitLrGrConsignment(e.target.value)}
+                            disabled={purchaseTransitDeliveryType === 'Courier'}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Upload Document */}
+                      <div className="mt-6 md:mt-0">
+                        <input
+                          type="file"
+                          id="transit-doc-road"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) setPurchaseTransitDocument(file);
+                          }}
+                          className="hidden"
+                          accept=".jpg,.jpeg,.pdf"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => document.getElementById('transit-doc-road')?.click()}
+                          className="w-full h-full min-h-[160px] border-2 border-dashed border-gray-300 hover:border-indigo-500 bg-white hover:bg-indigo-50/50 text-gray-600 rounded-[4px] transition-colors flex flex-col items-center justify-center gap-2"
+                        >
+                          <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                          </svg>
+                          <span className="text-sm font-medium">UPLOAD DOCUMENT</span>
+                          {purchaseTransitDocument && (
+                            <span className="text-xs mt-2 text-indigo-600 font-medium">✓ {purchaseTransitDocument.name}</span>
+                          )}
+                        </button>
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* Rail Mode */}
-                {purchaseTransitMode === 'Rail' && (
-                  <div className="space-y-6 mt-6">
-                    {/* Upto PORT (Consolidated for Rail) */}
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-800 mb-4">UPTO PORT</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-6 rounded-[4px] border border-gray-200">
-                        <div className="space-y-4">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Bill of Lading No.</label>
-                            <input
-                              type="text"
-                              value={purchaseTransitUptoPortBolNo}
-                              onChange={(e) => setPurchaseTransitUptoPortBolNo(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Railway Receipt No.</label>
-                            <input
-                              type="text"
-                              value={purchaseTransitUptoPortRrNo}
-                              onChange={(e) => setPurchaseTransitUptoPortRrNo(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Railway Receipt Date</label>
-                            <input
-                              type="date"
-                              value={purchaseTransitUptoPortRrDate}
-                              onChange={(e) => setPurchaseTransitUptoPortRrDate(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Origin</label>
-                            <input
-                              type="text"
-                              value={purchaseTransitUptoPortOriginCity}
-                              onChange={(e) => setPurchaseTransitUptoPortOriginCity(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2"
-                              placeholder="City"
-                            />
-                            <input
-                              type="text"
-                              value={purchaseTransitUptoPortOriginCountry}
-                              onChange={(e) => setPurchaseTransitUptoPortOriginCountry(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                              placeholder="Country"
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-4">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Bill of Lading Date</label>
-                            <input
-                              type="date"
-                              value={purchaseTransitUptoPortBolDate}
-                              onChange={(e) => setPurchaseTransitUptoPortBolDate(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">FNR No.</label>
-                            <input
-                              type="text"
-                              value={purchaseTransitUptoPortFnrNo}
-                              onChange={(e) => setPurchaseTransitUptoPortFnrNo(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Station of Loading</label>
-                            <input
-                              type="text"
-                              value={purchaseTransitUptoPortStationLoading}
-                              onChange={(e) => setPurchaseTransitUptoPortStationLoading(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Station of Discharge</label>
-                            <input
-                              type="text"
-                              value={purchaseTransitUptoPortStationDischarge}
-                              onChange={(e) => setPurchaseTransitUptoPortStationDischarge(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Final Destination</label>
-                            <input
-                              type="text"
-                              value={purchaseTransitUptoPortFinalDestCity}
-                              onChange={(e) => setPurchaseTransitUptoPortFinalDestCity(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2"
-                              placeholder="City"
-                            />
-                            <input
-                              type="text"
-                              value={purchaseTransitUptoPortFinalDestCountry}
-                              onChange={(e) => setPurchaseTransitUptoPortFinalDestCountry(e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                              placeholder="Country"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
+
+
+
               </div>
             )
           }

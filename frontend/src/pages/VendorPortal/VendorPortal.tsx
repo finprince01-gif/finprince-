@@ -144,6 +144,146 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const [activeProcurementSubTab, setActiveProcurementSubTab] = useState<ProcurementSubTab>('Dashboard');
     const [activePaymentSubTab, setActivePaymentSubTab] = useState<ProcurementSubTab>('Dashboard');
 
+    // Procurement View State (New)
+    const [procurementViewMode, setProcurementViewMode] = useState<'list' | 'ledger' | 'month'>('list');
+    const [selectedProcurementVendor, setSelectedProcurementVendor] = useState<any>(null);
+
+    // Month Filter State
+    const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
+    const [isMonthFilterOpen, setIsMonthFilterOpen] = useState(false);
+
+    const [ledgerFilters, setLedgerFilters] = useState({
+        date: '',
+        transferFrom: '',
+        referenceNo: '',
+        ledger: '',
+        status: '',
+        debit: '',
+        credit: '',
+        runningBalance: ''
+    });
+
+    // Mock Data for Procurement (Reference from images)
+    const vendorAgingList = [
+        { id: 1, code: 'VEN-001', name: 'Alpha Raw Materials', aging0_45: '45,000', aging45_90: '-', aging6M: '-', aging1Y: '-' },
+        { id: 2, code: 'VEN-005', name: 'Beta Supplies', aging0_45: '12,500', aging45_90: '-', aging6M: '-', aging1Y: '-' },
+        { id: 3, code: 'VEN-012', name: 'Gamma Corp', aging0_45: '78,000', aging45_90: '-', aging6M: '-', aging1Y: '-' },
+        { id: 4, code: 'VEN-003', name: 'Delta Industries', aging0_45: '-', aging45_90: '1,20,000', aging6M: '-', aging1Y: '-' },
+    ];
+
+    // Dynamic Ledger Data State
+    const [vendorLedgerData, setVendorLedgerData] = useState<any[]>([]);
+    const [loadingLedger, setLoadingLedger] = useState(false);
+
+    // Fetch ledger data for a selected vendor, enriching Payment/Receipt entries with voucher numbers
+    const fetchVendorLedger = async (vendorName: string) => {
+        setLoadingLedger(true);
+        try {
+            // Fetch payment vouchers for this vendor (pay_to = vendor name)
+            const paymentRes: any = await httpClient.get(`/api/vouchers/payment-single/?pay_to=${encodeURIComponent(vendorName)}`);
+            const paymentVouchers: any[] = Array.isArray(paymentRes) ? paymentRes : (paymentRes.results || []);
+
+            // Fetch receipt vouchers for this vendor (receive_from = vendor name)
+            const receiptRes: any = await httpClient.get(`/api/vouchers/receipt-single/?receive_from=${encodeURIComponent(vendorName)}`);
+            const receiptVouchers: any[] = Array.isArray(receiptRes) ? receiptRes : (receiptRes.results || []);
+
+            // Build ledger entries from Payment vouchers
+            const paymentEntries = paymentVouchers.map((v: any, idx: number) => ({
+                id: `pay-${v.id || idx}`,
+                date: v.date || '',
+                transferFrom: 'Payment',
+                referenceNo: v.voucher_number || '-',
+                ledger: v.pay_from || '-',
+                status: 'Paid',
+                debit: '-',
+                credit: v.total_payment ? Number(v.total_payment).toLocaleString('en-IN') : '-',
+                runningBalance: '-'
+            }));
+
+            // Build ledger entries from Receipt vouchers
+            const receiptEntries = receiptVouchers.map((v: any, idx: number) => ({
+                id: `rec-${v.id || idx}`,
+                date: v.date || '',
+                transferFrom: 'Receipt',
+                referenceNo: v.voucher_number || '-',
+                ledger: v.receive_in || '-',
+                status: 'Paid',
+                debit: '-',
+                credit: v.total_receipt ? Number(v.total_receipt).toLocaleString('en-IN') : '-',
+                runningBalance: '-'
+            }));
+
+            // Combine and sort by date descending
+            const allEntries = [...paymentEntries, ...receiptEntries].sort((a, b) =>
+                new Date(b.date).getTime() - new Date(a.date).getTime()
+            );
+
+            // If no real data, fall back to mock data so the UI is not empty
+            if (allEntries.length === 0) {
+                setVendorLedgerData([
+                    { id: 1, date: '2023-10-28', transferFrom: 'Purchase', referenceNo: 'INV-2023-001', ledger: 'Purchase A/c', status: 'Unpaid', debit: '45,000', credit: '-', runningBalance: '45,000 Dr' },
+                    { id: 2, date: '2023-10-25', transferFrom: 'Payment', referenceNo: 'V-002', ledger: 'HDFC Bank', status: 'Paid', debit: '-', credit: '15,000', runningBalance: '30,000 Dr' },
+                    { id: 3, date: '2023-10-20', transferFrom: 'Purchase', referenceNo: 'INV-2023-002', ledger: 'Purchase A/c', status: 'Partially Paid', debit: '12,000', credit: '-', runningBalance: '42,000 Dr' },
+                    { id: 4, date: '2023-10-15', transferFrom: 'Receipt', referenceNo: 'V-005', ledger: 'Cash', status: 'Paid', debit: '-', credit: '5,000', runningBalance: '37,000 Dr' },
+                    { id: 5, date: '2023-10-10', transferFrom: 'Sales', referenceNo: 'INV-2023-003', ledger: 'Sales A/c', status: 'Paid', debit: '-', credit: '2,000', runningBalance: '35,000 Dr' },
+                ]);
+            } else {
+                setVendorLedgerData(allEntries);
+            }
+        } catch (error) {
+            console.error('Error fetching vendor ledger:', error);
+            // Fall back to mock data on error
+            setVendorLedgerData([
+                { id: 1, date: '2023-10-28', transferFrom: 'Purchase', referenceNo: 'INV-2023-001', ledger: 'Purchase A/c', status: 'Unpaid', debit: '45,000', credit: '-', runningBalance: '45,000 Dr' },
+                { id: 2, date: '2023-10-25', transferFrom: 'Payment', referenceNo: 'V-002', ledger: 'HDFC Bank', status: 'Paid', debit: '-', credit: '15,000', runningBalance: '30,000 Dr' },
+                { id: 3, date: '2023-10-20', transferFrom: 'Purchase', referenceNo: 'INV-2023-002', ledger: 'Purchase A/c', status: 'Partially Paid', debit: '12,000', credit: '-', runningBalance: '42,000 Dr' },
+                { id: 4, date: '2023-10-15', transferFrom: 'Receipt', referenceNo: 'V-005', ledger: 'Cash', status: 'Paid', debit: '-', credit: '5,000', runningBalance: '37,000 Dr' },
+                { id: 5, date: '2023-10-10', transferFrom: 'Sales', referenceNo: 'INV-2023-003', ledger: 'Sales A/c', status: 'Paid', debit: '-', credit: '2,000', runningBalance: '35,000 Dr' },
+            ]);
+        } finally {
+            setLoadingLedger(false);
+        }
+    };
+
+
+    const filteredLedgerData = vendorLedgerData.filter(entry => {
+        return (
+            entry.date.toLowerCase().includes(ledgerFilters.date.toLowerCase()) &&
+            entry.transferFrom.toLowerCase().includes(ledgerFilters.transferFrom.toLowerCase()) &&
+            entry.referenceNo.toLowerCase().includes(ledgerFilters.referenceNo.toLowerCase()) &&
+            entry.ledger.toLowerCase().includes(ledgerFilters.ledger.toLowerCase()) &&
+            entry.status.toLowerCase().includes(ledgerFilters.status.toLowerCase()) &&
+            (entry.debit !== '-' ? entry.debit : '').toLowerCase().includes(ledgerFilters.debit.toLowerCase()) &&
+            (entry.credit !== '-' ? entry.credit : '').toLowerCase().includes(ledgerFilters.credit.toLowerCase()) &&
+            entry.runningBalance.toLowerCase().includes(ledgerFilters.runningBalance.toLowerCase())
+        );
+    });
+
+    const totalDebit = filteredLedgerData.reduce((sum, entry) => {
+        const val = entry.debit !== '-' ? parseFloat(entry.debit.replace(/,/g, '')) : 0;
+        return sum + val;
+    }, 0);
+
+    const totalCredit = filteredLedgerData.reduce((sum, entry) => {
+        const val = entry.credit !== '-' ? parseFloat(entry.credit.replace(/,/g, '')) : 0;
+        return sum + val;
+    }, 0);
+
+    const vendorMonthData = [
+        { month: 'January', debit: '-', credit: '-', closingBalance: '-' },
+        { month: 'February', debit: '-', credit: '-', closingBalance: '-' },
+        { month: 'March', debit: '-', credit: '-', closingBalance: '-' },
+        { month: 'April', debit: '-', credit: '-', closingBalance: '-' },
+        { month: 'May', debit: '-', credit: '-', closingBalance: '-' },
+        { month: 'June', debit: '-', credit: '-', closingBalance: '-' },
+        { month: 'July', debit: '-', credit: '-', closingBalance: '-' },
+        { month: 'August', debit: '-', credit: '-', closingBalance: '-' },
+        { month: 'September', debit: '-', credit: '-', closingBalance: '-' },
+        { month: 'October', debit: '57,000', credit: '22,000', closingBalance: '35,000 Cr' },
+        { month: 'November', debit: '-', credit: '-', closingBalance: '35,000 Cr' },
+        { month: 'December', debit: '-', credit: '-', closingBalance: '35,000 Cr' },
+    ];
+
     // Defaulting logic for sub-tabs
     const availableMasterSubTabs = ['Category', 'PO Settings', 'Vendor Creation'].filter(subTab => isSuperuser || hasTabAccess('Vendor Portal', subTab));
     const availableTransactionSubTabs = ['Purchase Orders', 'Procurement', 'Payment'].filter(subTab => isSuperuser || hasTabAccess('Vendor Portal', subTab));
@@ -812,48 +952,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     }
 
     // Procurement Aging Data Interface
-    interface ProcurementItem {
-        id: number;
-        vendorCode: string;
-        vendorName: string;
-        amount: string;
-        status: 'Pending' | 'Paid' | 'Overdue';
-    }
 
-    interface AgingBucket {
-        id: string;
-        label: string;
-        items: ProcurementItem[];
-    }
 
-    // Ledger Entry Interface
-    interface LedgerEntry {
-        id: number;
-        date: string;
-        takenFrom: 'Purchase' | 'Payment' | 'Sales' | 'Receipt';
-        invoiceNo?: string; // Invoice number for the transaction
-        ledger: string;
-        status: 'Paid' | 'Unpaid' | 'Partially Paid';
-        debit: number;
-        credit: number;
-        runningBalance: number;
-    }
 
-    const [expandedAgingBucket, setExpandedAgingBucket] = useState<string | null>('0-90');
-    const [selectedProcurementVendor, setSelectedProcurementVendor] = useState<ProcurementItem | null>(null);
-    const [isMonthView, setIsMonthView] = useState(false);
-
-    // Ledger Filters State
-    const [ledgerFilters, setLedgerFilters] = useState({
-        date: '',
-        transferFrom: '',
-        invoiceNo: '',
-        ledger: '',
-        status: '',
-        debit: '',
-        credit: '',
-        runningBalance: ''
-    });
 
     // Date formatting helper function
     const formatDate = (dateString: string): string => {
@@ -861,90 +962,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         return `${day}-${month}-${year}`;
     };
 
-    // Mock Ledger Data (filtered by vendor in real app)
-    const mockLedgerEntries: LedgerEntry[] = [
-        { id: 1, date: '2023-10-28', takenFrom: 'Purchase', invoiceNo: 'INV-2023-001', ledger: 'Purchase A/c', status: 'Unpaid', debit: 45000, credit: 0, runningBalance: 45000 },
-        { id: 2, date: '2023-10-25', takenFrom: 'Payment', invoiceNo: undefined, ledger: 'HDFC Bank', status: 'Paid', debit: 0, credit: 15000, runningBalance: 30000 },
-        { id: 3, date: '2023-10-20', takenFrom: 'Purchase', invoiceNo: 'INV-2023-002', ledger: 'Purchase A/c', status: 'Partially Paid', debit: 12000, credit: 0, runningBalance: 42000 },
-        { id: 4, date: '2023-10-15', takenFrom: 'Receipt', invoiceNo: undefined, ledger: 'Cash', status: 'Paid', debit: 0, credit: 5000, runningBalance: 37000 },
-        { id: 5, date: '2023-10-10', takenFrom: 'Sales', invoiceNo: 'INV-2023-003', ledger: 'Sales A/c', status: 'Paid', debit: 0, credit: 2000, runningBalance: 35000 },
-    ].map(item => ({
-        ...item,
-        takenFrom: item.takenFrom as LedgerEntry['takenFrom'],
-        status: item.status as LedgerEntry['status']
-    })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-    // Filtered Ledger Entries
-    const filteredLedgerEntries = mockLedgerEntries.filter((entry) => {
-        const matchesDate = entry.date.toLowerCase().includes(ledgerFilters.date.toLowerCase());
-        const matchesTransferFrom = entry.takenFrom.toLowerCase().includes(ledgerFilters.transferFrom.toLowerCase());
-        const matchesInvoiceNo = (entry.invoiceNo || '').toLowerCase().includes(ledgerFilters.invoiceNo.toLowerCase());
-        const matchesLedger = entry.ledger.toLowerCase().includes(ledgerFilters.ledger.toLowerCase());
-        const matchesStatus = entry.status.toLowerCase().includes(ledgerFilters.status.toLowerCase());
-        const matchesDebit = entry.debit.toString().includes(ledgerFilters.debit);
-        const matchesCredit = entry.credit.toString().includes(ledgerFilters.credit);
-        const matchesRunningBalance = entry.runningBalance.toString().includes(ledgerFilters.runningBalance);
-
-        return matchesDate && matchesTransferFrom && matchesInvoiceNo && matchesLedger &&
-            matchesStatus && matchesDebit && matchesCredit && matchesRunningBalance;
-    });
-
-    const mockMonthlySummary = [
-        { month: 'January', debit: 10000, credit: 5000, closingBalance: 5000 },
-        { month: 'February', debit: 20000, credit: 15000, closingBalance: 10000 },
-        { month: 'March', debit: 15000, credit: 20000, closingBalance: 5000 },
-        { month: 'April', debit: 0, credit: 0, closingBalance: 5000 },
-        { month: 'May', debit: 5000, credit: 0, closingBalance: 10000 },
-        { month: 'June', debit: 0, credit: 0, closingBalance: 10000 },
-        { month: 'July', debit: 30000, credit: 10000, closingBalance: 30000 },
-        { month: 'August', debit: 0, credit: 0, closingBalance: 30000 },
-        { month: 'September', debit: 12000, credit: 12000, closingBalance: 30000 },
-        { month: 'October', debit: 57000, credit: 22000, closingBalance: 65000 },
-        { month: 'November', debit: 0, credit: 0, closingBalance: 65000 },
-        { month: 'December', debit: 0, credit: 0, closingBalance: 65000 },
-    ];
-
-    // Updated procurement aging data with column-based structure
-    interface VendorAgingData {
-        id: number;
-        vendorCode: string;
-        vendorName: string;
-        amount0to45: string;
-        amount45to90: string;
-        amount6m: string;
-        amount1yr: string;
-        status: 'Pending' | 'Paid' | 'Overdue';
-    }
-
-    const vendorAgingTableData: VendorAgingData[] = [
-        { id: 1, vendorCode: 'VEN-001', vendorName: 'Alpha Raw Materials', amount0to45: '? 45,000', amount45to90: '-', amount6m: '-', amount1yr: '-', status: 'Pending' },
-        { id: 2, vendorCode: 'VEN-005', vendorName: 'Beta Supplies', amount0to45: '? 12,500', amount45to90: '-', amount6m: '-', amount1yr: '-', status: 'Pending' },
-        { id: 3, vendorCode: 'VEN-012', vendorName: 'Gamma Corp', amount0to45: '? 78,000', amount45to90: '-', amount6m: '-', amount1yr: '-', status: 'Overdue' },
-        { id: 4, vendorCode: 'VEN-003', vendorName: 'Delta Industries', amount0to45: '-', amount45to90: '? 1,20,000', amount6m: '-', amount1yr: '-', status: 'Pending' },
-    ];
-
-    // Keep the old structure for backward compatibility with other parts
-    const procurementAgingData: AgingBucket[] = [
-        {
-            id: '0-90',
-            label: '0 - 90 days',
-            items: [
-                { id: 1, vendorCode: 'VEN-001', vendorName: 'Alpha Raw Materials', amount: '? 45,000', status: 'Pending' },
-                { id: 2, vendorCode: 'VEN-005', vendorName: 'Beta Supplies', amount: '? 12,500', status: 'Pending' },
-                { id: 3, vendorCode: 'VEN-012', vendorName: 'Gamma Corp', amount: '? 78,000', status: 'Overdue' },
-            ]
-        },
-        {
-            id: '90-180',
-            label: '90 days - 6 months',
-            items: [
-                { id: 4, vendorCode: 'VEN-003', vendorName: 'Delta Industries', amount: '? 1,20,000', status: 'Pending' },
-            ]
-        },
-        { id: '180-365', label: '6 months - 1 year', items: [] },
-        { id: '1y-2y', label: '1 year - 2 years', items: [] },
-        { id: '2y+', label: 'More than 2 years', items: [] },
-    ];
 
     const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([
         { id: 1, accountNumber: '', bankName: '', ifscCode: '', branchName: '', swiftCode: '', vendorBranch: [], accountType: 'Savings' }
@@ -3622,7 +3640,11 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         return (
                                                             <button
                                                                 key={item.name}
-                                                                onClick={() => setActiveProcurementSubTab(item.name as ProcurementSubTab)}
+                                                                onClick={() => {
+                                                                    setActiveProcurementSubTab(item.name as ProcurementSubTab);
+                                                                    setProcurementViewMode('list');
+                                                                    setSelectedProcurementVendor(null);
+                                                                }}
                                                                 className="p-6 border-2 border-gray-200 rounded-[4px] hover:border-indigo-500 hover:shadow-none border border-slate-200 transition-all duration-200 text-left group bg-white relative"
                                                             >
                                                                 <div className="flex items-center justify-between mb-4">
@@ -3655,26 +3677,24 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             <div className="flex items-center justify-between mb-6">
                                                 <div>
                                                     <div className="flex items-center space-x-2 text-sm text-gray-500 mb-1">
-                                                        <button onClick={() => setActiveProcurementSubTab('Dashboard')} className="hover:text-indigo-600 hover:underline">
+                                                        <button onClick={() => { setActiveProcurementSubTab('Dashboard'); setProcurementViewMode('list'); }} className="hover:text-indigo-600 hover:underline">
                                                             Procurement
                                                         </button>
                                                         <span>/</span>
-                                                        <span className="text-indigo-600 font-medium">{activeProcurementSubTab}</span>
+                                                        <button onClick={() => { setProcurementViewMode('list'); setSelectedProcurementVendor(null); }} className={`hover:text-indigo-600 hover:underline ${procurementViewMode === 'list' ? 'text-indigo-600 font-medium' : ''}`}>
+                                                            {activeProcurementSubTab}
+                                                        </button>
+                                                        {selectedProcurementVendor && (
+                                                            <>
+                                                                <span>/</span>
+                                                                <span className="text-indigo-600 font-medium">{selectedProcurementVendor.name}</span>
+                                                            </>
+                                                        )}
                                                     </div>
-                                                    <h2 className="text-2xl font-bold text-gray-800">{activeProcurementSubTab} Orders</h2>
-                                                    <p className="text-sm text-gray-500">Manage procurement orders for {activeProcurementSubTab.toLowerCase()}.</p>
+                                                    <h2 className="text-2xl font-bold text-gray-800">{activeProcurementSubTab}</h2>
+                                                    <p className="text-sm text-gray-500">Manage {activeProcurementSubTab.toLowerCase()} details here.</p>
                                                 </div>
                                                 <div className="flex space-x-2">
-                                                    <button
-                                                        onClick={() => {
-                                                            // Logic to open Create PO Modal with category pre-selected
-                                                            // For now just open the modal
-                                                            setShowCreatePOModal(true);
-                                                        }}
-                                                        className="px-4 py-2 bg-indigo-600 text-white rounded-[4px] text-sm font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                                                    >
-                                                        Create PO
-                                                    </button>
                                                     <button
                                                         onClick={() => setActiveProcurementSubTab('Dashboard')}
                                                         className="px-4 py-2 border border-slate-200 rounded-[4px] text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
@@ -3684,53 +3704,291 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 </div>
                                             </div>
 
-                                            <div className="erp-card border border-slate-200 overflow-hidden">
-                                                <table className="min-w-full divide-y divide-gray-200">
-                                                    <thead className="bg-gray-50">
-                                                        <tr>
-                                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PO Number</th>
-                                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vendor</th>
-                                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody className="bg-white divide-y divide-gray-200">
-                                                        {purchaseOrders
-                                                            .filter(po => po.category === activeProcurementSubTab || !po.category) // Show uncategorized if any, during dev
-                                                            .map((po) => (
-                                                                <tr key={po.id} className="hover:bg-gray-50 transition-colors">
-                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{po.poNumber}</td>
-                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(po.poDate)}</td>
-                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{po.vendorName}</td>
-                                                                    <td className="px-6 py-4 whitespace-nowrap">
-                                                                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${po.status === 'Approved' ? 'bg-green-100 text-green-800' :
-                                                                            po.status === 'Draft' ? 'bg-gray-100 text-gray-800' :
-                                                                                'bg-indigo-100 text-indigo-800'
-                                                                            }`}>
-                                                                            {po.status}
-                                                                        </span>
+                                            {procurementViewMode === 'list' && (
+                                                <div className="erp-card border border-slate-200 overflow-hidden">
+                                                    <table className="min-w-full divide-y divide-gray-200">
+                                                        <thead className="bg-gray-50">
+                                                            <tr>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vendor Code</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vendor Name</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">0-45 Days</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">45-90 Days</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{">"}6M</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{">"}1YR</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="bg-white divide-y divide-gray-200">
+                                                            {vendorAgingList.map((vendor) => (
+                                                                <tr key={vendor.id} className="hover:bg-gray-50 transition-colors">
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{vendor.code}</td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-indigo-600 cursor-pointer hover:underline" onClick={() => {
+                                                                        setSelectedProcurementVendor(vendor);
+                                                                        setProcurementViewMode('ledger');
+                                                                        fetchVendorLedger(vendor.name);
+                                                                    }}>
+                                                                        {vendor.name}
                                                                     </td>
-                                                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                                        <button
-                                                                            onClick={() => handleViewPO(po)}
-                                                                            className="text-indigo-600 hover:text-indigo-900"
-                                                                        >
-                                                                            View
-                                                                        </button>
-                                                                    </td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">₹{vendor.aging0_45}</td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{vendor.aging45_90 !== '-' ? `₹${vendor.aging45_90}` : '-'}</td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{vendor.aging6M !== '-' ? `₹${vendor.aging6M}` : '-'}</td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{vendor.aging1Y !== '-' ? `₹${vendor.aging1Y}` : '-'}</td>
                                                                 </tr>
                                                             ))}
-                                                        {purchaseOrders.filter(po => po.category === activeProcurementSubTab).length === 0 && (
-                                                            <tr>
-                                                                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
-                                                                    No purchase orders found for this category.
-                                                                </td>
-                                                            </tr>
-                                                        )}
-                                                    </tbody>
-                                                </table>
-                                            </div>
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            )}
+
+                                            {procurementViewMode === 'ledger' && selectedProcurementVendor && (
+                                                <div className="erp-card border border-slate-200 overflow-hidden p-0">
+                                                    <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 bg-gray-50">
+                                                        <h3 className="text-lg font-bold text-gray-800">{selectedProcurementVendor.name}</h3>
+                                                        <button
+                                                            onClick={() => setProcurementViewMode('month')}
+                                                            className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
+                                                        >
+                                                            Month View
+                                                        </button>
+                                                    </div>
+
+                                                    <div className="overflow-x-auto">
+                                                        <table className="min-w-full divide-y divide-gray-200">
+                                                            <thead className="bg-gray-50">
+                                                                <tr>
+                                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">Date</th>
+                                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">Transfer From</th>
+                                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">Reference No</th>
+                                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">Ledger</th>
+                                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">Status</th>
+                                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">Debit</th>
+                                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">Credit</th>
+                                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">Running Balance</th>
+                                                                </tr>
+                                                                <tr>
+                                                                    <th className="px-6 pb-3 pt-0">
+                                                                        <input
+                                                                            type="text"
+                                                                            placeholder="Filter Date"
+                                                                            value={ledgerFilters.date}
+                                                                            onChange={(e) => setLedgerFilters({ ...ledgerFilters, date: e.target.value })}
+                                                                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                                        />
+                                                                    </th>
+                                                                    <th className="px-6 pb-3 pt-0">
+                                                                        <input
+                                                                            type="text"
+                                                                            placeholder="Filter Transfer"
+                                                                            value={ledgerFilters.transferFrom}
+                                                                            onChange={(e) => setLedgerFilters({ ...ledgerFilters, transferFrom: e.target.value })}
+                                                                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                                        />
+                                                                    </th>
+                                                                    <th className="px-6 pb-3 pt-0">
+                                                                        <input
+                                                                            type="text"
+                                                                            placeholder="Filter Reference"
+                                                                            value={ledgerFilters.referenceNo}
+                                                                            onChange={(e) => setLedgerFilters({ ...ledgerFilters, referenceNo: e.target.value })}
+                                                                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                                        />
+                                                                    </th>
+                                                                    <th className="px-6 pb-3 pt-0">
+                                                                        <input
+                                                                            type="text"
+                                                                            placeholder="Filter Ledger"
+                                                                            value={ledgerFilters.ledger}
+                                                                            onChange={(e) => setLedgerFilters({ ...ledgerFilters, ledger: e.target.value })}
+                                                                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                                        />
+                                                                    </th>
+                                                                    <th className="px-6 pb-3 pt-0">
+                                                                        <input
+                                                                            type="text"
+                                                                            placeholder="Filter Status"
+                                                                            value={ledgerFilters.status}
+                                                                            onChange={(e) => setLedgerFilters({ ...ledgerFilters, status: e.target.value })}
+                                                                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                                        />
+                                                                    </th>
+                                                                    <th className="px-6 pb-3 pt-0">
+                                                                        <input
+                                                                            type="text"
+                                                                            placeholder="Filter Debit"
+                                                                            value={ledgerFilters.debit}
+                                                                            onChange={(e) => setLedgerFilters({ ...ledgerFilters, debit: e.target.value })}
+                                                                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                                        />
+                                                                    </th>
+                                                                    <th className="px-6 pb-3 pt-0">
+                                                                        <input
+                                                                            type="text"
+                                                                            placeholder="Filter Credit"
+                                                                            value={ledgerFilters.credit}
+                                                                            onChange={(e) => setLedgerFilters({ ...ledgerFilters, credit: e.target.value })}
+                                                                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                                        />
+                                                                    </th>
+                                                                    <th className="px-6 pb-3 pt-0">
+                                                                        <input
+                                                                            type="text"
+                                                                            placeholder="Filter Runn"
+                                                                            value={ledgerFilters.runningBalance}
+                                                                            onChange={(e) => setLedgerFilters({ ...ledgerFilters, runningBalance: e.target.value })}
+                                                                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                                        />
+                                                                    </th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="bg-white divide-y divide-gray-200">
+                                                                {loadingLedger ? (
+                                                                    <tr>
+                                                                        <td colSpan={8} className="px-6 py-8 text-center text-sm text-gray-500">
+                                                                            <div className="flex items-center justify-center space-x-2">
+                                                                                <svg className="animate-spin h-5 w-5 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                                                                </svg>
+                                                                                <span>Loading ledger data...</span>
+                                                                            </div>
+                                                                        </td>
+                                                                    </tr>
+                                                                ) : filteredLedgerData.map((entry) => (
+                                                                    <tr key={entry.id} className="hover:bg-gray-50 transition-colors">
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.date}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{entry.transferFrom}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-medium cursor-pointer hover:underline">{entry.referenceNo}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.ledger}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap">
+                                                                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${entry.status === 'Paid' ? 'bg-green-100 text-green-800' :
+                                                                                entry.status === 'Unpaid' ? 'bg-red-100 text-red-800' :
+                                                                                    'bg-yellow-100 text-yellow-800'}`}>
+                                                                                {entry.status}
+                                                                            </span>
+                                                                        </td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.debit !== '-' ? `₹${entry.debit}` : '-'}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.credit !== '-' ? `₹${entry.credit}` : '-'}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">{entry.runningBalance !== '-' ? `₹${entry.runningBalance}` : '-'}</td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                            <tfoot className="bg-gray-50 font-bold border-t border-gray-200">
+                                                                <tr>
+                                                                    <td colSpan={5} className="px-6 py-3 text-right text-gray-900 text-sm">TOTAL</td>
+                                                                    <td className="px-6 py-3 text-gray-900 text-sm">₹{totalDebit.toLocaleString('en-IN')}</td>
+                                                                    <td className="px-6 py-3 text-gray-900 text-sm">₹{totalCredit.toLocaleString('en-IN')}</td>
+                                                                    <td className="px-6 py-3"></td>
+                                                                </tr>
+                                                            </tfoot>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {procurementViewMode === 'month' && selectedProcurementVendor && (
+                                                <div className="erp-card border border-slate-200 p-0">
+                                                    <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 bg-gray-50">
+                                                        <h3 className="text-lg font-bold text-gray-800">{selectedProcurementVendor.name}</h3>
+                                                        <div className="flex items-center space-x-3">
+                                                            {/* Month Filter Dropdown */}
+                                                            <div className="relative">
+                                                                <button
+                                                                    onClick={() => setIsMonthFilterOpen(!isMonthFilterOpen)}
+                                                                    className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors flex items-center justify-between min-w-[150px]"
+                                                                >
+                                                                    <span>{selectedMonths.length > 0 ? `${selectedMonths.length} Selected` : 'Select Month'}</span>
+                                                                    <ChevronDown className="w-4 h-4 ml-2" />
+                                                                </button>
+                                                                {isMonthFilterOpen && (
+                                                                    <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
+                                                                        {(() => {
+                                                                            const allMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                                                                            return (
+                                                                                <>
+                                                                                    <label className="flex items-center px-4 py-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 sticky top-0 bg-white z-10">
+                                                                                        <input
+                                                                                            type="checkbox"
+                                                                                            checked={selectedMonths.length === allMonths.length}
+                                                                                            onChange={() => {
+                                                                                                if (selectedMonths.length === allMonths.length) {
+                                                                                                    setSelectedMonths([]);
+                                                                                                } else {
+                                                                                                    setSelectedMonths(allMonths);
+                                                                                                }
+                                                                                            }}
+                                                                                            className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                                                                        />
+                                                                                        <span className="ml-2 text-sm font-semibold text-gray-900">Select All</span>
+                                                                                    </label>
+                                                                                    {allMonths.map(month => (
+                                                                                        <label key={month} className="flex items-center px-4 py-2 hover:bg-gray-50 cursor-pointer">
+                                                                                            <input
+                                                                                                type="checkbox"
+                                                                                                checked={selectedMonths.includes(month)}
+                                                                                                onChange={() => {
+                                                                                                    if (selectedMonths.includes(month)) {
+                                                                                                        setSelectedMonths(selectedMonths.filter(m => m !== month));
+                                                                                                    } else {
+                                                                                                        setSelectedMonths([...selectedMonths, month]);
+                                                                                                    }
+                                                                                                }}
+                                                                                                className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                                                                            />
+                                                                                            <span className="ml-2 text-sm text-gray-700">{month}</span>
+                                                                                        </label>
+                                                                                    ))}
+                                                                                </>
+                                                                            );
+                                                                        })()}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            <button
+                                                                onClick={() => setProcurementViewMode('ledger')}
+                                                                className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
+                                                            >
+                                                                Bill-wise View
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    {(() => {
+                                                        const filteredMonthData = vendorMonthData.filter(entry => selectedMonths.length === 0 || selectedMonths.includes(entry.month));
+                                                        const totalMonthDebit = filteredMonthData.reduce((sum, entry) => sum + (entry.debit !== '-' ? parseFloat(entry.debit.replace(/,/g, '')) : 0), 0);
+                                                        const totalMonthCredit = filteredMonthData.reduce((sum, entry) => sum + (entry.credit !== '-' ? parseFloat(entry.credit.replace(/,/g, '')) : 0), 0);
+
+                                                        return (
+                                                            <table className="min-w-full divide-y divide-gray-200">
+                                                                <thead className="bg-gray-50">
+                                                                    <tr>
+                                                                        <th className="px-6 py-3 text-left text-base font-medium text-gray-700">Month</th>
+                                                                        <th className="px-6 py-3 text-left text-base font-medium text-gray-700">Debit</th>
+                                                                        <th className="px-6 py-3 text-left text-base font-medium text-gray-700">Credit</th>
+                                                                        <th className="px-6 py-3 text-left text-base font-medium text-gray-700">Closing Balance</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody className="bg-white divide-y divide-gray-200">
+                                                                    {filteredMonthData.map((entry, idx) => (
+                                                                        <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                                                                            <td className="px-6 py-4 whitespace-nowrap text-lg font-medium text-gray-900">{entry.month}</td>
+                                                                            <td className="px-6 py-4 whitespace-nowrap text-base text-gray-500">{entry.debit !== '-' ? `₹${entry.debit}` : '-'}</td>
+                                                                            <td className="px-6 py-4 whitespace-nowrap text-base text-gray-500">{entry.credit !== '-' ? `₹${entry.credit}` : '-'}</td>
+                                                                            <td className="px-6 py-4 whitespace-nowrap text-base font-bold text-gray-900">{entry.closingBalance !== '-' ? `₹${entry.closingBalance}` : '-'}</td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                                <tfoot className="bg-gray-50 font-bold border-t-2 border-slate-300">
+                                                                    <tr>
+                                                                        <td className="px-6 py-4 text-left text-lg text-blue-600">Total</td>
+                                                                        <td className="px-6 py-4 text-blue-600">₹{totalMonthDebit.toLocaleString('en-IN')}</td>
+                                                                        <td className="px-6 py-4 text-blue-600">₹{totalMonthCredit.toLocaleString('en-IN')}</td>
+                                                                        <td className="px-6 py-4"></td>
+                                                                    </tr>
+                                                                </tfoot>
+                                                            </table>
+                                                        );
+                                                    })()}
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -4219,12 +4477,34 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                             </select>
                                                                         </td>
                                                                         <td className="px-3 py-2">
-                                                                            <input
-                                                                                type="text"
+                                                                            <select
                                                                                 value={item.itemName}
-                                                                                onChange={(e) => handlePOItemChange(item.id, 'itemName', e.target.value)}
+                                                                                onChange={(e) => {
+                                                                                    const selectedName = e.target.value;
+                                                                                    const selectedItem = availableVendorItems.find(i => i.item_name === selectedName);
+
+                                                                                    setPOItems(prevItems => prevItems.map(pItem => {
+                                                                                        if (pItem.id === item.id) {
+                                                                                            return {
+                                                                                                ...pItem,
+                                                                                                itemCode: selectedItem ? (selectedItem.item_code || '') : '',
+                                                                                                itemName: selectedName,
+                                                                                                supplierItemCode: selectedItem ? (selectedItem.supplier_item_code || '') : '',
+                                                                                                uom: selectedItem ? (selectedItem.unit || '') : '',
+                                                                                            };
+                                                                                        }
+                                                                                        return pItem;
+                                                                                    }));
+                                                                                }}
                                                                                 className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                                            />
+                                                                            >
+                                                                                <option value="">Select Item</option>
+                                                                                {availableVendorItems.map((vItem) => (
+                                                                                    <option key={vItem.id} value={vItem.item_name}>
+                                                                                        {vItem.item_name}
+                                                                                    </option>
+                                                                                ))}
+                                                                            </select>
                                                                         </td>
                                                                         <td className="px-3 py-2">
                                                                             <input
@@ -4814,11 +5094,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                     </div>
                                 )}
 
-                            {activeTransactionSubTab === 'Payment' && (
-                                <div>
-                                    {/* Payment content */}
-                                </div>
-                            )}
+
                         </div>
                     </div>
                 )
