@@ -42,7 +42,8 @@ class VendorProductServiceViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Filter queryset by tenant"""
         tenant_id = self.get_tenant_id()
-        queryset = VendorProductServiceDatabase.get_products_by_vendor(tenant_id, self.request.query_params.get('vendor_id'))
+        vendor_id = self.request.query_params.get('vendor_id') or self.request.query_params.get('vendor_basic_detail')
+        queryset = VendorProductServiceDatabase.get_products_by_vendor(tenant_id, vendor_id)
         return queryset if queryset is not None else VendorMasterProductService.objects.none()
 
     def get_serializer_class(self):

@@ -300,6 +300,7 @@ const InventoryPage: React.FC = () => {
   const [showGRNForm, setShowGRNForm] = useState(false);
   const [grnType, setGrnType] = useState('purchases');
   const [grnNumber, setGrnNumber] = useState('');
+  const [grnSelectedSeriesId, setGrnSelectedSeriesId] = useState<number | null>(null);
   const [grnDate, setGrnDate] = useState('');
   const [grnTime, setGrnTime] = useState('');
   const [grnLocation, setGrnLocation] = useState('');
@@ -777,6 +778,15 @@ const InventoryPage: React.FC = () => {
       if (locations.length === 0) fetchLocations();
     }
   }, [issueSlipTab]);
+
+  // Fetch GRN series when GRN form is opened
+  useEffect(() => {
+    if (showGRNForm) {
+      if (grnSeriesList.length === 0) fetchGrnSeries();
+      if (vendors.length === 0) fetchVendors();
+      if (locations.length === 0) fetchLocations();
+    }
+  }, [showGRNForm]);
 
   // Handlers - Items
   const handleItemSubmit = async (e: React.FormEvent) => {
@@ -1793,6 +1803,26 @@ const InventoryPage: React.FC = () => {
           // I'll leave items for now unless requested, as it might conflict with current state structure if not careful.
         }
       }
+    }
+  };
+
+  const handleGrnSeriesChange = async (seriesId: string) => {
+    if (!seriesId) {
+      setGrnSelectedSeriesId(null);
+      setGrnNumber('');
+      return;
+    }
+    const id = parseInt(seriesId, 10);
+    setGrnSelectedSeriesId(id);
+    try {
+      const response = await httpClient.get<{ grn_no: string; series_name: string }>(
+        `/api/inventory/master-voucher-grn/${id}/next-number/`
+      );
+      if (response && response.grn_no) {
+        setGrnNumber(response.grn_no);
+      }
+    } catch (error) {
+      console.error('Error fetching next GRN number:', error);
     }
   };
 
@@ -5351,11 +5381,7 @@ const InventoryPage: React.FC = () => {
                   </div>
 
                   {/* Common Fields */}
-                  <div className="grid grid-cols-4 gap-5">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">GRN No.</label>
-                      <input type="text" value={grnNumber} onChange={(e) => setGrnNumber(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                    </div>
+                  <div className="grid grid-cols-3 gap-5">
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Date</label>
                       <input type="date" value={grnDate} onChange={(e) => setGrnDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
@@ -5379,6 +5405,37 @@ const InventoryPage: React.FC = () => {
                   {grnType === 'purchases' ? (
                     // PURCHASES FORM
                     <>
+                      {/* GRN Series Name */}
+                      <div className="grid grid-cols-2 gap-5 mt-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">GRN Series Name</label>
+                          <select
+                            value={grnSelectedSeriesId ?? ''}
+                            onChange={(e) => handleGrnSeriesChange(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          >
+                            <option value="">Select GRN Series</option>
+                            {grnSeriesList.map((series: any) => (
+                              <option key={series.id} value={series.id}>{series.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            GRN No.
+                            {grnSelectedSeriesId && <span className="ml-2 text-xs text-indigo-500 font-normal">(Auto-generated)</span>}
+                          </label>
+                          <input
+                            type="text"
+                            value={grnNumber}
+                            onChange={(e) => setGrnNumber(e.target.value)}
+                            readOnly={!!grnSelectedSeriesId}
+                            className={`w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${grnSelectedSeriesId ? 'bg-gray-50 text-indigo-700 font-semibold cursor-not-allowed' : ''}`}
+                            placeholder="Enter GRN No. or select a series above"
+                          />
+                        </div>
+                      </div>
+
                       <div className="grid grid-cols-2 gap-5 mt-4">
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Vendor Name</label>
@@ -5437,6 +5494,37 @@ const InventoryPage: React.FC = () => {
                   ) : (
                     // SALES RETURN FORM
                     <>
+                      {/* GRN Series Name + GRN No. for Sales Return */}
+                      <div className="grid grid-cols-2 gap-5 mt-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">GRN Series Name</label>
+                          <select
+                            value={grnSelectedSeriesId ?? ''}
+                            onChange={(e) => handleGrnSeriesChange(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          >
+                            <option value="">Select GRN Series</option>
+                            {grnSeriesList.map((series: any) => (
+                              <option key={series.id} value={series.id}>{series.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            GRN No.
+                            {grnSelectedSeriesId && <span className="ml-2 text-xs text-indigo-500 font-normal">(Auto-generated)</span>}
+                          </label>
+                          <input
+                            type="text"
+                            value={grnNumber}
+                            onChange={(e) => setGrnNumber(e.target.value)}
+                            readOnly={!!grnSelectedSeriesId}
+                            className={`w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${grnSelectedSeriesId ? 'bg-gray-50 text-indigo-700 font-semibold cursor-not-allowed' : ''}`}
+                            placeholder="Enter GRN No. or select a series above"
+                          />
+                        </div>
+                      </div>
+
                       <div className="grid grid-cols-2 gap-5 mt-4">
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Customer Name</label>
@@ -5671,7 +5759,7 @@ const InventoryPage: React.FC = () => {
 
                   <div className="flex gap-3 justify-end border-t border-gray-200 pt-5 mt-4">
                     <button onClick={handleGRNSubmit} className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 font-semibold text-sm">Post & Close</button>
-                    <button onClick={() => setShowGRNForm(false)} className="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 font-semibold text-sm">Cancel</button>
+                    <button onClick={() => { setShowGRNForm(false); setGrnSelectedSeriesId(null); setGrnNumber(''); }} className="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 font-semibold text-sm">Cancel</button>
                   </div>
                 </div>
               </div>
@@ -6581,16 +6669,19 @@ const InventoryPage: React.FC = () => {
 
               {/* Reorder & Saleable */}
               <div className="border-t pt-4 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Reorder Level</label>
-                  <input
-                    type="text"
-                    value={editFormData?.reorderLevel || ''}
-                    onChange={(e) => handleFormChange('reorderLevel', e.target.value)}
-                    placeholder="Enter reorder level"
-                    className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
+                {/* Reorder Level - Only for specific categories */}
+                {editFormData?.categoryPath && ['raw material', 'stock-in-trade', 'stock in trade', 'stores & spares', 'stores and spares', 'packing material'].some(cat => editFormData.categoryPath.toLowerCase().includes(cat)) && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Reorder Level</label>
+                    <input
+                      type="text"
+                      value={editFormData?.reorderLevel || ''}
+                      onChange={(e) => handleFormChange('reorderLevel', e.target.value)}
+                      placeholder="Enter reorder level"
+                      className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                )}
                 {editFormData?.categoryPath?.includes('Work in Progress') && (
                   <label className="flex items-center">
                     <input
