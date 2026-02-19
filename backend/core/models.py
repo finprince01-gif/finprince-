@@ -57,6 +57,7 @@ class Tenant(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
+        managed = False
         db_table = 'tenants'
 
     def __str__(self):
@@ -94,6 +95,7 @@ class User(AbstractBaseUser):
     REQUIRED_FIELDS = ['company_name']
 
     class Meta:
+        managed = False
         db_table = 'users'
         # Removed unique_together constraint - usernames can be duplicated
         # Email uniqueness is enforced at the field level
@@ -156,7 +158,8 @@ class CompanyFullInfo(BaseModel):
     voucher_numbering = models.JSONField(null=True, blank=True)
     
     class Meta:
-        db_table = 'company_informations'
+        managed = False
+        db_table = 'core_companyfullinfo'
 
 class PasswordResetOTP(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_reset_otps')
@@ -167,4 +170,19 @@ class PasswordResetOTP(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        managed = False
         db_table = 'password_reset_otps'
+
+class AIUsage(models.Model):
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
+    year = models.IntegerField()
+    month = models.IntegerField()
+    used_count = models.IntegerField(default=0)
+
+    class Meta:
+        managed = False
+        db_table = 'ai_usage'
+        unique_together = ('tenant', 'year', 'month')
+
+    def __str__(self):
+        return f"{self.tenant_id} - {self.year}/{self.month}: {self.used_count}"

@@ -53,6 +53,7 @@ class MasterChartOfAccounts(models.Model):
     is_leaf = models.BooleanField(default=False)
 
     class Meta:
+        managed = False
         db_table = 'master_chart_of_accounts'
         verbose_name_plural = "Master Chart of Accounts"
 
@@ -68,6 +69,7 @@ class TenantLedger(BaseModel):
     is_active = models.BooleanField(default=True)
     
     class Meta:
+        managed = False
         db_table = 'tenant_ledgers'
         unique_together = ('tenant_id', 'master_ledger')
 
@@ -83,6 +85,7 @@ class MasterLedgerGroup(BaseModel):
     parent = models.CharField(max_length=255, null=True, blank=True, help_text="Parent group name")
     
     class Meta:
+        managed = False
         db_table = 'master_ledger_groups'
         unique_together = ('name', 'tenant_id')
 
@@ -140,6 +143,7 @@ class MasterLedger(BaseModel):
     )
 
     class Meta:
+        managed = False
         db_table = 'master_ledgers'
         unique_together = ('name', 'tenant_id')
 
@@ -268,6 +272,7 @@ class Voucher(BaseModel):
     dummy_force = models.IntegerField(null=True, blank=True)
 
     class Meta:
+        managed = False
         db_table = 'vouchers'
         unique_together = ('voucher_number', 'tenant_id', 'type')
         ordering = ['-date']
@@ -283,6 +288,7 @@ class JournalEntry(BaseModel):
     credit = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     
     class Meta:
+        managed = False
         db_table = 'journal_entries'
         indexes = [
             models.Index(fields=['voucher', 'tenant_id']),
@@ -380,6 +386,7 @@ class AmountTransaction(BaseModel):
     )
     
     class Meta:
+        managed = False
         db_table = 'amount_transactions'
         ordering = ['-transaction_date', '-created_at']
         indexes = [
@@ -509,6 +516,7 @@ class ExtractedInvoice(BaseModel):
     additional_fields = models.JSONField(null=True, blank=True, help_text="Stores the remaining 60+ fields dynamically")
 
     class Meta:
+        managed = False
         db_table = 'extracted_invoices'
         ordering = ['-created_at']
 
@@ -681,6 +689,7 @@ class SalesInvoice(BaseModel):
     )
     
     class Meta:
+        managed = False
         db_table = 'sales_invoices'
         unique_together = ('tenant_id', 'invoice_number')
         ordering = ['-invoice_date', '-created_at']

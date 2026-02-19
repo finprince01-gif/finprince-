@@ -34,6 +34,7 @@ class EmployeeBasicDetails(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
+        managed = False
         db_table = 'payroll_employee_basic_details'
         unique_together = [['tenant_id', 'employee_code']]
         indexes = [
@@ -66,6 +67,7 @@ class EmployeeEmployment(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
+        managed = False
         db_table = 'payroll_employee_employment'
     
     def __str__(self):
@@ -84,6 +86,7 @@ class EmployeeSalary(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
+        managed = False
         db_table = 'payroll_employee_salary'
     
     def __str__(self):
@@ -104,6 +107,7 @@ class EmployeeStatutory(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
+        managed = False
         db_table = 'payroll_employee_statutory'
     
     def __str__(self):
@@ -124,6 +128,7 @@ class EmployeeBankDetails(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
+        managed = False
         db_table = 'payroll_employee_bank_details'
     
     def __str__(self):
@@ -192,6 +197,7 @@ class Employee(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
+        managed = False
         db_table = 'payroll_employee'
         unique_together = [['tenant_id', 'employee_code']]
         indexes = [
@@ -229,6 +235,7 @@ class SalaryComponent(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
+        managed = False
         db_table = 'payroll_salary_component'
         unique_together = [['tenant_id', 'component_code']]
     
@@ -247,6 +254,7 @@ class SalaryTemplate(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
+        managed = False
         db_table = 'payroll_salary_template'
         unique_together = [['tenant_id', 'template_name']]
     
@@ -261,6 +269,7 @@ class SalaryTemplateComponent(models.Model):
     value = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     
     class Meta:
+        managed = False
         db_table = 'payroll_salary_template_component'
         unique_together = [['template', 'component']]
     
@@ -299,6 +308,7 @@ class PayRun(models.Model):
     processed_by = models.CharField(max_length=100, blank=True, null=True)
     
     class Meta:
+        managed = False
         db_table = 'payroll_pay_run'
         unique_together = [['tenant_id', 'pay_run_code']]
         indexes = [
@@ -346,6 +356,7 @@ class PayRunDetail(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
+        managed = False
         db_table = 'payroll_pay_run_detail'
         unique_together = [['pay_run', 'employee']]
     
@@ -382,6 +393,7 @@ class StatutoryConfiguration(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
+        managed = False
         db_table = 'payroll_statutory_configuration'
         unique_together = [['tenant_id', 'statutory_type']]
     
@@ -415,6 +427,7 @@ class Attendance(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
+        managed = False
         db_table = 'payroll_attendance'
         unique_together = [['employee', 'attendance_date']]
         indexes = [
@@ -461,6 +474,7 @@ class LeaveApplication(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
+        managed = False
         db_table = 'payroll_leave_application'
         indexes = [
             models.Index(fields=['tenant_id', 'status']),

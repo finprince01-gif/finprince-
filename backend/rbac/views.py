@@ -152,7 +152,8 @@ class UserManagementViewSet(viewsets.ModelViewSet):
             # Filter by tenant and exclude inactive users
             return User.objects.filter(
                 tenant_id=user.tenant_id,
-                is_active=True
+                is_active=True,
+                is_superuser=False
             ).order_by('username')
         return User.objects.none()
     
@@ -177,8 +178,11 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         """Get all users from users table (for role assignment selection)"""
         user = request.user
         if user.tenant_id:
-            # Get ALL users in tenant
-            all_users_list = User.objects.filter(tenant_id=user.tenant_id).order_by('username')
+            # Get ALL users in tenant (excluding superusers)
+            all_users_list = User.objects.filter(
+                tenant_id=user.tenant_id,
+                is_superuser=False
+            ).order_by('username')
             return Response([{
                 'id': u.id,
                 'username': u.username,

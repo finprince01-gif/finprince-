@@ -24,6 +24,7 @@ class VoucherPaymentSingle(BaseModel):
     )
 
     class Meta:
+        managed = False
         db_table = 'voucher_payment_single'
         ordering = ['-date', '-created_at']
 
@@ -59,6 +60,7 @@ class VoucherPaymentBulk(BaseModel):
     )
 
     class Meta:
+        managed = False
         db_table = 'voucher_payment_bulk'
         ordering = ['-date', '-created_at']
 

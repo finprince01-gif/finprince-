@@ -18,6 +18,7 @@ class VoucherJournal(BaseModel):
     entries = models.JSONField(default=list, help_text="List of journal entries")
 
     class Meta:
+        managed = False
         db_table = 'voucher_journal'
         ordering = ['-date', '-created_at']
 

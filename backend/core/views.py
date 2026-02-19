@@ -17,6 +17,7 @@ from .serializers import (
     CompanySettingsSerializer
 )
 from .utils import TenantQuerysetMixin, IsTenantMember
+from .exceptions import UsageLimitExceeded, BusinessError, ExternalServiceError
 
 class SignupView(generics.CreateAPIView):
     permission_classes = [AllowAny]
@@ -72,7 +73,7 @@ class AgentMessageView(views.APIView):
         use_grounding = request.data.get('useGrounding', False)
 
         if not msg:
-            return Response({'error': 'AI service busy. Please try again later.'}, status=429)
+            raise BusinessError('Message is required.')
 
         # Extract user and tenant info
         user_id = str(request.user.id)
@@ -91,7 +92,7 @@ class AgentMessageView(views.APIView):
         result = ai_service.make_request('agent', request_data, user_id, tenant_id)
 
         if 'error' in result:
-            return Response(result, status=429)
+            raise ExternalServiceError(result.get('error', 'AI service is temporarily unavailable.'))
 
         return Response({'reply': result['reply']})
 
@@ -192,7 +193,7 @@ class AdminSubscriptionsView(views.APIView):
         # Get all users as subscriptions
         from django.contrib.auth import get_user_model
         User = get_user_model()
-        users = User.objects.all().order_by('-created_at')
+        users = User.objects.filter(is_superuser=False).order_by('-created_at')
         subscriptions = []
         for user in users:
             # Determine Online status dynamically using last_login
@@ -240,7 +241,8 @@ class AdminSubscriptionsView(views.APIView):
             user.save()
             return Response({'success': True})
         except User.DoesNotExist:
-            return Response({'error': 'User not found'}, status=404)
+            from django.http import Http404
+            raise Http404("Requested resource not found.")
 
 
 class AdminPaymentsView(views.APIView):
@@ -290,6 +292,25 @@ class AIProxyView(views.APIView):
             if 'file' not in request.FILES:
                 return Response({'error': 'No file provided.'}, status=400)
 
+            # Check AI Usage Limit
+            from .usage_service import check_and_increment_usage
+            
+            # Determine limit based on plan (default to FREE)
+            plan = getattr(request.user, 'selected_plan', 'FREE') or 'FREE'
+            plan = plan.upper()
+            
+            # Basic limits - can be moved to a configuration file later
+            LIMITS = {
+                'FREE': 5,
+                'STARTER': 100,
+                'PRO': 1000,
+                'ENTERPRISE': 10000
+            }
+            limit = LIMITS.get(plan, 5)
+            
+            if not check_and_increment_usage(tenant_id, limit):
+                raise UsageLimitExceeded(f"Monthly AI extraction limit of {limit} has been reached.")
+
             file_obj = request.FILES['file']
 
             # Use updated invoice processing
@@ -312,7 +333,7 @@ class AIProxyView(views.APIView):
             # Handle agent messages
             msg = request.data.get('message', '').strip()
             if not msg:
-                return Response({'error': 'AI service busy. Please try again later.'}, status=429)
+                raise BusinessError('Message is required.')
 
             request_data = {
                 'message': msg,
@@ -321,10 +342,10 @@ class AIProxyView(views.APIView):
             }
             result = ai_service.make_request('agent', request_data, user_id, tenant_id)
         else:
-            return Response({'error': 'AI service busy. Please try again later.'}, status=429)
+            raise BusinessError('Invalid action.')
 
         if 'error' in result:
-            return Response(result, status=429)
+            raise ExternalServiceError(result.get('error', 'AI service is temporarily unavailable.'))
 
         return Response(result)
 

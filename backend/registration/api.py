@@ -10,6 +10,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework import status
 from core.serializers import RegisterInitiateSerializer, CreateUserSerializer
 from . import flow
+from core.exceptions import BusinessError
 
 
 # ============================================================================
@@ -32,10 +33,7 @@ class DirectRegisterView(APIView):
         required_fields = ['username', 'password', 'company_name', 'selected_plan']
         for field in required_fields:
             if not data.get(field):
-                return Response(
-                    {'error': f'{field} is required'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                raise BusinessError(f'{field} is required')
         
         try:
             # Delegate to flow layer
@@ -56,11 +54,5 @@ class DirectRegisterView(APIView):
             return Response(result, status=status.HTTP_201_CREATED)
             
         except ValueError as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            return Response(
-                {'error': f'An error occurred during registration: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            raise BusinessError(str(e))
+        # Remove manual 500 handling, let global handler do it

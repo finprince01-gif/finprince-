@@ -35,6 +35,7 @@ class ServiceGroup(BaseModel):
     is_active = models.BooleanField(default=True)
     
     class Meta:
+        managed = False
         db_table = 'service_group'
         unique_together = ('tenant_id', 'category', 'group', 'subgroup')
         ordering = ['category', 'group', 'subgroup']
@@ -126,6 +127,7 @@ class Service(models.Model):
     )
     
     class Meta:
+        managed = False
         db_table = 'service_list'
         verbose_name = 'Service'
         verbose_name_plural = 'Services'
