@@ -114,7 +114,7 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
         model = CustomerMasterCustomer  # This is aliased to CustomerMasterCustomerBasicDetails
         fields = [
             'id', 'tenant_id', 'customer_name', 'customer_code', 'customer_category',
-            'pan_number', 'contact_person', 'email_address', 'contact_number',
+            'pan_number', 'contact_person', 'email_address', 'contact_number', 'billing_currency',
             'is_also_vendor',
             # These are not in the model but accepted in serializer
             'gst_details', 'products_services', 'banking_info',
@@ -183,6 +183,7 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
             'contact_person': instance.contact_person,
             'email_address': instance.email_address,
             'contact_number': instance.contact_number,
+            'billing_currency': instance.billing_currency,
             'is_also_vendor': instance.is_also_vendor,
             'is_active': instance.is_active,
             'is_deleted': instance.is_deleted,

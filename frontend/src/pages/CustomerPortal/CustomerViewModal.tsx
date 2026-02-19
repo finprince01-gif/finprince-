@@ -1,5 +1,10 @@
 import React, { useState } from 'react';
-import { X, ChevronRight, Building2, CreditCard, ShoppingBag, FileText, Landmark, ShieldCheck } from 'lucide-react';
+import { X, ChevronRight, FileText } from 'lucide-react';
+import Building2 from 'lucide-react/dist/esm/icons/building-2';
+import CreditCard from 'lucide-react/dist/esm/icons/credit-card';
+import ShoppingBag from 'lucide-react/dist/esm/icons/shopping-bag';
+import Landmark from 'lucide-react/dist/esm/icons/landmark';
+import ShieldCheck from 'lucide-react/dist/esm/icons/shield-check';
 
 interface CustomerViewModalProps {
     customer: any;
@@ -63,8 +68,8 @@ const CustomerViewModal: React.FC<CustomerViewModalProps> = ({ customer, onClose
                                         key={tab.id}
                                         onClick={() => setActiveTab(tab.id)}
                                         className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-[4px] transition-all ${activeTab === tab.id
-                                                ? 'bg-indigo-50 text-indigo-700 shadow-none border border-slate-200-none border border-slate-200 ring-1 ring-indigo-200'
-                                                : 'text-gray-600 hover:bg-white hover:shadow-none border border-slate-200-none border border-slate-200 hover:text-gray-900'
+                                            ? 'bg-indigo-50 text-indigo-700 shadow-none border border-slate-200-none border border-slate-200 ring-1 ring-indigo-200'
+                                            : 'text-gray-600 hover:bg-white hover:shadow-none border border-slate-200-none border border-slate-200 hover:text-gray-900'
                                             }`}
                                     >
                                         <tab.icon className={`w-4 h-4 ${activeTab === tab.id ? 'text-indigo-600' : 'text-gray-400'}`} />
