@@ -2516,3 +2516,14 @@ CREATE TABLE IF NOT EXISTS `rbac_user_roles` (
   CONSTRAINT `rbac_user_roles_tenant_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='RBAC User Role Assignments';
 
+-- Table structure for table `ai_usage`
+CREATE TABLE `ai_usage` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `tenant_id` varchar(50) NOT NULL,
+  `year` int NOT NULL,
+  `month` int NOT NULL,
+  `used_count` int DEFAULT '0',
+  `plan` varchar(50) DEFAULT 'FREE',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `tenant_year_month` (`tenant_id`,`year`,`month`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

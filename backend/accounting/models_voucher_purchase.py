@@ -30,6 +30,7 @@ class VoucherPurchaseSupplierDetails(BaseModel):
     supporting_document = models.FileField(upload_to='purchase_documents/', null=True, blank=True)
 
     class Meta:
+        managed = False
         db_table = 'voucher_purchase_supplier_details'
         ordering = ['-date', '-created_at']
 
@@ -56,6 +57,7 @@ class VoucherPurchaseSupplyForeignDetails(BaseModel):
     items = models.JSONField(default=list)
 
     class Meta:
+        managed = False
         db_table = 'voucher_purchase_supply_foreign_details'
 
 
@@ -77,6 +79,7 @@ class VoucherPurchaseSupplyINRDetails(BaseModel):
     items = models.JSONField(default=list)
 
     class Meta:
+        managed = False
         db_table = 'voucher_purchase_supply_inr_details'
 
 
@@ -102,6 +105,7 @@ class VoucherPurchaseDueDetails(BaseModel):
     advance_references = models.JSONField(default=list, null=True, blank=True)
 
     class Meta:
+        managed = False
         db_table = 'voucher_purchase_due_details'
 
 
@@ -135,4 +139,5 @@ class VoucherPurchaseTransitDetails(BaseModel):
     extra_details = models.JSONField(default=dict, blank=True)
 
     class Meta:
+        managed = False
         db_table = 'voucher_purchase_transit_details'

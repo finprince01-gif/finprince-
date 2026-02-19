@@ -12,42 +12,31 @@ export interface SubscriptionUsage {
 
 export const useSubscriptionUsage = () => {
     const [subscriptionUsage, setSubscriptionUsage] = useState<SubscriptionUsage | null>(null);
-    const [localUsedCount, setLocalUsedCount] = useState<number>(() => {
-        const saved = localStorage.getItem('ai_extraction_usage_count');
-        return saved ? parseInt(saved, 10) : 0;
-    });
     const [isLoading, setIsLoading] = useState(false);
 
     const fetchUsage = useCallback(async () => {
         setIsLoading(true);
         try {
             const usage = await apiService.getSubscriptionUsage();
-            // Merge with local count
-            setSubscriptionUsage({
-                ...usage,
-                used: (usage.used || 0) + localUsedCount
-            });
+            setSubscriptionUsage(usage);
         } catch (e) {
             console.error("Failed to fetch subscription usage");
-            // Fallback to local only
+            // Fallback default for disconnected state
             setSubscriptionUsage({
                 plan: 'FREE',
-                used: localUsedCount,
+                used: 0,
                 limit: 5,
-                remaining: 5 - localUsedCount,
+                remaining: 5,
                 cycle_start: new Date().toISOString()
             } as SubscriptionUsage);
         } finally {
             setIsLoading(false);
         }
-    }, [localUsedCount]);
+    }, []);
 
     const incrementUsage = useCallback((amount: number = 1) => {
-        const newCount = localUsedCount + amount;
-        setLocalUsedCount(newCount);
-        localStorage.setItem('ai_extraction_usage_count', newCount.toString());
-
-        // Optimistically update the UI
+        // Optimistically update the UI while waiting for the next poll
+        // The backend handles the actual increment during the API call.
         if (subscriptionUsage) {
             setSubscriptionUsage(prev => {
                 if (!prev) return null;
@@ -60,15 +49,14 @@ export const useSubscriptionUsage = () => {
                 };
             });
         }
-    }, [localUsedCount, subscriptionUsage]);
+    }, [subscriptionUsage]);
 
     useEffect(() => {
-        // Only fetch if we have a token (baseline check)
         const token = httpClient.getToken();
         if (!token) return;
 
         fetchUsage();
-        // Poll every minute
+        // Poll every minute to stay in sync with backend
         const interval = setInterval(() => {
             const currentToken = httpClient.getToken();
             if (currentToken) {
@@ -82,10 +70,9 @@ export const useSubscriptionUsage = () => {
     const isLimitReached = useMemo(() => {
         if (!subscriptionUsage) return false;
         if (subscriptionUsage.limit === 'Unlimited') return false;
-        // Ensure limit is treated as number for comparison
         const limitNum = typeof subscriptionUsage.limit === 'string' ? parseFloat(subscriptionUsage.limit) : subscriptionUsage.limit;
         if (isNaN(limitNum)) return false;
-        return subscriptionUsage.used >= limitNum;
+        return (subscriptionUsage.used || 0) >= limitNum;
     }, [subscriptionUsage]);
 
     return {

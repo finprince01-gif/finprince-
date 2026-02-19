@@ -53,6 +53,7 @@ class CustomerMaster(models.Model):
     created_by = models.CharField(max_length=100, null=True, blank=True)
     
     class Meta:
+        managed = False
         db_table = 'customer_master'
         indexes = [
             models.Index(fields=['tenant_id', 'customer_code']),
@@ -79,6 +80,7 @@ class CustomerMasterCategory(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
+        managed = False
         db_table = 'customer_master_category'
         unique_together = ['tenant_id', 'category', 'group', 'subgroup']
         indexes = [
@@ -113,6 +115,7 @@ class CustomerMastersSalesQuotation(models.Model):
     created_by = models.CharField(max_length=100, null=True, blank=True)
     
     class Meta:
+        managed = False
         db_table = 'customer_masters_salesquotation'
         indexes = [
             models.Index(fields=['tenant_id', 'is_deleted']),
@@ -154,6 +157,7 @@ class CustomerMastersSalesOrder(models.Model):
     created_by = models.CharField(max_length=100, null=True, blank=True)
     
     class Meta:
+        managed = False
         db_table = 'customer_masters_salesorder'
         indexes = [
             models.Index(fields=['tenant_id', 'is_deleted']),
@@ -207,6 +211,7 @@ class CustomerMasterCustomerBasicDetails(models.Model):
     updated_by = models.CharField(max_length=100, null=True, blank=True)
     
     class Meta:
+        managed = False
         db_table = 'customer_master_customer_basicdetails'
         indexes = [
             models.Index(fields=['tenant_id', 'customer_code']),
@@ -251,6 +256,7 @@ class CustomerMasterCustomerGSTDetails(models.Model):
     updated_by = models.CharField(max_length=100, null=True, blank=True)
     
     class Meta:
+        managed = False
         db_table = 'customer_master_customer_gstdetails'
         indexes = [
             models.Index(fields=['tenant_id', 'gstin']),
@@ -296,6 +302,7 @@ class CustomerMasterCustomerTDS(models.Model):
     updated_by = models.CharField(max_length=100, null=True, blank=True)
     
     class Meta:
+        managed = False
         db_table = 'customer_master_customer_tds'
         indexes = [
             models.Index(fields=['tenant_id']),
@@ -337,6 +344,7 @@ class CustomerMasterCustomerBanking(models.Model):
     updated_by = models.CharField(max_length=100, null=True, blank=True)
     
     class Meta:
+        managed = False
         db_table = 'customer_master_customer_banking'
         indexes = [
             models.Index(fields=['tenant_id', 'account_number']),
@@ -378,6 +386,7 @@ class CustomerMasterCustomerProductService(models.Model):
     updated_by = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
+        managed = False
         db_table = 'customer_master_customer_productservice'
         indexes = [
             models.Index(fields=['tenant_id', 'item_code']),
@@ -415,6 +424,7 @@ class CustomerMasterCustomerTermsCondition(models.Model):
     updated_by = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
+        managed = False
         db_table = 'customer_master_customer_termscondition'
         indexes = [
             models.Index(fields=['tenant_id']),
@@ -459,6 +469,7 @@ class CustomerTransaction(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
+        managed = False
         db_table = 'customer_transaction'
         indexes = [
             models.Index(fields=['tenant_id', 'customer_id']),
@@ -619,6 +630,7 @@ class CustomerMasterLongTermContractBasicDetail(models.Model):
     created_by = models.CharField(max_length=100, null=True, blank=True)
     
     class Meta:
+        managed = False
         db_table = 'customer_master_longtermcontracts_basicdetails'
         indexes = [
             models.Index(fields=['tenant_id', 'contract_number']),
@@ -668,6 +680,7 @@ class CustomerMasterLongTermContractProductService(models.Model):
     created_by = models.CharField(max_length=100, null=True, blank=True)
     
     class Meta:
+        managed = False
         db_table = 'customer_master_longtermcontracts_productservices'
         indexes = [
             models.Index(fields=['tenant_id', 'item_code']),
@@ -706,6 +719,7 @@ class CustomerMasterLongTermContractTermsCondition(models.Model):
     created_by = models.CharField(max_length=100, null=True, blank=True)
     
     class Meta:
+        managed = False
         db_table = 'customer_master_longtermcontracts_termscondition'
         indexes = [
             models.Index(fields=['tenant_id']),
@@ -738,6 +752,7 @@ class CustomerTransactionSalesQuotationGeneral(models.Model):
     created_by = models.CharField(max_length=100, null=True, blank=True)
     
     class Meta:
+        managed = False
         db_table = 'customer_transaction_salesquotation_general'
         indexes = [
             models.Index(fields=['tenant_id', 'quote_number']),
@@ -777,6 +792,7 @@ class CustomerTransactionSalesQuotationSpecific(models.Model):
     created_by = models.CharField(max_length=100, null=True, blank=True)
     
     class Meta:
+        managed = False
         db_table = 'customer_transaction_salesquotation_specific'
         indexes = [
             models.Index(fields=['tenant_id', 'quote_number']),
@@ -820,6 +836,7 @@ class CustomerTransactionSalesOrderBasicDetails(models.Model):
     updated_by = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
+        managed = False
         db_table = 'customer_transaction_salesorder_basicdetails'
         indexes = [
             models.Index(fields=['tenant_id']),
@@ -862,6 +879,7 @@ class CustomerTransactionSalesOrderItemDetails(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
+        managed = False
         db_table = 'customer_transaction_salesorder_items'
         indexes = [
             models.Index(fields=['tenant_id']),
@@ -896,6 +914,7 @@ class CustomerTransactionSalesOrderDeliveryTerms(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
+        managed = False
         db_table = 'customer_transaction_salesorder_deliveryterms'
         indexes = [
             models.Index(fields=['tenant_id']),
@@ -932,6 +951,7 @@ class CustomerTransactionSalesOrderPaymentAndSalesperson(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
+        managed = False
         db_table = 'customer_transaction_salesorder_payment_salesperson'
         indexes = [
             models.Index(fields=['tenant_id']),
@@ -964,6 +984,7 @@ class CustomerTransactionSalesOrderQuotationDetails(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
+        managed = False
         db_table = 'customer_transaction_salesorder_quotation_details'
         indexes = [
             models.Index(fields=['tenant_id']),

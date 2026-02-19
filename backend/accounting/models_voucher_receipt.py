@@ -29,6 +29,7 @@ class VoucherReceiptSingle(BaseModel):
     )
 
     class Meta:
+        managed = False
         db_table = 'voucher_receipt_single'
         ordering = ['-date', '-created_at']
 
@@ -66,6 +67,7 @@ class VoucherReceiptBulk(BaseModel):
     )
 
     class Meta:
+        managed = False
         db_table = 'voucher_receipt_bulk'
         ordering = ['-date', '-created_at']
 

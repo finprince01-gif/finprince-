@@ -26,6 +26,7 @@ class InventoryMasterCategory(BaseModel):
     is_active = models.BooleanField(default=True)
     
     class Meta:
+        managed = False
         db_table = 'inventory_master_category'
         unique_together = ('tenant_id', 'category', 'group', 'subgroup')
         ordering = ['category', 'group', 'subgroup']
@@ -76,6 +77,7 @@ class InventoryLocation(BaseModel):
     )
     
     class Meta:
+        managed = False
         db_table = 'inventory_master_location'
         ordering = ['name']
         indexes = [
@@ -122,6 +124,7 @@ class InventoryItem(BaseModel):
     is_active = models.BooleanField(default=True)
 
     class Meta:
+        managed = False
         db_table = 'inventory_master_inventoryitems'
         ordering = ['item_name']
         indexes = [
@@ -139,6 +142,7 @@ class InventoryUnit(BaseModel):
     is_active = models.BooleanField(default=True)
 
     class Meta:
+        managed = False
         db_table = 'inventory_unit'
 
     def __str__(self):
@@ -160,6 +164,7 @@ class InventoryMasterGRN(BaseModel):
     is_active = models.BooleanField(default=True)
 
     class Meta:
+        managed = False
         db_table = 'inventory_master_grn'
         ordering = ['name']
 
@@ -182,6 +187,7 @@ class InventoryMasterIssueSlip(BaseModel):
     is_active = models.BooleanField(default=True)
 
     class Meta:
+        managed = False
         db_table = 'inventory_master_issueslip'
         ordering = ['name']
 
@@ -250,6 +256,7 @@ class InventoryOperationJobWork(BaseModel):
     lr_gr_consignment = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
+        managed = False
         db_table = 'inventory_operation_jobwork'
 
 
@@ -290,6 +297,7 @@ class InventoryOperationInterUnit(BaseModel):
     lr_gr_consignment = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
+        managed = False
         db_table = 'inventory_operation_interunit'
 
 
@@ -327,6 +335,7 @@ class InventoryOperationLocationChange(BaseModel):
     lr_gr_consignment = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
+        managed = False
         db_table = 'inventory_operation_locationchange'
 
 
@@ -372,6 +381,7 @@ class InventoryOperationProduction(BaseModel):
     lr_gr_consignment = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
+        managed = False
         db_table = 'inventory_operation_production'
 
 
@@ -409,6 +419,7 @@ class InventoryOperationConsumption(BaseModel):
     lr_gr_consignment = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
+        managed = False
         db_table = 'inventory_operation_consumption'
 
 
@@ -446,6 +457,7 @@ class InventoryOperationScrap(BaseModel):
     lr_gr_consignment = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
+        managed = False
         db_table = 'inventory_operation_scrap'
 
 
@@ -502,6 +514,7 @@ class InventoryOperationOutward(BaseModel):
     lr_gr_consignment = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
+        managed = False
         db_table = 'inventory_operation_outward'
 
 
@@ -539,4 +552,5 @@ class InventoryOperationNewGRN(BaseModel):
     items = models.JSONField(default=list, blank=True, null=True)
     
     class Meta:
+        managed = False
         db_table = 'inventory_operation_new_grn'

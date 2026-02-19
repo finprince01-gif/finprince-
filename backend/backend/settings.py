@@ -346,8 +346,12 @@ EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL") or EMAIL_HOST_USER or 'webmaster@localhost'
 
 # ============================================================================
-# DISABLE MIGRATIONS - Rely on schema.sql only
+# DATABASE SCHEMA MANAGEMENT (MANUAL)
 # ============================================================================
+# Django migrations are completely disabled.
+# schema.sql is the single source of truth for the database structure.
+# All models MUST have Meta: managed = False and explicit db_table.
+
 MIGRATION_MODULES = {
     'core': None,
     'accounting': None,
@@ -368,4 +372,8 @@ MIGRATION_MODULES = {
     'auth': None,
     'contenttypes': None,
     'sessions': None,
+    'messages': None,
+    'staticfiles': None,
+    'rest_framework': None,
+    'corsheaders': None,
 }

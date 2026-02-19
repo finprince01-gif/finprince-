@@ -22,6 +22,7 @@ class VoucherContra(BaseModel):
     narration = models.TextField(null=True, blank=True)
 
     class Meta:
+        managed = False
         db_table = 'voucher_contra'
         ordering = ['-date', '-created_at']
 

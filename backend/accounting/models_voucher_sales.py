@@ -92,6 +92,7 @@ class VoucherSalesInvoiceDetails(BaseModel):
     )
 
     class Meta:
+        managed = False
         db_table = 'voucher_sales_invoicedetails'
         verbose_name = "Voucher Sales Invoice Detail"
 
@@ -123,6 +124,7 @@ class VoucherSalesItems(BaseModel):
     alternate_unit = models.CharField(max_length=50, null=True, blank=True)
 
     class Meta:
+        managed = False
         db_table = 'voucher_sales_items'
         verbose_name = "Voucher Sales Item"
 
@@ -143,6 +145,7 @@ class VoucherSalesItemsForeign(BaseModel):
     amount = models.DecimalField(max_digits=18, decimal_places=2, default=0)
 
     class Meta:
+        managed = False
         db_table = 'voucher_sales_items_foreign'
         verbose_name = "Voucher Sales Item Foreign"
 
@@ -176,6 +179,7 @@ class VoucherSalesPaymentDetails(BaseModel):
     advance_references = models.TextField(default="[]", null=True, blank=True)
 
     class Meta:
+        managed = False
         db_table = 'voucher_sales_paymentdetails'
         verbose_name = "Voucher Sales Payment Detail"
 
@@ -236,6 +240,7 @@ class VoucherSalesDispatchDetails(BaseModel):
     rail_beyond_port_dest_country = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
+        managed = False
         db_table = 'voucher_sales_dispatchdetails'
         verbose_name = "Voucher Sales Dispatch Detail"
 
@@ -266,5 +271,6 @@ class VoucherSalesEwayBill(BaseModel):
     ack_no = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
+        managed = False
         db_table = 'voucher_sales_ewaybill'
         verbose_name = "Voucher Sales Eway Bill"

@@ -29,21 +29,27 @@ def get_billing_cycle_start(user):
 
 def get_invoice_usage(user):
     """
-    Count invoices from AI extraction and scanner only in the current billing cycle.
-    Only AI-extracted and scanned invoices count towards subscription limits.
-    Manual invoice creation is unlimited and does not count towards the limit.
+    Count invoices from AI extraction and scanner for the current month.
+    Fetches the used_count from the AIUsage model.
     """
-    cycle_start = get_billing_cycle_start(user)
     tenant_id = getattr(user, 'tenant_id', None)
-    
     if not tenant_id:
         return 0
 
-    # Only count from AI Extractions. 
-    # Tracking is moving to Local Storage on the frontend.
-    count_extracted = 0
+    from core.models import AIUsage
+    from datetime import datetime
     
-    return count_extracted
+    now = datetime.now()
+    try:
+        usage = AIUsage.objects.filter(
+            tenant_id=tenant_id,
+            year=now.year,
+            month=now.month
+        ).first()
+        return usage.used_count if usage else 0
+    except Exception as e:
+        print(f"Error fetching AI usage: {e}")
+        return 0
 
 def check_subscription_limit(user, increment=1):
     """

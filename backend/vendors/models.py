@@ -32,6 +32,7 @@ class VendorMasterCategory(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
+        managed = False
         db_table = 'vendor_master_category'
         unique_together = ('tenant_id', 'category', 'group', 'subgroup')
         ordering = ['category', 'group', 'subgroup']
@@ -172,6 +173,7 @@ class Vendor(models.Model):
     updated_by = models.CharField(max_length=100, blank=True, null=True, help_text="Updated by user")
 
     class Meta:
+        managed = False
         db_table = 'vendor_master'
         verbose_name = 'Vendor'
         verbose_name_plural = 'Vendors'
@@ -237,6 +239,7 @@ class VendorMasterPOSettings(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        managed = False
         db_table = 'vendor_master_posettings'
         verbose_name = 'Vendor Master PO Setting'
         verbose_name_plural = 'Vendor Master PO Settings'
@@ -294,6 +297,7 @@ class VendorMasterBasicDetail(models.Model):
     updated_by = models.CharField(max_length=100, blank=True, null=True, help_text="Updated by user")
 
     class Meta:
+        managed = False
         db_table = 'vendor_master_basicdetail'
         verbose_name = 'Vendor Master Basic Detail'
         verbose_name_plural = 'Vendor Master Basic Details'
@@ -387,6 +391,7 @@ class VendorMasterGSTDetails(models.Model):
     updated_by = models.CharField(max_length=100, blank=True, null=True, help_text="Updated by user")
 
     class Meta:
+        managed = False
         db_table = 'vendor_master_gstdetails'
         verbose_name = 'Vendor Master GST Detail'
         verbose_name_plural = 'Vendor Master GST Details'
@@ -443,6 +448,7 @@ class VendorMasterProductService(models.Model):
     updated_by = models.CharField(max_length=100, blank=True, null=True, help_text="Updated by user")
 
     class Meta:
+        managed = False
         db_table = 'vendor_master_productservices'
         verbose_name = 'Vendor Master Product/Service'
         verbose_name_plural = 'Vendor Master Products/Services'
@@ -506,6 +512,7 @@ class VendorMasterTDS(models.Model):
     updated_by = models.CharField(max_length=100, blank=True, null=True, help_text="Updated by user")
 
     class Meta:
+        managed = False
         db_table = 'vendor_master_tds'
         verbose_name = 'Vendor Master TDS Detail'
         verbose_name_plural = 'Vendor Master TDS Details'
@@ -566,6 +573,7 @@ class VendorMasterBanking(models.Model):
     updated_by = models.CharField(max_length=100, blank=True, null=True, help_text="Updated by user")
 
     class Meta:
+        managed = False
         db_table = 'vendor_master_banking'
         verbose_name = 'Vendor Master Banking Detail'
         verbose_name_plural = 'Vendor Master Banking Details'
@@ -613,6 +621,7 @@ class VendorMasterTerms(models.Model):
     updated_by = models.CharField(max_length=100, blank=True, null=True, help_text="Updated by user")
 
     class Meta:
+        managed = False
         db_table = 'vendor_master_terms'
         verbose_name = 'Vendor Master Terms & Conditions'
         verbose_name_plural = 'Vendor Master Terms & Conditions'
@@ -692,6 +701,7 @@ class VendorTransactionPO(models.Model):
     updated_by = models.CharField(max_length=100, blank=True, null=True, help_text="Updated by user")
 
     class Meta:
+        managed = False
         db_table = 'vendor_transaction_po'
         verbose_name = 'Vendor Purchase Order'
         verbose_name_plural = 'Vendor Purchase Orders'
@@ -745,6 +755,7 @@ class VendorTransactionPOItem(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        managed = False
         db_table = 'vendor_transaction_po_items'
         verbose_name = 'Vendor PO Item'
         verbose_name_plural = 'Vendor PO Items'

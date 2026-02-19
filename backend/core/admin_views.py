@@ -13,7 +13,7 @@ class AdminSubscriptionsView(APIView):
     
     def get(self, request):
         """Get all users with their subscription data"""
-        users = User.objects.all()
+        users = User.objects.filter(is_superuser=False)
         
         subscriptions = []
         for user in users:
