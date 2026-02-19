@@ -4,7 +4,8 @@ Handles data transformation for sales invoices.
 """
 
 from rest_framework import serializers
-from accounting.models import SalesInvoice, ReceiptVoucherType, MasterLedger
+from accounting.models import SalesInvoice, MasterLedger
+from masters.voucher_master_models import MasterVoucherReceipts as ReceiptVoucherType
 from core.utils import TenantModelSerializerMixin
 
 

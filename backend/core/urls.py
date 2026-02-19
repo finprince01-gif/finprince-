@@ -20,8 +20,8 @@ router = routers.DefaultRouter()
 router.register('company-settings', CompanySettingsViewSet, basename='company-settings')
 
 urlpatterns = [
-    # Direct Registration (no OTP)
-    path('auth/register/', DirectRegisterView.as_view(), name='register'),
+    # Direct Registration (no OTP) -- MOVED TO REGISTRATION MODULE
+    # path('auth/register/', DirectRegisterView.as_view(), name='register'),
     
     path('auth/check-status/', check_status, name='check-status'),
     path('auth/check-phone/', check_phone, name='check-phone'),

@@ -50,14 +50,18 @@ def register_user(registration_data):
                 phone=phone,
                 tenant_id=tenant_id,
                 selected_plan=selected_plan,
+                phone_verified=True,  # No OTP for direct registration
                 is_active=True,
                 is_superuser=True,  # All users are superusers (RBAC removed)
             )
             
-            # Seed tenant data
-            seed_tenant_data(tenant_id)
-            
-            logger.info(f"✅ User {user.id} created successfully with tenant {tenant_id}")
+            from django.db import connection
+            db_name = connection.settings_dict['NAME']
+            logger.info(f"✅ User {user.id} created successfully with tenant {tenant_id} in DB: {db_name}")
+        
+        # Seed tenant data (Outside atomic block to prevent rollback on seeding failure)
+        # Seeding errors are caught inside the function
+        seed_tenant_data(tenant_id)
         
         # Auto-login: Generate JWT tokens
         refresh = MyTokenObtainPairSerializer.get_token(user)

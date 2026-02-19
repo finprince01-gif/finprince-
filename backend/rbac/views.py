@@ -149,10 +149,9 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         """Filter users by tenant"""
         user = self.request.user
         if user.tenant_id:
-            # Filter by tenant AND exclude superusers
+            # Filter by tenant and exclude inactive users
             return User.objects.filter(
                 tenant_id=user.tenant_id,
-                is_superuser=False,
                 is_active=True
             ).order_by('username')
         return User.objects.none()

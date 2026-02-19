@@ -1386,7 +1386,12 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       case 'Receipt':
         voucher = { id: '', type: voucherType, date, account, party, amount: simpleAmount, narration };
         break;
+
       case 'Contra':
+        if (!fromAccount || !toAccount || simpleAmount <= 0) {
+          showError("Please fill all mandatory fields (Transfer From, Transfer To, Amount > 0)");
+          return;
+        }
         voucher = { id: '', type: voucherType, date, fromAccount, toAccount, amount: simpleAmount, narration };
         break;
       case 'Journal':

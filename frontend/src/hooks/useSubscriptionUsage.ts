@@ -12,19 +12,55 @@ export interface SubscriptionUsage {
 
 export const useSubscriptionUsage = () => {
     const [subscriptionUsage, setSubscriptionUsage] = useState<SubscriptionUsage | null>(null);
+    const [localUsedCount, setLocalUsedCount] = useState<number>(() => {
+        const saved = localStorage.getItem('ai_extraction_usage_count');
+        return saved ? parseInt(saved, 10) : 0;
+    });
     const [isLoading, setIsLoading] = useState(false);
 
     const fetchUsage = useCallback(async () => {
         setIsLoading(true);
         try {
             const usage = await apiService.getSubscriptionUsage();
-            setSubscriptionUsage(usage);
+            // Merge with local count
+            setSubscriptionUsage({
+                ...usage,
+                used: (usage.used || 0) + localUsedCount
+            });
         } catch (e) {
             console.error("Failed to fetch subscription usage");
+            // Fallback to local only
+            setSubscriptionUsage({
+                plan: 'FREE',
+                used: localUsedCount,
+                limit: 5,
+                remaining: 5 - localUsedCount,
+                cycle_start: new Date().toISOString()
+            } as SubscriptionUsage);
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [localUsedCount]);
+
+    const incrementUsage = useCallback((amount: number = 1) => {
+        const newCount = localUsedCount + amount;
+        setLocalUsedCount(newCount);
+        localStorage.setItem('ai_extraction_usage_count', newCount.toString());
+
+        // Optimistically update the UI
+        if (subscriptionUsage) {
+            setSubscriptionUsage(prev => {
+                if (!prev) return null;
+                const newUsed = (prev.used || 0) + amount;
+                const limitNum = typeof prev.limit === 'string' ? parseFloat(prev.limit) : prev.limit;
+                return {
+                    ...prev,
+                    used: newUsed,
+                    remaining: typeof limitNum === 'number' ? limitNum - newUsed : prev.remaining
+                };
+            });
+        }
+    }, [localUsedCount, subscriptionUsage]);
 
     useEffect(() => {
         // Only fetch if we have a token (baseline check)
@@ -56,6 +92,7 @@ export const useSubscriptionUsage = () => {
         subscriptionUsage,
         isLimitReached,
         isLoading,
-        refetch: fetchUsage
+        refetch: fetchUsage,
+        incrementUsage
     };
 };

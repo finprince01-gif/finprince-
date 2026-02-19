@@ -469,102 +469,102 @@ class CustomerTransaction(models.Model):
         return f"{self.transaction_number} - {self.transaction_type}"
 
 
-class CustomerSalesQuotation(models.Model):
-    """
-    Sales Quotation Table
-    Manages customer quotations
-    """
-    STATUS_CHOICES = [
-        ('draft', 'Draft'),
-        ('sent', 'Sent'),
-        ('accepted', 'Accepted'),
-        ('rejected', 'Rejected'),
-        ('converted', 'Converted to Order'),
-    ]
-    
-    id = models.AutoField(primary_key=True)
-    tenant_id = models.CharField(max_length=36, db_index=True)
-    customer_id = models.IntegerField(db_index=True)
-    quotation_number = models.CharField(max_length=50, unique=True)
-    quotation_date = models.DateField()
-    valid_until = models.DateField()
-    
-    # Financial Details
-    subtotal = models.DecimalField(max_digits=15, decimal_places=2)
-    tax_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    discount_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    total_amount = models.DecimalField(max_digits=15, decimal_places=2)
-    
-    # Status and Notes
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
-    terms_and_conditions = models.TextField(null=True, blank=True)
-    notes = models.TextField(null=True, blank=True)
-    
-    # Metadata
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        db_table = 'customer_sales_quotation'
-        indexes = [
-            models.Index(fields=['tenant_id', 'customer_id']),
-            models.Index(fields=['quotation_date']),
-        ]
-    
-    def __str__(self):
-        return f"{self.quotation_number} - {self.status}"
+# class CustomerSalesQuotation(models.Model):
+#     """
+#     Sales Quotation Table
+#     Manages customer quotations
+#     """
+#     STATUS_CHOICES = [
+#         ('draft', 'Draft'),
+#         ('sent', 'Sent'),
+#         ('accepted', 'Accepted'),
+#         ('rejected', 'Rejected'),
+#         ('converted', 'Converted to Order'),
+#     ]
+#     
+#     id = models.AutoField(primary_key=True)
+#     tenant_id = models.CharField(max_length=36, db_index=True)
+#     customer_id = models.IntegerField(db_index=True)
+#     quotation_number = models.CharField(max_length=50, unique=True)
+#     quotation_date = models.DateField()
+#     valid_until = models.DateField()
+#     
+#     # Financial Details
+#     subtotal = models.DecimalField(max_digits=15, decimal_places=2)
+#     tax_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+#     discount_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+#     total_amount = models.DecimalField(max_digits=15, decimal_places=2)
+#     
+#     # Status and Notes
+#     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+#     terms_and_conditions = models.TextField(null=True, blank=True)
+#     notes = models.TextField(null=True, blank=True)
+#     
+#     # Metadata
+#     created_at = models.DateTimeField(auto_now_add=True)
+#     updated_at = models.DateTimeField(auto_now=True)
+#     
+#     class Meta:
+#         db_table = 'customer_sales_quotation'
+#         indexes = [
+#             models.Index(fields=['tenant_id', 'customer_id']),
+#             models.Index(fields=['quotation_date']),
+#         ]
+#     
+#     def __str__(self):
+#         return f"{self.quotation_number} - {self.status}"
 
 
-class CustomerSalesOrder(models.Model):
-    """
-    Sales Order Table
-    Manages customer sales orders
-    """
-    ORDER_STATUS = [
-        ('pending', 'Pending'),
-        ('confirmed', 'Confirmed'),
-        ('processing', 'Processing'),
-        ('shipped', 'Shipped'),
-        ('delivered', 'Delivered'),
-        ('cancelled', 'Cancelled'),
-    ]
-    
-    id = models.AutoField(primary_key=True)
-    tenant_id = models.CharField(max_length=36, db_index=True)
-    customer_id = models.IntegerField(db_index=True)
-    order_number = models.CharField(max_length=50, unique=True)
-    order_date = models.DateField()
-    expected_delivery_date = models.DateField(null=True, blank=True)
-    
-    # Reference
-    quotation_reference = models.CharField(max_length=50, null=True, blank=True)
-    po_number = models.CharField(max_length=50, null=True, blank=True)
-    
-    # Financial Details
-    subtotal = models.DecimalField(max_digits=15, decimal_places=2)
-    tax_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    discount_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    shipping_charges = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    total_amount = models.DecimalField(max_digits=15, decimal_places=2)
-    
-    # Status and Notes
-    status = models.CharField(max_length=20, choices=ORDER_STATUS, default='pending')
-    notes = models.TextField(null=True, blank=True)
-    
-    # Metadata
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        db_table = 'customer_sales_order'
-        indexes = [
-            models.Index(fields=['tenant_id', 'customer_id']),
-            models.Index(fields=['order_date']),
-            models.Index(fields=['status']),
-        ]
-    
-    def __str__(self):
-        return f"{self.order_number} - {self.status}"
+# class CustomerSalesOrder(models.Model):
+#     """
+#     Sales Order Table
+#     Manages customer sales orders
+#     """
+#     ORDER_STATUS = [
+#         ('pending', 'Pending'),
+#         ('confirmed', 'Confirmed'),
+#         ('processing', 'Processing'),
+#         ('shipped', 'Shipped'),
+#         ('delivered', 'Delivered'),
+#         ('cancelled', 'Cancelled'),
+#     ]
+#     
+#     id = models.AutoField(primary_key=True)
+#     tenant_id = models.CharField(max_length=36, db_index=True)
+#     customer_id = models.IntegerField(db_index=True)
+#     order_number = models.CharField(max_length=50, unique=True)
+#     order_date = models.DateField()
+#     expected_delivery_date = models.DateField(null=True, blank=True)
+#     
+#     # Reference
+#     quotation_reference = models.CharField(max_length=50, null=True, blank=True)
+#     po_number = models.CharField(max_length=50, null=True, blank=True)
+#     
+#     # Financial Details
+#     subtotal = models.DecimalField(max_digits=15, decimal_places=2)
+#     tax_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+#     discount_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+#     shipping_charges = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+#     total_amount = models.DecimalField(max_digits=15, decimal_places=2)
+#     
+#     # Status and Notes
+#     status = models.CharField(max_length=20, choices=ORDER_STATUS, default='pending')
+#     notes = models.TextField(null=True, blank=True)
+#     
+#     # Metadata
+#     created_at = models.DateTimeField(auto_now_add=True)
+#     updated_at = models.DateTimeField(auto_now=True)
+#     
+#     class Meta:
+#         db_table = 'customer_sales_order'
+#         indexes = [
+#             models.Index(fields=['tenant_id', 'customer_id']),
+#             models.Index(fields=['order_date']),
+#             models.Index(fields=['status']),
+#         ]
+#     
+#     def __str__(self):
+#         return f"{self.order_number} - {self.status}"
 
 
 # ============================================================================

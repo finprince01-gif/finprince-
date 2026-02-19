@@ -30,6 +30,7 @@ interface Location {
   vendor_name?: string | null;
   customer_name?: string | null;
   state_code?: string | null;
+  location_address?: string | null;
 }
 
 interface Item {
@@ -655,7 +656,8 @@ const InventoryPage: React.FC = () => {
         country: locCountry,
         gstin: locationGstin || null,
         vendor_name: vendorName || null,
-        customer_name: customerName || null
+        customer_name: customerName || null,
+        location_address: locationAddress || null
       };
 
       if (isEditModeLocation && selectedLocation) {
@@ -694,7 +696,7 @@ const InventoryPage: React.FC = () => {
     setLocationGstin(selectedLocation.gstin || '');
     setVendorName('');
     setCustomerName('');
-    setLocationAddress('');
+    setLocationAddress(selectedLocation.location_address || '');
     setIsEditModeLocation(true);
   };
 
@@ -718,6 +720,7 @@ const InventoryPage: React.FC = () => {
     setIsCustomLocationType(false);
     setCustomLocationTypeValue('');
     setVendorName('');
+    setCustomerName('');
     setCustomerName('');
     setLocationAddress('');
     setLocAddressLine1('');

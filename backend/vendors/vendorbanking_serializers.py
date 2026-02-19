@@ -30,7 +30,7 @@ class VendorMasterBankingSerializer(serializers.ModelSerializer):
             'created_by',
             'updated_by',
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'tenant_id', 'created_at', 'updated_at', 'created_by', 'updated_by']
     
     def validate_ifsc_code(self, value):
         """Validate IFSC code format"""

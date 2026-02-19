@@ -4,7 +4,7 @@ Handles serialization and validation for Masters module.
 """
 
 from rest_framework import serializers
-from accounting.models import VoucherConfiguration
+from .models import MasterVoucherSales as VoucherConfiguration
 
 
 class VoucherConfigurationSerializer(serializers.ModelSerializer):
@@ -17,15 +17,14 @@ class VoucherConfigurationSerializer(serializers.ModelSerializer):
         model = VoucherConfiguration
         fields = [
             'id',
-            'voucher_type',
             'voucher_name',
-            'enable_auto_numbering',
             'prefix',
             'suffix',
             'start_from',
             'current_number',
             'required_digits',
-            'include_from_existing_series_id',
+            'enable_auto_numbering',
+            'include_from_existing_series',
             'is_active',
             'created_at',
             'updated_at',
@@ -53,3 +52,7 @@ class VoucherConfigurationSerializer(serializers.ModelSerializer):
         # Set current_number to start_from initially
         validated_data['current_number'] = validated_data.get('start_from', 1)
         return super().create(validated_data)
+
+# Alias for backward compatibility
+MasterVoucherConfigSerializer = VoucherConfigurationSerializer
+

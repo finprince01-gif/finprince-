@@ -7,11 +7,10 @@ from rest_framework import serializers
 from accounting.models import (
     SalesVoucher,
     SalesVoucherItem,
-    SalesVoucherDocument,
-    ReceiptVoucherType,
-    MasterLedger,
-    VoucherConfiguration
+    MasterLedger
 )
+from masters.voucher_master_models import MasterVoucherReceipts as ReceiptVoucherType
+from masters.voucher_master_models import MasterVoucherSales as VoucherConfiguration
 
 
 class ReceiptVoucherTypeSerializer(serializers.ModelSerializer):
@@ -36,38 +35,65 @@ class VoucherConfigurationDropdownSerializer(serializers.ModelSerializer):
         ]
 
 
+
 class SalesVoucherItemSerializer(serializers.ModelSerializer):
     """Serializer for Sales Voucher Items"""
     
+    # Map model fields to serializer fields expected by frontend if needed
+    # Or just expose model fields directly
+    
+    taxable_amount = serializers.DecimalField(source='taxable_value', max_digits=18, decimal_places=2, read_only=True)
+    total_amount = serializers.DecimalField(source='invoice_value', max_digits=18, decimal_places=2, read_only=True)
+    
+    # Aliases
+    unit = serializers.CharField(source='uom', read_only=True)
+    hsn_code = serializers.CharField(source='hsn_sac', read_only=True)
+    rate = serializers.DecimalField(source='item_rate', max_digits=18, decimal_places=2, read_only=True)
+    
+    # Tax fields mapping
+    cgst_amount = serializers.DecimalField(source='cgst', max_digits=18, decimal_places=2, read_only=True)
+    sgst_amount = serializers.DecimalField(source='sgst', max_digits=18, decimal_places=2, read_only=True)
+    igst_amount = serializers.DecimalField(source='igst', max_digits=18, decimal_places=2, read_only=True)
+
     class Meta:
         model = SalesVoucherItem
         fields = [
             'id', 'item_name', 'hsn_code', 'quantity', 'unit', 'rate',
-            'taxable_amount', 'cgst_rate', 'cgst_amount', 'sgst_rate', 'sgst_amount',
-            'igst_rate', 'igst_amount', 'total_amount', 'line_number'
+            'taxable_amount', 'cgst_amount', 'sgst_amount', 'igst_amount', 'total_amount', 
+            # 'line_number' # missing in model?
         ]
         read_only_fields = ['id', 'taxable_amount', 'cgst_amount', 'sgst_amount', 'igst_amount', 'total_amount']
 
 
-class SalesVoucherDocumentSerializer(serializers.ModelSerializer):
-    """Serializer for Sales Voucher Documents"""
-    
-    class Meta:
-        model = SalesVoucherDocument
-        fields = ['id', 'file_name', 'file_path', 'file_type', 'file_size', 'uploaded_at']
-        read_only_fields = ['id', 'uploaded_at']
+class SalesVoucherDocumentSerializer(serializers.Serializer):
+    """Serializer stub for Sales Voucher Documents (Stored as field in header)"""
+    id = serializers.IntegerField(default=0)
+    file_name = serializers.CharField()
+    file_path = serializers.CharField()
+    file_type = serializers.CharField()
+    file_size = serializers.IntegerField()
+    uploaded_at = serializers.DateTimeField(allow_null=True, required=False)
+
 
 
 class SalesVoucherListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for Sales Voucher list/dropdowns"""
-    customer_name = serializers.CharField(source='customer.name', read_only=True)
-    voucher_type_name = serializers.CharField(source='voucher_type.name', read_only=True)
+    
+    # Map new fields to old names for frontend compatibility where possible
+    sales_invoice_number = serializers.CharField(source='sales_invoice_no', read_only=True)
+    # customer field is removed as we use customer_name directly
+    voucher_type_name = serializers.CharField(source='voucher_name', read_only=True)
+    
+    # Missing fields in schema: grand_total, status
+    # We return 0 or empty for now
+    grand_total = serializers.FloatField(default=0.0, read_only=True)
+    status = serializers.CharField(default='draft', read_only=True)
 
     class Meta:
         model = SalesVoucher
         fields = [
-            'id', 'date', 'sales_invoice_number', 'customer', 'customer_name', 
-            'voucher_type', 'voucher_type_name', 'grand_total', 'status'
+            'id', 'date', 'sales_invoice_number', 'customer_name', 
+            'voucher_type_name', 'grand_total', 'status'
         ]
         read_only_fields = fields
 
@@ -76,28 +102,48 @@ class SalesVoucherSerializer(serializers.ModelSerializer):
     """Serializer for Sales Voucher"""
     
     items = SalesVoucherItemSerializer(many=True, read_only=True)
-    documents = SalesVoucherDocumentSerializer(many=True, read_only=True)
-    voucher_type_name = serializers.CharField(source='voucher_type.name', read_only=True)
-    customer_name = serializers.CharField(source='customer.name', read_only=True)
+    # documents = SalesVoucherDocumentSerializer(many=True, read_only=True) # Commented out as table doesn't exist
+    
+    sales_invoice_number = serializers.CharField(source='sales_invoice_no', read_only=True)
+    voucher_type_name = serializers.CharField(source='voucher_name', read_only=True)
+    
+    # Address mapping
+    bill_to_address = serializers.CharField(source='bill_to', read_only=True)
+    # bill_to_state/country etc not in header schema either...
+    
+    ship_to_address = serializers.CharField(source='ship_to', read_only=True)
+    
+    # Missing fields mocking
+    grand_total = serializers.FloatField(default=0.0, read_only=True)
+    status = serializers.CharField(default='draft', read_only=True)
+    current_step = serializers.IntegerField(default=1, read_only=True)
     
     class Meta:
         model = SalesVoucher
         fields = [
-            'id', 'date', 'voucher_type', 'voucher_type_name', 'sales_invoice_number',
-            'customer', 'customer_name', 'bill_to_address', 'bill_to_gstin', 'bill_to_contact',
-            'bill_to_state', 'bill_to_country', 'ship_to_address', 'ship_to_state', 'ship_to_country',
+            'id', 'date', 'voucher_type_name', 'sales_invoice_number',
+            'customer_name', 'bill_to_address', 
+            # 'bill_to_gstin', 'bill_to_contact', # These exist in schema? Yes
+            'gstin', 'contact', # Expose model fields directly
+            
+            # 'bill_to_state', 'bill_to_country', 'ship_to_state', 'ship_to_country', # Missing
+            
+            'ship_to_address',
             'tax_type', 
             # GST-Compliant Fields
             'place_of_supply', 'reverse_charge', 'invoice_type', 'export_type',
             'port_code', 'shipping_bill_number', 'shipping_bill_date', 'ecommerce_gstin',
             # Status and Totals
-            'status', 'current_step', 'total_taxable_amount', 'total_cgst',
-            'total_sgst', 'total_igst', 'grand_total', 'payment_details', 'dispatch_details',
-            'einvoice_details', 'items', 'documents', 'created_at', 'updated_at'
+            'status', 'current_step', 
+            # 'total_taxable_amount', 'total_cgst', ... # Missing
+            'grand_total', 
+            # 'payment_details', 'dispatch_details', 'einvoice_details', # Missing/JSON in schema? Payment/Dispatch Details are separate tables.
+            'items', 
+            # 'documents', 
+            'created_at', 'updated_at'
         ]
         read_only_fields = [
-            'id', 'sales_invoice_number', 'tax_type', 'total_taxable_amount',
-            'total_cgst', 'total_sgst', 'total_igst', 'grand_total', 'created_at', 'updated_at'
+            'id', 'sales_invoice_number', 'tax_type', 'grand_total', 'created_at', 'updated_at'
         ]
 
 

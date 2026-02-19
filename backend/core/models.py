@@ -1,15 +1,38 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.utils import timezone
+import uuid
 
 class CustomUserManager(BaseUserManager):
     def create_user(self, username, password=None, **extra_fields):
         if not username:
             raise ValueError('The Username field must be set')
         
-        # Registered users (owners) are superusers by default
-        extra_fields.setdefault('is_superuser', True)
-        extra_fields.setdefault('is_staff', True)
+        # Ensure tenant creation logic
+        tenant_id = extra_fields.get('tenant_id')
+        if not tenant_id:
+            company_name = extra_fields.get('company_name')
+            if not company_name:
+                raise ValueError('Company Name is required for new user registration')
+            
+            # Generate new Tenant
+            tenant_id = str(uuid.uuid4())
+            
+            # Create Tenant record
+            # Import here to avoid circular dependency issues if any, though runtime resolution works
+            from .models import Tenant
+            try:
+                Tenant.objects.get_or_create(id=tenant_id, defaults={'name': company_name})
+            except Exception as e:
+                # If get_or_create fails or integrity error, just create (id is unique)
+                # But to be safe and simple as requested:
+                Tenant.objects.create(id=tenant_id, name=company_name)
+            
+            extra_fields['tenant_id'] = tenant_id
+
+        # Set default flags
+        extra_fields.setdefault('is_staff', False)
+        extra_fields.setdefault('is_superuser', False)
         
         user = self.model(username=username, **extra_fields)
         user.set_password(password)
@@ -17,8 +40,15 @@ class CustomUserManager(BaseUserManager):
         return user
 
     def create_superuser(self, username, password=None, **extra_fields):
-        extra_fields.setdefault('is_superuser', True)
         extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+        extra_fields.setdefault('is_active', True)
+
+        if extra_fields.get('is_staff') is not True:
+            raise ValueError('Superuser must have is_staff=True.')
+        if extra_fields.get('is_superuser') is not True:
+            raise ValueError('Superuser must have is_superuser=True.')
+
         return self.create_user(username, password, **extra_fields)
 
 class Tenant(models.Model):
@@ -37,7 +67,7 @@ class User(AbstractBaseUser):
     id = models.BigAutoField(primary_key=True) # Matches BIGINT in DB
     # Username can be duplicated - no uniqueness constraint
     username = models.CharField(max_length=100)
-    company_name = models.CharField(max_length=255, unique=True, null=True, blank=True)
+    company_name = models.CharField(max_length=255, null=True, blank=True)
     # Email must be unique globally across all tenants
     email = models.CharField(max_length=255, unique=True, blank=True, null=True)
     
@@ -125,6 +155,8 @@ class CompanyFullInfo(BaseModel):
     bank_branch = models.CharField(max_length=255, blank=True, null=True)
     voucher_numbering = models.JSONField(null=True, blank=True)
     
+    class Meta:
+        db_table = 'company_informations'
 
 class PasswordResetOTP(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_reset_otps')

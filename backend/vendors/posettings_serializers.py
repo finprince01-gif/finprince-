@@ -4,7 +4,7 @@ Serializers for Vendor Master PO Settings.
 
 from rest_framework import serializers
 from .models import VendorMasterPOSettings
-from inventory.models import InventoryMasterCategory
+from .models import VendorMasterPOSettings, VendorMasterCategory
 
 
 class VendorMasterPOSettingsSerializer(serializers.ModelSerializer):
@@ -47,7 +47,7 @@ class VendorMasterPOSettingsCreateSerializer(serializers.ModelSerializer):
     Serializer for creating VendorMasterPOSettings.
     """
     category = serializers.PrimaryKeyRelatedField(
-        queryset=InventoryMasterCategory.objects.all(),
+        queryset=VendorMasterCategory.objects.all(),
         required=False,
         allow_null=True
     )
@@ -93,7 +93,7 @@ class VendorMasterPOSettingsUpdateSerializer(serializers.ModelSerializer):
     Serializer for updating VendorMasterPOSettings.
     """
     category = serializers.PrimaryKeyRelatedField(
-        queryset=InventoryMasterCategory.objects.all(),
+        queryset=VendorMasterCategory.objects.all(),
         required=False,
         allow_null=True
     )

@@ -84,6 +84,7 @@ export const extractInvoiceDataWithRetry = async (
       }
 
       // Use httpClient for authenticated request with automatic token refresh
+      formData.append('save', 'false');
       const response: any = await httpClient.postFormData('/api/ai/extract-invoice/', formData);
 
       // Backend returns { reply: "stringified json" }
@@ -155,36 +156,8 @@ export const extractInvoiceDataWithRetry = async (
   throw new Error('Unexpected retry termination.');
 };
 
-// ============================================================================
-// AI AGENT (KIKI) - INTERNAL DATA
-// ============================================================================
-
 /**
- * Get AI agent response based on company's internal data
- * The AI (Kiki) answers questions using vouchers, ledgers, and stock data
- * 
- * HOW IT WORKS:
- * 1. Frontend sends user question + company data (JSON)
- * 2. Backend formats data and sends to Gemini AI
- * 3. Gemini analyzes data and generates answer
- * 4. Response returned to frontend
- * 
- * FEATURES:
- * - Answers accounting questions
- * - Analyzes company financial data
- * - Handles rate limiting gracefully
- * - Shows queue position when busy
- * 
- * USAGE:
- * ```typescript
- * const contextData = JSON.stringify({ vouchers, ledgers, stockItems });
- * const response = await getAgentResponse(contextData, "What are my total sales?");
- *  // AI's answer
- * ```
- * 
- * @param contextData - JSON string of company data (vouchers, ledgers, etc.)
- * @param userQuery - User's question
- * @returns Object with reply and optional queue/rate limit info
+ * AI AGENT (KIKI) - INTERNAL DATA
  */
 export const getAgentResponse = async (
   contextData: string,
@@ -192,158 +165,77 @@ export const getAgentResponse = async (
   history: { role: string; text: string }[] = []
 ): Promise<{ reply: string; code?: string; retryAfter?: number; queuePosition?: number; estimatedWaitSeconds?: number }> => {
   try {
-    // Get API configuration
-    const baseUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000';
-    const token = localStorage.getItem('token');
-
-    // Make API request to AI agent endpoint
-    const response = await fetch(`${baseUrl}/api/agent/message/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        // Authorization via HttpOnly cookies
-      },
-      credentials: 'include', // Send cookies for authentication
-      body: JSON.stringify({
-        message: userQuery,
-        history: history, // Send conversation history
-        contextData,
-        useGrounding: false  // Use internal data, not web search
-      }),
+    // Use httpClient for automatic token management and refresh
+    const response: any = await httpClient.post('/api/agent/message/', {
+      message: userQuery,
+      history: history,
+      contextData,
+      useGrounding: false
     });
 
-    // Check if response is JSON or HTML error page
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      const data = await response.json();
+    // Success - return AI's response
+    return { reply: response.reply || "I couldn't generate a response at this time." };
 
-      // Handle error responses
-      if (!response.ok) {
+  } catch (error: any) {
+    // Handle error responses from httpClient
+    const status = error.status;
+    const data = error.data || {};
 
-        // Authentication error
-        if (response.status === 401) {
-          return { reply: data.error || "Please log in to use the AI Agent.", code: 'AUTH_ERROR' };
-        }
-        // Rate limiting or queue
-        else if (response.status === 429) {
-          // Rate limit - user needs to wait
-          if (data.code === 'RATE_LIMIT' && data.retryAfter) {
-            return {
-              reply: `Rate limit exceeded. Please wait ${data.retryAfter} seconds before trying again.`,
-              code: 'RATE_LIMIT',
-              retryAfter: data.retryAfter
-            };
-          }
-          // Queued - request is waiting in line
-          else if (data.code === 'QUEUED' && data.queuePosition) {
-            return {
-              reply: `Your request is queued (position ${data.queuePosition}). Estimated wait: ${data.estimatedWaitSeconds || 'unknown'} seconds.`,
-              code: 'QUEUED',
-              queuePosition: data.queuePosition,
-              estimatedWaitSeconds: data.estimatedWaitSeconds
-            };
-          }
-          // Circuit breaker - service is down
-          else if (data.code === 'CIRCUIT_BREAKER') {
-            return { reply: "AI service is temporarily unavailable. Please try again later.", code: 'CIRCUIT_BREAKER' };
-          }
-          return { reply: data.error || "AI service is busy. Please wait a moment and try again.", code: 'SERVICE_BUSY' };
-        }
-
-        return { reply: data.error || "Sorry, I encountered an error while processing your request.", code: 'UNKNOWN_ERROR' };
-      }
-
-      // Success - return AI's response
-      return { reply: data.reply || "I couldn't generate a response at this time." };
-    } else {
-      // HTML error page returned (server error)
-      const text = await response.text();
-      return { reply: "Server error occurred. Please check the backend logs.", code: 'SERVER_ERROR' };
+    if (status === 401) {
+      return { reply: "Please log in to use the AI Agent.", code: 'AUTH_ERROR' };
     }
 
-  } catch (err: any) {
-    // Network error or other exception
-    return { reply: "Sorry, I encountered an error while processing your request.", code: 'NETWORK_ERROR' };
+    if (status === 429) {
+      if (data.code === 'RATE_LIMIT' && data.retryAfter) {
+        return {
+          reply: `Rate limit exceeded. Please wait ${data.retryAfter} seconds before trying again.`,
+          code: 'RATE_LIMIT',
+          retryAfter: data.retryAfter
+        };
+      }
+      if (data.code === 'QUEUED' && data.queuePosition) {
+        return {
+          reply: `Your request is queued (position ${data.queuePosition}). Estimated wait: ${data.estimatedWaitSeconds || 'unknown'} seconds.`,
+          code: 'QUEUED',
+          queuePosition: data.queuePosition,
+          estimatedWaitSeconds: data.estimatedWaitSeconds
+        };
+      }
+      if (data.code === 'CIRCUIT_BREAKER') {
+        return { reply: "AI service is temporarily unavailable. Please try again later.", code: 'CIRCUIT_BREAKER' };
+      }
+      return { reply: data.error || "AI service is busy. Please wait a moment and try again.", code: 'SERVICE_BUSY' };
+    }
+
+    return { reply: data.error || "Sorry, I encountered an error while processing your request.", code: 'NETWORK_ERROR' };
   }
 };
 
-// ============================================================================
-// AI AGENT (KIKI) - WEB SEARCH
-// ============================================================================
-
 /**
- * Get AI agent response using real-time web search
- * The AI searches the internet for up-to-date information
- * 
- * HOW IT WORKS:
- * 1. Frontend sends user question
- * 2. Backend uses Gemini with Google Search grounding
- * 3. Gemini searches web and generates answer with sources
- * 4. Response includes answer + source URLs
- * 
- * USE CASES:
- * - Latest tax rates
- * - Current accounting standards
- * - Recent regulatory changes
- * - General accounting questions
- * 
- * USAGE:
- * ```typescript
- * const response = await getGroundedAgentResponse("What is the current GST rate for electronics?");
- *     // AI's answer
- *  // Array of source URLs
- * ```
- * 
- * @param userQuery - User's question
- * @returns Object with text answer and source URLs
+ * AI AGENT (KIKI) - WEB SEARCH
  */
 export const getGroundedAgentResponse = async (
   userQuery: string
 ): Promise<{ text: string; sources: { uri: string; title: string; }[] }> => {
   try {
-    const baseUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000';
-    const token = localStorage.getItem('token');
-
-    const response = await fetch(`${baseUrl}/api/agent/message/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-      body: JSON.stringify({
-        message: userQuery,
-        contextData: '',
-        useGrounding: true
-      }),
+    const response: any = await httpClient.post('/api/agent/message/', {
+      message: userQuery,
+      contextData: '',
+      useGrounding: true
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-
-      if (response.status === 401) {
-        return {
-          text: "Please log in to use the AI Agent.",
-          sources: []
-        };
-      } else if (response.status === 429) {
-        return {
-          text: "AI service is busy. Please wait a moment and try again.",
-          sources: []
-        };
-      }
-
-      return {
-        text: "Sorry, I encountered an error while processing your request with web search.",
-        sources: []
-      };
-    }
-
-    const data = await response.json();
     return {
-      text: data.reply || "I couldn't generate a response at this time.",
-      sources: data.sources || []
+      text: response.reply || "I couldn't generate a response at this time.",
+      sources: response.sources || []
     };
-  } catch (err: any) {
+  } catch (error: any) {
+    const status = error.status;
+    if (status === 401) {
+      return { text: "Please log in to use the AI Agent.", sources: [] };
+    }
+    if (status === 429) {
+      return { text: "AI service is busy. Please wait a moment and try again.", sources: [] };
+    }
     return {
       text: "Sorry, I encountered an error while processing your request with web search.",
       sources: []

@@ -17,7 +17,9 @@ def seed_tenant_data(tenant_id):
         # call_command('seed_voucher_configurations', tenant_id=tenant_id)
         
         # Currently just a placeholder to prevent import errors and crashes
-        pass
+        # Call the seeder from registration.database
+        from registration.database import seed_default_ledger_groups
+        seed_default_ledger_groups(tenant_id)
         
     except Exception as e:
         logger.error(f"❌ Error seeding data for tenant {tenant_id}: {e}")

@@ -219,7 +219,7 @@ class VendorMasterPOSettings(models.Model):
     tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
     name = models.CharField(max_length=200, help_text="Name of PO Series")
     category = models.ForeignKey(
-        InventoryMasterCategory,
+        'VendorMasterCategory',
         on_delete=models.PROTECT,
         related_name='vendor_po_settings',
         null=True,

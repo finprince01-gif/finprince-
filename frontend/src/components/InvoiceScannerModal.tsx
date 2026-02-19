@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { httpClient } from '../services/httpClient';
 import { showError } from '../utils/toast';
+import { useSubscriptionUsage } from '../hooks/useSubscriptionUsage';
 declare const XLSX: any;
 
 // Icon component inline
@@ -75,16 +76,38 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose }) =>
         XLSX.writeFile(wb, `Extracted_Invoices_${new Date().getTime()}.xlsx`);
     };
 
+    const { incrementUsage, isLimitReached, subscriptionUsage } = useSubscriptionUsage();
+
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const files = event.target.files;
         if (!files || files.length === 0) return;
+
+        if (isLimitReached) {
+            showError("❌ AI Extraction limit reached for your plan. Please upgrade to continue.");
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+        }
 
         setIsExtracting(true);
         const API_URL = (import.meta as any).env.VITE_API_URL || 'http://localhost:8000';
 
         try {
             const allResults: any[] = [];
+            // Track accumulated usage within this batch to prevent over-limit processing
+            let batchProcessedCount = 0;
+
             for (let i = 0; i < files.length; i++) {
+                // Check limit dynamically based on plan
+                if (subscriptionUsage && subscriptionUsage.limit !== 'Unlimited') {
+                    const limit = typeof subscriptionUsage.limit === 'string' ? parseFloat(subscriptionUsage.limit) : subscriptionUsage.limit;
+                    const currentUsed = (subscriptionUsage.used || 0) + batchProcessedCount;
+
+                    if (currentUsed >= limit) {
+                        showError(`❌ AI Extraction limit reached (${limit}). Processed ${batchProcessedCount} files.`);
+                        break;
+                    }
+                }
+
                 const file = files[i];
                 const formData = new FormData();
                 formData.append('file', file);
@@ -98,6 +121,10 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose }) =>
                     }
 
                     if (result.reply) {
+                        // Increment usage on successful extraction
+                        incrementUsage(1);
+                        batchProcessedCount++;
+
                         // Backend returns a JSON string in 'reply'
                         let parsedData;
                         try {
@@ -105,7 +132,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose }) =>
                             const cleanJson = result.reply.replace(/```json\n?|\n?```/g, '').trim();
                             parsedData = JSON.parse(cleanJson);
                         } catch (e) {
-                            
+
                             // If simple parse fails, try to find the first '[' and last ']'
                             try {
                                 const jsonMatch = result.reply.match(/\[[\s\S]*\]/);
@@ -127,6 +154,8 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose }) =>
                         }
                     } else if (result.success && result.data) {
                         // Support legacy or alternative format if any
+                        incrementUsage(1);
+                        batchProcessedCount++;
                         allResults.push(result.data);
                     } else {
                         throw new Error("No data received from backend");

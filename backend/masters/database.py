@@ -7,9 +7,12 @@ Only database queries accepting tenant_id as parameter.
 import logging
 from django.db.models import Max
 from accounting.models import (
-    MasterLedgerGroup, MasterLedger, MasterVoucherConfig, MasterHierarchyRaw,
-    VoucherConfiguration, AmountTransaction
+    MasterLedgerGroup, MasterLedger, MasterHierarchyRaw,
+    AmountTransaction
 )
+from .models import MasterVoucherSales as MasterVoucherConfig
+from .models import MasterVoucherSales as VoucherConfiguration
+
 
 logger = logging.getLogger('masters.database')
 

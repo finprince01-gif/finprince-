@@ -8,27 +8,25 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db import transaction
 from .models import (
-    CustomerMaster,
     CustomerMasterCategory,
     CustomerMastersSalesQuotation,
     CustomerMastersSalesOrder,
     CustomerMasterCustomer,
     CustomerTransaction,
-    CustomerSalesQuotation,
-    CustomerSalesOrder,
+    # CustomerSalesQuotation,
+    # CustomerSalesOrder,
     CustomerMasterLongTermContractBasicDetail,
     CustomerTransactionSalesQuotationGeneral,
     CustomerTransactionSalesQuotationSpecific,
     CustomerTransactionSalesOrderBasicDetails
 )
 from .serializers import (
-    CustomerMasterSerializer,
     CustomerMasterCategorySerializer,
     CustomerMastersSalesQuotationSerializer,
     CustomerMasterCustomerSerializer,
     CustomerTransactionSerializer,
-    CustomerSalesQuotationSerializer,
-    CustomerSalesOrderSerializer,
+    # CustomerSalesQuotationSerializer,
+    # CustomerSalesOrderSerializer,
     CustomerMasterLongTermContractBasicDetailSerializer,
     CustomerMasterLongTermContractProductServiceSerializer,
     CustomerMasterLongTermContractTermsConditionSerializer,
@@ -43,18 +41,31 @@ class CustomerMasterViewSet(viewsets.ModelViewSet):
     """
     ViewSet for Customer Master operations
     Handles CRUD operations for customer records
+    Uses customer_master_customer_basicdetails table (the actual customer table)
     """
     permission_classes = [IsAuthenticated]
-    serializer_class = CustomerMasterSerializer
-    
+    serializer_class = CustomerMasterCustomerSerializer
+
     def get_queryset(self):
         """Filter customers by tenant"""
         user = self.request.user
         tenant_id = getattr(user, 'tenant_id', None)
         if tenant_id:
-            return CustomerMaster.objects.filter(tenant_id=tenant_id, is_deleted=False)
-        return CustomerMaster.objects.none()
-    
+            return CustomerMasterCustomer.objects.filter(tenant_id=tenant_id, is_deleted=False)
+        return CustomerMasterCustomer.objects.none()
+
+    def perform_create(self, serializer):
+        """Set tenant_id and created_by when creating"""
+        user = self.request.user
+        tenant_id = getattr(user, 'tenant_id', None)
+        if not tenant_id:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({'error': 'User does not have a tenant_id.'})
+        serializer.save(
+            tenant_id=tenant_id,
+            created_by=user.username if hasattr(user, 'username') else None
+        )
+
     @action(detail=True, methods=['post'])
     def deactivate(self, request, pk=None):
         """Soft delete a customer"""
@@ -62,6 +73,7 @@ class CustomerMasterViewSet(viewsets.ModelViewSet):
         customer.is_deleted = True
         customer.save()
         return Response({'status': 'customer deactivated'})
+
 
 
 class CustomerCategoryViewSet(viewsets.ModelViewSet):
@@ -300,60 +312,63 @@ class CustomerTransactionViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
-class CustomerSalesQuotationViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet for Sales Quotation operations
-    Manages customer sales quotations
-    """
-    permission_classes = [IsAuthenticated]
-    serializer_class = CustomerSalesQuotationSerializer
-    
-    def get_queryset(self):
-        """Filter quotations by tenant"""
-        user = self.request.user
-        tenant_id = getattr(user, 'tenant_id', None)
-        if tenant_id:
-            return CustomerSalesQuotation.objects.filter(tenant_id=tenant_id)
-        return CustomerSalesQuotation.objects.none()
-    
-    @action(detail=True, methods=['post'])
-    def convert_to_order(self, request, pk=None):
-        """Convert quotation to sales order"""
-        quotation = self.get_object()
-        
-        with transaction.atomic():
-            # Create sales order from quotation
-            order = CustomerSalesOrder.objects.create(
-                tenant_id=quotation.tenant_id,
-                customer_id=quotation.customer_id,
-                quotation_reference=quotation.quotation_number,
-                # Copy other relevant fields
-            )
-            
-            quotation.status = 'converted'
-            quotation.save()
-        
-        return Response({
-            'status': 'quotation converted to order',
-            'order_id': order.id
-        })
+# class CustomerSalesQuotationViewSet(viewsets.ModelViewSet):
+#     """
+#     ViewSet for Sales Quotation operations
+#     Manages customer sales quotations
+#     """
+#     permission_classes = [IsAuthenticated]
+#     # serializer_class = CustomerSalesQuotationSerializer
+#     
+#     def get_queryset(self):
+#         """Filter quotations by tenant"""
+#         user = self.request.user
+#         tenant_id = getattr(user, 'tenant_id', None)
+#         if tenant_id:
+#             pass # return CustomerSalesQuotation.objects.filter(tenant_id=tenant_id)
+#         # return CustomerSalesQuotation.objects.none()
+#         return []
+#     
+#     @action(detail=True, methods=['post'])
+#     def convert_to_order(self, request, pk=None):
+#         """Convert quotation to sales order"""
+#         return Response({"error": "Not implemented"}, status=501)
+#         # quotation = self.get_object()
+#         
+#         # with transaction.atomic():
+#         #     # Create sales order from quotation
+#         #     order = CustomerSalesOrder.objects.create(
+#         #         tenant_id=quotation.tenant_id,
+#         #         customer_id=quotation.customer_id,
+#         #         quotation_reference=quotation.quotation_number,
+#         #         # Copy other relevant fields
+#         #     )
+#         #     
+#         #     quotation.status = 'converted'
+#         #     quotation.save()
+#         
+#         # return Response({
+#         #     'status': 'quotation converted to order',
+#         #     'order_id': order.id
+#         # })
 
 
-class CustomerSalesOrderViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet for Sales Order operations
-    Manages customer sales orders
-    """
-    permission_classes = [IsAuthenticated]
-    serializer_class = CustomerSalesOrderSerializer
-    
-    def get_queryset(self):
-        """Filter orders by tenant"""
-        user = self.request.user
-        tenant_id = getattr(user, 'tenant_id', None)
-        if tenant_id:
-            return CustomerSalesOrder.objects.filter(tenant_id=tenant_id)
-        return CustomerSalesOrder.objects.none()
+# class CustomerSalesOrderViewSet(viewsets.ModelViewSet):
+#     """
+#     ViewSet for Sales Order operations
+#     Manages customer sales orders
+#     """
+#     permission_classes = [IsAuthenticated]
+#     # serializer_class = CustomerSalesOrderSerializer
+#     
+#     def get_queryset(self):
+#         """Filter orders by tenant"""
+#         # user = self.request.user
+#         # tenant_id = getattr(user, 'tenant_id', None)
+#         # if tenant_id:
+#         #     return CustomerSalesOrder.objects.filter(tenant_id=tenant_id)
+#         # return CustomerSalesOrder.objects.none()
+#         return []
 
 
 # TODO: Uncomment when CustomerMasterLongTermContract model is created

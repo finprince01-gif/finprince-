@@ -71,6 +71,7 @@ import { extractInvoiceDataWithRetry, getAgentResponse, getGroundedAgentResponse
 
 // API Service - Handles all HTTP requests to Django backend
 import { apiService, httpClient } from '../services';
+import { isAuthenticated } from '../services/authService';
 
 // Initial Data - Default data for new companies (fallback if backend is empty)
 import { initialLedgers, initialLedgerGroups } from '../store/initialData';
@@ -161,8 +162,8 @@ const App: React.FC = () => {
   // ============================================================================
 
   // Authentication state - tracks if user is logged in
-  // Initialize to false to ensure logout on refresh (tokens are now in memory only)
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  // Check for refresh token to persist login across reloads
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => isAuthenticated());
 
   // View state - determines whether to show login or signup page
   const [view, setView] = useState<'login' | 'signup' | 'forgot-password'>('login');
@@ -390,18 +391,7 @@ const App: React.FC = () => {
           }
         } else {
           // Not logged in or no tenant ID, just show empty state
-          try {
-            const [rv, rc, ut] = await Promise.all([
-              apiService.getRichVendors(),
-              apiService.getRichCustomers(),
-              apiService.getUserTables()
-            ]);
-            setRichVendors(rv);
-            setRichCustomers(rc);
-            setUserTables(ut);
-          } catch (e) {
-            console.error('Failed to load rich metadata:', e);
-          }
+          // Fallback to empty state
           // Fallback to empty state
           setLedgers([]);
           setLedgerGroups([]);
@@ -472,13 +462,7 @@ const App: React.FC = () => {
   const handleLogout = async () => {
     try {
       // Update server login status to Offline before clearing local data
-      await fetch(`${API_BASE}/api/auth/logout`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include' // Send cookies
-      });
+      await httpClient.post('/api/auth/logout/');
     } catch (error) {
 
     }

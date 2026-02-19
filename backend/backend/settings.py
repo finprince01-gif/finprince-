@@ -4,7 +4,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from datetime import timedelta
 
-load_dotenv()
+load_dotenv(override=True)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -16,7 +16,7 @@ if not SECRET_KEY:
 DEBUG = os.getenv('DJANGO_DEBUG', 'False') == 'True'
 
 # Production: Specify exact domains (no wildcards)
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,finpixe.com,www.finpixe.com,api.finpixe.com,testserver,16.171.255.74').split(',')
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,finpixe.com,www.finpixe.com,api.finpixe.com,testserver,16.171.255.74,13.63.35.153').split(',')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'corsheaders',
+    'masters', # Masters Module (Voucher configs etc)
     'core',
     'accounting',
     'inventory',
@@ -169,6 +170,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5176",
     "http://localhost:3000",
     "http://16.171.255.74",
+    "http://13.63.35.153",
 ]
 
 # Filter out localhost in production
@@ -190,6 +192,7 @@ CSRF_TRUSTED_ORIGINS = [
     'http://127.0.0.1:5174',
     'http://localhost:3000',
     'http://16.171.255.74',
+    'http://13.63.35.153',
 ]
 
 # Filter out localhost in production
@@ -343,11 +346,11 @@ EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL") or EMAIL_HOST_USER or 'webmaster@localhost'
 
 # ============================================================================
-# DISABLE MIGRATIONS
+# DISABLE MIGRATIONS - Rely on schema.sql only
 # ============================================================================
 MIGRATION_MODULES = {
     'core': None,
-    # 'accounting': None,
+    'accounting': None,
     'inventory': None,
     'customerportal': None,
     'payroll': None,
@@ -360,4 +363,9 @@ MIGRATION_MODULES = {
     'settings': None,
     'vouchers': None,
     'dashboard': None,
+    'vendors': None,
+    'admin': None,
+    'auth': None,
+    'contenttypes': None,
+    'sessions': None,
 }

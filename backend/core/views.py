@@ -286,10 +286,6 @@ class AIProxyView(views.APIView):
             tenant_id = 'default' # Fallback to default tenant if not set
 
         if action == 'extract-invoice':
-            # Check Limits
-            from accounting.utils_subscription import check_subscription_limit
-            check_subscription_limit(request.user)
-
             # Handle file upload for invoice extraction
             if 'file' not in request.FILES:
                 return Response({'error': 'No file provided.'}, status=400)
@@ -307,32 +303,9 @@ class AIProxyView(views.APIView):
 
             # Record the extraction event for usage tracking
             if result and isinstance(result, dict) and 'reply' in result:
-                try:
-                    from accounting.models import ExtractedInvoice
-                    # Backend returns a JSON string in 'reply'
-                    import json
-                    reply_text = result['reply']
-                    # Simple clean of markdown
-                    clean_json = reply_text.replace('```json', '').replace('```', '').strip()
-                    parsed_data = json.loads(clean_json)
-                    
-                    if isinstance(parsed_data, list) and len(parsed_data) > 0:
-                        data = parsed_data[0]
-                    else:
-                        data = parsed_data
-
-                    if data and isinstance(data, dict):
-                        # Create ExtractedInvoice with timezone-aware datetime
-                        ExtractedInvoice.objects.create(
-                            tenant_id=tenant_id,
-                            invoice_number=data.get('Invoice Number') or data.get('invoiceNumber'),
-                            supplier_name=data.get('Supplier Name') or data.get('sellerName'),
-                            invoice_value=str(data.get('Invoice Value') or data.get('totalAmount') or ''),
-                            additional_fields=data
-                        )
-                        logger.info(f"✅ Recorded extraction for tenant {tenant_id}")
-                except Exception as e:
-                    logger.error(f"❌ Failed to record extraction: {str(e)}")
+                # User requested to skip database saving for extracted invoices.
+                # Data is returned to frontend for local storage handling.
+                pass
 
 
         elif action == 'agent-message':

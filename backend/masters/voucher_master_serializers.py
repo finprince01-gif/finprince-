@@ -2,7 +2,7 @@
 Serializers for Separate Voucher Master Tables
 """
 from rest_framework import serializers
-from accounting.models import (
+from .models import (
     MasterVoucherSales,
     MasterVoucherCreditNote,
     MasterVoucherReceipts,

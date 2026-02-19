@@ -376,19 +376,17 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
     React.useEffect(() => {
         const fetchSalesDocs = async () => {
             try {
-                const [soRes, soBasicRes, sqGenRes, sqSpecRes, sqBasicRes, custRes] = await Promise.all([
+                const [soRes, sqGenRes, sqSpecRes, custRes] = await Promise.all([
                     httpClient.get('/api/customerportal/sales-orders/').catch(() => []),
-                    httpClient.get('/api/customerportal/orders/').catch(() => []),
                     httpClient.get('/api/customerportal/sales-quotations-general/').catch(() => []),
                     httpClient.get('/api/customerportal/sales-quotations-specific/').catch(() => []),
-                    httpClient.get('/api/customerportal/quotations/').catch(() => []),
                     httpClient.get('/api/customerportal/customer-master/').catch(() => [])
                 ]);
 
                 const getList = (res: any) => Array.isArray(res) ? res : (res as any).results || [];
 
-                setSalesOrders([...getList(soRes), ...getList(soBasicRes)]);
-                setSalesQuotations([...getList(sqGenRes), ...getList(sqSpecRes), ...getList(sqBasicRes)]);
+                setSalesOrders(getList(soRes));
+                setSalesQuotations([...getList(sqGenRes), ...getList(sqSpecRes)]);
                 setMasterCustomers(getList(custRes));
             } catch (error) {
                 console.error('Error fetching sales documents:', error);
@@ -407,20 +405,12 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
         try {
             let fullDoc: any;
             if (doc.type === 'Order') {
-                try {
-                    fullDoc = await httpClient.get(`/api/customerportal/sales-orders/${doc.id}/`);
-                } catch {
-                    fullDoc = await httpClient.get(`/api/customerportal/orders/${doc.id}/`);
-                }
+                fullDoc = await httpClient.get(`/api/customerportal/sales-orders/${doc.id}/`);
             } else {
                 try {
                     fullDoc = await httpClient.get(`/api/customerportal/sales-quotations-general/${doc.id}/`);
                 } catch {
-                    try {
-                        fullDoc = await httpClient.get(`/api/customerportal/sales-quotations-specific/${doc.id}/`);
-                    } catch {
-                        fullDoc = await httpClient.get(`/api/customerportal/quotations/${doc.id}/`);
-                    }
+                    fullDoc = await httpClient.get(`/api/customerportal/sales-quotations-specific/${doc.id}/`);
                 }
             }
 
