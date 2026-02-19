@@ -9,10 +9,18 @@ class VoucherReceiptSingleViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         user = self.request.user
+        queryset = self.queryset
+
         # Filter by tenant_id if available on user
         if hasattr(user, 'tenant_id') and user.tenant_id:
-            return self.queryset.filter(tenant_id=user.tenant_id)
-        return self.queryset
+            queryset = queryset.filter(tenant_id=user.tenant_id)
+
+        # Filter by receive_from (vendor/party name) for ledger view
+        receive_from = self.request.query_params.get('receive_from')
+        if receive_from:
+            queryset = queryset.filter(receive_from__icontains=receive_from)
+
+        return queryset
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -27,9 +35,12 @@ class VoucherReceiptBulkViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        queryset = self.queryset
+
         if hasattr(user, 'tenant_id') and user.tenant_id:
-            return self.queryset.filter(tenant_id=user.tenant_id)
-        return self.queryset
+            queryset = queryset.filter(tenant_id=user.tenant_id)
+
+        return queryset
         
     def perform_create(self, serializer):
         user = self.request.user

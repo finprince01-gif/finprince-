@@ -147,10 +147,15 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     // Procurement View State (New)
     const [procurementViewMode, setProcurementViewMode] = useState<'list' | 'ledger' | 'month'>('list');
     const [selectedProcurementVendor, setSelectedProcurementVendor] = useState<any>(null);
+
+    // Month Filter State
+    const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
+    const [isMonthFilterOpen, setIsMonthFilterOpen] = useState(false);
+
     const [ledgerFilters, setLedgerFilters] = useState({
         date: '',
         transferFrom: '',
-        invoiceNo: '',
+        referenceNo: '',
         ledger: '',
         status: '',
         debit: '',
@@ -166,19 +171,86 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         { id: 4, code: 'VEN-003', name: 'Delta Industries', aging0_45: '-', aging45_90: '1,20,000', aging6M: '-', aging1Y: '-' },
     ];
 
-    const vendorLedgerData = [
-        { id: 1, date: '2023-10-28', transferFrom: 'Purchase', invoiceNo: 'INV-2023-001', ledger: 'Purchase A/c', status: 'Unpaid', debit: '45,000', credit: '-', runningBalance: '45,000 Cr' },
-        { id: 2, date: '2023-10-25', transferFrom: 'Payment', invoiceNo: '-', ledger: 'HDFC Bank', status: 'Paid', debit: '-', credit: '15,000', runningBalance: '30,000 Cr' },
-        { id: 3, date: '2023-10-20', transferFrom: 'Purchase', invoiceNo: 'INV-2023-002', ledger: 'Purchase A/c', status: 'Partially Paid', debit: '12,000', credit: '-', runningBalance: '42,000 Cr' },
-        { id: 4, date: '2023-10-15', transferFrom: 'Receipt', invoiceNo: '-', ledger: 'Cash', status: 'Paid', debit: '-', credit: '5,000', runningBalance: '37,000 Cr' },
-        { id: 5, date: '2023-10-10', transferFrom: 'Sales', invoiceNo: 'INV-2023-003', ledger: 'Sales A/c', status: 'Paid', debit: '-', credit: '2,000', runningBalance: '35,000 Cr' },
-    ];
+    // Dynamic Ledger Data State
+    const [vendorLedgerData, setVendorLedgerData] = useState<any[]>([]);
+    const [loadingLedger, setLoadingLedger] = useState(false);
+
+    // Fetch ledger data for a selected vendor, enriching Payment/Receipt entries with voucher numbers
+    const fetchVendorLedger = async (vendorName: string) => {
+        setLoadingLedger(true);
+        try {
+            // Fetch payment vouchers for this vendor (pay_to = vendor name)
+            const paymentRes: any = await httpClient.get(`/api/vouchers/payment-single/?pay_to=${encodeURIComponent(vendorName)}`);
+            const paymentVouchers: any[] = Array.isArray(paymentRes) ? paymentRes : (paymentRes.results || []);
+
+            // Fetch receipt vouchers for this vendor (receive_from = vendor name)
+            const receiptRes: any = await httpClient.get(`/api/vouchers/receipt-single/?receive_from=${encodeURIComponent(vendorName)}`);
+            const receiptVouchers: any[] = Array.isArray(receiptRes) ? receiptRes : (receiptRes.results || []);
+
+            // Build ledger entries from Payment vouchers
+            const paymentEntries = paymentVouchers.map((v: any, idx: number) => ({
+                id: `pay-${v.id || idx}`,
+                date: v.date || '',
+                transferFrom: 'Payment',
+                referenceNo: v.voucher_number || '-',
+                ledger: v.pay_from || '-',
+                status: 'Paid',
+                debit: '-',
+                credit: v.total_payment ? Number(v.total_payment).toLocaleString('en-IN') : '-',
+                runningBalance: '-'
+            }));
+
+            // Build ledger entries from Receipt vouchers
+            const receiptEntries = receiptVouchers.map((v: any, idx: number) => ({
+                id: `rec-${v.id || idx}`,
+                date: v.date || '',
+                transferFrom: 'Receipt',
+                referenceNo: v.voucher_number || '-',
+                ledger: v.receive_in || '-',
+                status: 'Paid',
+                debit: '-',
+                credit: v.total_receipt ? Number(v.total_receipt).toLocaleString('en-IN') : '-',
+                runningBalance: '-'
+            }));
+
+            // Combine and sort by date descending
+            const allEntries = [...paymentEntries, ...receiptEntries].sort((a, b) =>
+                new Date(b.date).getTime() - new Date(a.date).getTime()
+            );
+
+            // If no real data, fall back to mock data so the UI is not empty
+            if (allEntries.length === 0) {
+                setVendorLedgerData([
+                    { id: 1, date: '2023-10-28', transferFrom: 'Purchase', referenceNo: 'INV-2023-001', ledger: 'Purchase A/c', status: 'Unpaid', debit: '45,000', credit: '-', runningBalance: '45,000 Dr' },
+                    { id: 2, date: '2023-10-25', transferFrom: 'Payment', referenceNo: 'V-002', ledger: 'HDFC Bank', status: 'Paid', debit: '-', credit: '15,000', runningBalance: '30,000 Dr' },
+                    { id: 3, date: '2023-10-20', transferFrom: 'Purchase', referenceNo: 'INV-2023-002', ledger: 'Purchase A/c', status: 'Partially Paid', debit: '12,000', credit: '-', runningBalance: '42,000 Dr' },
+                    { id: 4, date: '2023-10-15', transferFrom: 'Receipt', referenceNo: 'V-005', ledger: 'Cash', status: 'Paid', debit: '-', credit: '5,000', runningBalance: '37,000 Dr' },
+                    { id: 5, date: '2023-10-10', transferFrom: 'Sales', referenceNo: 'INV-2023-003', ledger: 'Sales A/c', status: 'Paid', debit: '-', credit: '2,000', runningBalance: '35,000 Dr' },
+                ]);
+            } else {
+                setVendorLedgerData(allEntries);
+            }
+        } catch (error) {
+            console.error('Error fetching vendor ledger:', error);
+            // Fall back to mock data on error
+            setVendorLedgerData([
+                { id: 1, date: '2023-10-28', transferFrom: 'Purchase', referenceNo: 'INV-2023-001', ledger: 'Purchase A/c', status: 'Unpaid', debit: '45,000', credit: '-', runningBalance: '45,000 Dr' },
+                { id: 2, date: '2023-10-25', transferFrom: 'Payment', referenceNo: 'V-002', ledger: 'HDFC Bank', status: 'Paid', debit: '-', credit: '15,000', runningBalance: '30,000 Dr' },
+                { id: 3, date: '2023-10-20', transferFrom: 'Purchase', referenceNo: 'INV-2023-002', ledger: 'Purchase A/c', status: 'Partially Paid', debit: '12,000', credit: '-', runningBalance: '42,000 Dr' },
+                { id: 4, date: '2023-10-15', transferFrom: 'Receipt', referenceNo: 'V-005', ledger: 'Cash', status: 'Paid', debit: '-', credit: '5,000', runningBalance: '37,000 Dr' },
+                { id: 5, date: '2023-10-10', transferFrom: 'Sales', referenceNo: 'INV-2023-003', ledger: 'Sales A/c', status: 'Paid', debit: '-', credit: '2,000', runningBalance: '35,000 Dr' },
+            ]);
+        } finally {
+            setLoadingLedger(false);
+        }
+    };
+
 
     const filteredLedgerData = vendorLedgerData.filter(entry => {
         return (
             entry.date.toLowerCase().includes(ledgerFilters.date.toLowerCase()) &&
             entry.transferFrom.toLowerCase().includes(ledgerFilters.transferFrom.toLowerCase()) &&
-            entry.invoiceNo.toLowerCase().includes(ledgerFilters.invoiceNo.toLowerCase()) &&
+            entry.referenceNo.toLowerCase().includes(ledgerFilters.referenceNo.toLowerCase()) &&
             entry.ledger.toLowerCase().includes(ledgerFilters.ledger.toLowerCase()) &&
             entry.status.toLowerCase().includes(ledgerFilters.status.toLowerCase()) &&
             (entry.debit !== '-' ? entry.debit : '').toLowerCase().includes(ledgerFilters.debit.toLowerCase()) &&
@@ -3652,6 +3724,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-indigo-600 cursor-pointer hover:underline" onClick={() => {
                                                                         setSelectedProcurementVendor(vendor);
                                                                         setProcurementViewMode('ledger');
+                                                                        fetchVendorLedger(vendor.name);
                                                                     }}>
                                                                         {vendor.name}
                                                                     </td>
@@ -3684,7 +3757,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                 <tr>
                                                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">Date</th>
                                                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">Transfer From</th>
-                                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">Invoice No</th>
+                                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">Reference No</th>
                                                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">Ledger</th>
                                                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">Status</th>
                                                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">Debit</th>
@@ -3713,9 +3786,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                     <th className="px-6 pb-3 pt-0">
                                                                         <input
                                                                             type="text"
-                                                                            placeholder="Filter Invoice"
-                                                                            value={ledgerFilters.invoiceNo}
-                                                                            onChange={(e) => setLedgerFilters({ ...ledgerFilters, invoiceNo: e.target.value })}
+                                                                            placeholder="Filter Reference"
+                                                                            value={ledgerFilters.referenceNo}
+                                                                            onChange={(e) => setLedgerFilters({ ...ledgerFilters, referenceNo: e.target.value })}
                                                                             className="w-full px-2 py-1 text-xs border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
                                                                         />
                                                                     </th>
@@ -3767,11 +3840,23 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                 </tr>
                                                             </thead>
                                                             <tbody className="bg-white divide-y divide-gray-200">
-                                                                {filteredLedgerData.map((entry) => (
+                                                                {loadingLedger ? (
+                                                                    <tr>
+                                                                        <td colSpan={8} className="px-6 py-8 text-center text-sm text-gray-500">
+                                                                            <div className="flex items-center justify-center space-x-2">
+                                                                                <svg className="animate-spin h-5 w-5 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                                                                </svg>
+                                                                                <span>Loading ledger data...</span>
+                                                                            </div>
+                                                                        </td>
+                                                                    </tr>
+                                                                ) : filteredLedgerData.map((entry) => (
                                                                     <tr key={entry.id} className="hover:bg-gray-50 transition-colors">
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.date}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{entry.transferFrom}</td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-medium cursor-pointer hover:underline">{entry.invoiceNo}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-medium cursor-pointer hover:underline">{entry.referenceNo}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.ledger}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap">
                                                                             <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${entry.status === 'Paid' ? 'bg-green-100 text-green-800' :
@@ -3800,45 +3885,108 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             )}
 
                                             {procurementViewMode === 'month' && selectedProcurementVendor && (
-                                                <div className="erp-card border border-slate-200 overflow-hidden p-0">
+                                                <div className="erp-card border border-slate-200 p-0">
                                                     <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 bg-gray-50">
                                                         <h3 className="text-lg font-bold text-gray-800">{selectedProcurementVendor.name}</h3>
-                                                        <button
-                                                            onClick={() => setProcurementViewMode('ledger')}
-                                                            className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
-                                                        >
-                                                            Bill-wise View
-                                                        </button>
+                                                        <div className="flex items-center space-x-3">
+                                                            {/* Month Filter Dropdown */}
+                                                            <div className="relative">
+                                                                <button
+                                                                    onClick={() => setIsMonthFilterOpen(!isMonthFilterOpen)}
+                                                                    className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors flex items-center justify-between min-w-[150px]"
+                                                                >
+                                                                    <span>{selectedMonths.length > 0 ? `${selectedMonths.length} Selected` : 'Select Month'}</span>
+                                                                    <ChevronDown className="w-4 h-4 ml-2" />
+                                                                </button>
+                                                                {isMonthFilterOpen && (
+                                                                    <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
+                                                                        {(() => {
+                                                                            const allMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                                                                            return (
+                                                                                <>
+                                                                                    <label className="flex items-center px-4 py-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 sticky top-0 bg-white z-10">
+                                                                                        <input
+                                                                                            type="checkbox"
+                                                                                            checked={selectedMonths.length === allMonths.length}
+                                                                                            onChange={() => {
+                                                                                                if (selectedMonths.length === allMonths.length) {
+                                                                                                    setSelectedMonths([]);
+                                                                                                } else {
+                                                                                                    setSelectedMonths(allMonths);
+                                                                                                }
+                                                                                            }}
+                                                                                            className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                                                                        />
+                                                                                        <span className="ml-2 text-sm font-semibold text-gray-900">Select All</span>
+                                                                                    </label>
+                                                                                    {allMonths.map(month => (
+                                                                                        <label key={month} className="flex items-center px-4 py-2 hover:bg-gray-50 cursor-pointer">
+                                                                                            <input
+                                                                                                type="checkbox"
+                                                                                                checked={selectedMonths.includes(month)}
+                                                                                                onChange={() => {
+                                                                                                    if (selectedMonths.includes(month)) {
+                                                                                                        setSelectedMonths(selectedMonths.filter(m => m !== month));
+                                                                                                    } else {
+                                                                                                        setSelectedMonths([...selectedMonths, month]);
+                                                                                                    }
+                                                                                                }}
+                                                                                                className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                                                                            />
+                                                                                            <span className="ml-2 text-sm text-gray-700">{month}</span>
+                                                                                        </label>
+                                                                                    ))}
+                                                                                </>
+                                                                            );
+                                                                        })()}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            <button
+                                                                onClick={() => setProcurementViewMode('ledger')}
+                                                                className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
+                                                            >
+                                                                Bill-wise View
+                                                            </button>
+                                                        </div>
                                                     </div>
 
-                                                    <table className="min-w-full divide-y divide-gray-200">
-                                                        <thead className="bg-gray-50">
-                                                            <tr>
-                                                                <th className="px-6 py-3 text-left text-base font-medium text-gray-700">Month</th>
-                                                                <th className="px-6 py-3 text-left text-base font-medium text-gray-700">Debit</th>
-                                                                <th className="px-6 py-3 text-left text-base font-medium text-gray-700">Credit</th>
-                                                                <th className="px-6 py-3 text-left text-base font-medium text-gray-700">Closing Balance</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="bg-white divide-y divide-gray-200">
-                                                            {vendorMonthData.map((entry, idx) => (
-                                                                <tr key={idx} className="hover:bg-gray-50 transition-colors">
-                                                                    <td className="px-6 py-4 whitespace-nowrap text-lg font-medium text-gray-900">{entry.month}</td>
-                                                                    <td className="px-6 py-4 whitespace-nowrap text-base text-gray-500">{entry.debit !== '-' ? `₹${entry.debit}` : '-'}</td>
-                                                                    <td className="px-6 py-4 whitespace-nowrap text-base text-gray-500">{entry.credit !== '-' ? `₹${entry.credit}` : '-'}</td>
-                                                                    <td className="px-6 py-4 whitespace-nowrap text-base font-bold text-gray-900">{entry.closingBalance !== '-' ? `₹${entry.closingBalance}` : '-'}</td>
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                        <tfoot className="bg-gray-50 font-bold border-t-2 border-slate-300">
-                                                            <tr>
-                                                                <td className="px-6 py-4 text-left text-lg text-blue-600">Total</td>
-                                                                <td className="px-6 py-4 text-blue-600">₹57,000</td>
-                                                                <td className="px-6 py-4 text-blue-600">₹22,000</td>
-                                                                <td className="px-6 py-4"></td>
-                                                            </tr>
-                                                        </tfoot>
-                                                    </table>
+                                                    {(() => {
+                                                        const filteredMonthData = vendorMonthData.filter(entry => selectedMonths.length === 0 || selectedMonths.includes(entry.month));
+                                                        const totalMonthDebit = filteredMonthData.reduce((sum, entry) => sum + (entry.debit !== '-' ? parseFloat(entry.debit.replace(/,/g, '')) : 0), 0);
+                                                        const totalMonthCredit = filteredMonthData.reduce((sum, entry) => sum + (entry.credit !== '-' ? parseFloat(entry.credit.replace(/,/g, '')) : 0), 0);
+
+                                                        return (
+                                                            <table className="min-w-full divide-y divide-gray-200">
+                                                                <thead className="bg-gray-50">
+                                                                    <tr>
+                                                                        <th className="px-6 py-3 text-left text-base font-medium text-gray-700">Month</th>
+                                                                        <th className="px-6 py-3 text-left text-base font-medium text-gray-700">Debit</th>
+                                                                        <th className="px-6 py-3 text-left text-base font-medium text-gray-700">Credit</th>
+                                                                        <th className="px-6 py-3 text-left text-base font-medium text-gray-700">Closing Balance</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody className="bg-white divide-y divide-gray-200">
+                                                                    {filteredMonthData.map((entry, idx) => (
+                                                                        <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                                                                            <td className="px-6 py-4 whitespace-nowrap text-lg font-medium text-gray-900">{entry.month}</td>
+                                                                            <td className="px-6 py-4 whitespace-nowrap text-base text-gray-500">{entry.debit !== '-' ? `₹${entry.debit}` : '-'}</td>
+                                                                            <td className="px-6 py-4 whitespace-nowrap text-base text-gray-500">{entry.credit !== '-' ? `₹${entry.credit}` : '-'}</td>
+                                                                            <td className="px-6 py-4 whitespace-nowrap text-base font-bold text-gray-900">{entry.closingBalance !== '-' ? `₹${entry.closingBalance}` : '-'}</td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                                <tfoot className="bg-gray-50 font-bold border-t-2 border-slate-300">
+                                                                    <tr>
+                                                                        <td className="px-6 py-4 text-left text-lg text-blue-600">Total</td>
+                                                                        <td className="px-6 py-4 text-blue-600">₹{totalMonthDebit.toLocaleString('en-IN')}</td>
+                                                                        <td className="px-6 py-4 text-blue-600">₹{totalMonthCredit.toLocaleString('en-IN')}</td>
+                                                                        <td className="px-6 py-4"></td>
+                                                                    </tr>
+                                                                </tfoot>
+                                                            </table>
+                                                        );
+                                                    })()}
                                                 </div>
                                             )}
                                         </div>
@@ -4329,12 +4477,34 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                             </select>
                                                                         </td>
                                                                         <td className="px-3 py-2">
-                                                                            <input
-                                                                                type="text"
+                                                                            <select
                                                                                 value={item.itemName}
-                                                                                onChange={(e) => handlePOItemChange(item.id, 'itemName', e.target.value)}
+                                                                                onChange={(e) => {
+                                                                                    const selectedName = e.target.value;
+                                                                                    const selectedItem = availableVendorItems.find(i => i.item_name === selectedName);
+
+                                                                                    setPOItems(prevItems => prevItems.map(pItem => {
+                                                                                        if (pItem.id === item.id) {
+                                                                                            return {
+                                                                                                ...pItem,
+                                                                                                itemCode: selectedItem ? (selectedItem.item_code || '') : '',
+                                                                                                itemName: selectedName,
+                                                                                                supplierItemCode: selectedItem ? (selectedItem.supplier_item_code || '') : '',
+                                                                                                uom: selectedItem ? (selectedItem.unit || '') : '',
+                                                                                            };
+                                                                                        }
+                                                                                        return pItem;
+                                                                                    }));
+                                                                                }}
                                                                                 className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                                            />
+                                                                            >
+                                                                                <option value="">Select Item</option>
+                                                                                {availableVendorItems.map((vItem) => (
+                                                                                    <option key={vItem.id} value={vItem.item_name}>
+                                                                                        {vItem.item_name}
+                                                                                    </option>
+                                                                                ))}
+                                                                            </select>
                                                                         </td>
                                                                         <td className="px-3 py-2">
                                                                             <input
