@@ -278,6 +278,15 @@ class ApiService {
         return httpClient.get<any[]>(url);
     }
 
+    /**
+     * Get Sales Invoices (Vouchers) for a specific customer
+     * @param customerName - Customer name to filter by
+     */
+    async getCustomerSalesInvoices(customerName: string) {
+        let url = `/api/accounting/vouchers/sales/?customer_name=${encodeURIComponent(customerName)}`;
+        return httpClient.get<any[]>(url);
+    }
+
     async getHierarchy() {
         return httpClient.get<any[]>('/api/hierarchy/');
     }
