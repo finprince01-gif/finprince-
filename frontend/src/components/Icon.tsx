@@ -5,9 +5,10 @@ type IconName = 'dashboard' | 'layout-dashboard' | 'masters' | 'inventory' | 'vo
 interface IconProps {
   name: IconName;
   className?: string;
+  style?: React.CSSProperties;
 }
 
-const Icon: React.FC<IconProps> = ({ name, className = 'w-5 h-5' }) => {
+const Icon: React.FC<IconProps> = ({ name, className = 'w-5 h-5', style }) => {
   const icons: Record<IconName, React.ReactElement> = {
     // SIDEBAR ICONS - Enhanced Professional Detail Style
     dashboard: (
@@ -170,6 +171,7 @@ const Icon: React.FC<IconProps> = ({ name, className = 'w-5 h-5' }) => {
       viewBox="0 0 24 24"
       stroke="currentColor"
       className={className}
+      style={style}
     >
       {icons[name]}
     </svg>

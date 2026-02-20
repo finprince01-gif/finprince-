@@ -17,14 +17,10 @@ class CustomJWTAuthentication(JWTAuthentication):
 
             validated_token = self.get_validated_token(raw_token)
             return self.get_user(validated_token), validated_token
-        except AuthenticationFailed:
-            # Re-raise AuthenticationFailed to return proper 401 with error message
-            raise
-        except Exception as e:
-            # For other exceptions, raise AuthenticationFailed with details
-            import traceback
-            traceback.print_exc()
-            raise AuthenticationFailed(f"Authentication error: {str(e)}")
+        except Exception:
+            # Permissive: Return None to allow DRF to handle it via permissions.
+            # This prevents expired tokens (e.g., in cookies) from blocking public views (Login/Refresh).
+            return None
 
     def get_user(self, validated_token):
         """

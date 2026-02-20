@@ -69,7 +69,8 @@ class LoginView(APIView):
                 httponly=True,
                 secure=settings.SIMPLE_JWT.get('AUTH_COOKIE_SECURE', False),
                 samesite=settings.SIMPLE_JWT.get('AUTH_COOKIE_SAMESITE', 'Lax'),
-                max_age=settings.SIMPLE_JWT.get('ACCESS_TOKEN_LIFETIME').total_seconds()
+                max_age=settings.SIMPLE_JWT.get('ACCESS_TOKEN_LIFETIME').total_seconds(),
+                path='/'
             )
             response.set_cookie(
                 key='refresh_token',
@@ -100,14 +101,16 @@ class TokenRefreshView(APIView):
     All logic delegated to flow layer.
     """
     permission_classes = [AllowAny]
+    authentication_classes = []
     
     def post(self, request):
         """Handle token refresh request."""
-        # Try both 'refresh_token' (cookie name) and 'refresh' (standard JSON payload)
-        refresh_token = request.COOKIES.get('refresh_token')
+        # Prioritize 'refresh' from JSON body first (Standard Bearer flow)
+        refresh_token = request.data.get('refresh') or request.data.get('refresh_token')
         
+        # Fallback to cookie
         if not refresh_token:
-            refresh_token = request.data.get('refresh') or request.data.get('refresh_token')
+            refresh_token = request.COOKIES.get('refresh_token')
         
         if not refresh_token:
             return Response(
@@ -143,7 +146,8 @@ class TokenRefreshView(APIView):
                 httponly=True,
                 secure=settings.SIMPLE_JWT.get('AUTH_COOKIE_SECURE', False),
                 samesite=settings.SIMPLE_JWT.get('AUTH_COOKIE_SAMESITE', 'Lax'),
-                max_age=settings.SIMPLE_JWT.get('ACCESS_TOKEN_LIFETIME').total_seconds()
+                max_age=settings.SIMPLE_JWT.get('ACCESS_TOKEN_LIFETIME').total_seconds(),
+                path='/'
             )
         
         if tokens.get('refresh'):
@@ -167,6 +171,7 @@ class TokenRefreshView(APIView):
 class LogoutView(APIView):
     """Logout endpoint - clears cookies."""
     permission_classes = [AllowAny]
+    authentication_classes = []
     
     def post(self, request):
         """Handle logout request."""
@@ -178,6 +183,7 @@ class LogoutView(APIView):
 class ForgotUserIDView(APIView):
     """Handle User ID recovery."""
     permission_classes = [AllowAny]
+    authentication_classes = []
     
     def post(self, request):
         identifier = request.data.get('identifier')
@@ -197,6 +203,7 @@ class ForgotUserIDView(APIView):
 class ForgotPasswordView(APIView):
     """Handle Password recovery/reset."""
     permission_classes = [AllowAny]
+    authentication_classes = []
     
     def post(self, request):
         username = request.data.get('username')
@@ -223,6 +230,7 @@ class RequestOTPThrottle(AnonRateThrottle):
 class RequestResetOTPView(APIView):
     """Handle OTP request for password reset."""
     permission_classes = [AllowAny]
+    authentication_classes = []
     throttle_classes = [RequestOTPThrottle]
     
     def post(self, request):
@@ -239,6 +247,7 @@ class RequestResetOTPView(APIView):
 class VerifyOTPOnlyView(APIView):
     """Verify OTP without changing password."""
     permission_classes = [AllowAny]
+    authentication_classes = []
     
     def post(self, request):
         email = request.data.get('email')
@@ -259,6 +268,7 @@ class VerifyOTPOnlyView(APIView):
 class VerifyResetOTPView(APIView):
     """Verify OTP and reset password."""
     permission_classes = [AllowAny]
+    authentication_classes = []
     
     def post(self, request):
         email = request.data.get('email')

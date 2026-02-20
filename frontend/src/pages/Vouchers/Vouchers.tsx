@@ -15,6 +15,7 @@ import PaymentVoucherSingle from './PaymentVoucherSingle';
 import PaymentVoucherBulk from './PaymentVoucherBulk';
 import ReceiptVoucher from './ReceiptVoucher';
 import CreateGRNModal from '../../components/CreateGRNModal';
+import SearchableSelect from '../../components/SearchableSelect';
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5003';
 
@@ -36,123 +37,7 @@ interface VouchersPageProps {
 
 const getTodayDate = () => new Date().toISOString().split('T')[0];
 
-interface SearchableSelectProps {
-  value: string;
-  onChange: (value: string) => void;
-  options: string[];
-  placeholder?: string;
-  className?: string;
-}
 
-const SearchableSelect: React.FC<SearchableSelectProps> = ({ value, onChange, options, placeholder = "Select...", className = "" }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const portalRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
-
-  const updatePosition = () => {
-    if (containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      setPosition({
-        top: rect.bottom,
-        left: rect.left,
-        width: Math.max(rect.width, 250) // Wider dropdown for better visibility
-      });
-    }
-  };
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (
-        containerRef.current && !containerRef.current.contains(target) &&
-        portalRef.current && !portalRef.current.contains(target)
-      ) {
-        setIsOpen(false);
-      }
-    };
-
-    const handleScroll = (event: Event) => {
-      // Small optimization: don't close if scrolling inside the dropdown itself
-      if (portalRef.current && portalRef.current.contains(event.target as Node)) {
-        return;
-      }
-      setIsOpen(false);
-    };
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      window.addEventListener('scroll', handleScroll, true);
-      window.addEventListener('resize', () => setIsOpen(false));
-      updatePosition();
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      window.removeEventListener('scroll', handleScroll, true);
-      window.removeEventListener('resize', () => setIsOpen(false));
-    };
-  }, [isOpen]);
-
-  const filteredOptions = options.filter(opt =>
-    (opt || '').toLowerCase().includes((value || '').toLowerCase())
-  );
-
-  return (
-    <div className={`relative ${className}`} ref={containerRef}>
-      <div className="relative">
-        <input
-          type="text"
-          className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
-          value={value}
-          onChange={(e) => {
-            onChange(e.target.value);
-            if (!isOpen) setIsOpen(true);
-          }}
-          onFocus={() => setIsOpen(true)}
-          placeholder={placeholder}
-        />
-        <div
-          className="absolute inset-y-0 right-0 flex items-center pr-2 cursor-pointer"
-          onClick={() => setIsOpen(!isOpen)}
-        >
-          <Icon name="chevron-down" className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-        </div>
-      </div>
-
-      {isOpen && createPortal(
-        <div
-          ref={portalRef}
-          className="fixed z-[9999] bg-white border border-gray-200 rounded-[4px] shadow-xl max-h-60 overflow-y-auto"
-          style={{
-            top: position.top + 4,
-            left: position.left,
-            width: position.width,
-          }}
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          {filteredOptions.length > 0 ? (
-            filteredOptions.map((opt, i) => (
-              <div
-                key={i}
-                className={`px-4 py-2 text-sm hover:bg-indigo-50 cursor-pointer transition-colors ${value === opt ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-gray-700'}`}
-                onClick={() => {
-                  onChange(opt);
-                  setIsOpen(false);
-                }}
-              >
-                {opt}
-              </div>
-            ))
-          ) : (
-            <div className="px-4 py-2 text-sm text-gray-500">No results found</div>
-          )}
-        </div>,
-        document.body
-      )}
-    </div>
-  );
-};
 
 const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockItems, onAddVouchers, prefilledData, clearPrefilledData, onInvoiceUpload, companyDetails, onMassUploadComplete, permissions = [] }) => {
 
@@ -5035,34 +4920,58 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   );
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6" style={{ background: '#EEF2FF', minHeight: '100%', margin: '-24px', padding: '24px' }}>
       {/* Page Header */}
-      <div className="flex items-end justify-between border-b border-slate-200 pb-6">
-        <div>
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Transaction Entry</p>
-          <h2 className="text-[20px] font-bold text-slate-900">
-            Voucher Entry
-          </h2>
-        </div>
+      <div style={{ paddingBottom: '12px', borderBottom: '1px solid #E2E8F0' }}>
+        <h1
+          style={{
+            fontSize: '15px',
+            fontWeight: 700,
+            color: '#1F2937',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            marginBottom: '4px',
+          }}
+        >
+          Voucher Entry
+        </h1>
+        <p style={{ fontSize: '13px', color: '#475569', fontWeight: 400 }}>
+          Record transactions — sales, purchases, payments, and more
+        </p>
       </div>
 
       {/* Main Tabs */}
-      <div className="flex space-x-6 overflow-x-auto border-b border-slate-200 no-scrollbar">
+      <div
+        style={{
+          display: 'flex',
+          borderBottom: '1px solid #E2E8F0',
+          gap: '4px',
+          overflowX: 'auto',
+          marginBottom: '0',
+        }}
+      >
         {availableVoucherTypes.map(type => (
           <button
             key={type.id}
             onClick={() => { setVoucherType(type.id); resetForm(); }}
-            className={`
-              whitespace-nowrap pb-4 text-[13px] font-bold uppercase tracking-wider transition-all relative
-              ${voucherType === type.id
-                ? 'text-indigo-600'
-                : 'text-slate-400 hover:text-slate-600'}
-            `}
+            style={{
+              padding: '10px 20px',
+              fontSize: '13px',
+              fontWeight: voucherType === type.id ? 600 : 500,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              color: voucherType === type.id ? '#4F46E5' : '#64748B',
+              border: 'none',
+              borderBottom: voucherType === type.id ? '2px solid #4F46E5' : '2px solid transparent',
+              background: 'transparent',
+              cursor: 'pointer',
+              marginBottom: '-1px',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+              transition: 'color 0.15s ease, border-color 0.15s ease',
+            }}
           >
             {type.label}
-            {voucherType === type.id && (
-              <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-600" />
-            )}
           </button>
         ))}
       </div>

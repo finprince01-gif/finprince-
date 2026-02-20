@@ -78,24 +78,50 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, companyName, 
     };
 
     return (
-        <div className="flex flex-col gap-6 animate-in fade-in duration-700 bg-slate-50/50 -m-6 p-6 min-h-screen">
+        <div className="flex flex-col gap-6 animate-in fade-in duration-700 -m-6 p-6 min-h-screen" style={{ background: '#EEF2FF' }}>
             {/* Minimal Header */}
-            <div className="flex items-center justify-between">
+            <div style={{ paddingBottom: '12px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0' }}>
                 <div>
-                    <h1 className="text-sm font-black text-slate-900 uppercase tracking-[0.2em]">Dashboard</h1>
+                    <h1
+                        style={{
+                            fontSize: '15px',
+                            fontWeight: 700,
+                            color: '#1F2937',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                            marginBottom: '4px',
+                        }}
+                    >
+                        Dashboard
+                    </h1>
+                    <p style={{ fontSize: '13px', color: '#475569', fontWeight: 400 }}>
+                        Welcome back — here is what's happening today.
+                    </p>
                 </div>
                 <button
                     onClick={() => onNavigate('Dashboard Builder' as any)}
-                    className="flex items-center px-6 py-2.5 text-[10px] font-black uppercase tracking-widest text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all hover:-translate-y-0.5"
+                    style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        padding: '10px 18px',
+                        background: '#4F46E5',
+                        color: '#FFFFFF',
+                        border: 'none',
+                        borderRadius: '12px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.08em',
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 8px rgba(79,70,229,0.25)',
+                        gap: '6px',
+                    }}
                 >
-                    <Icon name="edit" className="w-3.5 h-3.5 mr-2" />
+                    <Icon name="edit" className="w-3.5 h-3.5" />
                     Edit Dashboard
                 </button>
             </div>
 
-            <div className="space-y-1.5 mb-2">
-                <p className="text-sm font-bold text-slate-600 dark:text-slate-400">Welcome back, here is what's happening today.</p>
-            </div>
 
             {/* Row 1: The 5 StatCards as per screenshot */}
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-5">
@@ -133,10 +159,40 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, companyName, 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                 {/* Left Section: Revenue Analysis (The BI "Revenbox") */}
                 <div className="lg:col-span-8 space-y-4">
-                    <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col min-h-[580px]">
-                        <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-white relative z-10">
+                    <div
+                        style={{
+                            background: '#FFFFFF',
+                            border: '1px solid #E2E8F0',
+                            borderRadius: '16px',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.04)',
+                            overflow: 'hidden',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            minHeight: '580px',
+                        }}
+                    >
+                        <div
+                            style={{
+                                padding: '20px 24px',
+                                borderBottom: '1px solid #E2E8F0',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                background: '#FFFFFF',
+                            }}
+                        >
                             <div>
-                                <h3 className="text-[11px] font-black text-slate-800 uppercase tracking-[0.2em]">Revenue Analysis</h3>
+                                <h3
+                                    style={{
+                                        fontSize: '11px',
+                                        fontWeight: 700,
+                                        color: '#1F2937',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.12em',
+                                    }}
+                                >
+                                    Revenue Analysis
+                                </h3>
                             </div>
                             {customWidgets.length > 0 && (
                                 <button
@@ -182,9 +238,31 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, companyName, 
                 </div>
 
                 {/* Right Section: Recent Activity */}
-                <div className="lg:col-span-4 bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[580px]">
-                    <div className="px-8 py-6 border-b border-slate-100">
-                        <h3 className="text-[11px] font-black text-slate-800 uppercase tracking-[0.2em]">Recent Activity</h3>
+                <div
+                    style={{
+                        background: '#FFFFFF',
+                        border: '1px solid #E2E8F0',
+                        borderRadius: '16px',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.04)',
+                        overflow: 'hidden',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        height: '580px',
+                    }}
+                    className="lg:col-span-4"
+                >
+                    <div style={{ padding: '20px 24px', borderBottom: '1px solid #E2E8F0' }}>
+                        <h3
+                            style={{
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                color: '#1F2937',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.12em',
+                            }}
+                        >
+                            Recent Activity
+                        </h3>
                     </div>
 
                     <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-2">

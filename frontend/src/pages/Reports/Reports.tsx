@@ -1446,7 +1446,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
 
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6" style={{ background: '#EEF2FF', minHeight: '100%', margin: '-24px', padding: '24px' }}>
       {/* PRINT STYLES */}
       <style>{`
         @media print {
@@ -1477,13 +1477,22 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
       `}</style>
 
       {/* Page Header */}
-      <div className="flex items-end justify-between border-b border-slate-200 pb-6">
-        <div>
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Financial Statements</p>
-          <h2 className="text-[20px] font-bold text-slate-900">
-            Reports & Analysis
-          </h2>
-        </div>
+      <div style={{ paddingBottom: '12px', borderBottom: '1px solid #E2E8F0' }}>
+        <h1
+          style={{
+            fontSize: '15px',
+            fontWeight: 700,
+            color: '#1F2937',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            marginBottom: '4px',
+          }}
+        >
+          Reports &amp; Analysis
+        </h1>
+        <p style={{ fontSize: '13px', color: '#475569', fontWeight: 400 }}>
+          Financial statements, ledger reports, and GST data
+        </p>
       </div>
 
       <div className="print-header">
@@ -1492,27 +1501,50 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
       </div>
 
       {/* Main Tabs */}
-      <div className="flex space-x-8 border-b border-slate-200 overflow-x-auto no-scrollbar">
+      <div
+        style={{
+          display: 'flex',
+          borderBottom: '1px solid #E2E8F0',
+          gap: '4px',
+          overflowX: 'auto',
+          marginBottom: '0',
+        }}
+      >
         {availableReports.map(({ id, label }, idx) => (
           <button
             key={`report-tab-${id}-${idx}`}
             onClick={() => setReportType(id as ReportType)}
-            className={`
-              whitespace-nowrap pb-4 text-[13px] font-bold uppercase tracking-wider transition-all relative
-              ${reportType === id
-                ? 'text-indigo-600'
-                : 'text-slate-400 hover:text-slate-600'}
-            `}
+            style={{
+              padding: '10px 20px',
+              fontSize: '13px',
+              fontWeight: reportType === id ? 600 : 500,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              color: reportType === id ? '#4F46E5' : '#64748B',
+              border: 'none',
+              borderBottom: reportType === id ? '2px solid #4F46E5' : '2px solid transparent',
+              background: 'transparent',
+              cursor: 'pointer',
+              marginBottom: '-1px',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+              transition: 'color 0.15s ease, border-color 0.15s ease',
+            }}
           >
             {label}
-            {reportType === id && (
-              <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-600" />
-            )}
           </button>
         ))}
       </div>
 
-      <div className="bg-white p-8 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200">
+      <div
+        style={{
+          background: '#FFFFFF',
+          border: '1px solid #E2E8F0',
+          borderRadius: '16px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.04)',
+          padding: '32px',
+        }}
+      >
         {reportType === 'DayBook' && (
           <>
             <div className="mb-6 flex flex-wrap items-end gap-4 p-6 bg-gray-50 rounded-[4px] border border-gray-200">

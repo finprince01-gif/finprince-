@@ -5,7 +5,8 @@
  * All functions return promises with typed data.
  */
 
-import axios from 'axios';
+
+import { httpClient } from './httpClient';
 import type {
     ReportFilters,
     ReportApiResponse,
@@ -23,26 +24,16 @@ import type {
 
 const API_BASE_URL = '/api/inventory/reports';
 
-// Helper to build query string from filters
-const buildQueryString = (filters: Partial<ReportFilters>): string => {
-    const params = new URLSearchParams();
-    Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== '') {
-            params.append(key, String(value));
-        }
-    });
-    return params.toString();
-};
-
 /**
  * Fetch Stock Summary Report
  */
 export const fetchStockSummary = async (
     filters: Partial<ReportFilters>
 ): Promise<ReportApiResponse<StockSummaryData>> => {
-    const queryString = buildQueryString(filters);
-    const response = await axios.get(`${API_BASE_URL}/stock-summary?${queryString}`);
-    return response.data;
+    return httpClient.get<ReportApiResponse<StockSummaryData>>(
+        `${API_BASE_URL}/stock-summary`,
+        filters
+    );
 };
 
 /**
@@ -51,9 +42,10 @@ export const fetchStockSummary = async (
 export const fetchInventoryValuationSummary = async (
     filters: Partial<ReportFilters>
 ): Promise<ReportApiResponse<InventoryValuationData>> => {
-    const queryString = buildQueryString(filters);
-    const response = await axios.get(`${API_BASE_URL}/inventory-valuation-summary?${queryString}`);
-    return response.data;
+    return httpClient.get<ReportApiResponse<InventoryValuationData>>(
+        `${API_BASE_URL}/inventory-valuation-summary`,
+        filters
+    );
 };
 
 /**
@@ -62,9 +54,10 @@ export const fetchInventoryValuationSummary = async (
 export const fetchInventoryValuationDetail = async (
     filters: Partial<ReportFilters>
 ): Promise<ReportApiResponse<InventoryValuationDetailData>> => {
-    const queryString = buildQueryString(filters);
-    const response = await axios.get(`${API_BASE_URL}/inventory-valuation-detail?${queryString}`);
-    return response.data;
+    return httpClient.get<ReportApiResponse<InventoryValuationDetailData>>(
+        `${API_BASE_URL}/inventory-valuation-detail`,
+        filters
+    );
 };
 
 /**
@@ -73,9 +66,10 @@ export const fetchInventoryValuationDetail = async (
 export const fetchInventoryAging = async (
     filters: Partial<ReportFilters>
 ): Promise<ReportApiResponse<InventoryAgingData>> => {
-    const queryString = buildQueryString(filters);
-    const response = await axios.get(`${API_BASE_URL}/inventory-aging?${queryString}`);
-    return response.data;
+    return httpClient.get<ReportApiResponse<InventoryAgingData>>(
+        `${API_BASE_URL}/inventory-aging`,
+        filters
+    );
 };
 
 /**
@@ -84,9 +78,10 @@ export const fetchInventoryAging = async (
 export const fetchItemDetails = async (
     filters: Partial<ReportFilters>
 ): Promise<ReportApiResponse<ItemDetailsData>> => {
-    const queryString = buildQueryString(filters);
-    const response = await axios.get(`${API_BASE_URL}/item-details?${queryString}`);
-    return response.data;
+    return httpClient.get<ReportApiResponse<ItemDetailsData>>(
+        `${API_BASE_URL}/item-details`,
+        filters
+    );
 };
 
 /**
@@ -95,9 +90,10 @@ export const fetchItemDetails = async (
 export const fetchSalesByItem = async (
     filters: Partial<ReportFilters>
 ): Promise<ReportApiResponse<SalesByItemData>> => {
-    const queryString = buildQueryString(filters);
-    const response = await axios.get(`${API_BASE_URL}/sales-by-item?${queryString}`);
-    return response.data;
+    return httpClient.get<ReportApiResponse<SalesByItemData>>(
+        `${API_BASE_URL}/sales-by-item`,
+        filters
+    );
 };
 
 /**
@@ -106,9 +102,10 @@ export const fetchSalesByItem = async (
 export const fetchPurchasesByItem = async (
     filters: Partial<ReportFilters>
 ): Promise<ReportApiResponse<PurchasesByItemData>> => {
-    const queryString = buildQueryString(filters);
-    const response = await axios.get(`${API_BASE_URL}/purchases-by-item?${queryString}`);
-    return response.data;
+    return httpClient.get<ReportApiResponse<PurchasesByItemData>>(
+        `${API_BASE_URL}/purchases-by-item`,
+        filters
+    );
 };
 
 /**
@@ -117,9 +114,10 @@ export const fetchPurchasesByItem = async (
 export const fetchInventoryAdjustment = async (
     filters: Partial<ReportFilters>
 ): Promise<ReportApiResponse<InventoryAdjustmentData>> => {
-    const queryString = buildQueryString(filters);
-    const response = await axios.get(`${API_BASE_URL}/inventory-adjustment?${queryString}`);
-    return response.data;
+    return httpClient.get<ReportApiResponse<InventoryAdjustmentData>>(
+        `${API_BASE_URL}/inventory-adjustment`,
+        filters
+    );
 };
 
 /**
@@ -128,9 +126,10 @@ export const fetchInventoryAdjustment = async (
 export const fetchWarehouseSummary = async (
     filters: Partial<ReportFilters>
 ): Promise<ReportApiResponse<WarehouseSummaryData>> => {
-    const queryString = buildQueryString(filters);
-    const response = await axios.get(`${API_BASE_URL}/warehouse-summary?${queryString}`);
-    return response.data;
+    return httpClient.get<ReportApiResponse<WarehouseSummaryData>>(
+        `${API_BASE_URL}/warehouse-summary`,
+        filters
+    );
 };
 
 /**
@@ -139,7 +138,8 @@ export const fetchWarehouseSummary = async (
 export const fetchWarehouseDetail = async (
     filters: Partial<ReportFilters>
 ): Promise<ReportApiResponse<WarehouseDetailData>> => {
-    const queryString = buildQueryString(filters);
-    const response = await axios.get(`${API_BASE_URL}/warehouse-detail?${queryString}`);
-    return response.data;
+    return httpClient.get<ReportApiResponse<WarehouseDetailData>>(
+        `${API_BASE_URL}/warehouse-detail`,
+        filters
+    );
 };

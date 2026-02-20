@@ -35,85 +35,195 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, co
     return hasPageAccess(item.name);
   });
 
-  return (
-    <aside className="fixed inset-y-0 left-0 z-40 flex flex-col h-full bg-[#E0E7FF] dark:bg-[#0f172a] border-r border-[#C7D2FE] dark:border-slate-800 transition-all duration-300" style={{ width: '260px' }}>
+  const usagePercent = Math.min(
+    100,
+    ((subscriptionUsage?.used || 0) / (subscriptionUsage?.limit as number || 1)) * 100
+  );
+  const usageDisplay =
+    subscriptionUsage?.limit === 'Unlimited'
+      ? '∞'
+      : `${Math.round(usagePercent)}%`;
 
-      {/* Profile / Brand Section */}
-      <div className="px-5 pt-6 pb-6 border-b border-transparent dark:border-slate-800/50">
+  return (
+    <aside
+      className="fixed inset-y-0 left-0 z-40 flex flex-col h-full transition-all duration-300 dark:bg-[#0f172a]"
+      style={{
+        width: '260px',
+        backgroundColor: '#DDE3FF',
+        borderRight: '1px solid #E2E8F0',
+      }}
+    >
+      {/* ── Brand / Profile Section ──────────────────────────── */}
+      <div style={{ padding: '24px 20px 16px' }}>
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-10 h-10 text-white rounded-lg shadow-sm bg-indigo-600 shrink-0">
-            <span className="text-lg font-bold">{companyName?.charAt(0).toUpperCase() || 'A'}</span>
+          {/* Company Avatar */}
+          <div
+            className="flex items-center justify-center w-10 h-10 text-white rounded-xl shrink-0"
+            style={{ background: '#4F46E5', boxShadow: '0 2px 8px rgba(79,70,229,0.3)' }}
+          >
+            <span className="text-base font-bold">
+              {companyName?.charAt(0).toUpperCase() || 'A'}
+            </span>
           </div>
+
+          {/* Company Name + Plan */}
           <div className="flex flex-col min-w-0">
-            <span className="text-sm font-bold text-slate-900 dark:text-white truncate tracking-tight">
+            <span
+              className="text-sm font-bold truncate tracking-tight dark:text-white"
+              style={{ color: '#1F2937' }}
+            >
               {companyName || 'Admin User'}
             </span>
-            <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 truncate mt-0.5">
+            <span
+              className="text-[11px] font-semibold truncate mt-0.5 dark:text-slate-400"
+              style={{ color: '#475569' }}
+            >
               {subscriptionUsage?.plan || 'Enterprise Plan'}
             </span>
           </div>
         </div>
+
+        {/* Divider below profile */}
+        <div style={{ borderBottom: '1px solid #E2E8F0', marginTop: '16px' }} />
       </div>
 
-      {/* Navigation Links */}
-      <nav className="flex-1 px-4 space-y-2 overflow-y-auto custom-scrollbar pt-4">
-        {displayItems.map((item) => {
-          const isActive = currentPage === item.name;
-          return (
-            <button
-              key={item.name}
-              onClick={() => onNavigate(item.name)}
-              className={`w-full flex items-center gap-3 px-[14px] h-[48px] rounded-[14px] font-semibold transition-all duration-200 group ${isActive
-                ? 'bg-white/60 dark:bg-indigo-600 text-indigo-700 dark:text-white shadow-sm dark:shadow-indigo-900/20'
-                : 'text-slate-800 dark:text-slate-400 hover:bg-white/40 dark:hover:bg-slate-800 hover:text-indigo-700 dark:hover:text-white'
-                }`}
-            >
-              <div className={`flex-shrink-0 w-5 h-5 flex items-center justify-center transition-colors duration-200 ${isActive ? 'text-indigo-700 dark:text-white' : 'text-slate-600 dark:text-slate-500 group-hover:text-indigo-700 dark:group-hover:text-white'
-                }`}>
-                <Icon name={item.icon as any} className="w-5 h-5" />
-              </div>
-              <span className="text-[14px] tracking-wide">{item.name}</span>
-            </button>
-          );
-        })}
+      {/* ── Navigation Links ────────────────────────────────── */}
+      <nav className="flex-1 overflow-y-auto" style={{ padding: '4px 12px 0' }}>
+        <div className="space-y-1">
+          {displayItems.map((item) => {
+            const isActive = currentPage === item.name;
+            return (
+              <button
+                key={item.name}
+                onClick={() => onNavigate(item.name)}
+                className={`w-full flex items-center gap-3 rounded-[12px] font-semibold transition-all duration-200 group ${isActive
+                  ? 'dark:bg-indigo-600 dark:text-white'
+                  : 'dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white'
+                  }`}
+                style={{
+                  padding: '10px 14px',
+                  height: '44px',
+                  background: isActive ? 'rgba(255,255,255,0.65)' : 'transparent',
+                  color: isActive ? '#4F46E5' : '#1F2937',
+                  boxShadow: isActive ? '0 1px 4px rgba(79,70,229,0.08)' : 'none',
+                }}
+                onMouseEnter={e => {
+                  if (!isActive) {
+                    (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.4)';
+                    (e.currentTarget as HTMLButtonElement).style.color = '#4F46E5';
+                  }
+                }}
+                onMouseLeave={e => {
+                  if (!isActive) {
+                    (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                    (e.currentTarget as HTMLButtonElement).style.color = '#1F2937';
+                  }
+                }}
+              >
+                <div
+                  className="flex-shrink-0 w-5 h-5 flex items-center justify-center transition-colors duration-200"
+                  style={{ color: isActive ? '#4F46E5' : '#475569' }}
+                >
+                  <Icon name={item.icon as any} className="w-5 h-5" />
+                </div>
+                <span style={{ fontSize: '13px', fontWeight: 600, letterSpacing: '0.02em' }}>
+                  {item.name}
+                </span>
+                {isActive && (
+                  <div
+                    className="ml-auto w-1.5 h-1.5 rounded-full"
+                    style={{ background: '#4F46E5' }}
+                  />
+                )}
+              </button>
+            );
+          })}
+        </div>
       </nav>
 
-      {/* Footer Section */}
-      <div className="p-5 mt-auto space-y-6">
+      {/* ── Footer: Storage + Logout ─────────────────────────── */}
+      <div style={{ padding: '0 16px 24px' }}>
+        {/* Divider above storage */}
+        <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: '16px', marginBottom: '16px' }} />
 
-        {/* Active Plan Box */}
-        <div className="bg-white dark:bg-[#1e293b] border border-[#E0E7FF] dark:border-slate-700 rounded-2xl p-4 shadow-[0_8px_20px_rgba(79,70,229,0.15)] dark:shadow-none relative transition-colors">
+        {/* Storage Box */}
+        <div
+          className="dark:bg-[#1e293b] dark:border-slate-700"
+          style={{
+            background: '#FFFFFF',
+            border: '1px solid #E2E8F0',
+            borderRadius: '14px',
+            padding: '16px',
+            marginBottom: '12px',
+          }}
+        >
           <div className="flex items-center justify-between mb-3">
-            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Storage</span>
-            <span className="px-2 py-0.5 text-[10px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/30 rounded-full dark:border dark:border-indigo-500/20">
-              {subscriptionUsage?.limit === 'Unlimited' ? '∞' : `${Math.round((subscriptionUsage?.used || 0) / (subscriptionUsage?.limit as number || 1) * 100)}%`}
+            <span
+              className="uppercase font-bold dark:text-slate-500"
+              style={{ fontSize: '10px', letterSpacing: '0.1em', color: '#64748B' }}
+            >
+              Storage
+            </span>
+            <span
+              className="px-2 py-0.5 rounded-full font-bold dark:text-indigo-300 dark:bg-indigo-900/30"
+              style={{
+                fontSize: '10px',
+                color: '#4F46E5',
+                background: '#EEF2FF',
+                letterSpacing: '0.05em',
+              }}
+            >
+              {usageDisplay}
             </span>
           </div>
 
-          <div className="w-full h-1.5 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden">
+          {/* Progress Bar */}
+          <div
+            className="w-full dark:bg-slate-700"
+            style={{ height: '6px', background: '#EEF2FF', borderRadius: '999px', overflow: 'hidden' }}
+          >
             <div
-              className="h-full bg-indigo-600 dark:bg-indigo-500 rounded-full transition-all duration-500"
-              style={{ width: `${Math.min(100, ((subscriptionUsage?.used || 0) / (subscriptionUsage?.limit as number || 1)) * 100)}%` }}
+              style={{
+                width: `${usagePercent}%`,
+                height: '100%',
+                background: '#4F46E5',
+                borderRadius: '999px',
+                transition: 'width 0.5s ease',
+              }}
             />
           </div>
-          <div className="mt-2 text-[10px] text-slate-400 dark:text-slate-500 font-medium flex justify-between">
+
+          <div
+            className="mt-2 flex justify-between dark:text-slate-500"
+            style={{ fontSize: '10px', color: '#94A3B8', fontWeight: 500 }}
+          >
             <span>Used</span>
-            <span>{subscriptionUsage?.used} / {subscriptionUsage?.limit}</span>
+            <span>
+              {subscriptionUsage?.used} / {subscriptionUsage?.limit}
+            </span>
           </div>
         </div>
 
         {/* Logout Button */}
         <button
           onClick={onLogout}
-          className="w-full flex items-center gap-3 px-2 py-2 text-slate-800 dark:text-slate-400 rounded-lg hover:bg-white/40 dark:hover:bg-slate-800 hover:text-indigo-700 dark:hover:text-white transition-colors group"
+          className="w-full flex items-center gap-3 rounded-xl font-semibold transition-colors group dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
+          style={{ padding: '10px 12px', color: '#475569' }}
+          onMouseEnter={e => {
+            (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.4)';
+            (e.currentTarget as HTMLButtonElement).style.color = '#4F46E5';
+          }}
+          onMouseLeave={e => {
+            (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+            (e.currentTarget as HTMLButtonElement).style.color = '#475569';
+          }}
         >
-          <div className="w-5 h-5 flex items-center justify-center text-slate-600 dark:text-slate-500 group-hover:text-indigo-700 dark:group-hover:text-white transition-colors duration-200">
+          <div className="w-5 h-5 flex items-center justify-center">
             <Icon name="logout" className="w-[18px] h-[18px]" />
           </div>
-          <span className="text-sm font-medium">Log Out</span>
+          <span style={{ fontSize: '13px', fontWeight: 600 }}>Log Out</span>
         </button>
       </div>
-
     </aside>
   );
 };

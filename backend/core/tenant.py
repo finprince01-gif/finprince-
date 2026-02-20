@@ -4,7 +4,7 @@ Centralized tenant management logic.
 """
 
 from django.http import JsonResponse
-from .auth import CustomJWTAuthentication
+from .authentication import CustomJWTAuthentication
 
 
 def get_tenant_from_request(request):

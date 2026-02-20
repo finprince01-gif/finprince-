@@ -530,12 +530,10 @@ class ApiService {
         }
 
         // Save tenant and company info
-        if (data.user) {
-            httpClient.saveAuthData({
-                tenant_id: data.user?.tenant_id || data.tenant_id,
-                company_name: data.user?.company_name || data.company_name,
-            });
-        }
+        httpClient.saveAuthData({
+            tenant_id: data.tenant_id,
+            company_name: data.company_name,
+        });
 
         return data;
     }
@@ -579,7 +577,12 @@ class ApiService {
         }
 
         // Save tenant/company info if returned
-        if (data.user) {
+        if (data.tenant_id && data.company_name) {
+            httpClient.saveAuthData({
+                tenant_id: data.tenant_id,
+                company_name: data.company_name,
+            });
+        } else if (data.user) { // Fallback for older API responses
             httpClient.saveAuthData({
                 tenant_id: data.user.tenant_id || data.user.tenantId,
                 company_name: data.user.company_name || data.user.companyName,

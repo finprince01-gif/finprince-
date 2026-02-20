@@ -2108,27 +2108,63 @@ const MastersPage: React.FC<MastersPageProps> = ({
   };
 
   return (
-    <div>
-      <h2 className="text-2xl font-bold text-gray-800 mb-6">Accounting Masters</h2>
-
-      <div className="mb-6">
-        <nav className="flex space-x-8" aria-label="Tabs">
-          {availableTabs.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`${activeTab === tab.id
-                ? 'border-indigo-500 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                } whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
+    <div className="space-y-6" style={{ background: '#EEF2FF', minHeight: '100%', margin: '-24px', padding: '24px' }}>
+      {/* Page Section Title */}
+      <div style={{ paddingBottom: '12px', borderBottom: '1px solid #E2E8F0' }}>
+        <h1
+          style={{
+            fontSize: '15px',
+            fontWeight: 700,
+            color: '#1F2937',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            marginBottom: '4px',
+          }}
+        >
+          Accounting Masters
+        </h1>
+        <p style={{ fontSize: '13px', color: '#475569', fontWeight: 400 }}>
+          Manage ledgers, groups, and voucher configurations
+        </p>
       </div>
 
-      {activeTab === 'Ledgers' ? renderLedgers() : renderVouchers()}
+      {/* Tab Bar */}
+      <div
+        style={{
+          display: 'flex',
+          borderBottom: '1px solid #E2E8F0',
+          gap: '4px',
+          marginBottom: '0',
+        }}
+      >
+        {availableTabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            style={{
+              padding: '10px 20px',
+              fontSize: '13px',
+              fontWeight: activeTab === tab.id ? 600 : 500,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              color: activeTab === tab.id ? '#4F46E5' : '#64748B',
+              border: 'none',
+              borderBottom: activeTab === tab.id ? '2px solid #4F46E5' : '2px solid transparent',
+              background: 'transparent',
+              cursor: 'pointer',
+              marginBottom: '-1px',
+              transition: 'color 0.15s ease, border-color 0.15s ease',
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Content */}
+      <div>
+        {activeTab === 'Ledgers' ? renderLedgers() : renderVouchers()}
+      </div>
     </div>
   );
 };

@@ -251,7 +251,7 @@ TWILIO_PHONE_NUMBER = os.getenv('TWILIO_PHONE_NUMBER', None)
 # Security Headers (enabled in production)
 if not DEBUG:
     # HTTPS/SSL Settings
-    SECURE_SSL_REDIRECT = True  # Redirect all HTTP to HTTPS
+    #SECURE_SSL_REDIRECT = True  # Redirect all HTTP to HTTPS
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # Trust proxy headers
     
     # HSTS (HTTP Strict Transport Security)

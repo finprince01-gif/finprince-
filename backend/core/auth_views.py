@@ -52,7 +52,8 @@ class CookieTokenObtainPairView(TokenObtainPairView):
                 httponly=True,
                 secure=settings.SIMPLE_JWT.get('AUTH_COOKIE_SECURE', False),
                 samesite=settings.SIMPLE_JWT.get('AUTH_COOKIE_SAMESITE', 'Lax'),
-                max_age=settings.SIMPLE_JWT.get('ACCESS_TOKEN_LIFETIME').total_seconds()
+                max_age=settings.SIMPLE_JWT.get('ACCESS_TOKEN_LIFETIME').total_seconds(),
+                path='/'
             )
             response.set_cookie(
                 key='refresh_token',
@@ -60,7 +61,8 @@ class CookieTokenObtainPairView(TokenObtainPairView):
                 httponly=True,
                 secure=settings.SIMPLE_JWT.get('AUTH_COOKIE_SECURE', False),
                 samesite=settings.SIMPLE_JWT.get('AUTH_COOKIE_SAMESITE', 'Lax'),
-                max_age=settings.SIMPLE_JWT.get('REFRESH_TOKEN_LIFETIME').total_seconds()
+                max_age=settings.SIMPLE_JWT.get('REFRESH_TOKEN_LIFETIME').total_seconds(),
+                path='/api/auth/refresh/'
             )
 
             # 5. Log login event
@@ -81,6 +83,7 @@ class CookieTokenObtainPairView(TokenObtainPairView):
 
 
 class CookieTokenRefreshView(TokenRefreshView):
+    authentication_classes = [] # Disable auth check for refresh
     def post(self, request, *args, **kwargs):
         # Prioritize refresh token from body (for non-cookie clients)
         if 'refresh' in request.data:
@@ -133,7 +136,8 @@ class CookieTokenRefreshView(TokenRefreshView):
                 httponly=True,
                 secure=settings.SIMPLE_JWT.get('AUTH_COOKIE_SECURE', False),
                 samesite=settings.SIMPLE_JWT.get('AUTH_COOKIE_SAMESITE', 'Lax'),
-                max_age=settings.SIMPLE_JWT.get('ACCESS_TOKEN_LIFETIME').total_seconds()
+                max_age=settings.SIMPLE_JWT.get('ACCESS_TOKEN_LIFETIME').total_seconds(),
+                path='/'
             )
         
         # Update Refresh Token if rotated
@@ -144,7 +148,8 @@ class CookieTokenRefreshView(TokenRefreshView):
                 httponly=True,
                 secure=settings.SIMPLE_JWT.get('AUTH_COOKIE_SECURE', False),
                 samesite=settings.SIMPLE_JWT.get('AUTH_COOKIE_SAMESITE', 'Lax'),
-                max_age=settings.SIMPLE_JWT.get('REFRESH_TOKEN_LIFETIME').total_seconds()
+                max_age=settings.SIMPLE_JWT.get('REFRESH_TOKEN_LIFETIME').total_seconds(),
+                path='/api/auth/refresh/'
             )
 
         return response

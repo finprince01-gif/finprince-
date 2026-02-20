@@ -107,6 +107,7 @@ class HttpClient {
             if (data.access) {
                 const newRefresh = data.refresh || storedRefresh;
                 setTokens(data.access, newRefresh);
+                this.isRefreshing = false; // Ensure false before processing queue
                 this.processQueue(null);
             } else {
                 throw new Error('No access token in refresh response');
@@ -114,11 +115,14 @@ class HttpClient {
 
         } catch (error) {
             console.error('❌ Session expired. Logging out.');
+            this.isRefreshing = false; // Ensure false before processing queue
             this.processQueue(error as Error);
             this.logout();
             throw error;
         } finally {
-            this.isRefreshing = false;
+            // This finally block is now redundant for setting isRefreshing to false,
+            // but it's harmless. The flag is explicitly set before processQueue.
+            // this.isRefreshing = false;
         }
     }
 
@@ -136,7 +140,8 @@ class HttpClient {
 
         if (!initialToken && storedRefresh && !endpoint.includes('/auth/')) {
             if (!this.isRefreshing) {
-                this.performRefresh().catch(() => { });
+                // Return original request wrapped in the refresh promise
+                return this.performRefresh().then(() => this.request<T>(endpoint, options));
             }
 
             return new Promise((resolve, reject) => {
@@ -209,12 +214,14 @@ class HttpClient {
                     errorData = { message: errorText || `HTTP ${response.status}` };
                 }
 
+                // Extract message from structured response: errorData.error.message OR errorData.detail OR errorData.message
+                const message = errorData.error?.message || errorData.detail || errorData.message || 'Request failed';
+
                 // Throw structured error container
                 throw {
                     status: response.status,
                     data: errorData,
-                    // valid backend error might have 'detail' or 'message'
-                    message: errorData.detail || errorData.message || 'Request failed',
+                    message,
                     // Mimic axios structure for backward compatibility
                     response: {
                         status: response.status,
@@ -257,8 +264,18 @@ class HttpClient {
 
     // --- PUBLIC METHODS ---
 
-    public async get<T>(endpoint: string): Promise<T> {
-        return this.request<T>(endpoint, { method: 'GET' });
+    public async get<T>(endpoint: string, params?: Record<string, any>): Promise<T> {
+        let url = endpoint;
+        if (params) {
+            const query = Object.entries(params)
+                .filter(([_, value]) => value !== undefined && value !== null && value !== '')
+                .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+                .join('&');
+            if (query) {
+                url += (url.includes('?') ? '&' : '?') + query;
+            }
+        }
+        return this.request<T>(url, { method: 'GET' });
     }
 
     public async post<T>(endpoint: string, data?: any): Promise<T> {

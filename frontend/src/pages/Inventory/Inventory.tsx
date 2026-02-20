@@ -7276,31 +7276,56 @@ const InventoryPage: React.FC = () => {
   );
 
   return (
-    <div className="space-y-8">
-      {/* Page Header */}
-      <div className="flex items-end justify-between border-b border-slate-200 pb-6">
-        <div>
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Inventory Control</p>
-          <h2 className="text-[20px] font-bold text-slate-900">
-            Inventory Management
-          </h2>
-        </div>
+    <div className="space-y-6" style={{ background: '#EEF2FF', minHeight: '100%', margin: '-24px', padding: '24px' }}>
+      {/* Page Section Title */}
+      <div style={{ paddingBottom: '12px', borderBottom: '1px solid #E2E8F0' }}>
+        <h1
+          style={{
+            fontSize: '15px',
+            fontWeight: 700,
+            color: '#1F2937',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            marginBottom: '4px',
+          }}
+        >
+          Inventory Management
+        </h1>
+        <p style={{ fontSize: '13px', color: '#475569', fontWeight: 400 }}>
+          Manage categories, locations, items, and operations
+        </p>
       </div>
 
       {/* Main Tabs */}
-      <div className="flex space-x-8 border-b border-slate-200">
+      <div
+        style={{
+          display: 'flex',
+          borderBottom: '1px solid #E2E8F0',
+          gap: '4px',
+          marginBottom: '0',
+        }}
+      >
         {visibleTabs.map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`pb-4 text-[14px] font-semibold uppercase tracking-wider transition-all relative ${activeTab === tab
-              ? 'text-indigo-600'
-              : 'text-slate-500 hover:text-slate-700'
-              }`}
+            style={{
+              padding: '10px 20px',
+              fontSize: '13px',
+              fontWeight: activeTab === tab ? 600 : 500,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              color: activeTab === tab ? '#4F46E5' : '#64748B',
+              border: 'none',
+              borderBottom: activeTab === tab ? '2px solid #4F46E5' : '2px solid transparent',
+              background: 'transparent',
+              cursor: 'pointer',
+              marginBottom: '-1px',
+              position: 'relative',
+              transition: 'color 0.15s ease, border-color 0.15s ease',
+            }}
           >
-            {tab}            {activeTab === tab && (
-              <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-600" />
-            )}
+            {tab}
           </button>
         ))}
       </div>

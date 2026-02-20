@@ -1102,7 +1102,7 @@ const App: React.FC = () => {
     />;
   }
   return (
-    <div className="flex h-screen bg-white font-sans overflow-hidden">
+    <div className="flex h-screen font-sans overflow-hidden" style={{ background: '#EEF2FF' }}>
       {isSidebarOpen && (
         <Sidebar
           currentPage={currentPage}
@@ -1111,36 +1111,77 @@ const App: React.FC = () => {
           companyName={companyDetails.name}
         />
       )}
-      <main className={`flex-1 ${isSidebarOpen ? 'ml-[260px]' : 'ml-0'} h-full overflow-y-auto bg-slate-50 transition-all duration-300`}>
-        <div className="p-6">
-          <div className="max-w-[1600px] mx-auto">
-            {/* Sticky Header with Toggle Button */}
-            <div className="sticky top-0 z-30 bg-slate-50/80 backdrop-blur-md -mx-6 px-6 py-4 mb-6 border-b border-slate-200/50 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={toggleSidebar}
-                  className="p-2 hover:bg-white rounded-lg transition-all shadow-sm border border-slate-200 bg-white active:scale-95 group"
-                  title={isSidebarOpen ? "Hide Sidebar" : "Show Sidebar"}
-                >
-                  <div className="flex flex-col gap-1 w-5">
-                    <span className={`h-0.5 bg-indigo-600 rounded-full transition-all ${isSidebarOpen ? 'w-5' : 'w-5'}`}></span>
-                    <span className={`h-0.5 bg-indigo-600 rounded-full transition-all ${isSidebarOpen ? 'w-5' : 'w-3'}`}></span>
-                    <span className={`h-0.5 bg-indigo-600 rounded-full transition-all ${isSidebarOpen ? 'w-5' : 'w-4'}`}></span>
-                  </div>
-                </button>
-                <div className="flex flex-col">
-                  <h2 className="text-[14px] font-bold text-slate-800 uppercase tracking-wider leading-none">
-                    {currentPage}
-                  </h2>
-                  <span className="text-[10px] text-slate-400 font-medium uppercase tracking-widest mt-1">
-                    {companyDetails.name || 'Ai Accounting'}
-                  </span>
-                </div>
+      <main
+        className={`flex-1 ${isSidebarOpen ? 'ml-[260px]' : 'ml-0'} h-full overflow-y-auto transition-all duration-300`}
+        style={{ background: '#EEF2FF' }}
+      >
+        {/* ── Sticky Header ─────────────────────────────────── */}
+        <div
+          className="sticky top-0 z-30 backdrop-blur-md flex items-center justify-between"
+          style={{
+            background: '#FFFFFF',
+            borderBottom: '1px solid #E2E8F0',
+            padding: '16px 24px',
+          }}
+        >
+          <div className="flex items-center gap-4">
+            {/* Sidebar Toggle */}
+            <button
+              onClick={toggleSidebar}
+              className="flex flex-col gap-1 rounded-xl active:scale-95 transition-all"
+              style={{
+                padding: '8px',
+                background: '#F8FAFC',
+                border: '1px solid #E2E8F0',
+                width: '40px',
+                height: '40px',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              title={isSidebarOpen ? 'Hide Sidebar' : 'Show Sidebar'}
+            >
+              <div className="flex flex-col gap-[5px] w-5">
+                <span className="h-0.5 w-5 bg-indigo-600 rounded-full transition-all" />
+                <span className={`h-0.5 bg-indigo-600 rounded-full transition-all ${isSidebarOpen ? 'w-5' : 'w-3'}`} />
+                <span className={`h-0.5 bg-indigo-600 rounded-full transition-all ${isSidebarOpen ? 'w-5' : 'w-4'}`} />
               </div>
+            </button>
 
-              <div className="flex items-center gap-3">
-              </div>
+            {/* Page Title */}
+            <div className="flex flex-col">
+              <h2
+                className="leading-none"
+                style={{
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  color: '#1F2937',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                }}
+              >
+                {currentPage}
+              </h2>
+              <span
+                style={{
+                  fontSize: '10px',
+                  color: '#94A3B8',
+                  fontWeight: 500,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.12em',
+                  marginTop: '3px',
+                }}
+              >
+                {companyDetails.name || 'Ai Accounting'}
+              </span>
             </div>
+          </div>
+
+          <div className="flex items-center gap-3" />
+        </div>
+
+        {/* ── Page Content ──────────────────────────────────── */}
+        <div style={{ padding: '24px' }}>
+          <div className="max-w-[1600px] mx-auto">
             {renderPage()}
           </div>
         </div>

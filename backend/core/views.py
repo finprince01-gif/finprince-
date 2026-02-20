@@ -4,7 +4,7 @@ logger = logging.getLogger(__name__)
 from rest_framework import viewsets, status, generics, views  # type: ignore
 from rest_framework.response import Response  # type: ignore
 from rest_framework.permissions import IsAuthenticated, AllowAny  # type: ignore
-from rest_framework.decorators import api_view, permission_classes  # type: ignore
+from rest_framework.decorators import api_view, permission_classes, authentication_classes  # type: ignore
 from django.utils.decorators import method_decorator  # type: ignore
 from django.views.decorators.csrf import csrf_exempt  # type: ignore
 from django.utils import timezone  # type: ignore
@@ -21,6 +21,7 @@ from .exceptions import UsageLimitExceeded, BusinessError, ExternalServiceError
 
 class SignupView(generics.CreateAPIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
     serializer_class = UserSignupSerializer
 
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser  # type: ignore
@@ -37,7 +38,8 @@ class CompanySettingsViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
         serializer.save(tenant_id=tid)
 
 @api_view(['GET'])
-@permission_classes([AllowAny]) # Or IsAuthenticated depending on need
+@permission_classes([AllowAny])
+@authentication_classes([])
 def health_check(request):
     return Response({
         'status': 'ok',
@@ -51,6 +53,7 @@ def check_status(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def check_phone(request):
     """Check if a phone number is already registered."""
     from django.contrib.auth import get_user_model
@@ -144,6 +147,7 @@ def ai_metrics(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def health_with_metrics(request):
     """Enhanced health check with basic metrics"""
     from django.db import connections  # type: ignore

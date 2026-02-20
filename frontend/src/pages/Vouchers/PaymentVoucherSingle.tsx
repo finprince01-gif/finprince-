@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { httpClient, apiService } from '../../services';
 import { showError, showSuccess } from '../../utils/toast';
 import { Ledger } from '../../types';
+import SearchableSelect from '../../components/SearchableSelect';
 
 
 import { ExtractedInvoiceData } from '../../types';
@@ -80,9 +81,17 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
 
     // Filter Pay From options
     const payFromLedgers = useMemo(() => {
-        // Includes standard Cash/Bank groups and Bank OD groups
-        const targetGroups = ['Cash-in-Hand', 'Bank Accounts', 'Bank OD A/c', 'Bank OD/CC Accounts', 'Cash and Bank Accounts'];
-        return allLedgers.filter(l => targetGroups.includes(l.group));
+        return allLedgers.filter(l => {
+            const group = (l.group || '').toLowerCase();
+            // Robust fuzzy matching to include "Cash and Bank Accounts", "Bank OD/CC Account" 
+            // and related standard accounting groups to ensure the list is populated correctly.
+            return (
+                group.includes('cash') ||
+                group.includes('bank') ||
+                group.includes('od') ||
+                group.includes('cc')
+            );
+        });
     }, [allLedgers]);
 
     // Filter Pay To options: All ledgers EXCEPT those in Pay From
@@ -454,18 +463,13 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Pay From</label>
                             <div className="flex gap-2">
-                                <select
+                                <SearchableSelect
                                     value={payFrom}
-                                    onChange={(e) => setPayFrom(e.target.value)}
-                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                >
-                                    <option value="">Select Pay From</option>
-                                    {payFromLedgers.map((ledger) => (
-                                        <option key={ledger.id} value={ledger.name}>
-                                            {ledger.name}
-                                        </option>
-                                    ))}
-                                </select>
+                                    onChange={(val) => setPayFrom(val)}
+                                    options={payFromLedgers.map(l => l.name)}
+                                    placeholder="Select Pay From"
+                                    className="flex-1"
+                                />
                                 <div className="px-4 py-2 bg-gray-50 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 min-w-[80px] text-center">
                                     {payFromBalance}
                                 </div>
@@ -474,18 +478,13 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Pay To</label>
                             <div className="flex gap-2">
-                                <select
+                                <SearchableSelect
                                     value={payTo}
-                                    onChange={(e) => setPayTo(e.target.value)}
-                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                >
-                                    <option value="">Select Pay To</option>
-                                    {payToOptions.map((ledger) => (
-                                        <option key={ledger.id} value={ledger.name}>
-                                            {ledger.name}
-                                        </option>
-                                    ))}
-                                </select>
+                                    onChange={(val) => setPayTo(val)}
+                                    options={payToOptions.map(l => l.name)}
+                                    placeholder="Select Pay To"
+                                    className="flex-1"
+                                />
 
                                 <button
                                     onClick={() => setShowSingleAdvanceSection(!showSingleAdvanceSection)}
@@ -647,18 +646,13 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Pay from</label>
-                                    <select
+                                    <SearchableSelect
                                         value={payFrom}
-                                        onChange={e => setPayFrom(e.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                    >
-                                        <option value="">Select Pay From</option>
-                                        {payFromLedgers.map((ledger) => (
-                                            <option key={ledger.id} value={ledger.name}>
-                                                {ledger.name}
-                                            </option>
-                                        ))}
-                                    </select>
+                                        onChange={(val) => setPayFrom(val)}
+                                        options={payFromLedgers.map(l => l.name)}
+                                        placeholder="Select Pay From"
+                                        className="w-full"
+                                    />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Running Balance</label>
@@ -677,19 +671,14 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                                     <label className="block text-sm font-medium text-gray-700 mb-2">Pay to</label>
                                     <div className="space-y-2">
                                         {paymentRows.map((row) => (
-                                            <select
+                                            <SearchableSelect
                                                 key={row.id}
                                                 value={row.payTo}
-                                                onChange={e => handlePaymentRowChange(row.id, 'payTo', e.target.value)}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-                                            >
-                                                <option value="">Select Pay To</option>
-                                                {payToOptions.map((ledger) => (
-                                                    <option key={ledger.id} value={ledger.name}>
-                                                        {ledger.name}
-                                                    </option>
-                                                ))}
-                                            </select>
+                                                onChange={val => handlePaymentRowChange(row.id, 'payTo', val)}
+                                                options={payToOptions.map(l => l.name)}
+                                                placeholder="Select Pay To"
+                                                className="w-full"
+                                            />
                                         ))}
                                     </div>
                                     <button

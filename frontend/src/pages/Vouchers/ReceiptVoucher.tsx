@@ -4,6 +4,7 @@ import { showError, showSuccess } from '../../utils/toast';
 
 
 import { Ledger, ExtractedInvoiceData } from '../../types';
+import SearchableSelect from '../../components/SearchableSelect';
 
 interface PendingTransaction {
     date: string;
@@ -434,18 +435,13 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Receive In</label>
                             <div className="flex gap-2">
-                                <select
+                                <SearchableSelect
                                     value={receiveIn}
-                                    onChange={(e) => setReceiveIn(e.target.value)}
-                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                >
-                                    <option value="">Select Receive In</option>
-                                    {receiveInLedgers.map((ledger) => (
-                                        <option key={ledger.id} value={ledger.name}>
-                                            {ledger.name}
-                                        </option>
-                                    ))}
-                                </select>
+                                    onChange={(val) => setReceiveIn(val)}
+                                    options={receiveInLedgers.map(l => l.name)}
+                                    placeholder="Select Receive In"
+                                    className="flex-1"
+                                />
                                 <div className="px-4 py-2 bg-gray-50 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 min-w-[80px] text-center">
                                     {receiveInBalance}
                                 </div>
@@ -454,18 +450,13 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Receive From</label>
                             <div className="flex gap-2">
-                                <select
+                                <SearchableSelect
                                     value={receiveFrom}
-                                    onChange={(e) => setReceiveFrom(e.target.value)}
-                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                >
-                                    <option value="">Select Receive From</option>
-                                    {receiveFromOptions.map((ledger) => (
-                                        <option key={ledger.id} value={ledger.name}>
-                                            {ledger.name}
-                                        </option>
-                                    ))}
-                                </select>
+                                    onChange={(val) => setReceiveFrom(val)}
+                                    options={receiveFromOptions.map(l => l.name)}
+                                    placeholder="Select Receive From"
+                                    className="flex-1"
+                                />
 
                                 <button
                                     onClick={() => setShowSingleAdvanceSection(!showSingleAdvanceSection)}
@@ -627,18 +618,13 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Receive In</label>
-                                    <select
+                                    <SearchableSelect
                                         value={receiveIn}
-                                        onChange={e => setReceiveIn(e.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                    >
-                                        <option value="">Select</option>
-                                        {receiveInLedgers.map((ledger) => (
-                                            <option key={ledger.id} value={ledger.name}>
-                                                {ledger.name}
-                                            </option>
-                                        ))}
-                                    </select>
+                                        onChange={(val) => setReceiveIn(val)}
+                                        options={receiveInLedgers.map(l => l.name)}
+                                        placeholder="Select Receive In"
+                                        className="w-full"
+                                    />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Running Balance</label>
@@ -657,19 +643,14 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                                     <label className="block text-sm font-medium text-gray-700 mb-2">Receive From</label>
                                     <div className="space-y-2">
                                         {receiptRows.map((row) => (
-                                            <select
+                                            <SearchableSelect
                                                 key={row.id}
                                                 value={row.receiveFrom}
-                                                onChange={e => handleReceiptRowChange(row.id, 'receiveFrom', e.target.value)}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-                                            >
-                                                <option value="">Select Receive From</option>
-                                                {receiveFromOptions.map((ledger) => (
-                                                    <option key={ledger.id} value={ledger.name}>
-                                                        {ledger.name}
-                                                    </option>
-                                                ))}
-                                            </select>
+                                                onChange={val => handleReceiptRowChange(row.id, 'receiveFrom', val)}
+                                                options={receiveFromOptions.map(l => l.name)}
+                                                placeholder="Select Receive From"
+                                                className="w-full"
+                                            />
                                         ))}
                                     </div>
                                     <button

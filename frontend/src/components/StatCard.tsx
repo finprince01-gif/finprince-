@@ -13,46 +13,135 @@ interface StatCardProps {
     subValue?: string;
 }
 
-const colorMap: Record<string, { bg: string, text: string, border: string, iconBg: string, shadow: string }> = {
-    emerald: { bg: 'bg-emerald-50/30', text: 'text-emerald-600', border: 'border-emerald-400', iconBg: 'bg-emerald-100', shadow: 'shadow-emerald-100' },
-    rose: { bg: 'bg-rose-50/30', text: 'text-rose-600', border: 'border-rose-400', iconBg: 'bg-rose-100', shadow: 'shadow-rose-100' },
-    amber: { bg: 'bg-amber-50/30', text: 'text-amber-600', border: 'border-amber-400', iconBg: 'bg-amber-100', shadow: 'shadow-amber-100' },
-    blue: { bg: 'bg-blue-50/30', text: 'text-blue-600', border: 'border-blue-400', iconBg: 'bg-blue-100', shadow: 'shadow-blue-100' },
-    indigo: { bg: 'bg-indigo-50/30', text: 'text-indigo-600', border: 'border-indigo-400', iconBg: 'bg-indigo-100', shadow: 'shadow-indigo-100' },
-    slate: { bg: 'bg-slate-50/30', text: 'text-slate-600', border: 'border-slate-400', iconBg: 'bg-slate-100', shadow: 'shadow-slate-100' },
-    cyan: { bg: 'bg-cyan-50/30', text: 'text-cyan-600', border: 'border-cyan-400', iconBg: 'bg-cyan-100', shadow: 'shadow-cyan-100' },
-    purple: { bg: 'bg-purple-50/30', text: 'text-purple-600', border: 'border-purple-400', iconBg: 'bg-purple-100', shadow: 'shadow-purple-100' },
+const colorMap: Record<string, { accent: string; iconBg: string; iconColor: string }> = {
+    emerald: { accent: '#059669', iconBg: '#ECFDF5', iconColor: '#059669' },
+    rose: { accent: '#E11D48', iconBg: '#FFF1F2', iconColor: '#E11D48' },
+    amber: { accent: '#D97706', iconBg: '#FFFBEB', iconColor: '#D97706' },
+    blue: { accent: '#2563EB', iconBg: '#EFF6FF', iconColor: '#2563EB' },
+    indigo: { accent: '#4F46E5', iconBg: '#EEF2FF', iconColor: '#4F46E5' },
+    slate: { accent: '#475569', iconBg: '#F1F5F9', iconColor: '#475569' },
+    cyan: { accent: '#0891B2', iconBg: '#ECFEFF', iconColor: '#0891B2' },
+    purple: { accent: '#9333EA', iconBg: '#FAF5FF', iconColor: '#9333EA' },
 };
 
-const StatCard: React.FC<StatCardProps> = ({ title, value, icon, trend, trendLabel = 'vs last period', color = 'slate', className = '', onClick, subValue }) => {
-    const theme = colorMap[color] || colorMap.slate;
+const StatCard: React.FC<StatCardProps> = ({
+    title, value, icon, trend, trendLabel = 'vs last period',
+    color = 'indigo', className = '', onClick, subValue
+}) => {
+    const theme = colorMap[color] || colorMap.indigo;
 
     return (
         <div
             onClick={onClick}
-            className={`bg-white dark:bg-slate-900 rounded-xl border-2 ${theme.border} dark:border-slate-800 shadow-sm dark:shadow-none ${theme.bg} p-6 flex flex-col justify-between hover:shadow-lg dark:hover:bg-slate-800 transition-all duration-300 cursor-default ${className}`}
+            style={{
+                background: '#FFFFFF',
+                border: '1px solid #E2E8F0',
+                borderRadius: '16px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.04)',
+                padding: '20px 24px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                transition: 'box-shadow 0.2s ease, border-color 0.2s ease',
+                cursor: onClick ? 'pointer' : 'default',
+            }}
+            className={`dark:bg-slate-900 dark:border-slate-800 hover:border-[#C7D2FE] hover:shadow-lg dark:hover:bg-slate-800 transition-all ${className}`}
         >
-            <div className="flex justify-between items-start">
+            {/* Top Row */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
-                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">{title}</p>
-                    <h3 className="text-2xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">{value}</h3>
-                    {subValue && <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mt-1 uppercase tracking-wider">{subValue}</p>}
+                    <p
+                        style={{
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            color: '#64748B',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.1em',
+                            marginBottom: '8px',
+                        }}
+                        className="dark:text-slate-400"
+                    >
+                        {title}
+                    </p>
+                    <h3
+                        style={{
+                            fontSize: '24px',
+                            fontWeight: 700,
+                            color: '#1F2937',
+                            letterSpacing: '-0.02em',
+                            lineHeight: '1',
+                        }}
+                        className="dark:text-slate-100"
+                    >
+                        {value}
+                    </h3>
+                    {subValue && (
+                        <p
+                            style={{
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                color: '#94A3B8',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.08em',
+                                marginTop: '4px',
+                            }}
+                            className="dark:text-slate-500"
+                        >
+                            {subValue}
+                        </p>
+                    )}
                 </div>
+
                 {icon && (
-                    <div className={`p-2 rounded-lg ${theme.iconBg} dark:bg-slate-800`}>
-                        <Icon name={icon as any} className={`w-5 h-5 ${theme.text} dark:text-indigo-400`} />
+                    <div
+                        style={{
+                            width: '40px',
+                            height: '40px',
+                            borderRadius: '12px',
+                            background: theme.iconBg,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                        }}
+                        className="dark:bg-slate-800"
+                    >
+                        <Icon
+                            name={icon as any}
+                            className="w-5 h-5"
+                            style={{ color: theme.iconColor }}
+                        />
                     </div>
                 )}
             </div>
 
-            {(trend) && (
-                <div className="flex items-center mt-4">
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${trend.startsWith('+')
-                        ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-                        : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'}`}>
+            {/* Trend Row */}
+            {trend && (
+                <div style={{ display: 'flex', alignItems: 'center', marginTop: '16px' }}>
+                    <span
+                        style={{
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            padding: '2px 8px',
+                            borderRadius: '999px',
+                            background: trend.startsWith('+') ? '#ECFDF5' : '#FFF1F2',
+                            color: trend.startsWith('+') ? '#059669' : '#E11D48',
+                            letterSpacing: '0.03em',
+                        }}
+                    >
                         {trend}
                     </span>
-                    <span className="text-xs text-slate-400 dark:text-slate-500 ml-2 font-medium">{trendLabel}</span>
+                    <span
+                        style={{
+                            fontSize: '11px',
+                            color: '#94A3B8',
+                            fontWeight: 500,
+                            marginLeft: '8px',
+                        }}
+                        className="dark:text-slate-500"
+                    >
+                        {trendLabel}
+                    </span>
                 </div>
             )}
         </div>

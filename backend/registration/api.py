@@ -23,6 +23,7 @@ class DirectRegisterView(APIView):
     All logic delegated to flow layer.
     """
     permission_classes = [AllowAny]
+    authentication_classes = []
     
     def post(self, request):
         """Handle direct registration."""
