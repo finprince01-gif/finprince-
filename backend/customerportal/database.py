@@ -202,6 +202,7 @@ class CustomerMasterCustomerBasicDetails(models.Model):
     contact_number = models.CharField(max_length=15, null=True, blank=True)
     billing_currency = models.CharField(max_length=10, null=True, blank=True)
     is_also_vendor = models.BooleanField(default=False)
+    gst_tds_applicable = models.BooleanField(default=False, help_text='TDS Applicable under GST')
     
     # Status and Metadata
     is_active = models.BooleanField(default=True)
@@ -245,7 +246,17 @@ class CustomerMasterCustomerGSTDetails(models.Model):
     
     # Branch Details
     branch_reference_name = models.CharField(max_length=255, null=True, blank=True)
-    branch_address = models.TextField(null=True, blank=True)
+    branch_address = models.TextField(null=True, blank=True, help_text='Legacy JSON address')
+    
+    # New Address Columns (Frontend Extract)
+    address_line_1 = models.CharField(max_length=255, null=True, blank=True)
+    address_line_2 = models.CharField(max_length=255, null=True, blank=True)
+    address_line_3 = models.CharField(max_length=255, null=True, blank=True)
+    city = models.CharField(max_length=100, null=True, blank=True)
+    state = models.CharField(max_length=100, null=True, blank=True)
+    country = models.CharField(max_length=100, null=True, blank=True)
+    pincode = models.CharField(max_length=20, null=True, blank=True)
+
     branch_contact_person = models.CharField(max_length=255, null=True, blank=True)
     branch_email = models.EmailField(null=True, blank=True)
     branch_contact_number = models.CharField(max_length=15, null=True, blank=True)

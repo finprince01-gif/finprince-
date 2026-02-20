@@ -52,14 +52,15 @@ export const useSubscriptionUsage = () => {
     }, [subscriptionUsage]);
 
     useEffect(() => {
-        const token = httpClient.getToken();
-        if (!token) return;
+        // Only fetch if we have a session (refresh token exists)
+        // Note: httpClient.get will handle automatic access token refresh if needed.
+        const hasSession = localStorage.getItem('refresh_token') !== null;
+        if (!hasSession) return;
 
         fetchUsage();
         // Poll every minute to stay in sync with backend
         const interval = setInterval(() => {
-            const currentToken = httpClient.getToken();
-            if (currentToken) {
+            if (localStorage.getItem('refresh_token') !== null) {
                 fetchUsage();
             }
         }, 60000);

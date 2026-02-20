@@ -273,10 +273,10 @@ const MastersPage: React.FC<MastersPageProps> = ({
           updateData.inventoryType = inventoryType;
           updateData.inventoryValuationMethod = inventoryValuationMethod;
         }
-        
+
         onUpdateLedger(identifier, updateData);
       } else {
-        
+
       }
       setIsEditMode(false);
       setSelectedLedger(null);
@@ -359,7 +359,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
           newLedger.inventoryType = inventoryType;
           newLedger.inventoryValuationMethod = inventoryValuationMethod;
         }
-        
+
         onAddLedger(newLedger);
       }
     }
@@ -393,7 +393,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
       return;
     }
 
-    
+
     setLedgerName(selectedLedger.name);
     setLedgerGroup(selectedLedger.group);
 
@@ -467,12 +467,12 @@ const MastersPage: React.FC<MastersPageProps> = ({
     }
 
 
-    
+
 
     if (onDeleteLedger) {
       try {
         const identifier = selectedLedger.id || selectedLedger.name;
-        
+
         onDeleteLedger(identifier);
         setSelectedLedger(null);
         // Clear form if we were editing this ledger
@@ -487,7 +487,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
       }
 
     } else {
-      
+
       showError('Delete function is not available.');
     }
 
@@ -536,14 +536,14 @@ const MastersPage: React.FC<MastersPageProps> = ({
     if (isEditModeGroup && selectedGroup) {
       if (onUpdateLedgerGroup) {
         const identifier = selectedGroup.id || selectedGroup.name;
-        
+
         onUpdateLedgerGroup(identifier as number, { name: trimmedGroupName, under: groupUnder });
       }
       setIsEditModeGroup(false);
       setSelectedGroup(null);
     } else {
       // Create new group
-      
+
       onAddLedgerGroup({ name: trimmedGroupName, under: groupUnder });
     }
     // Reset form
@@ -557,7 +557,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
       return;
     }
 
-    
+
     setGroupName(selectedGroup.name);
     setGroupUnder(selectedGroup.under);
     setIsEditModeGroup(true);
@@ -577,7 +577,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
     }
 
 
-    
+
 
     if (onDeleteLedgerGroup) {
       try {
@@ -595,7 +595,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
       }
 
     } else {
-      
+
       showError('Delete function is not available.');
     }
 
@@ -1511,7 +1511,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                         value={group.name}
                         checked={isSelected}
                         onChange={() => {
-                          
+
                           setSelectedGroup(group);
                         }}
                         className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
@@ -1521,7 +1521,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                     <td
                       className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 cursor-pointer"
                       onClick={() => {
-                        
+
                         setSelectedGroup(group);
                       }}
                     >
@@ -1597,7 +1597,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
     // voucherButtons is now defined at top level
 
     const handleVoucherClick = (voucherId: string) => {
-      
+
       setSelectedVoucher(voucherId);
       // TODO: Add navigation or action logic here
     };

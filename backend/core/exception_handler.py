@@ -44,7 +44,19 @@ def custom_exception_handler(exc, context):
             error_data["error"]["fields"] = response.data
             response.status_code = status.HTTP_400_BAD_REQUEST
             
-        elif isinstance(exc, (exceptions.PermissionDenied, exceptions.NotAuthenticated)):
+        elif isinstance(exc, exceptions.NotAuthenticated):
+            error_data["error"]["type"] = "NOT_AUTHENTICATED"
+            detail = response.data.get('detail') if isinstance(response.data, dict) else response.data
+            error_data["error"]["message"] = str(detail)
+            response.status_code = status.HTTP_401_UNAUTHORIZED
+
+        elif isinstance(exc, exceptions.AuthenticationFailed):
+            error_data["error"]["type"] = "AUTHENTICATION_FAILED"
+            detail = response.data.get('detail') if isinstance(response.data, dict) else response.data
+            error_data["error"]["message"] = str(detail)
+            response.status_code = status.HTTP_401_UNAUTHORIZED
+            
+        elif isinstance(exc, exceptions.PermissionDenied):
             error_data["error"]["type"] = "PERMISSION_DENIED"
             detail = response.data.get('detail') if isinstance(response.data, dict) else response.data
             error_data["error"]["message"] = str(detail)

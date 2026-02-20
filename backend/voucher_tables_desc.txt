@@ -1,0 +1,24 @@
+Field	Type	Null	Key	Default	Extra
+id	bigint	NO	PRI	NULL	auto_increment
+tenant_id	varchar(36)	NO	MUL	NULL	
+created_at	datetime(6)	YES		NULL	
+updated_at	datetime(6)	YES		NULL	
+date	date	NO		NULL	
+voucher_type	varchar(100)	YES		NULL	
+voucher_number	varchar(100)	NO		NULL	
+pay_from	varchar(100)	YES		NULL	
+pay_to	varchar(255)	YES		NULL	
+total_payment	decimal(15,2)	NO		NULL	
+transaction_details	json	YES		NULL	
+Field	Type	Null	Key	Default	Extra
+id	bigint	NO	PRI	NULL	auto_increment
+tenant_id	varchar(36)	NO	MUL	NULL	
+created_at	datetime(6)	YES		NULL	
+updated_at	datetime(6)	YES		NULL	
+date	date	NO		NULL	
+voucher_type	varchar(100)	YES		NULL	
+voucher_number	varchar(100)	NO		NULL	
+receive_in	varchar(100)	YES		NULL	
+receive_from	varchar(255)	YES		NULL	
+total_receipt	decimal(15,2)	NO		NULL	
+transaction_details	json	YES		NULL	
