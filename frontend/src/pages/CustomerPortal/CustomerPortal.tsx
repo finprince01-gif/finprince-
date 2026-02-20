@@ -576,7 +576,8 @@ const CustomerContent: React.FC = () => {
         contact_person: '',
         email_address: '',
         contact_number: '',
-        billing_currency: ''
+        billing_currency: '',
+        gst_tds_applicable: false // Default to No
     });
 
     // Track created customer ID for progressive saving
@@ -598,7 +599,8 @@ const CustomerContent: React.FC = () => {
     }, [openBranchDropdown]);
 
     // Handle form field changes
-    const handleCustomerFieldChange = (field: string, value: string) => {
+    // Handle form field changes
+    const handleCustomerFieldChange = (field: string, value: string | boolean) => {
         setCustomerFormData(prev => ({ ...prev, [field]: value }));
     };
 
@@ -621,6 +623,7 @@ const CustomerContent: React.FC = () => {
                 contact_number: customerFormData.contact_number || null,
                 billing_currency: customerFormData.billing_currency || null,
                 is_also_vendor: isVendor,
+                gst_tds_applicable: customerFormData.gst_tds_applicable, // Add to payload
                 // GST Details
                 gst_details: {
                     gstins: isUnregistered ? [] : selectedGSTINs,
@@ -722,7 +725,8 @@ const CustomerContent: React.FC = () => {
                     contact_person: '',
                     email_address: '',
                     contact_number: '',
-                    billing_currency: ''
+                    billing_currency: '',
+                    gst_tds_applicable: false
                 });
             }
             return true;
@@ -927,7 +931,8 @@ const CustomerContent: React.FC = () => {
             contact_person: customer.contact_person || '',
             email_address: customer.email_address || '',
             contact_number: customer.contact_number || '',
-            billing_currency: customer.billing_currency || ''
+            billing_currency: customer.billing_currency || '',
+            gst_tds_applicable: customer.gst_tds_applicable || false
         });
 
         // 2. Vendor Link
@@ -1392,11 +1397,23 @@ const CustomerContent: React.FC = () => {
                                 <label className="block text-sm font-semibold text-gray-700 mb-3">TDS Applicable under GST?</label>
                                 <div className="flex gap-6">
                                     <label className="flex items-center gap-2 cursor-pointer">
-                                        <input type="radio" name="tds" className="text-indigo-600 focus:ring-indigo-500 w-4 h-4" />
+                                        <input
+                                            type="radio"
+                                            name="gst_tds_applicable"
+                                            checked={customerFormData.gst_tds_applicable === true}
+                                            onChange={() => handleCustomerFieldChange('gst_tds_applicable', true)}
+                                            className="text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                                        />
                                         <span className="text-sm text-gray-700">Yes</span>
                                     </label>
                                     <label className="flex items-center gap-2 cursor-pointer">
-                                        <input type="radio" name="tds" defaultChecked className="text-indigo-600 focus:ring-indigo-500 w-4 h-4" />
+                                        <input
+                                            type="radio"
+                                            name="gst_tds_applicable"
+                                            checked={customerFormData.gst_tds_applicable === false}
+                                            onChange={() => handleCustomerFieldChange('gst_tds_applicable', false)}
+                                            className="text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                                        />
                                         <span className="text-sm text-gray-700">No</span>
                                     </label>
                                 </div>
@@ -2874,7 +2891,8 @@ const CustomerContent: React.FC = () => {
                             contact_person: '',
                             email_address: '',
                             contact_number: '',
-                            billing_currency: ''
+                            billing_currency: '',
+                            gst_tds_applicable: false
                         });
                         setView('create');
                     }}

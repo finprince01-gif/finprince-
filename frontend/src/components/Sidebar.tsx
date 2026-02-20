@@ -64,8 +64,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, co
               key={item.name}
               onClick={() => onNavigate(item.name)}
               className={`w-full flex items-center gap-3 px-[14px] h-[48px] rounded-[14px] font-semibold transition-all duration-200 group ${isActive
-                  ? 'bg-white/60 dark:bg-indigo-600 text-indigo-700 dark:text-white shadow-sm dark:shadow-indigo-900/20'
-                  : 'text-slate-800 dark:text-slate-400 hover:bg-white/40 dark:hover:bg-slate-800 hover:text-indigo-700 dark:hover:text-white'
+                ? 'bg-white/60 dark:bg-indigo-600 text-indigo-700 dark:text-white shadow-sm dark:shadow-indigo-900/20'
+                : 'text-slate-800 dark:text-slate-400 hover:bg-white/40 dark:hover:bg-slate-800 hover:text-indigo-700 dark:hover:text-white'
                 }`}
             >
               <div className={`flex-shrink-0 w-5 h-5 flex items-center justify-center transition-colors duration-200 ${isActive ? 'text-indigo-700 dark:text-white' : 'text-slate-600 dark:text-slate-500 group-hover:text-indigo-700 dark:group-hover:text-white'

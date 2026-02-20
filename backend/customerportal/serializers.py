@@ -115,7 +115,7 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'tenant_id', 'customer_name', 'customer_code', 'customer_category',
             'pan_number', 'contact_person', 'email_address', 'contact_number', 'billing_currency',
-            'is_also_vendor',
+            'is_also_vendor', 'gst_tds_applicable',
             # These are not in the model but accepted in serializer
             'gst_details', 'products_services', 'banking_info',
             'msme_no', 'fssai_no', 'iec_code', 'eou_status',
@@ -148,18 +148,36 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
         dropdown_branches = []
         
         for gst in instance.gst_details.all():
-            addr_data = parse_address_data(gst.branch_address)
+            # Check for new columns first, fallback to legacy JSON
+            if gst.address_line_1 or gst.city:
+                addressLine1 = gst.address_line_1 or ''
+                addressLine2 = gst.address_line_2 or ''
+                addressLine3 = gst.address_line_3 or ''
+                city = gst.city or ''
+                pincode = gst.pincode or ''
+                state = gst.state or ''
+                country = gst.country or 'India'
+            else:
+                addr_data = parse_address_data(gst.branch_address)
+                addressLine1 = addr_data.get('addressLine1', '')
+                addressLine2 = addr_data.get('addressLine2', '')
+                addressLine3 = addr_data.get('addressLine3', '')
+                city = addr_data.get('city', '')
+                pincode = addr_data.get('pincode', '')
+                state = addr_data.get('state', '')
+                country = addr_data.get('country', 'India')
             
             processed_branch = {
                 'id': gst.id,
                 'gstin': gst.gstin,
                 'defaultRef': gst.branch_reference_name,
-                'addressLine1': addr_data.get('addressLine1', ''),
-                'addressLine2': addr_data.get('addressLine2', ''),
-                'city': addr_data.get('city', ''),
-                'pincode': addr_data.get('pincode', ''),
-                'state': addr_data.get('state', ''),
-                'country': addr_data.get('country', 'India'),
+                'addressLine1': addressLine1,
+                'addressLine2': addressLine2,
+                'addressLine3': addressLine3,
+                'city': city,
+                'pincode': pincode,
+                'state': state,
+                'country': country,
                 'contactPerson': gst.branch_contact_person,
                 'email': gst.branch_email,
                 'contactNumber': gst.branch_contact_number
@@ -185,6 +203,7 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
             'contact_number': instance.contact_number,
             'billing_currency': instance.billing_currency,
             'is_also_vendor': instance.is_also_vendor,
+            'gst_tds_applicable': instance.gst_tds_applicable,
             'is_active': instance.is_active,
             'is_deleted': instance.is_deleted,
             'created_at': instance.created_at.isoformat() if instance.created_at else None,
@@ -335,10 +354,11 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
                 for branch in branches:
                     branch_gstin = branch.get('gstin')
                     
-                    # Construct structured address JSON
+                    # Construct structured address JSON (Legacy Support)
                     address_data = {
                         'addressLine1': branch.get('addressLine1', branch.get('address', '')),
                         'addressLine2': branch.get('addressLine2', ''),
+                        'addressLine3': branch.get('addressLine3', ''),
                         'city': branch.get('city', ''),
                         'pincode': branch.get('pincode', ''),
                         'state': branch.get('state', ''),
@@ -351,7 +371,17 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
                         tenant_id=basic_details.tenant_id,
                         gstin=branch_gstin,
                         branch_reference_name=branch.get('defaultRef'),
-                        branch_address=branch_address_json,
+                        branch_address=branch_address_json, # Keep legacy JSON for now
+                        
+                        # New Columns
+                        address_line_1=branch.get('addressLine1', branch.get('address', '')),
+                        address_line_2=branch.get('addressLine2', ''),
+                        address_line_3=branch.get('addressLine3', ''),
+                        city=branch.get('city', ''),
+                        state=branch.get('state', ''),
+                        country=branch.get('country', 'India'),
+                        pincode=branch.get('pincode', ''),
+                        
                         branch_contact_person=branch.get('contactPerson'),
                         branch_email=branch.get('email'),
                         branch_contact_number=branch.get('contactNumber'),
@@ -557,10 +587,11 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
                 for branch in branches:
                     branch_gstin = branch.get('gstin')
                     
-                    # Construct structured address JSON
+                    # Construct structured address JSON (Legacy Support)
                     address_data = {
                         'addressLine1': branch.get('addressLine1', branch.get('address', '')),
                         'addressLine2': branch.get('addressLine2', ''),
+                        'addressLine3': branch.get('addressLine3', ''),
                         'city': branch.get('city', ''),
                         'pincode': branch.get('pincode', ''),
                         'state': branch.get('state', ''),
@@ -573,7 +604,17 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
                         tenant_id=instance.tenant_id,
                         gstin=branch_gstin,
                         branch_reference_name=branch.get('defaultRef'),
-                        branch_address=branch_address_json,
+                        branch_address=branch_address_json, # Keep legacy JSON
+                        
+                        # New Columns
+                        address_line_1=branch.get('addressLine1', branch.get('address', '')),
+                        address_line_2=branch.get('addressLine2', ''),
+                        address_line_3=branch.get('addressLine3', ''),
+                        city=branch.get('city', ''),
+                        state=branch.get('state', ''),
+                        country=branch.get('country', 'India'),
+                        pincode=branch.get('pincode', ''),
+                        
                         branch_contact_person=branch.get('contactPerson'),
                         branch_email=branch.get('email'),
                         branch_contact_number=branch.get('contactNumber'),
