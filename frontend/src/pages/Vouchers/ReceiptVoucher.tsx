@@ -49,7 +49,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
 
     // "Receive From" (Credit Account - Customer) matches PayTo (Debit Account) visually
     const [receiveFrom, setReceiveFrom] = useState('');
-    const [receiveFromBalance, setReceiveFromBalance] = useState('₹0 Cr');
+
 
     const [totalReceipt, setTotalReceipt] = useState(0);
 
@@ -76,6 +76,11 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
     const [advanceAmount, setAdvanceAmount] = useState<number>(0);
     const [postingNote, setPostingNote] = useState<string>('');
     const [runningBalance, setRunningBalance] = useState<number>(0);
+
+    // Single Advance state
+    const [showSingleAdvanceSection, setShowSingleAdvanceSection] = useState<boolean>(false);
+    const [singleAdvanceRefNo, setSingleAdvanceRefNo] = useState<string>('');
+    const [singleAdvanceAmount, setSingleAdvanceAmount] = useState<number>(0);
 
     // Populate from AI Extraction
     useEffect(() => {
@@ -145,10 +150,15 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
         calculateTotalReceipt(updatedTransactions);
     };
 
-    const calculateTotalReceipt = (transactions: PendingTransaction[]) => {
+    const calculateTotalReceipt = (transactions: PendingTransaction[], advance: number = singleAdvanceAmount) => {
         const total = transactions.reduce((sum, txn) => sum + txn.receipt, 0);
-        setTotalReceipt(total);
+        setTotalReceipt(total + advance);
     };
+
+    // Update total when advance amount changes
+    useEffect(() => {
+        calculateTotalReceipt(pendingTransactions, singleAdvanceAmount);
+    }, [singleAdvanceAmount]);
 
     // Bulk mode handlers
     const handleReceiptRowChange = (id: string, field: keyof ReceiptRow, value: string | number) => {
@@ -210,6 +220,9 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
         setShowAdvanceSection(false);
         setAdvanceRefNo('');
         setAdvanceAmount(0);
+        setSingleAdvanceRefNo('');
+        setSingleAdvanceAmount(0);
+        setShowSingleAdvanceSection(false);
         setTotalReceipt(0);
     };
 
@@ -227,7 +240,9 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                         ...t,
                         pending: Math.max(0, t.amount - t.receipt),
                         advance: Math.max(0, t.receipt - t.amount)
-                    }))
+                    })),
+                    advance_ref_no: singleAdvanceRefNo,
+                    advance_amount: singleAdvanceAmount
                 };
 
 
@@ -363,15 +378,48 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                                     <option value="customer1">Customer 1</option>
                                     <option value="customer2">Customer 2</option>
                                 </select>
-                                <div className="px-4 py-2 bg-gray-50 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 min-w-[80px] text-center">
-                                    {receiveFromBalance}
-                                </div>
-                                <button className="px-4 py-2 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700">
+
+                                <button
+                                    onClick={() => setShowSingleAdvanceSection(!showSingleAdvanceSection)}
+                                    className={`px-4 py-2 border rounded-[4px] text-sm font-medium transition-colors ${showSingleAdvanceSection
+                                        ? 'bg-indigo-600 text-white border-indigo-600'
+                                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                                        }`}
+                                >
                                     Advance
                                 </button>
                             </div>
                         </div>
                     </div>
+
+                    {/* Advance Receipt Section (Single) */}
+                    {showSingleAdvanceSection && (
+                        <div className="bg-indigo-50 border border-indigo-100 rounded-[4px] p-4 mb-4">
+                            <h4 className="text-sm font-semibold text-indigo-800 mb-3">Advance Receipt Details</h4>
+                            <div className="flex gap-4">
+                                <div className="flex-1">
+                                    <label className="block text-xs font-medium text-indigo-700 mb-1">Reference No.</label>
+                                    <input
+                                        type="text"
+                                        value={singleAdvanceRefNo}
+                                        onChange={(e) => setSingleAdvanceRefNo(e.target.value)}
+                                        className="w-full px-3 py-2 border border-indigo-200 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                                        placeholder="Enter Reference No"
+                                    />
+                                </div>
+                                <div className="flex-1">
+                                    <label className="block text-xs font-medium text-indigo-700 mb-1">Amount</label>
+                                    <input
+                                        type="number"
+                                        value={singleAdvanceAmount || ''}
+                                        onChange={(e) => setSingleAdvanceAmount(parseFloat(e.target.value) || 0)}
+                                        className="w-full px-3 py-2 border border-indigo-200 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                                        placeholder="0.00"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Pending Transactions */}
                     <div>
@@ -455,248 +503,251 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                         </button>
                     </div>
                 </>
-            )}
+            )
+            }
 
             {/* Bulk Tab Content */}
-            {activeTab === 'bulk' && (
-                <div className="grid grid-cols-2 gap-6">
-                    {/* Left Panel */}
-                    <div className="space-y-6">
-                        {/* Top Fields */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                                <input
-                                    type="date"
-                                    value={date}
-                                    onChange={e => setDate(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Voucher Number</label>
-                                <input
-                                    type="text"
-                                    value={voucherNumber}
-                                    readOnly
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
-                                />
-                            </div>
-                        </div>
-
-                        {/* Receive In and Running Balance */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Receive In</label>
-                                <select
-                                    value={receiveIn}
-                                    onChange={e => setReceiveIn(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                >
-                                    <option value="">Select</option>
-                                    <option value="cash">Cash</option>
-                                    <option value="bank">Bank</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Running Balance</label>
-                                <input
-                                    type="number"
-                                    value={runningBalance}
-                                    readOnly
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500 text-right"
-                                />
-                            </div>
-                        </div>
-
-                        {/* Receive From and Amount Section */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Receive From</label>
-                                <div className="space-y-2">
-                                    {receiptRows.map((row) => (
-                                        <select
-                                            key={row.id}
-                                            value={row.receiveFrom}
-                                            onChange={e => handleReceiptRowChange(row.id, 'receiveFrom', e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-                                        >
-                                            <option value="">Customer Name</option>
-                                            <option value="customer1">Customer 1</option>
-                                            <option value="customer2">Customer 2</option>
-                                        </select>
-                                    ))}
+            {
+                activeTab === 'bulk' && (
+                    <div className="grid grid-cols-2 gap-6">
+                        {/* Left Panel */}
+                        <div className="space-y-6">
+                            {/* Top Fields */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                                    <input
+                                        type="date"
+                                        value={date}
+                                        onChange={e => setDate(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    />
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={handleAddReceiptRow}
-                                    className="mt-2 text-indigo-600 hover:text-slate-700 text-3xl font-bold"
-                                >
-                                    +
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Voucher Number</label>
+                                    <input
+                                        type="text"
+                                        value={voucherNumber}
+                                        readOnly
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Receive In and Running Balance */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Receive In</label>
+                                    <select
+                                        value={receiveIn}
+                                        onChange={e => setReceiveIn(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    >
+                                        <option value="">Select</option>
+                                        <option value="cash">Cash</option>
+                                        <option value="bank">Bank</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Running Balance</label>
+                                    <input
+                                        type="number"
+                                        value={runningBalance}
+                                        readOnly
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500 text-right"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Receive From and Amount Section */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Receive From</label>
+                                    <div className="space-y-2">
+                                        {receiptRows.map((row) => (
+                                            <select
+                                                key={row.id}
+                                                value={row.receiveFrom}
+                                                onChange={e => handleReceiptRowChange(row.id, 'receiveFrom', e.target.value)}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                                            >
+                                                <option value="">Customer Name</option>
+                                                <option value="customer1">Customer 1</option>
+                                                <option value="customer2">Customer 2</option>
+                                            </select>
+                                        ))}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleAddReceiptRow}
+                                        className="mt-2 text-indigo-600 hover:text-slate-700 text-3xl font-bold"
+                                    >
+                                        +
+                                    </button>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Amount</label>
+                                    <div className="space-y-2">
+                                        {receiptRows.map((row) => (
+                                            <input
+                                                key={`amount-${row.id}`}
+                                                type="number"
+                                                value={row.amount || ''}
+                                                onChange={e => handleReceiptRowChange(row.id, 'amount', parseFloat(e.target.value) || 0)}
+                                                placeholder="Receive now/Advance total"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Total Receipt */}
+                            <div className="flex justify-center">
+                                <button className="px-8 py-2 bg-indigo-600 text-white rounded-[4px] font-medium">
+                                    Total Receipt
                                 </button>
                             </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Amount</label>
-                                <div className="space-y-2">
-                                    {receiptRows.map((row) => (
-                                        <input
-                                            key={`amount-${row.id}`}
-                                            type="number"
-                                            value={row.amount || ''}
-                                            onChange={e => handleReceiptRowChange(row.id, 'amount', parseFloat(e.target.value) || 0)}
-                                            placeholder="Receive now/Advance total"
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-                                        />
-                                    ))}
-                                </div>
+                            {/* Posting Note */}
+                            <div className="bg-indigo-50/50 border-2 border-slate-200 rounded-[4px] p-4">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Posting Note</label>
+                                <textarea
+                                    value={postingNote}
+                                    onChange={e => setPostingNote(e.target.value)}
+                                    placeholder="Enter posting note..."
+                                    rows={3}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none text-sm"
+                                />
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex justify-center gap-4">
+                                <button
+                                    onClick={handleCancel}
+                                    className="px-6 py-2 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-[4px] hover:bg-gray-50"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handlePostReceipt}
+                                    className="px-6 py-2 text-sm font-medium text-white bg-indigo-600 rounded-[4px] hover:bg-indigo-700"
+                                >
+                                    Post
+                                </button>
                             </div>
                         </div>
 
-                        {/* Total Receipt */}
-                        <div className="flex justify-center">
-                            <button className="px-8 py-2 bg-indigo-600 text-white rounded-[4px] font-medium">
-                                Total Receipt
-                            </button>
-                        </div>
+                        {/* Right Panel - Transaction List */}
+                        <div className="bg-indigo-600 rounded-[4px] p-6">
+                            <div className="text-center mb-4">
+                                <h4 className="text-white font-semibold text-sm">
+                                    {selectedCustomer || 'Customer Name'} (Whose data is displayed below)
+                                </h4>
+                            </div>
 
-                        {/* Posting Note */}
-                        <div className="bg-indigo-50/50 border-2 border-slate-200 rounded-[4px] p-4">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Posting Note</label>
-                            <textarea
-                                value={postingNote}
-                                onChange={e => setPostingNote(e.target.value)}
-                                placeholder="Enter posting note..."
-                                rows={3}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none text-sm"
-                            />
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex justify-center gap-4">
-                            <button
-                                onClick={handleCancel}
-                                className="px-6 py-2 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-[4px] hover:bg-gray-50"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handlePostReceipt}
-                                className="px-6 py-2 text-sm font-medium text-white bg-indigo-600 rounded-[4px] hover:bg-indigo-700"
-                            >
-                                Post
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Right Panel - Transaction List */}
-                    <div className="bg-indigo-600 rounded-[4px] p-6">
-                        <div className="text-center mb-4">
-                            <h4 className="text-white font-semibold text-sm">
-                                {selectedCustomer || 'Customer Name'} (Whose data is displayed below)
-                            </h4>
-                        </div>
-
-                        {!showAdvanceSection ? (
-                            <div className="bg-white rounded-[4px] p-4 min-h-[400px]">
-                                {bulkTransactions.length > 0 ? (
-                                    <table className="w-full text-sm">
-                                        <thead className="border-b-2 border-gray-300">
-                                            <tr>
-                                                <th className="text-left py-2 px-2 font-semibold text-gray-700">Date</th>
-                                                <th className="text-left py-2 px-2 font-semibold text-gray-700">Invoice No.</th>
-                                                <th className="text-right py-2 px-2 font-semibold text-gray-700">Amount</th>
-                                                <th className="text-right py-2 px-2 font-semibold text-gray-700">Pending</th>
-                                                <th className="text-center py-2 px-2 font-semibold text-gray-700">Receive Now</th>
-                                                <th className="text-right py-2 px-2 font-semibold text-gray-700">Advance</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {bulkTransactions.map(transaction => (
-                                                <tr key={transaction.id} className="border-b border-gray-200">
-                                                    <td className="py-3 px-2">
-                                                        <div className="flex items-center gap-2">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={transaction.selected}
-                                                                onChange={e => handleTransactionSelect(transaction.id, e.target.checked)}
-                                                                className="w-4 h-4"
-                                                            />
-                                                            <span>{transaction.date}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="py-3 px-2">{transaction.invoiceNo}</td>
-                                                    <td className="py-3 px-2 text-right">{transaction.amount}</td>
-                                                    <td className="py-3 px-2 text-right text-red-600 font-medium">
-                                                        {(Math.max(0, transaction.amount - transaction.receiveNow)).toFixed(2)}
-                                                    </td>
-                                                    <td className="py-3 px-2">
-                                                        <input
-                                                            type="number"
-                                                            value={transaction.receiveNow || ''}
-                                                            onChange={e => handleReceiveNowChange(transaction.id, parseFloat(e.target.value) || 0)}
-                                                            className="w-full px-2 py-1 border border-gray-300 rounded text-center"
-                                                        />
-                                                    </td>
-                                                    <td className="py-3 px-2 text-right text-indigo-600 font-medium">
-                                                        {(Math.max(0, transaction.receiveNow - transaction.amount)).toFixed(2)}
-                                                    </td>
+                            {!showAdvanceSection ? (
+                                <div className="bg-white rounded-[4px] p-4 min-h-[400px]">
+                                    {bulkTransactions.length > 0 ? (
+                                        <table className="w-full text-sm">
+                                            <thead className="border-b-2 border-gray-300">
+                                                <tr>
+                                                    <th className="text-left py-2 px-2 font-semibold text-gray-700">Date</th>
+                                                    <th className="text-left py-2 px-2 font-semibold text-gray-700">Invoice No.</th>
+                                                    <th className="text-right py-2 px-2 font-semibold text-gray-700">Amount</th>
+                                                    <th className="text-right py-2 px-2 font-semibold text-gray-700">Pending</th>
+                                                    <th className="text-center py-2 px-2 font-semibold text-gray-700">Receive Now</th>
+                                                    <th className="text-right py-2 px-2 font-semibold text-gray-700">Advance</th>
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                ) : (
-                                    <div className="flex items-center justify-center h-full min-h-[350px]">
-                                        <p className="text-sm text-gray-500 italic text-center">
-                                            Select a customer to view transactions
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
-                        ) : (
-                            <div className="bg-white rounded-[4px] p-6 min-h-[400px]">
-                                <h5 className="text-sm font-semibold text-gray-700 mb-4 text-center">Advance Receipt</h5>
-                                <div className="space-y-4">
-                                    <div className="flex items-center gap-3">
-                                        <input type="checkbox" className="w-4 h-4" />
-                                        <div className="flex-1">
-                                            <label className="block text-xs font-medium text-gray-700 mb-1">Advance Ref. No.</label>
-                                            <input
-                                                type="text"
-                                                value={advanceRefNo}
-                                                onChange={e => setAdvanceRefNo(e.target.value)}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded"
-                                            />
+                                            </thead>
+                                            <tbody>
+                                                {bulkTransactions.map(transaction => (
+                                                    <tr key={transaction.id} className="border-b border-gray-200">
+                                                        <td className="py-3 px-2">
+                                                            <div className="flex items-center gap-2">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={transaction.selected}
+                                                                    onChange={e => handleTransactionSelect(transaction.id, e.target.checked)}
+                                                                    className="w-4 h-4"
+                                                                />
+                                                                <span>{transaction.date}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-3 px-2">{transaction.invoiceNo}</td>
+                                                        <td className="py-3 px-2 text-right">{transaction.amount}</td>
+                                                        <td className="py-3 px-2 text-right text-red-600 font-medium">
+                                                            {(Math.max(0, transaction.amount - transaction.receiveNow)).toFixed(2)}
+                                                        </td>
+                                                        <td className="py-3 px-2">
+                                                            <input
+                                                                type="number"
+                                                                value={transaction.receiveNow || ''}
+                                                                onChange={e => handleReceiveNowChange(transaction.id, parseFloat(e.target.value) || 0)}
+                                                                className="w-full px-2 py-1 border border-gray-300 rounded text-center"
+                                                            />
+                                                        </td>
+                                                        <td className="py-3 px-2 text-right text-indigo-600 font-medium">
+                                                            {(Math.max(0, transaction.receiveNow - transaction.amount)).toFixed(2)}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    ) : (
+                                        <div className="flex items-center justify-center h-full min-h-[350px]">
+                                            <p className="text-sm text-gray-500 italic text-center">
+                                                Select a customer to view transactions
+                                            </p>
                                         </div>
-                                        <div className="flex-1">
-                                            <label className="block text-xs font-medium text-gray-700 mb-1">Amount</label>
-                                            <input
-                                                type="number"
-                                                value={advanceAmount || ''}
-                                                onChange={e => setAdvanceAmount(parseFloat(e.target.value) || 0)}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded"
-                                            />
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="bg-white rounded-[4px] p-6 min-h-[400px]">
+                                    <h5 className="text-sm font-semibold text-gray-700 mb-4 text-center">Advance Receipt</h5>
+                                    <div className="space-y-4">
+                                        <div className="flex items-center gap-3">
+                                            <input type="checkbox" className="w-4 h-4" />
+                                            <div className="flex-1">
+                                                <label className="block text-xs font-medium text-gray-700 mb-1">Advance Ref. No.</label>
+                                                <input
+                                                    type="text"
+                                                    value={advanceRefNo}
+                                                    onChange={e => setAdvanceRefNo(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded"
+                                                />
+                                            </div>
+                                            <div className="flex-1">
+                                                <label className="block text-xs font-medium text-gray-700 mb-1">Amount</label>
+                                                <input
+                                                    type="number"
+                                                    value={advanceAmount || ''}
+                                                    onChange={e => setAdvanceAmount(parseFloat(e.target.value) || 0)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded"
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
 
-                        <div className="mt-4 text-center">
-                            <button
-                                onClick={() => setShowAdvanceSection(!showAdvanceSection)}
-                                className={`px-8 py-2 text-sm font-medium rounded-[4px] ${showAdvanceSection
-                                    ? 'bg-indigo-600 text-white'
-                                    : 'bg-white text-gray-700 border-2 border-gray-300'
-                                    }`}
-                            >
-                                Advance
-                            </button>
+                            <div className="mt-4 text-center">
+                                <button
+                                    onClick={() => setShowAdvanceSection(!showAdvanceSection)}
+                                    className={`px-8 py-2 text-sm font-medium rounded-[4px] ${showAdvanceSection
+                                        ? 'bg-indigo-600 text-white'
+                                        : 'bg-white text-gray-700 border-2 border-gray-300'
+                                        }`}
+                                >
+                                    Advance
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 };
 

@@ -20,6 +20,10 @@ class VoucherReceiptSingle(BaseModel):
     receive_from = models.CharField(max_length=255, null=True, blank=True)
     
     total_receipt = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+
+    # Advance Receipt details
+    advance_ref_no = models.CharField(max_length=100, null=True, blank=True)
+    advance_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     
     # Stores the grid of transactions being received against
     transaction_details = models.JSONField(
