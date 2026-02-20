@@ -446,6 +446,7 @@ const CustomerContent: React.FC = () => {
             referenceName: '',
             addressLine1: '',
             addressLine2: '',
+            addressLine3: '',
             city: '',
             pincode: '',
             state: '',
@@ -627,6 +628,7 @@ const CustomerContent: React.FC = () => {
                         defaultRef: b.referenceName,
                         addressLine1: b.addressLine1 || '',
                         addressLine2: b.addressLine2 || '',
+                        addressLine3: b.addressLine3 || '',
                         city: b.city || '',
                         pincode: b.pincode || '',
                         state: b.state || '',
@@ -639,6 +641,7 @@ const CustomerContent: React.FC = () => {
                         defaultRef: b.defaultRef,
                         addressLine1: b.addressLine1 || '',
                         addressLine2: b.addressLine2 || '',
+                        addressLine3: b.addressLine3 || '',
                         city: b.city || '',
                         pincode: b.pincode || '',
                         state: b.state || '',
@@ -880,6 +883,7 @@ const CustomerContent: React.FC = () => {
             referenceName: '',
             addressLine1: '',
             addressLine2: '',
+            addressLine3: '',
             city: '',
             pincode: '',
             state: '',
@@ -955,6 +959,7 @@ const CustomerContent: React.FC = () => {
                     referenceName: b.defaultRef || '',
                     addressLine1: b.addressLine1 || b.address || '',
                     addressLine2: b.addressLine2 || '',
+                    addressLine3: b.addressLine3 || '',
                     city: b.city || '',
                     pincode: b.pincode || '',
                     state: b.state || '',
@@ -969,6 +974,7 @@ const CustomerContent: React.FC = () => {
                     referenceName: '',
                     addressLine1: '',
                     addressLine2: '',
+                    addressLine3: '',
                     city: '',
                     pincode: '',
                     state: '',
@@ -994,6 +1000,7 @@ const CustomerContent: React.FC = () => {
                         defaultRef: b.defaultRef || mockRef,
                         addressLine1: b.addressLine1 || b.address || mockAddr,
                         addressLine2: b.addressLine2 || '',
+                        addressLine3: b.addressLine3 || '',
                         city: b.city || '',
                         pincode: b.pincode || '',
                         state: b.state || '',
@@ -1016,6 +1023,7 @@ const CustomerContent: React.FC = () => {
                 referenceName: '',
                 addressLine1: '',
                 addressLine2: '',
+                addressLine3: '',
                 city: '',
                 pincode: '',
                 state: '',
@@ -1485,15 +1493,125 @@ const CustomerContent: React.FC = () => {
 
                                         {!addMultipleBranches ? (
                                             // Single Branch - Simple Address
-                                            <div>
-                                                <label className="block text-sm font-semibold text-gray-700 mb-2">Address <span className="text-red-500">*</span></label>
-                                                <textarea
-                                                    rows={3}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 resize-none"
-                                                    placeholder="Enter Full Address"
-                                                    value={unregisteredBranches[0].addressLine1}
-                                                    onChange={(e) => handleManualBranchChange(1, 'addressLine1', e.target.value)}
-                                                />
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <div className="md:col-span-2">
+                                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Address Line 1 <span className="text-red-500">*</span></label>
+                                                    <input
+                                                        type="text"
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                        value={unregisteredBranches[0].addressLine1}
+                                                        onChange={(e) => handleManualBranchChange(1, 'addressLine1', e.target.value)}
+                                                        placeholder="Enter address line 1"
+                                                    />
+                                                </div>
+                                                <div className="md:col-span-2">
+                                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Address Line 2</label>
+                                                    <input
+                                                        type="text"
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                        value={unregisteredBranches[0].addressLine2}
+                                                        onChange={(e) => handleManualBranchChange(1, 'addressLine2', e.target.value)}
+                                                        placeholder="Enter address line 2"
+                                                    />
+                                                </div>
+                                                <div className="md:col-span-2">
+                                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Address Line 3</label>
+                                                    <input
+                                                        type="text"
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                        value={unregisteredBranches[0].addressLine3}
+                                                        onChange={(e) => handleManualBranchChange(1, 'addressLine3', e.target.value)}
+                                                        placeholder="Enter address line 3"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Country</label>
+                                                    <select
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
+                                                        value={Country.getAllCountries().find(c => c.name === unregisteredBranches[0].country)?.isoCode || ''}
+                                                        onChange={(e) => {
+                                                            const countryCode = e.target.value;
+                                                            const countryInfo = Country.getCountryByCode(countryCode);
+                                                            handleManualBranchChange(1, 'country', countryInfo?.name || '');
+                                                            handleManualBranchChange(1, 'state', '');
+                                                            handleManualBranchChange(1, 'city', '');
+                                                        }}
+                                                    >
+                                                        <option value="">Select Country</option>
+                                                        {Country.getAllCountries().map((country) => (
+                                                            <option key={country.isoCode} value={country.isoCode}>
+                                                                {country.name}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-semibold text-gray-700 mb-2">State</label>
+                                                    <select
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
+                                                        value={getAvailableStates(Country.getAllCountries().find(c => c.name === unregisteredBranches[0].country)?.isoCode || '').find(s => s.name === unregisteredBranches[0].state)?.isoCode || ''}
+                                                        onChange={(e) => {
+                                                            const countryCode = Country.getAllCountries().find(c => c.name === unregisteredBranches[0].country)?.isoCode || '';
+                                                            const stateCode = e.target.value;
+                                                            const allStates = getAvailableStates(countryCode);
+                                                            const stateInfo = allStates.find(s => s.isoCode === stateCode);
+                                                            handleManualBranchChange(1, 'state', stateInfo?.name || '');
+                                                            handleManualBranchChange(1, 'city', '');
+                                                        }}
+                                                        disabled={!unregisteredBranches[0].country}
+                                                    >
+                                                        <option value="">Select State</option>
+                                                        {getAvailableStates(Country.getAllCountries().find(c => c.name === unregisteredBranches[0].country)?.isoCode || '').map((state) => (
+                                                            <option key={state.isoCode} value={state.isoCode}>
+                                                                {state.name}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-semibold text-gray-700 mb-2">City</label>
+                                                    {(() => {
+                                                        const countryCode = Country.getAllCountries().find(c => c.name === unregisteredBranches[0].country)?.isoCode || '';
+                                                        const allStates = getAvailableStates(countryCode);
+                                                        const stateCode = allStates.find(s => s.name === unregisteredBranches[0].state)?.isoCode || '';
+                                                        const cities = (countryCode && stateCode) ? City.getCitiesOfState(countryCode, stateCode) : [];
+
+                                                        return cities.length > 0 ? (
+                                                            <select
+                                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
+                                                                value={unregisteredBranches[0].city || ''}
+                                                                onChange={(e) => handleManualBranchChange(1, 'city', e.target.value)}
+                                                                disabled={!unregisteredBranches[0].state}
+                                                            >
+                                                                <option value="">Select City</option>
+                                                                {cities.map((city) => (
+                                                                    <option key={city.name} value={city.name}>
+                                                                        {city.name}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
+                                                        ) : (
+                                                            <input
+                                                                type="text"
+                                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                value={unregisteredBranches[0].city || ''}
+                                                                onChange={(e) => handleManualBranchChange(1, 'city', e.target.value)}
+                                                                placeholder="Enter city"
+                                                                disabled={!unregisteredBranches[0].state}
+                                                            />
+                                                        );
+                                                    })()}
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Pincode</label>
+                                                    <input
+                                                        type="text"
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                        value={unregisteredBranches[0].pincode || ''}
+                                                        onChange={(e) => handleManualBranchChange(1, 'pincode', e.target.value)}
+                                                        placeholder="Enter pincode"
+                                                    />
+                                                </div>
                                             </div>
                                         ) : (
                                             // Multiple Manual Branches
@@ -1547,6 +1665,16 @@ const CustomerContent: React.FC = () => {
                                                                             value={branch.addressLine2 || ''}
                                                                             onChange={(e) => handleManualBranchChange(branch.id, 'addressLine2', e.target.value)}
                                                                             placeholder="Enter address line 2"
+                                                                        />
+                                                                    </div>
+                                                                    <div className="md:col-span-2">
+                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">Address Line 3</label>
+                                                                        <input
+                                                                            type="text"
+                                                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                            value={branch.addressLine3 || ''}
+                                                                            onChange={(e) => handleManualBranchChange(branch.id, 'addressLine3', e.target.value)}
+                                                                            placeholder="Enter address line 3"
                                                                         />
                                                                     </div>
                                                                     <div>
@@ -1779,6 +1907,16 @@ const CustomerContent: React.FC = () => {
                                                                         value={branch.addressLine2 || ''}
                                                                         onChange={(e) => handleRegisteredBranchChange(gstin, 'addressLine2', e.target.value)}
                                                                         placeholder="Enter address line 2"
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Address Line 3</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                                        value={branch.addressLine3 || ''}
+                                                                        onChange={(e) => handleRegisteredBranchChange(gstin, 'addressLine3', e.target.value)}
+                                                                        placeholder="Enter address line 3"
                                                                     />
                                                                 </div>
                                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
