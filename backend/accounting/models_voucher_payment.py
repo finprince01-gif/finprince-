@@ -15,6 +15,10 @@ class VoucherPaymentSingle(BaseModel):
     pay_from = models.CharField(max_length=100, null=True, blank=True)
     pay_to = models.CharField(max_length=255, null=True, blank=True)
     total_payment = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+
+    # Advance Payment details
+    advance_ref_no = models.CharField(max_length=100, null=True, blank=True)
+    advance_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     
     # Stores the grid of transactions being paid
     transaction_details = models.JSONField(
