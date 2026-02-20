@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { httpClient } from '../../services';
+import React, { useState, useEffect, useMemo } from 'react';
+import { httpClient, apiService } from '../../services';
 import { showError, showSuccess } from '../../utils/toast';
 
 
-import { ExtractedInvoiceData } from '../../types';
+import { Ledger, ExtractedInvoiceData } from '../../types';
 
 interface PendingTransaction {
     date: string;
@@ -39,9 +39,17 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
     const [activeTab, setActiveTab] = useState<'single' | 'bulk'>('single');
 
     // Common state
-    const [date, setDate] = useState('24-01-2026');
+    const getCurrentDate = () => {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
+    const [date, setDate] = useState(getCurrentDate());
     const [voucherType, setVoucherType] = useState('Receipt');
-    const [voucherNumber, setVoucherNumber] = useState('Auto-generated');
+    const [voucherNumber, setVoucherNumber] = useState('');
 
     // "Receive In" (Debit Account - Bank/Cash) matches PayFrom (Credit Account) visually in the single form
     const [receiveIn, setReceiveIn] = useState('');
@@ -50,8 +58,36 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
     // "Receive From" (Credit Account - Customer) matches PayTo (Debit Account) visually
     const [receiveFrom, setReceiveFrom] = useState('');
 
-
     const [totalReceipt, setTotalReceipt] = useState(0);
+
+    // Ledgers state
+    const [allLedgers, setAllLedgers] = useState<Ledger[]>([]);
+
+    // Fetch ledgers on mount
+    useEffect(() => {
+        const fetchLedgers = async () => {
+            try {
+                const ledgersData = await apiService.getLedgers();
+                setAllLedgers(ledgersData || []);
+            } catch (error) {
+                console.error('Error fetching ledgers:', error);
+                showError('Failed to fetch ledgers');
+            }
+        };
+        fetchLedgers();
+    }, []);
+
+    // Filter Receive In (Debit) options: Cash/Bank
+    const receiveInLedgers = useMemo(() => {
+        const targetGroups = ['Cash-in-Hand', 'Bank Accounts', 'Bank OD A/c', 'Bank OD/CC Accounts', 'Cash and Bank Accounts'];
+        return allLedgers.filter(l => targetGroups.includes(l.group));
+    }, [allLedgers]);
+
+    // Filter Receive From (Credit) options: All ledgers EXCEPT Receive In
+    const receiveFromOptions = useMemo(() => {
+        const receiveInIds = new Set(receiveInLedgers.map(l => l.id));
+        return allLedgers.filter(l => !receiveInIds.has(l.id));
+    }, [allLedgers, receiveInLedgers]);
 
     // Receipt Voucher Configuration state
     const [receiptVoucherConfigs, setReceiptVoucherConfigs] = useState<any[]>([]);
@@ -131,7 +167,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                 setVoucherNumber('Manual Input');
             }
         } else {
-            setVoucherNumber('Auto-generated');
+            setVoucherNumber('');
         }
     }, [selectedReceiptConfig, receiptVoucherConfigs]);
 
@@ -160,6 +196,24 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
         calculateTotalReceipt(pendingTransactions, singleAdvanceAmount);
     }, [singleAdvanceAmount]);
 
+    // Bulk Mode: Auto-calculate Amount based on Receive Now + Advance for selected customer
+    useEffect(() => {
+        if (!selectedCustomer) return;
+
+        const totalReceiveNow = bulkTransactions.reduce((sum, t) => sum + (t.receiveNow || 0), 0);
+        const totalAdvance = advanceAmount || 0;
+        const total = totalReceiveNow + totalAdvance;
+
+        setReceiptRows(prev => prev.map(row =>
+            row.receiveFrom === selectedCustomer ? { ...row, amount: total } : row
+        ));
+    }, [bulkTransactions, advanceAmount, selectedCustomer]);
+
+    // Bulk Mode: Calculate Grand Total
+    const bulkTotalReceipt = useMemo(() => {
+        return receiptRows.reduce((sum, row) => sum + (row.amount || 0), 0);
+    }, [receiptRows]);
+
     // Bulk mode handlers
     const handleReceiptRowChange = (id: string, field: keyof ReceiptRow, value: string | number) => {
         setReceiptRows(prev => prev.map(row =>
@@ -171,16 +225,43 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
         }
     };
 
-    const handleCustomerSelect = (customerName: string) => {
+    const handleCustomerSelect = async (customerName: string) => {
         setSelectedCustomer(customerName);
+        if (!customerName) {
+            setBulkTransactions([]);
+            return;
+        }
 
-        // Mock transaction data
-        const mockTransactions: BulkTransaction[] = [
-            { id: '1', date: 'xxx', invoiceNo: 'xxxxx', amount: 0, receiveNow: 0, selected: false },
-            { id: '2', date: 'xxx', invoiceNo: 'xxxxx', amount: 0, receiveNow: 0, selected: false }
-        ];
+        try {
+            // Determine if selected ledger is a Customer (Sundry Debtors)
+            // const ledger = allLedgers.find(l => l.name === customerName);
+            // const isCustomer = ledger?.group === 'Sundry Debtors';
 
-        setBulkTransactions(mockTransactions);
+            // Fetch transactions (Sales Invoices)
+            const response = await apiService.getCustomerSalesInvoices(customerName);
+
+            if (response && Array.isArray(response)) {
+                // Map API response to BulkTransaction format
+                const mappedTransactions: BulkTransaction[] = response.map((item: any) => ({
+                    id: item.id?.toString() || Math.random().toString(),
+                    date: item.date || getCurrentDate(),
+                    invoiceNo: item.invoice_number || item.voucher_number || 'N/A',
+                    // Use balance if available (pending amount), otherwise total
+                    amount: typeof item.balance !== 'undefined' ? Number(item.balance) : (Number(item.total_amount) || 0),
+                    receiveNow: 0,
+                    selected: false
+                }));
+
+                // Filter for positive outstanding balance
+                const validTransactions = mappedTransactions.filter(t => t.amount > 0);
+                setBulkTransactions(validTransactions);
+            } else {
+                setBulkTransactions([]);
+            }
+        } catch (error) {
+            console.error('Error fetching customer transactions:', error);
+            setBulkTransactions([]);
+        }
     };
 
     const handleAddReceiptRow = () => {
@@ -205,7 +286,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
     };
 
     const handleCancel = () => {
-        setDate('24-01-2026');
+        setDate(getCurrentDate());
         setReceiveIn('');
         setReceiveFrom('');
         setPendingTransactions(pendingTransactions.map(txn => ({ ...txn, receipt: 0 })));
@@ -230,7 +311,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
         try {
             if (activeTab === 'single') {
                 const payload = {
-                    date: date.split('-').reverse().join('-'),
+                    date: date,
                     voucher_type: selectedReceiptConfig || voucherType,
                     voucher_number: voucherNumber,
                     receive_in: receiveIn,
@@ -253,7 +334,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                 handleCancel();
             } else {
                 const payload = {
-                    date: date.split('-').reverse().join('-'),
+                    date: date,
                     voucher_number: voucherNumber,
                     receive_in: receiveIn,
                     receipt_rows: receiptRows,
@@ -317,6 +398,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                             <input
                                 type="date"
                                 value={date}
+                                min={getCurrentDate()}
                                 onChange={(e) => setDate(e.target.value)}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             />
@@ -358,8 +440,11 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                                     className="flex-1 px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 >
                                     <option value="">Select Receive In</option>
-                                    <option value="cash">Cash</option>
-                                    <option value="bank">Bank Account</option>
+                                    {receiveInLedgers.map((ledger) => (
+                                        <option key={ledger.id} value={ledger.name}>
+                                            {ledger.name}
+                                        </option>
+                                    ))}
                                 </select>
                                 <div className="px-4 py-2 bg-gray-50 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 min-w-[80px] text-center">
                                     {receiveInBalance}
@@ -375,8 +460,11 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                                     className="flex-1 px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 >
                                     <option value="">Select Receive From</option>
-                                    <option value="customer1">Customer 1</option>
-                                    <option value="customer2">Customer 2</option>
+                                    {receiveFromOptions.map((ledger) => (
+                                        <option key={ledger.id} value={ledger.name}>
+                                            {ledger.name}
+                                        </option>
+                                    ))}
                                 </select>
 
                                 <button
@@ -519,6 +607,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                                     <input
                                         type="date"
                                         value={date}
+                                        min={getCurrentDate()}
                                         onChange={e => setDate(e.target.value)}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                     />
@@ -544,8 +633,11 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                                         className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                     >
                                         <option value="">Select</option>
-                                        <option value="cash">Cash</option>
-                                        <option value="bank">Bank</option>
+                                        {receiveInLedgers.map((ledger) => (
+                                            <option key={ledger.id} value={ledger.name}>
+                                                {ledger.name}
+                                            </option>
+                                        ))}
                                     </select>
                                 </div>
                                 <div>
@@ -571,9 +663,12 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                                                 onChange={e => handleReceiptRowChange(row.id, 'receiveFrom', e.target.value)}
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                                             >
-                                                <option value="">Customer Name</option>
-                                                <option value="customer1">Customer 1</option>
-                                                <option value="customer2">Customer 2</option>
+                                                <option value="">Select Receive From</option>
+                                                {receiveFromOptions.map((ledger) => (
+                                                    <option key={ledger.id} value={ledger.name}>
+                                                        {ledger.name}
+                                                    </option>
+                                                ))}
                                             </select>
                                         ))}
                                     </div>
@@ -606,7 +701,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                             {/* Total Receipt */}
                             <div className="flex justify-center">
                                 <button className="px-8 py-2 bg-indigo-600 text-white rounded-[4px] font-medium">
-                                    Total Receipt
+                                    Total Receipt: ₹{bulkTotalReceipt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                 </button>
                             </div>
 
@@ -643,7 +738,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                         <div className="bg-indigo-600 rounded-[4px] p-6">
                             <div className="text-center mb-4">
                                 <h4 className="text-white font-semibold text-sm">
-                                    {selectedCustomer || 'Customer Name'} (Whose data is displayed below)
+                                    {selectedCustomer || 'Customer Name'}
                                 </h4>
                             </div>
 
