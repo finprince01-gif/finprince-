@@ -200,6 +200,7 @@ class CustomerMasterCustomerBasicDetails(models.Model):
     contact_person = models.CharField(max_length=255, null=True, blank=True)
     email_address = models.EmailField(validators=[EmailValidator()], null=True, blank=True)
     contact_number = models.CharField(max_length=15, null=True, blank=True)
+    billing_currency = models.CharField(max_length=10, null=True, blank=True)
     is_also_vendor = models.BooleanField(default=False)
     
     # Status and Metadata

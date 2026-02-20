@@ -144,10 +144,10 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
     React.useEffect(() => {
         const fetchSalesConfigs = async () => {
             try {
-                const data = await httpClient.get<any[]>('/api/masters/voucher-configurations/?voucher_type=sales').catch(() => []);
+                const data = await httpClient.get<any[]>('/api/masters/master-voucher-sales/').catch(() => []);
                 if (Array.isArray(data) && data.length > 0) {
                     setSalesVoucherConfigs(data);
-                    if (data.length === 1 && !voucherName) {
+                    if (!voucherName) {
                         setVoucherName(data[0].voucher_name);
                     }
                 } else {
@@ -161,6 +161,18 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
         };
         fetchSalesConfigs();
     }, []);
+
+    // Effect to auto-populate Sales Invoice No based on selected series
+    React.useEffect(() => {
+        if (voucherName && salesVoucherConfigs.length > 0) {
+            const config = salesVoucherConfigs.find((c: any) => c.voucher_name === voucherName);
+            if (config && config.enable_auto_numbering) {
+                const nextNum = config.current_number || config.start_from || 1;
+                const formatted = `${config.prefix || ''}${String(nextNum).padStart(config.required_digits || 4, '0')}${config.suffix || ''}`;
+                setSalesInvoiceNo(formatted);
+            }
+        }
+    }, [voucherName, salesVoucherConfigs]);
 
     const [outwardSlipNo, setOutwardSlipNo] = useState('');
     const [outwardSlipOptions, setOutwardSlipOptions] = useState<string[]>([]);
@@ -184,6 +196,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
     }, []);
 
     const [customerName, setCustomerName] = useState('');
+    const [customerBillingCurrency, setCustomerBillingCurrency] = useState('');
     const [billToAddress1, setBillToAddress1] = useState('');
     const [billToAddress2, setBillToAddress2] = useState('');
     const [billToCity, setBillToCity] = useState('');
@@ -247,6 +260,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
     // Handle Customer Selection
     const handleCustomerChange = (val: string) => {
         setCustomerName(val);
+        setCustomerBillingCurrency('');
 
         const customer = customers.find(c => c.customer_name === val);
         if (customer) {
@@ -314,6 +328,30 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                 // Multiple GSTINs: reset GSTIN, user must choose from dropdown
                 setGstin('');
             }
+
+            // Auto-populate Terms & Conditions from customer master
+            const parts: string[] = [];
+            if (customer.credit_period) parts.push(`Credit Period: ${customer.credit_period}`);
+            if (customer.credit_terms) parts.push(`Credit Terms: ${customer.credit_terms}`);
+            if (customer.penalty_terms) parts.push(`Penalty Terms: ${customer.penalty_terms}`);
+            if (customer.delivery_terms) parts.push(`Delivery Terms: ${customer.delivery_terms}`);
+            if (customer.warranty_details) parts.push(`Warranty / Guarantee: ${customer.warranty_details}`);
+            if (customer.force_majeure) parts.push(`Force Majeure: ${customer.force_majeure}`);
+            if (customer.dispute_terms) parts.push(`Dispute & Redressal: ${customer.dispute_terms}`);
+            if (parts.length > 0) {
+                setTermsConditions(parts.join('\n\n'));
+            } else {
+                setTermsConditions('');
+            }
+            setMasterTermsData(customer);
+
+            // Set billing currency from customer master
+            if (customer.billing_currency) {
+                setCustomerBillingCurrency(customer.billing_currency);
+            }
+        } else {
+            setTermsConditions('');
+            setMasterTermsData(null);
         }
     };
 
@@ -569,6 +607,59 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
         appliedNow: boolean;
     }>>([]);
     const [termsConditions, setTermsConditions] = useState('');
+    const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
+    const [masterTermsData, setMasterTermsData] = useState<any>(null);
+
+    // Draft states for Edit Masters modal fields
+    const [draftCreditPeriod, setDraftCreditPeriod] = useState('');
+    const [draftCreditTerms, setDraftCreditTerms] = useState('');
+    const [draftPenaltyTerms, setDraftPenaltyTerms] = useState('');
+    const [draftDeliveryTerms, setDraftDeliveryTerms] = useState('');
+    const [draftWarrantyDetails, setDraftWarrantyDetails] = useState('');
+    const [draftForceMajeure, setDraftForceMajeure] = useState('');
+    const [draftDisputeTerms, setDraftDisputeTerms] = useState('');
+
+    const openTermsModal = () => {
+        // Pre-fill draft fields from current customer's T&C data
+        setDraftCreditPeriod(masterTermsData?.credit_period || '');
+        setDraftCreditTerms(masterTermsData?.credit_terms || '');
+        setDraftPenaltyTerms(masterTermsData?.penalty_terms || '');
+        setDraftDeliveryTerms(masterTermsData?.delivery_terms || '');
+        setDraftWarrantyDetails(masterTermsData?.warranty_details || '');
+        setDraftForceMajeure(masterTermsData?.force_majeure || '');
+        setDraftDisputeTerms(masterTermsData?.dispute_terms || '');
+        setIsTermsModalOpen(true);
+    };
+
+    const saveTermsModal = () => {
+        // Build formatted display string from individual fields
+        const parts: string[] = [];
+        if (draftCreditPeriod) parts.push(`Credit Period: ${draftCreditPeriod}`);
+        if (draftCreditTerms) parts.push(`Credit Terms: ${draftCreditTerms}`);
+        if (draftPenaltyTerms) parts.push(`Penalty Terms: ${draftPenaltyTerms}`);
+        if (draftDeliveryTerms) parts.push(`Delivery Terms: ${draftDeliveryTerms}`);
+        if (draftWarrantyDetails) parts.push(`Warranty / Guarantee: ${draftWarrantyDetails}`);
+        if (draftForceMajeure) parts.push(`Force Majeure: ${draftForceMajeure}`);
+        if (draftDisputeTerms) parts.push(`Dispute & Redressal: ${draftDisputeTerms}`);
+        setTermsConditions(parts.join('\n\n'));
+        setIsTermsModalOpen(false);
+    };
+
+    // --- Qty Mismatch Validation ---
+    const [qtyMismatchError, setQtyMismatchError] = useState('');
+
+    const validateQtyMatch = (): boolean => {
+        for (let i = 0; i < Math.max(foreignItemRows.length, itemRows.length); i++) {
+            const foreignQty = parseFloat(foreignItemRows[i]?.qty || '0') || 0;
+            const inrQty = parseFloat(itemRows[i]?.qty || '0') || 0;
+            if (Math.abs(foreignQty - inrQty) > 0.0001) {
+                setQtyMismatchError('Items in Foreign Currency Tab & INR Tab does not match. Please correct it.');
+                return false;
+            }
+        }
+        setQtyMismatchError('');
+        return true;
+    };
 
     // Dispatch Details State
     const [skipDispatch, setSkipDispatch] = useState(false);
@@ -703,6 +794,11 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
     ];
 
     const handlePost = async () => {
+        // Validate Qty match between Foreign Currency and INR tabs
+        if (!validateQtyMatch()) {
+            setActiveTab('item_tax_inr');
+            return;
+        }
         try {
             const parseNum = (val: any) => {
                 if (val === '' || val === null || val === undefined) return 0;
@@ -996,7 +1092,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
 
     // Foreign Item Row Handlers
     const handleForeignItemRowChange = (id: number, field: keyof ItemRow, value: string) => {
-        setForeignItemRows(foreignItemRows.map(row => {
+        setForeignItemRows(prev => prev.map(row => {
             if (row.id === id) {
                 // Prevent negative values for specific numeric fields
                 let cleanValue = value;
@@ -1009,8 +1105,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
 
                 // Auto-calculate amount when qty or rate changes
                 if (field === 'qty' || field === 'itemRate') {
-                    const qty = parseFloat(field === 'qty' ? value : updatedRow.qty) || 0;
-                    const rate = parseFloat(field === 'itemRate' ? value : updatedRow.itemRate) || 0;
+                    const qty = parseFloat(field === 'qty' ? cleanValue : updatedRow.qty) || 0;
+                    const rate = parseFloat(field === 'itemRate' ? cleanValue : updatedRow.itemRate) || 0;
                     updatedRow.invoiceValue = (qty * rate).toFixed(2);
                 }
 
@@ -1018,6 +1114,31 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
             }
             return row;
         }));
+
+        // Sync Qty to the INR tab when qty changes in Foreign Currency tab
+        if (field === 'qty') {
+            const cleanValue = parseFloat(value) < 0 ? '0' : value;
+            setItemRows(prev => prev.map(row => {
+                if (row.id === id) {
+                    // Recalculate INR taxable value with new qty
+                    const qty = parseFloat(cleanValue) || 0;
+                    const rate = parseFloat(row.itemRate) || 0;
+                    const taxable = (qty * rate).toFixed(2);
+                    return { ...row, qty: cleanValue, taxableValue: taxable };
+                }
+                return row;
+            }));
+        }
+
+        // Sync Description to the INR tab when description changes in Foreign Currency tab
+        if (field === 'description') {
+            setItemRows(prev => prev.map(row => {
+                if (row.id === id) {
+                    return { ...row, description: value };
+                }
+                return row;
+            }));
+        }
     };
 
     const handleAddForeignItemRow = () => {
@@ -1078,6 +1199,24 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
         const payable = invVal - tdsIT - tdsGST - advance;
         setPaymentPayable(payable.toFixed(2));
     }, [itemRows, paymentTdsIncomeTax, paymentTdsGst, paymentAdvance]);
+
+    // Sync qty and description from Foreign Currency tab → INR tab whenever foreign rows change
+    React.useEffect(() => {
+        setItemRows(prev => prev.map((inrRow, idx) => {
+            const foreignRow = foreignItemRows[idx];
+            if (!foreignRow) return inrRow;
+            const qty = foreignRow.qty;
+            const description = foreignRow.description;
+            const rate = parseFloat(inrRow.itemRate) || 0;
+            const taxable = (parseFloat(qty) || 0) * rate;
+            return {
+                ...inrRow,
+                qty,
+                description,
+                taxableValue: taxable > 0 ? taxable.toFixed(2) : inrRow.taxableValue,
+            };
+        }));
+    }, [foreignItemRows]);
 
     const handleNext = () => {
         // Validation
@@ -1663,7 +1802,9 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                             </div>
 
                             <div className="flex items-center gap-2 bg-white px-4 py-2 border border-blue-200 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200">
-                                <span className="text-sm font-medium text-gray-700">1 Foreign Currency =</span>
+                                <span className="text-sm font-medium text-gray-700">
+                                    1 {customerBillingCurrency || 'Foreign Currency'} =
+                                </span>
                                 <input
                                     type="text"
                                     value={exchangeRate}
@@ -1686,8 +1827,12 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         <th className="px-3 py-3 text-sm font-semibold text-center border-r border-blue-400">Description</th>
                                         <th className="px-3 py-3 text-sm font-semibold text-center w-32 border-r border-blue-400">Quantity</th>
                                         <th className="px-3 py-3 text-sm font-semibold text-center w-32 border-r border-blue-400">UQC</th>
-                                        <th className="px-3 py-3 text-sm font-semibold text-center w-40 border-r border-blue-400">Rate</th>
-                                        <th className="px-3 py-3 text-sm font-semibold text-center w-40">Amount</th>
+                                        <th className="px-3 py-3 text-sm font-semibold text-center w-40 border-r border-blue-400">
+                                            Rate ({customerBillingCurrency || 'FC'})
+                                        </th>
+                                        <th className="px-3 py-3 text-sm font-semibold text-center w-40">
+                                            Amount ({customerBillingCurrency || 'FC'})
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
@@ -1910,8 +2055,13 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                         type="number"
                                                         value={row.qty}
                                                         min="0"
-                                                        onChange={(e) => handleItemRowChange(row.id, 'qty', e.target.value)}
-                                                        className="w-20 px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm"
+                                                        readOnly={activeTab === 'item_tax_inr'}
+                                                        onChange={activeTab === 'item_tax_inr' ? undefined : (e) => handleItemRowChange(row.id, 'qty', e.target.value)}
+                                                        title={activeTab === 'item_tax_inr' ? 'Quantity is auto-fetched from the Item & Tax Details (Foreign Currency) tab' : undefined}
+                                                        className={`w-20 px-2 py-1 border-0 rounded text-sm text-center ${activeTab === 'item_tax_inr'
+                                                            ? 'bg-gray-100 text-gray-600 cursor-not-allowed select-none'
+                                                            : 'focus:ring-1 focus:ring-indigo-500'
+                                                            }`}
                                                         placeholder="Qty"
                                                     />
                                                 </td>
@@ -2038,9 +2188,14 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                         <input
                                                             type="text"
                                                             value={row.description}
-                                                            onChange={(e) => handleItemRowChange(row.id, 'description', e.target.value)}
-                                                            className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500"
-                                                            placeholder="Enter description"
+                                                            readOnly={activeTab === 'item_tax_inr'}
+                                                            onChange={activeTab === 'item_tax_inr' ? undefined : (e) => handleItemRowChange(row.id, 'description', e.target.value)}
+                                                            title={activeTab === 'item_tax_inr' ? 'Description is auto-fetched from the Item & Tax Details (Foreign Currency) tab' : undefined}
+                                                            placeholder={activeTab === 'item_tax_inr' ? undefined : 'Enter description'}
+                                                            className={`flex-1 px-2 py-1 border rounded text-sm ${activeTab === 'item_tax_inr'
+                                                                ? 'bg-gray-100 border-gray-200 text-gray-600 cursor-not-allowed select-none'
+                                                                : 'border-gray-300 focus:ring-1 focus:ring-indigo-500'
+                                                                }`}
                                                         />
                                                     </div>
                                                 </td>
@@ -2110,6 +2265,16 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                             </table>
                         </div>
 
+                        {/* Qty Mismatch Error Banner */}
+                        {qtyMismatchError && (
+                            <div className="flex items-center gap-3 px-4 py-3 bg-red-50 border border-red-300 rounded-[4px] text-red-700 text-sm font-medium">
+                                <svg className="w-5 h-5 flex-shrink-0 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                                </svg>
+                                {qtyMismatchError}
+                            </div>
+                        )}
+
                         {/* Action Buttons */}
                         <div className="flex items-center justify-between">
                             <button
@@ -2127,7 +2292,11 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
 
                                 <button
                                     type="button"
-                                    onClick={() => setActiveTab('payment')}
+                                    onClick={() => {
+                                        if (validateQtyMatch()) {
+                                            setActiveTab('payment');
+                                        }
+                                    }}
                                     className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors flex items-center gap-2 font-medium"
                                 >
                                     NEXT
@@ -2351,6 +2520,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         </button>
                                         <button
                                             type="button"
+                                            onClick={openTermsModal}
                                             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors text-sm font-medium shadow-none border border-slate-200-none border border-slate-200"
                                         >
                                             Edit Masters
@@ -2358,13 +2528,12 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">Edit Here</label>
                                         <textarea
                                             value={termsConditions}
-                                            onChange={(e) => setTermsConditions(e.target.value)}
-                                            className="w-full px-4 py-3 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 resize-none bg-white"
+                                            readOnly
+                                            className="w-full px-4 py-3 border border-gray-200 rounded-[4px] text-gray-700 resize-none bg-white cursor-default select-none"
                                             rows={8}
-                                            placeholder="Enter terms and conditions..."
+                                            placeholder="Select a customer to auto-load their terms & conditions, or click Edit Masters to add manually."
                                         />
                                     </div>
                                 </div>
@@ -2383,6 +2552,138 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                 </svg>
                             </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Terms & Conditions Master Modal */}
+                {isTermsModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                        <div className="bg-white rounded-[4px] shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+                            {/* Modal Header */}
+                            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 bg-gray-50">
+                                <div>
+                                    <h2 className="text-lg font-bold text-gray-900">Edit Terms &amp; Conditions</h2>
+                                    {masterTermsData && (
+                                        <p className="text-sm text-gray-500 mt-0.5">{masterTermsData.customer_name}</p>
+                                    )}
+                                </div>
+                                <button
+                                    onClick={() => setIsTermsModalOpen(false)}
+                                    className="p-1.5 hover:bg-red-50 hover:text-red-500 rounded-[4px] text-gray-400 transition-colors"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            {/* Modal Body — individual T&C fields matching Customer Portal layout */}
+                            <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
+
+                                {/* Credit Period */}
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Credit Period</label>
+                                    <input
+                                        type="text"
+                                        value={draftCreditPeriod}
+                                        onChange={(e) => setDraftCreditPeriod(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400"
+                                        placeholder="e.g., 30 Days"
+                                    />
+                                </div>
+
+                                {/* Credit Terms */}
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Credit Terms</label>
+                                    <textarea
+                                        value={draftCreditTerms}
+                                        onChange={(e) => setDraftCreditTerms(e.target.value)}
+                                        rows={3}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 resize-none"
+                                        placeholder="Enter credit terms details"
+                                    />
+                                </div>
+
+                                {/* Penalty Terms */}
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Penalty Terms</label>
+                                    <textarea
+                                        value={draftPenaltyTerms}
+                                        onChange={(e) => setDraftPenaltyTerms(e.target.value)}
+                                        rows={3}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 resize-none"
+                                        placeholder="Enter penalty terms"
+                                    />
+                                </div>
+
+                                {/* Delivery Terms */}
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Delivery Terms</label>
+                                    <textarea
+                                        value={draftDeliveryTerms}
+                                        onChange={(e) => setDraftDeliveryTerms(e.target.value)}
+                                        rows={3}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 resize-none"
+                                        placeholder="Enter delivery terms"
+                                    />
+                                </div>
+
+                                {/* Warranty / Guarantee Details */}
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Warranty / Guarantee Details</label>
+                                    <textarea
+                                        value={draftWarrantyDetails}
+                                        onChange={(e) => setDraftWarrantyDetails(e.target.value)}
+                                        rows={3}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 resize-none"
+                                        placeholder="Enter warranty or guarantee details"
+                                    />
+                                </div>
+
+                                {/* Force Majeure */}
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Force Majeure</label>
+                                    <textarea
+                                        value={draftForceMajeure}
+                                        onChange={(e) => setDraftForceMajeure(e.target.value)}
+                                        rows={3}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 resize-none"
+                                        placeholder="Enter force majeure terms"
+                                    />
+                                </div>
+
+                                {/* Dispute Redressal Terms */}
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Dispute Redressal Terms</label>
+                                    <textarea
+                                        value={draftDisputeTerms}
+                                        onChange={(e) => setDraftDisputeTerms(e.target.value)}
+                                        rows={3}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 resize-none"
+                                        placeholder="Enter dispute redressal terms"
+                                    />
+                                </div>
+
+                            </div>
+
+                            {/* Modal Footer */}
+                            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsTermsModalOpen(false)}
+                                    className="px-5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-[4px] hover:bg-gray-50 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={saveTermsModal}
+                                    className="px-5 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-[4px] transition-colors"
+                                >
+                                    Save
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -2992,15 +3293,9 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="text"
                                                     value={railBeyondPortOrigin}
                                                     onChange={(e) => setRailBeyondPortOrigin(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2"
                                                     placeholder="City"
                                                 />
-                                            </div>
-
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                    Origin Country
-                                                </label>
                                                 <input
                                                     type="text"
                                                     value={railBeyondPortOriginCountry}
@@ -3056,8 +3351,15 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     type="text"
                                                     value={railBeyondPortFinalDestination}
                                                     onChange={(e) => setRailBeyondPortFinalDestination(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 mb-2"
                                                     placeholder="City"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    value={railBeyondPortDestCountry}
+                                                    onChange={(e) => setRailBeyondPortDestCountry(e.target.value)}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                    placeholder="Country"
                                                 />
                                             </div>
                                         </div>
