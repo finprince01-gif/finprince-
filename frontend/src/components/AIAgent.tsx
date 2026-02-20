@@ -161,15 +161,15 @@ const AIAgent: React.FC<AIAgentProps> = ({ isOpen, onClose, messages, onSendMess
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-30 z-50 flex items-end justify-end">
-      <div className="bg-white w-full max-w-md h-[70vh] m-8 rounded-[4px] shadow-none border border-slate-200-2xl flex flex-col transform transition-transform duration-300 ease-out animate-slide-in">
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
+      <div className="bg-white dark:bg-slate-900 w-full max-w-md h-[70vh] m-8 rounded-[4px] shadow-none border border-slate-200 dark:border-slate-800 flex flex-col transform transition-transform duration-300 ease-out animate-slide-in">
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-800">
           <div className="flex items-center space-x-3">
             <div className="w-20 h-20 flex items-center justify-center">
               <img src={kikiLogo} alt="Kiki" className="w-full h-full object-contain" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-800">Kiki Agent</h3>
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-slate-100">Kiki Agent</h3>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:text-slate-400 dark:hover:text-slate-200">
             <Icon name="close" className="w-6 h-6" />
           </button>
         </div>
@@ -180,7 +180,7 @@ const AIAgent: React.FC<AIAgentProps> = ({ isOpen, onClose, messages, onSendMess
             <div key={index}>
               <div className={`flex items-end gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 {msg.role === 'model' && <div className="w-10 h-10 flex items-center justify-center flex-shrink-0"><img src={kikiLogo} alt="Kiki" className="w-full h-full object-contain filter drop-shadow-none" /></div>}
-                <div className={`max-w-xs md:max-w-sm rounded-[4px] px-4 py-2 text-sm ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-gray-100 text-gray-800 rounded-bl-none'}`}>
+                <div className={`max-w-xs md:max-w-sm rounded-[4px] px-4 py-2 text-sm ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-gray-100 dark:bg-slate-800 text-gray-800 dark:text-slate-200 rounded-bl-none'}`}>
                   {msg.text}
                 </div>
               </div>
@@ -203,11 +203,11 @@ const AIAgent: React.FC<AIAgentProps> = ({ isOpen, onClose, messages, onSendMess
           {isLoading && (
             <div className="flex items-end gap-2 justify-start">
               <div className="w-10 h-10 flex items-center justify-center flex-shrink-0"><img src={kikiLogo} alt="Kiki" className="w-full h-full object-contain filter drop-shadow-none" /></div>
-              <div className="max-w-xs rounded-[4px] px-4 py-2 bg-gray-100 text-gray-800 rounded-bl-none">
+              <div className="max-w-xs rounded-[4px] px-4 py-2 bg-gray-100 dark:bg-slate-800 text-gray-800 dark:text-slate-200 rounded-bl-none">
                 <div className="flex items-center justify-center space-x-1">
-                  <div className="w-1.5 h-1.5 bg-gray-400 rounded-[4px] animate-bounce"></div>
-                  <div className="w-1.5 h-1.5 bg-gray-400 rounded-[4px] animate-bounce delay-75"></div>
-                  <div className="w-1.5 h-1.5 bg-gray-400 rounded-[4px] animate-bounce delay-150"></div>
+                  <div className="w-1.5 h-1.5 bg-gray-400 dark:bg-slate-500 rounded-[4px] animate-bounce"></div>
+                  <div className="w-1.5 h-1.5 bg-gray-400 dark:bg-slate-500 rounded-[4px] animate-bounce delay-75"></div>
+                  <div className="w-1.5 h-1.5 bg-gray-400 dark:bg-slate-500 rounded-[4px] animate-bounce delay-150"></div>
                 </div>
               </div>
             </div>
@@ -217,8 +217,8 @@ const AIAgent: React.FC<AIAgentProps> = ({ isOpen, onClose, messages, onSendMess
 
         {/* Queue Status */}
         {queueStatus && queueStatus.code === 'QUEUED' && (
-          <div className="px-4 py-2 bg-indigo-50/50 border-t border-slate-200">
-            <div className="text-xs text-indigo-800 text-center">
+          <div className="px-4 py-2 bg-indigo-50/50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-800">
+            <div className="text-xs text-indigo-800 dark:text-indigo-300 text-center">
               <Icon name="clock" className="w-3 h-3 inline mr-1" />
               Request queued (position {queueStatus.queuePosition})
               {queueStatus.estimatedWaitSeconds && (
@@ -229,8 +229,8 @@ const AIAgent: React.FC<AIAgentProps> = ({ isOpen, onClose, messages, onSendMess
         )}
 
         {queueStatus && queueStatus.code === 'RATE_LIMIT' && queueStatus.retryAfter && (
-          <div className="px-4 py-2 bg-red-50 border-t border-red-200">
-            <div className="text-xs text-red-800 text-center">
+          <div className="px-4 py-2 bg-red-50 dark:bg-red-900/10 border-t border-red-200 dark:border-red-900/30">
+            <div className="text-xs text-red-800 dark:text-red-300 text-center">
               <Icon name="exclamation-triangle" className="w-3 h-3 inline mr-1" />
               Too many requests. Try again in {queueStatus.retryAfter} seconds.
             </div>
@@ -238,7 +238,7 @@ const AIAgent: React.FC<AIAgentProps> = ({ isOpen, onClose, messages, onSendMess
         )}
 
         {/* Input Area */}
-        <div className="p-4 border-t border-gray-200">
+        <div className="p-4 border-t border-gray-200 dark:border-slate-800">
           <div className="relative">
             <textarea
               value={input}
@@ -247,9 +247,9 @@ const AIAgent: React.FC<AIAgentProps> = ({ isOpen, onClose, messages, onSendMess
               placeholder="Ask about your data..."
               rows={1}
               disabled={isLoading}
-              className="w-full pl-4 pr-12 py-2 border border-gray-300 rounded-[4px] resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100"
+              className="w-full pl-4 pr-12 py-2 border border-gray-300 dark:border-slate-700 rounded-[4px] resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 dark:disabled:bg-slate-900 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 dark:placeholder-slate-500"
             />
-            <button onClick={handleSend} disabled={isLoading || !input.trim()} className="absolute right-2 top-1/2 -translate-y-1/2 bg-indigo-600 text-white rounded-[4px] p-2 disabled:bg-gray-300 hover:bg-indigo-700">
+            <button onClick={handleSend} disabled={isLoading || !input.trim()} className="absolute right-2 top-1/2 -translate-y-1/2 bg-indigo-600 text-white rounded-[4px] p-2 disabled:bg-gray-300 dark:disabled:bg-slate-700 hover:bg-indigo-700">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5"><path d="M3.105 3.105a.75.75 0 01.053 1.053L6.37 8.25H13.5a.75.75 0 010 1.5H6.37l-3.212 4.092a.75.75 0 01-1.106-.998l3.75-4.75a.75.75 0 010-.998l-3.75-4.75a.75.75 0 011.053-.053z"></path></svg>
             </button>
           </div>
@@ -257,10 +257,10 @@ const AIAgent: React.FC<AIAgentProps> = ({ isOpen, onClose, messages, onSendMess
             <label htmlFor="grounding-toggle" className="flex items-center cursor-pointer">
               <div className="relative">
                 <input type="checkbox" id="grounding-toggle" className="sr-only" checked={useGrounding} onChange={() => setUseGrounding(!useGrounding)} />
-                <div className="block bg-gray-200 w-10 h-6 rounded-[4px]"></div>
+                <div className="block bg-gray-200 dark:bg-slate-700 w-10 h-6 rounded-[4px]"></div>
                 <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-[4px] transition-transform ${useGrounding ? 'translate-x-full bg-indigo-600' : ''}`}></div>
               </div>
-              <div className="ml-3 text-xs text-gray-600">Search the web</div>
+              <div className="ml-3 text-xs text-gray-600 dark:text-slate-400">Search the web</div>
             </label>
           </div>
         </div>
