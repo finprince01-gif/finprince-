@@ -771,7 +771,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
     <div className="w-full">
 
       {/* Create Ledger - RIGHT COLUMN */}
-      <div className="bg-white p-6 rounded-[4px] erp-card">
+      <div className="erp-container">
         <form onSubmit={handleLedgerSubmit} className="space-y-4">
           {/* Progressive Ledger Selection Wizard */}
           <LedgerCreationWizard
@@ -811,7 +811,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="loanAccountNumber"
                   value={loanAccountNumber}
                   onChange={(e) => setLoanAccountNumber(e.target.value)}
-                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  className="erp-input"
                   placeholder="Enter alphanumeric account number"
                   required
                 />
@@ -826,7 +826,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="panGstin"
                   value={panGstin}
                   onChange={(e) => setPanGstin(e.target.value.toUpperCase())}
-                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  className="erp-input"
                   placeholder="Enter PAN or GSTIN"
                   required
                 />
@@ -839,7 +839,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="lenderName"
                   value={lenderName}
                   onChange={(e) => setLenderName(e.target.value)}
-                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  className="erp-input"
                   placeholder="Enter lender name"
                   required
                 />
@@ -854,7 +854,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="loanAmount"
                   value={loanAmount}
                   onChange={(e) => setLoanAmount(e.target.value)}
-                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  className="erp-input"
                   placeholder="Enter loan amount"
                   min="0"
                   step="0.01"
@@ -902,7 +902,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="interestRate"
                   value={interestRate}
                   onChange={(e) => setInterestRate(e.target.value)}
-                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  className="erp-input"
                   placeholder="Enter interest rate"
                   min="0"
                   max="100"
@@ -918,7 +918,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="tenure"
                   value={tenure}
                   onChange={(e) => setTenure(e.target.value)}
-                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  className="erp-input"
                   placeholder="Enter tenure in months"
                   min="1"
                   required
@@ -940,7 +940,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="bankAccountNumber"
                   value={bankAccountNumber}
                   onChange={(e) => setBankAccountNumber(e.target.value)}
-                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  className="erp-input"
                   placeholder="Enter bank account number"
                   required
                 />
@@ -953,7 +953,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="gstinPan"
                   value={gstinPan}
                   onChange={(e) => setGstinPan(e.target.value.toUpperCase())}
-                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  className="erp-input"
                   placeholder="Enter GSTIN or PAN"
                 />
               </div>
@@ -979,7 +979,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="bankName"
                   value={bankName}
                   onChange={(e) => setBankName(e.target.value)}
-                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  className="erp-input"
                   placeholder="Enter bank name"
                 />
               </div>
@@ -993,7 +993,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="ifscCode"
                   value={ifscCode}
                   onChange={(e) => setIfscCode(e.target.value.toUpperCase())}
-                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  className="erp-input"
                   placeholder="Enter IFSC code"
                   required
                 />
@@ -1008,7 +1008,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="branch"
                   value={branch}
                   onChange={(e) => setBranch(e.target.value)}
-                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  className="erp-input"
                   placeholder="Enter branch name"
                   required
                 />
@@ -1022,7 +1022,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="bankingCurrency"
                   value={bankingCurrency}
                   onChange={(e) => setBankingCurrency(e.target.value)}
-                  className="block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-[4px]"
+                  className="erp-select"
                   required
                 >
                   <option value="">Select currency</option>
@@ -1079,7 +1079,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="creditPeriod"
                   value={creditPeriod}
                   onChange={(e) => setCreditPeriod(e.target.value)}
-                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  className="erp-input"
                   placeholder="Enter credit period (in days)"
                   min="0"
                 />
@@ -1100,7 +1100,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="inventoryType"
                   value={inventoryType}
                   onChange={(e) => setInventoryType(e.target.value)}
-                  className="block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-[4px]"
+                  className="erp-select"
                   required
                 >
                   <option value="">Select inventory type</option>
@@ -1121,7 +1121,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="inventoryValuationMethod"
                   value={inventoryValuationMethod}
                   onChange={(e) => setInventoryValuationMethod(e.target.value)}
-                  className="block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-[4px]"
+                  className="erp-select"
                   required
                 >
                   <option value="">Select valuation method</option>
@@ -1182,7 +1182,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                     id="depreciationPercentage"
                     value={depreciationPercentage}
                     onChange={(e) => setDepreciationPercentage(e.target.value)}
-                    className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="erp-input"
                     placeholder="Enter depreciation percentage"
                     min="0"
                     max="100"
@@ -1195,7 +1195,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
               <button
                 type="button"
                 onClick={() => showInfo('Update Fixed Assets Register functionality coming soon!')}
-                className="inline-flex items-center justify-center w-full px-4 py-2 border border-indigo-600 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-indigo-600 bg-white hover:bg-indigo-50/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="erp-button-secondary w-full"
               >
                 <Icon name="document" className="w-4 h-4 mr-2" />
                 Update Fixed Assets Register
@@ -1251,7 +1251,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                     id="amortizationPercentage"
                     value={amortizationPercentage}
                     onChange={(e) => setAmortizationPercentage(e.target.value)}
-                    className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="erp-input"
                     placeholder="Enter amortization percentage"
                     min="0"
                     max="100"
@@ -1264,7 +1264,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
               <button
                 type="button"
                 onClick={() => showInfo('Update Fixed Assets Register functionality coming soon!')}
-                className="inline-flex items-center justify-center w-full px-4 py-2 border border-indigo-600 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-indigo-600 bg-white hover:bg-indigo-50/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="erp-button-secondary w-full"
               >
                 <Icon name="document" className="w-4 h-4 mr-2" />
                 Update Fixed Assets Register
@@ -1284,7 +1284,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="companyCIN"
                   value={companyCIN}
                   onChange={(e) => setCompanyCIN(e.target.value.toUpperCase())}
-                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  className="erp-input"
                   placeholder="Enter Company's CIN"
                 />
               </div>
@@ -1296,7 +1296,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="dividendRate"
                   value={dividendRate}
                   onChange={(e) => setDividendRate(e.target.value)}
-                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  className="erp-input"
                   placeholder="Enter dividend rate"
                   min="0"
                   max="100"
@@ -1320,7 +1320,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="debentureBondCIN"
                   value={debentureBondCIN}
                   onChange={(e) => setDebentureBondCIN(e.target.value.toUpperCase())}
-                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  className="erp-input"
                   placeholder="Enter Company's CIN"
                   required
                 />
@@ -1334,7 +1334,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="debentureBondInterestRate"
                   value={debentureBondInterestRate}
                   onChange={(e) => setDebentureBondInterestRate(e.target.value)}
-                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  className="erp-input"
                   placeholder="Enter interest rate"
                   min="0"
                   max="100"
@@ -1351,7 +1351,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="debentureBondMaturityDate"
                   value={debentureBondMaturityDate}
                   onChange={(e) => setDebentureBondMaturityDate(e.target.value)}
-                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  className="erp-input"
                   required
                 />
               </div>
@@ -1369,7 +1369,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                   id="equityInstrumentsCIN"
                   value={equityInstrumentsCIN}
                   onChange={(e) => setEquityInstrumentsCIN(e.target.value.toUpperCase())}
-                  className="block w-full px-3 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  className="erp-input"
                   placeholder="Enter Company's CIN"
                 />
               </div>
@@ -1384,7 +1384,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
               <button
                 type="button"
                 onClick={() => showInfo('Update Fixed Assets Register functionality coming soon!')}
-                className="inline-flex items-center justify-center w-full px-4 py-2 border border-indigo-600 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-indigo-600 bg-white hover:bg-indigo-50/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="erp-button-secondary w-full"
               >
                 <Icon name="document" className="w-4 h-4 mr-2" />
                 Update Fixed Assets Register
@@ -1400,12 +1400,12 @@ const MastersPage: React.FC<MastersPageProps> = ({
 
   const renderLedgerGroups = () => (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div className="bg-white p-6 rounded-[4px] erp-card">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">Create Group</h3>
+      <div className="erp-container">
+        <h3 className="erp-section-title">Create Group</h3>
         <form onSubmit={handleGroupSubmit} className="space-y-4">
           <div>
-            <label htmlFor="groupName" className="block text-sm font-medium text-gray-500 mb-1">
-              Group Name
+            <label htmlFor="groupName" className="block text-sm font-medium text-gray-700 mb-1">
+              Group Name <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -1413,17 +1413,17 @@ const MastersPage: React.FC<MastersPageProps> = ({
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
               placeholder="Enter group name"
-              className="block w-full px-3 py-2 bg-white erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              className="erp-input"
               required
             />
           </div>
           <div>
-            <label htmlFor="groupUnder" className="block text-sm font-medium text-gray-500 mb-1">Under</label>
+            <label htmlFor="groupUnder" className="block text-sm font-medium text-gray-700 mb-1">Under <span className="text-red-500">*</span></label>
             <select
               id="groupUnder"
               value={groupUnder}
               onChange={(e) => setGroupUnder(e.target.value)}
-              className="block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-[4px]"
+              className="erp-select"
               required
             >
               <option value="">Select Parent Group</option>
@@ -1439,7 +1439,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
           </div>
           <button
             type="submit"
-            className={`inline-flex items-center justify-center w-full px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white ${isEditModeGroup ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-indigo-600 hover:bg-indigo-700'} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
+            className="erp-button-primary w-full"
           >
             <Icon name={isEditModeGroup ? "save" : "plus"} className="w-4 h-4 mr-2" />
             {isEditModeGroup ? 'Update Group' : 'Create Group'}
@@ -1448,45 +1448,47 @@ const MastersPage: React.FC<MastersPageProps> = ({
             <button
               type="button"
               onClick={handleCancelEditGroup}
-              className="mt-2 inline-flex items-center justify-center w-full px-4 py-2 border border-gray-300 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
+              className="erp-button-secondary w-full"
             >
               Cancel Edit
             </button>
           )}
         </form>
       </div>
-      <div className="bg-white rounded-[4px] erp-card">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-800 mb-3">Existing Groups</h3>
+      <div className="erp-container p-0 overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
+          <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider">Existing Groups</h3>
+        </div>
+        <div className="p-4 border-b border-slate-100">
           <div className="relative">
             <input
               type="text"
               placeholder="Search groups..."
               value={groupSearchQuery}
               onChange={(e) => setGroupSearchQuery(e.target.value)}
-              className="block w-full pl-10 pr-3 py-2 erp-input leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              className="erp-input pl-10"
             />
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Icon name="search" className="h-5 w-5 text-gray-400" />
+              <Icon name="search" className="h-4 w-4 text-gray-400" />
             </div>
             {groupSearchQuery && (
               <button
                 onClick={() => setGroupSearchQuery('')}
                 className="absolute inset-y-0 right-0 pr-3 flex items-center"
               >
-                <Icon name="x" className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                <Icon name="x" className="h-4 w-4 text-gray-400 hover:text-gray-600" />
               </button>
             )}
           </div>
         </div>
-        <div className="max-h-96 overflow-y-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50 sticky top-0">
+        <div className="erp-table-container max-h-96">
+          <table className="erp-table">
+            <thead>
               <tr>
-                <th scope="col" className="w-12 px-6 py-3"></th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Group Name</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Under</th>
-                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <th className="w-12"></th>
+                <th>Group Name</th>
+                <th>Under</th>
+                <th className="text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -1537,25 +1539,24 @@ const MastersPage: React.FC<MastersPageProps> = ({
                         <span className="text-gray-400 italic">Primary</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <td className="text-right px-6 py-4 whitespace-nowrap text-sm font-medium">
                       {isSelected ? (
                         <div className="inline-flex items-center gap-2">
                           <button
                             onClick={handleEditGroup}
-                            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-[4px] text-white bg-indigo-600 hover:bg-indigo-700 shadow-none border border-slate-200 hover:shadow-none border border-slate-200 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                            style={{ lineHeight: '1' }}
+                            className="erp-button-primary py-1.5 px-3 text-xs"
                             aria-label="Edit selected group"
                           >
-                            <Icon name="edit" className="w-4 h-4 flex-shrink-0" />
+                            <Icon name="edit" className="w-3.5 h-3.5 mr-1" />
                             Edit
                           </button>
                           <button
                             onClick={handleDeleteGroup}
-                            className="inline-flex items-center justify-center w-10 h-10 rounded-[4px] text-white bg-red-600 hover:bg-red-700 shadow-none border border-slate-200 hover:shadow-none border border-slate-200 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                            className="erp-button-secondary py-1.5 px-3 text-xs bg-red-50 text-red-600 border-red-100 hover:bg-red-100"
                             aria-label="Delete selected group"
                             title="Delete"
                           >
-                            <Icon name="trash" className="w-5 h-5" />
+                            <Icon name="trash" className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       ) : (
@@ -1616,36 +1617,33 @@ const MastersPage: React.FC<MastersPageProps> = ({
     return (
       <div className="space-y-6">
         {/* Select Voucher Type Header */}
-        <div className="text-center mb-4">
-          <h2 className="text-lg font-semibold text-gray-800">Select Voucher Type</h2>
+        <div className="text-center mb-0">
+          <h2 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-4">Select Voucher Type</h2>
         </div>
 
         {/* Voucher Type Tabs - Horizontal Navigation */}
-        <nav className="flex space-x-8 border-b border-gray-200 justify-center mb-6" aria-label="Voucher Types">
+        <div className="erp-tab-container justify-center mb-6">
           {voucherButtons.map((voucher, index) => {
             const isSelected = selectedVoucher === voucher.id;
             return (
               <button
                 key={voucher.id}
                 onClick={() => handleVoucherClick(voucher.id)}
-                className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors uppercase ${isSelected
-                  ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
+                className={`erp-tab ${isSelected ? 'active' : ''}`}
               >
                 {voucher.label}
               </button>
             );
           })}
-        </nav>
+        </div>
 
         {/* Sales Voucher Form with Existing Vouchers Table */}
         {selectedVoucher === 'sales' && (
-          <div className="erp-card p-6 border border-gray-200">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="erp-container">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* Left Column - Sales Voucher Configuration */}
               <div>
-                <h3 className="text-xl font-bold text-gray-800 mb-6">Sales</h3>
+                <h3 className="erp-section-title">Sales</h3>
 
                 {/* Error Message */}
                 {voucherFormError && (
@@ -1711,7 +1709,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                         type="text"
                         value={voucherSuffix}
                         onChange={(e) => setVoucherSuffix(e.target.value)}
-                        className="w-full px-4 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        className="erp-input"
                         placeholder="e.g., /24-25"
                         pattern="[a-zA-Z0-9/\-]*"
                         title="Only alphanumeric characters, slash (/), and hyphen (-) are allowed"
@@ -1731,7 +1729,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                         type="number"
                         value={voucherStartFrom}
                         onChange={(e) => setVoucherStartFrom(parseInt(e.target.value) || 1)}
-                        className="w-full px-4 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        className="erp-input"
                         placeholder="1"
                         min="1"
                       />
@@ -1744,7 +1742,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                         type="number"
                         value={voucherRequiredDigits}
                         onChange={(e) => setVoucherRequiredDigits(parseInt(e.target.value) || 4)}
-                        className="w-full px-4 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        className="erp-input"
                         placeholder="4"
                         min="1"
                       />
@@ -1774,14 +1772,14 @@ const MastersPage: React.FC<MastersPageProps> = ({
                       <button
                         type="button"
                         onClick={resetVoucherForm}
-                        className="px-8 py-3 bg-gray-500 text-white font-semibold rounded-[4px] hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors duration-200"
+                        className="erp-button-secondary"
                       >
                         Cancel
                       </button>
                     )}
                     <button
                       type="submit"
-                      className="px-8 py-3 bg-indigo-600 text-white font-semibold rounded-[4px] hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors duration-200"
+                      className="erp-button-primary"
                     >
                       {isEditModeVoucher ? 'Update' : 'Save'}
                     </button>
@@ -1791,12 +1789,12 @@ const MastersPage: React.FC<MastersPageProps> = ({
 
               {/* Right Column - Existing Vouchers */}
               <div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Existing Vouchers</h3>
+                <h3 className="erp-section-title">Existing Vouchers</h3>
 
                 {/* Table */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead className="bg-gray-50 border-b border-gray-200">
+                <div className="erp-table-container">
+                  <table className="erp-table text-xs">
+                    <thead>
                       <tr>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">SELECT</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">VOUCHER NAME</th>
@@ -1876,11 +1874,11 @@ const MastersPage: React.FC<MastersPageProps> = ({
 
         {/* Other Vouchers Form - For all vouchers except Sales */}
         {selectedVoucher !== 'sales' && (
-          <div className="erp-card p-6 border border-gray-200">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="erp-container">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* Left Column - Voucher Configuration */}
               <div>
-                <h3 className="text-xl font-bold text-gray-800 mb-6">
+                <h3 className="erp-section-title">
                   {voucherButtons.find(v => v.id === selectedVoucher)?.label}
                 </h3>
                 <form onSubmit={handleVoucherSubmit} className="space-y-6">
@@ -1893,7 +1891,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                       type="text"
                       value={voucherName}
                       onChange={(e) => setVoucherName(e.target.value)}
-                      className="w-full max-w-md px-4 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                      className="erp-input"
                       placeholder="Enter voucher name"
                       required
                     />
@@ -1924,7 +1922,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                         type="text"
                         value={voucherPrefix}
                         onChange={(e) => setVoucherPrefix(e.target.value)}
-                        className="w-full px-4 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        className="erp-input"
                         placeholder="e.g., CN-"
                         pattern="[a-zA-Z0-9/\-]*"
                         title="Only alphanumeric characters, slash (/), and hyphen (-) are allowed"
@@ -1940,7 +1938,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
                         type="text"
                         value={voucherSuffix}
                         onChange={(e) => setVoucherSuffix(e.target.value)}
-                        className="w-full px-4 py-2 erp-input focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        className="erp-input"
                         placeholder="e.g., /24-25"
                         pattern="[a-zA-Z0-9/\-]*"
                         title="Only alphanumeric characters, slash (/), and hyphen (-) are allowed"
@@ -2108,53 +2106,22 @@ const MastersPage: React.FC<MastersPageProps> = ({
   };
 
   return (
-    <div className="space-y-6" style={{ background: '#EEF2FF', minHeight: '100%', margin: '-24px', padding: '24px' }}>
+    <div className="space-y-6">
       {/* Page Section Title */}
-      <div style={{ paddingBottom: '12px', borderBottom: '1px solid #E2E8F0' }}>
-        <h1
-          style={{
-            fontSize: '15px',
-            fontWeight: 700,
-            color: '#1F2937',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            marginBottom: '4px',
-          }}
-        >
-          Accounting Masters
-        </h1>
-        <p style={{ fontSize: '13px', color: '#475569', fontWeight: 400 }}>
+      <div className="erp-section-title">
+        <h1 className="page-title">Accounting Masters</h1>
+        <p className="helper-text mb-0">
           Manage ledgers, groups, and voucher configurations
         </p>
       </div>
 
       {/* Tab Bar */}
-      <div
-        style={{
-          display: 'flex',
-          borderBottom: '1px solid #E2E8F0',
-          gap: '4px',
-          marginBottom: '0',
-        }}
-      >
+      <div className="erp-tab-container">
         {availableTabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            style={{
-              padding: '10px 20px',
-              fontSize: '13px',
-              fontWeight: activeTab === tab.id ? 600 : 500,
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              color: activeTab === tab.id ? '#4F46E5' : '#64748B',
-              border: 'none',
-              borderBottom: activeTab === tab.id ? '2px solid #4F46E5' : '2px solid transparent',
-              background: 'transparent',
-              cursor: 'pointer',
-              marginBottom: '-1px',
-              transition: 'color 0.15s ease, border-color 0.15s ease',
-            }}
+            className={`erp-tab ${activeTab === tab.id ? 'active' : ''}`}
           >
             {tab.label}
           </button>
@@ -2162,7 +2129,7 @@ const MastersPage: React.FC<MastersPageProps> = ({
       </div>
 
       {/* Tab Content */}
-      <div>
+      <div className="animate-in fade-in duration-300">
         {activeTab === 'Ledgers' ? renderLedgers() : renderVouchers()}
       </div>
     </div>

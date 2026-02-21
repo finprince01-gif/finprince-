@@ -31,13 +31,17 @@ interface CreateGRNModalProps {
 
 const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
     // Form State
+    const [grnType, setGrnType] = useState<'purchases' | 'sales_return'>('purchases');
     const [grnNo, setGrnNo] = useState('');
+    const [grnSeriesId, setGrnSeriesId] = useState('');
+    const [grnSeriesName, setGrnSeriesName] = useState('');
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [time, setTime] = useState(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
     const [location, setLocation] = useState('');
 
-    // Vendor State
+    // Vendor/Customer State
     const [vendorName, setVendorName] = useState('');
+    const [customerName, setCustomerName] = useState('');
     const [branch, setBranch] = useState('');
     const [address, setAddress] = useState('');
     const [gstin, setGstin] = useState('');
@@ -50,7 +54,9 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
 
     // Data Source State
     const [locations, setLocations] = useState<Location[]>([]);
+    const [grnSeriesList, setGrnSeriesList] = useState<any[]>([]);
     const [vendors, setVendors] = useState<any[]>([]);
+    const [customers, setCustomers] = useState<any[]>([]);
     const [itemsList, setItemsList] = useState<any[]>([]);
 
     // Dynamic Options State
@@ -81,11 +87,9 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
-                // Fetch Next GRN Number
-                const grnNumResponse = await httpClient.get<{ next_grn_no: string }>('/api/inventory/operations/next-grn-number/');
-                if (grnNumResponse && grnNumResponse.next_grn_no) {
-                    setGrnNo(grnNumResponse.next_grn_no);
-                }
+                // Fetch GRN Series
+                const seriesResponse = await httpClient.get<any[]>('/api/inventory/master-voucher-grn/');
+                setGrnSeriesList(seriesResponse || []);
 
                 // Fetch Locations
                 const locResponse = await httpClient.get<Location[]>('/api/inventory/locations/');
@@ -94,6 +98,10 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
                 // Fetch Vendors (Basic Details)
                 const vendorsResponse = await apiService.getRichVendors();
                 setVendors(vendorsResponse || []);
+
+                // Fetch Customers
+                const customersResponse = await apiService.getRichCustomers();
+                setCustomers(customersResponse || []);
 
                 // Fetch Items
                 const itemsResponse = await apiService.getStockItems();
@@ -141,6 +149,26 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
             } catch (error) {
                 console.error("Error fetching vendor details:", error);
             }
+        }
+    };
+
+    // Handle GRN Series Change
+    const handleGrnSeriesChange = async (seriesId: string) => {
+        setGrnSeriesId(seriesId);
+        const series = grnSeriesList.find(s => s.id.toString() === seriesId);
+        if (series) {
+            setGrnSeriesName(series.name);
+            try {
+                const response = await httpClient.get<{ grn_no: string }>(`/api/inventory/master-voucher-grn/${seriesId}/next-number/`);
+                if (response && response.grn_no) {
+                    setGrnNo(response.grn_no);
+                }
+            } catch (error) {
+                console.error("Error fetching next GRN number:", error);
+            }
+        } else {
+            setGrnSeriesName('');
+            setGrnNo('');
         }
     };
 
@@ -228,24 +256,27 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
     const handleSave = () => {
         // Validate required fields
         if (!grnNo) { alert('Please enter GRN No'); return; }
-        if (!vendorName) { alert('Please select a Vendor'); return; }
+        if (grnType === 'purchases' && !vendorName) { alert('Please select a Vendor'); return; }
+        if (grnType === 'sales_return' && !customerName) { alert('Please select a Customer'); return; }
         if (!location) { alert('Please select a Location'); return; }
 
         // Construct payload
         const payload = {
-            grn_type: 'purchases',
+            grn_type: grnType,
             grn_no: grnNo,
+            grn_series_name: grnSeriesName,
             date: date || null,
             time: time || null,
             location_id: location ? parseInt(location) : null,
 
-            vendor_name: vendorName,
+            vendor_name: grnType === 'purchases' ? vendorName : null,
+            customer_name: grnType === 'sales_return' ? customerName : null,
             branch: branch,
             address: address,
             gstin: gstin,
 
-            reference_no: purchaseOrderNo, // PO No
-            secondary_ref_no: supplierInvoiceNo || '', // Supplier Invoice No
+            reference_no: purchaseOrderNo,
+            secondary_ref_no: supplierInvoiceNo || '',
 
             posting_note: postingNote || '',
             status: 'Posted',
@@ -265,7 +296,7 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
             }))
         };
 
-        
+
         onSave(payload);
         onClose();
     };
@@ -280,24 +311,45 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
                 </div>
 
                 <div className="p-6 space-y-6 flex-1 overflow-y-auto">
-                    {/* Top Row */}
-                    <div className="mb-4">
-                        <label className="flex items-center gap-2">
-                            <input type="radio" checked readOnly className="text-indigo-600 focus:ring-indigo-500" />
+                    {/* Top Row: Type Selection */}
+                    <div className="flex gap-6 mb-4">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                                type="radio"
+                                name="grnType"
+                                checked={grnType === 'purchases'}
+                                onChange={() => {
+                                    setGrnType('purchases');
+                                    setCustomerName('');
+                                    setVendorName('');
+                                    setBranch('');
+                                    setAddress('');
+                                    setGstin('');
+                                }}
+                                className="text-indigo-600 focus:ring-indigo-500"
+                            />
                             <span className="text-sm font-bold text-gray-700 uppercase">PURCHASES</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                                type="radio"
+                                name="grnType"
+                                checked={grnType === 'sales_return'}
+                                onChange={() => {
+                                    setGrnType('sales_return');
+                                    setVendorName('');
+                                    setCustomerName('');
+                                    setBranch('');
+                                    setAddress('');
+                                    setGstin('');
+                                }}
+                                className="text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <span className="text-sm font-bold text-gray-700 uppercase">SALES RETURN</span>
                         </label>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">GRN NO.</label>
-                            <input
-                                type="text"
-                                value={grnNo}
-                                onChange={(e) => setGrnNo(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                            />
-                        </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">DATE</label>
                             <input
@@ -333,22 +385,73 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
                         </div>
                     </div>
 
-                    {/* Vendor Row */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">VENDOR NAME</label>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">GRN SERIES NAME</label>
                             <select
-                                value={vendorName}
-                                onChange={(e) => handleVendorChange(e.target.value)}
+                                value={grnSeriesId}
+                                onChange={(e) => handleGrnSeriesChange(e.target.value)}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
                             >
-                                <option value="">Select Vendor</option>
-                                {vendors.map((v) => (
-                                    <option key={v.id} value={v.vendor_name}>
-                                        {v.vendor_name}
+                                <option value="">Select Series</option>
+                                {grnSeriesList.map((series) => (
+                                    <option key={series.id} value={series.id.toString()}>
+                                        {series.name}
                                     </option>
                                 ))}
                             </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">GRN NO.</label>
+                            <input
+                                type="text"
+                                value={grnNo}
+                                onChange={(e) => setGrnNo(e.target.value)}
+                                readOnly={!!grnSeriesId}
+                                className={`w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 ${grnSeriesId ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Vendor/Customer Row */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">{grnType === 'purchases' ? 'VENDOR NAME' : 'CUSTOMER NAME'}</label>
+                            {grnType === 'purchases' ? (
+                                <select
+                                    value={vendorName}
+                                    onChange={(e) => handleVendorChange(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                >
+                                    <option value="">Select Vendor</option>
+                                    {vendors.map((v) => (
+                                        <option key={v.id} value={v.vendor_name}>
+                                            {v.vendor_name}
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <select
+                                    value={customerName}
+                                    onChange={(e) => {
+                                        setCustomerName(e.target.value);
+                                        // Reset dependent fields if needed
+                                        setBranch('');
+                                        setBranchOptions([]);
+                                        setAddress('');
+                                        setGstin('');
+                                        // Fetch branches for customer if applicable...
+                                    }}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                >
+                                    <option value="">Select Customer</option>
+                                    {customers.map((c) => (
+                                        <option key={c.id} value={c.customer_name}>
+                                            {c.customer_name}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">BRANCH</label>
@@ -391,34 +494,58 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
                     {/* Reference Row */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">PURCHASE ORDER NO.</label>
-                            <select
-                                value={purchaseOrderNo}
-                                onChange={(e) => setPurchaseOrderNo(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                            >
-                                <option value="">Select PO</option>
-                                {poOptions.map((po) => (
-                                    <option key={po.id} value={po.po_number}>
-                                        {po.po_number}
-                                    </option>
-                                ))}
-                            </select>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                                {grnType === 'purchases' ? 'PURCHASE ORDER NO.' : 'SALES VOUCHER NO.'}
+                            </label>
+                            {grnType === 'purchases' ? (
+                                <select
+                                    value={purchaseOrderNo}
+                                    onChange={(e) => setPurchaseOrderNo(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                >
+                                    <option value="">Select PO</option>
+                                    {poOptions.map((po) => (
+                                        <option key={po.id} value={po.po_number}>
+                                            {po.po_number}
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <input
+                                    type="text"
+                                    value={purchaseOrderNo}
+                                    onChange={(e) => setPurchaseOrderNo(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                    placeholder="Enter Sales Voucher No."
+                                />
+                            )}
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">SUPPLIER INVOICE NO.</label>
-                            <select
-                                value={supplierInvoiceNo}
-                                onChange={(e) => setSupplierInvoiceNo(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                            >
-                                <option value="">Select Invoice</option>
-                                {invoiceOptions.map((inv) => (
-                                    <option key={inv.id} value={inv.voucher_number}>
-                                        {inv.voucher_number}
-                                    </option>
-                                ))}
-                            </select>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                                {grnType === 'purchases' ? 'SUPPLIER INVOICE NO.' : 'DEBIT NOTE NO.'}
+                            </label>
+                            {grnType === 'purchases' ? (
+                                <select
+                                    value={supplierInvoiceNo}
+                                    onChange={(e) => setSupplierInvoiceNo(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                >
+                                    <option value="">Select Invoice</option>
+                                    {invoiceOptions.map((inv) => (
+                                        <option key={inv.id} value={inv.voucher_number}>
+                                            {inv.voucher_number}
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <input
+                                    type="text"
+                                    value={supplierInvoiceNo}
+                                    onChange={(e) => setSupplierInvoiceNo(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                    placeholder="Enter Debit Note No."
+                                />
+                            )}
                         </div>
                     </div>
 

@@ -151,33 +151,22 @@ const CustomerPortalPage: React.FC = () => {
 
     return (
         <div className="space-y-8">
-            {/* Page Header */}
-            <div className="flex items-end justify-between border-b border-slate-200 pb-6">
+            <div className="erp-section-title">
                 <div>
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Sales Management</p>
-                    <h2 className="text-[20px] font-bold text-slate-900">
-                        Customer Portal
-                    </h2>
+                    <h1 className="page-title">Customer Portal</h1>
+                    <p className="helper-text">Sales management and customer relations</p>
                 </div>
             </div>
 
             {/* Main Tabs */}
-            <div className="flex space-x-8 border-b border-slate-200">
+            <div className="erp-tab-container">
                 {availableTabs.map((tab) => (
                     <button
                         key={tab}
                         onClick={() => setActiveTab(tab as MainTab)}
-                        className={`
-                            whitespace-nowrap pb-4 text-[13px] font-bold uppercase tracking-wider transition-all relative
-                            ${activeTab === tab
-                                ? 'text-indigo-600'
-                                : 'text-slate-400 hover:text-slate-600'}
-                        `}
+                        className={`erp-tab ${activeTab === tab ? 'active' : ''}`}
                     >
                         {tab}
-                        {activeTab === tab && (
-                            <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-600" />
-                        )}
                     </button>
                 ))}
             </div>

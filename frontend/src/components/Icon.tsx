@@ -1,6 +1,6 @@
 import React from 'react';
 
-type IconName = 'dashboard' | 'layout-dashboard' | 'masters' | 'inventory' | 'vouchers' | 'reports' | 'plus' | 'trash' | 'upload' | 'close' | 'warning' | 'settings' | 'logout' | 'sparkles' | 'arrow-up-right' | 'arrow-down-left' | 'users' | 'wallet' | 'download' | 'check-circle' | 'x-circle' | 'spinner' | 'wand-sparkles' | 'bot' | 'vendor-portal' | 'customer-portal' | 'payroll' | 'service' | 'gst' | 'ledger' | 'search' | 'clock' | 'inbox' | 'x' | 'exclamation-triangle' | 'edit' | 'chevron-down' | 'document' | 'check' | 'scanner' | 'tag' | 'save';
+type IconName = 'dashboard' | 'layout-dashboard' | 'masters' | 'inventory' | 'vouchers' | 'reports' | 'plus' | 'trash' | 'upload' | 'close' | 'warning' | 'settings' | 'logout' | 'sparkles' | 'arrow-up-right' | 'arrow-down-left' | 'users' | 'wallet' | 'download' | 'check-circle' | 'x-circle' | 'spinner' | 'wand-sparkles' | 'bot' | 'vendor-portal' | 'customer-portal' | 'payroll' | 'service' | 'gst' | 'ledger' | 'search' | 'clock' | 'inbox' | 'x' | 'exclamation-triangle' | 'edit' | 'chevron-down' | 'document' | 'check' | 'scanner' | 'tag' | 'save' | 'menu';
 
 interface IconProps {
   name: IconName;
@@ -162,6 +162,7 @@ const Icon: React.FC<IconProps> = ({ name, className = 'w-5 h-5', style }) => {
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v4h10V4M10 20v-6h4v6" />
       </>
     ),
+    menu: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />,
   };
 
   return (

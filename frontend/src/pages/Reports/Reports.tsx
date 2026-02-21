@@ -59,7 +59,7 @@ const LedgerSelector: React.FC<LedgerSelectorProps> = ({
     <select
       value={selectedValue}
       onChange={(e) => onChange(e.target.value)}
-      className="block w-full pl-4 pr-10 py-3 text-base border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+      className="erp-select"
     >
       <option value="">All Ledgers</option>
       <optgroup label="Groups">
@@ -739,7 +739,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
   if (!Array.isArray(vouchers) || !Array.isArray(ledgers) || !Array.isArray(stockItems)) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Loading reports data...</div>
+        <div className="helper-text">Loading reports data...</div>
       </div>
     );
   }
@@ -1095,8 +1095,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
   }, [reportType, selectedLedger, filteredVouchers]);
 
   const renderDayBook = () => (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200">
+    <div className="erp-table-container">
+      <table className="erp-table">
         <thead className="bg-gray-50">
           <tr>
             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date</th>
@@ -1126,8 +1126,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
   );
 
   const renderLedger = () => (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200">
+    <div className="erp-table-container">
+      <table className="erp-table">
         <thead className="bg-gray-50">
           <tr>
             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date</th>
@@ -1164,8 +1164,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
   );
 
   const renderTrialBalance = () => (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200">
+    <div className="erp-table-container">
+      <table className="erp-table">
         <thead className="bg-gray-50">
           <tr>
             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Ledger</th>
@@ -1194,8 +1194,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
   );
 
   const renderStockSummary = () => (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200">
+    <div className="erp-table-container">
+      <table className="erp-table">
         <thead className="bg-gray-50">
           <tr>
             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Item Name</th>
@@ -1228,8 +1228,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
       {/* Section 1: B2B Invoices */}
       <div className="mb-8">
         <h4 className="text-lg font-medium text-gray-800 mb-4">1. B2B Invoices (Registered Dealers)</h4>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
+        <div className="erp-table-container">
+          <table className="erp-table">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">GSTIN</th>
@@ -1270,8 +1270,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
       {/* Section 2: B2C Invoices */}
       <div className="mb-8">
         <h4 className="text-lg font-medium text-gray-800 mb-4">2. B2C Invoices (Unregistered Dealers)</h4>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
+        <div className="erp-table-container">
+          <table className="erp-table">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">PARTY NAME</th>
@@ -1313,8 +1313,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
 
       <div className="mb-8">
         <h4 className="text-lg font-medium text-gray-800 mb-4">Purchase Invoices from Registered Suppliers</h4>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
+        <div className="erp-table-container">
+          <table className="erp-table">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">GSTIN</th>
@@ -1353,8 +1353,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
 
       <div className="mb-8">
         <h4 className="text-lg font-medium text-gray-800 mb-4">3.1 Details of Outward Supplies</h4>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
+        <div className="erp-table-container">
+          <table className="erp-table">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">DESCRIPTION</th>
@@ -1389,8 +1389,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
 
       <div className="mb-8">
         <h4 className="text-lg font-medium text-gray-800 mb-4">4. Eligible ITC</h4>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
+        <div className="erp-table-container">
+          <table className="erp-table">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">DESCRIPTION</th>
@@ -1446,16 +1446,21 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
 
 
   return (
-    <div className="space-y-6" style={{ background: '#EEF2FF', minHeight: '100%', margin: '-24px', padding: '24px' }}>
+    <div className="space-y-6">
       {/* PRINT STYLES */}
       <style>{`
         @media print {
-          aside, button, input, select, label, .mb-8.flex, .mb-6.flex, nav, .fixed, h2 {
+          aside, button, input, select, label, .mb-8.flex, .mb-6.flex, nav, .fixed, h2, .erp-tab-container, .erp-section-title {
             display: none !important;
           }
-          body, #root, .min-h-screen, .bg-gray-50, .p-6, .p-8 {
+          body, #root, .min-h-screen {
             background-color: white !important;
             margin: 0 !important;
+            padding: 0 !important;
+          }
+          .erp-container {
+            border: none !important;
+            box-shadow: none !important;
             padding: 0 !important;
           }
           table {
@@ -1477,22 +1482,13 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
       `}</style>
 
       {/* Page Header */}
-      <div style={{ paddingBottom: '12px', borderBottom: '1px solid #E2E8F0' }}>
-        <h1
-          style={{
-            fontSize: '15px',
-            fontWeight: 700,
-            color: '#1F2937',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            marginBottom: '4px',
-          }}
-        >
-          Reports &amp; Analysis
-        </h1>
-        <p style={{ fontSize: '13px', color: '#475569', fontWeight: 400 }}>
-          Financial statements, ledger reports, and GST data
-        </p>
+      <div className="erp-section-title">
+        <div>
+          <h1 className="page-title">Reports &amp; Analysis</h1>
+          <p className="helper-text mb-0">
+            Financial statements, ledger reports, and GST data
+          </p>
+        </div>
       </div>
 
       <div className="print-header">
@@ -1501,77 +1497,46 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
       </div>
 
       {/* Main Tabs */}
-      <div
-        style={{
-          display: 'flex',
-          borderBottom: '1px solid #E2E8F0',
-          gap: '4px',
-          overflowX: 'auto',
-          marginBottom: '0',
-        }}
-      >
-        {availableReports.map(({ id, label }, idx) => (
+      <div className="erp-tab-container">
+        {availableReports.map(({ id, label }) => (
           <button
-            key={`report-tab-${id}-${idx}`}
+            key={`report-tab-${id}`}
             onClick={() => setReportType(id as ReportType)}
-            style={{
-              padding: '10px 20px',
-              fontSize: '13px',
-              fontWeight: reportType === id ? 600 : 500,
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              color: reportType === id ? '#4F46E5' : '#64748B',
-              border: 'none',
-              borderBottom: reportType === id ? '2px solid #4F46E5' : '2px solid transparent',
-              background: 'transparent',
-              cursor: 'pointer',
-              marginBottom: '-1px',
-              whiteSpace: 'nowrap',
-              flexShrink: 0,
-              transition: 'color 0.15s ease, border-color 0.15s ease',
-            }}
+            className={`erp-tab ${reportType === id ? 'active' : ''}`}
           >
             {label}
           </button>
         ))}
       </div>
 
-      <div
-        style={{
-          background: '#FFFFFF',
-          border: '1px solid #E2E8F0',
-          borderRadius: '16px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.04)',
-          padding: '32px',
-        }}
-      >
+      <div className="erp-container">
         {reportType === 'DayBook' && (
           <>
-            <div className="mb-6 flex flex-wrap items-end gap-4 p-6 bg-gray-50 rounded-[4px] border border-gray-200">
+            <div className="mb-8 flex flex-wrap items-end gap-6 p-6 bg-slate-50/50 rounded-xl border border-slate-100">
               <div className="min-w-[200px]">
-                <label htmlFor="startDate" className="block text-sm font-semibold text-gray-700 mb-2">Start Date</label>
+                <label htmlFor="startDate" className="label-text">Start Date</label>
                 <input
                   type="date"
                   id="startDate"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                  className="erp-input"
                 />
               </div>
               <div className="min-w-[200px]">
-                <label htmlFor="endDate" className="block text-sm font-semibold text-gray-700 mb-2">End Date</label>
+                <label htmlFor="endDate" className="label-text">End Date</label>
                 <input
                   type="date"
                   id="endDate"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                  className="erp-input"
                 />
               </div>
               {(startDate || endDate) && (
                 <button
                   onClick={() => { setStartDate(''); setEndDate(''); }}
-                  className="px-6 py-3 border border-gray-300 text-sm font-semibold rounded-[4px] text-gray-700 bg-white hover:bg-gray-50 shadow-none border border-slate-200-none border border-slate-200 transition-colors"
+                  className="erp-button-secondary"
                 >
                   Clear
                 </button>
@@ -1581,7 +1546,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
             <div className="flex justify-end mb-4">
               <button
                 onClick={() => window.print()}
-                className="px-6 py-2 bg-red-600 text-white text-sm font-semibold rounded-[4px] hover:bg-red-700 shadow-none border border-slate-200-none border border-slate-200 transition-colors"
+                className="erp-button-primary bg-rose-600 hover:bg-rose-700"
                 title="Create PDF"
               >
                 Create PDF
@@ -1591,9 +1556,9 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
         )}
         {reportType === 'LedgerReport' && (
           <>
-            <div className="mb-6 flex flex-wrap items-end gap-4 p-6 bg-gray-50 rounded-[4px] border border-gray-200">
+            <div className="mb-8 flex flex-wrap items-end gap-6 p-6 bg-slate-50/50 rounded-xl border border-slate-100">
               <div className="min-w-[250px]">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Select Ledger/Group</label>
+                <label className="label-text">Select Ledger/Group</label>
                 <LedgerSelector
                   selectedValue={selectedLedger}
                   onChange={setSelectedLedger}
@@ -1602,29 +1567,29 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
                 />
               </div>
               <div className="min-w-[200px]">
-                <label htmlFor="ledgerStartDate" className="block text-sm font-semibold text-gray-700 mb-2">Start Date</label>
+                <label htmlFor="ledgerStartDate" className="label-text">Start Date</label>
                 <input
                   type="date"
                   id="ledgerStartDate"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                  className="erp-input"
                 />
               </div>
               <div className="min-w-[200px]">
-                <label htmlFor="ledgerEndDate" className="block text-sm font-semibold text-gray-700 mb-2">End Date</label>
+                <label htmlFor="ledgerEndDate" className="label-text">End Date</label>
                 <input
                   type="date"
                   id="ledgerEndDate"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                  className="erp-input"
                 />
               </div>
               {(startDate || endDate) && (
                 <button
                   onClick={() => { setStartDate(''); setEndDate(''); }}
-                  className="px-6 py-3 border border-gray-300 text-sm font-semibold rounded-[4px] text-gray-700 bg-white hover:bg-gray-50 shadow-none border border-slate-200-none border border-slate-200 transition-colors"
+                  className="erp-button-secondary"
                 >
                   Clear
                 </button>
@@ -1634,7 +1599,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
             <div className="flex justify-end mb-4">
               <button
                 onClick={() => window.print()}
-                className="px-6 py-2 bg-red-600 text-white text-sm font-semibold rounded-[4px] hover:bg-red-700 shadow-none border border-slate-200-none border border-slate-200 transition-colors"
+                className="erp-button-primary bg-rose-600 hover:bg-rose-700"
                 title="Create PDF"
               >
                 Create PDF
@@ -1644,25 +1609,25 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
         )}
         {reportType === 'TrialBalance' && (
           <>
-            <div className="mb-6 flex flex-wrap items-end gap-4 p-6 bg-gray-50 rounded-[4px] border border-gray-200">
+            <div className="mb-8 flex flex-wrap items-end gap-6 p-6 bg-slate-50/50 rounded-xl border border-slate-100">
               <div className="min-w-[200px]">
-                <label htmlFor="trialStartDate" className="block text-sm font-semibold text-gray-700 mb-2">Start Date</label>
+                <label htmlFor="trialStartDate" className="label-text">Start Date</label>
                 <input
                   type="date"
                   id="trialStartDate"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                  className="erp-input"
                 />
               </div>
               <div className="min-w-[200px]">
-                <label htmlFor="trialEndDate" className="block text-sm font-semibold text-gray-700 mb-2">End Date</label>
+                <label htmlFor="trialEndDate" className="label-text">End Date</label>
                 <input
                   type="date"
                   id="trialEndDate"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                  className="erp-input"
                 />
               </div>
             </div>
@@ -1670,7 +1635,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
             <div className="flex justify-end mb-4">
               <button
                 onClick={() => window.print()}
-                className="px-6 py-2 bg-red-600 text-white text-sm font-semibold rounded-[4px] hover:bg-red-700 shadow-none border border-slate-200-none border border-slate-200 transition-colors"
+                className="erp-button-primary bg-rose-600 hover:bg-rose-700"
                 title="Create PDF"
               >
                 Create PDF
@@ -1680,14 +1645,14 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
         )}
         {reportType === 'BalanceSheet' && (
           <>
-            <div className="mb-6 flex flex-wrap items-end gap-4 p-6 bg-gray-50 rounded-[4px] border border-gray-200">
+            <div className="mb-8 flex flex-wrap items-end gap-6 p-6 bg-slate-50/50 rounded-xl border border-slate-100">
               <div className="min-w-[200px]">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">As of Date</label>
+                <label className="label-text">As of Date</label>
                 <input
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                  className="erp-input"
                 />
               </div>
             </div>
@@ -1695,7 +1660,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
             <div className="flex justify-end mb-4">
               <button
                 onClick={() => window.print()}
-                className="px-6 py-2 bg-red-600 text-white text-sm font-semibold rounded-[4px] hover:bg-red-700 shadow-none border border-slate-200-none border border-slate-200 transition-colors"
+                className="erp-button-primary bg-rose-600 hover:bg-rose-700"
                 title="Create PDF"
               >
                 Create PDF
@@ -1712,25 +1677,25 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
         )}
         {reportType === 'StockSummary' && (
           <>
-            <div className="mb-6 flex flex-wrap items-end gap-4 p-6 bg-gray-50 rounded-[4px] border border-gray-200">
+            <div className="mb-8 flex flex-wrap items-end gap-6 p-6 bg-slate-50/50 rounded-xl border border-slate-100">
               <div className="min-w-[200px]">
-                <label htmlFor="stockStartDate" className="block text-sm font-semibold text-gray-700 mb-2">Start Date</label>
+                <label htmlFor="stockStartDate" className="label-text">Start Date</label>
                 <input
                   type="date"
                   id="stockStartDate"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                  className="erp-input"
                 />
               </div>
               <div className="min-w-[200px]">
-                <label htmlFor="stockEndDate" className="block text-sm font-semibold text-gray-700 mb-2">End Date</label>
+                <label htmlFor="stockEndDate" className="label-text">End Date</label>
                 <input
                   type="date"
                   id="stockEndDate"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                  className="erp-input"
                 />
               </div>
             </div>
@@ -1738,7 +1703,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
             <div className="flex justify-end mb-4">
               <button
                 onClick={() => window.print()}
-                className="px-6 py-2 bg-red-600 text-white text-sm font-semibold rounded-[4px] hover:bg-red-700 shadow-none border border-slate-200-none border border-slate-200 transition-colors"
+                className="erp-button-primary bg-rose-600 hover:bg-rose-700"
                 title="Create PDF"
               >
                 Create PDF
@@ -1749,9 +1714,9 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
         {reportType === 'GSTReports' && (
           <>
             {/* Filter Section Row */}
-            <div className="mb-6 flex flex-wrap items-end gap-4 p-6 bg-gray-50 rounded-[4px] border border-gray-200">
+            <div className="mb-8 flex flex-wrap items-end gap-6 p-6 bg-slate-50/50 rounded-xl border border-slate-100">
               <div className="min-w-[200px]">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">GST Return</label>
+                <label className="label-text">GST Return</label>
                 <select
                   value={gstForm}
                   onChange={(e) => setGstForm(e.target.value as GSTForm)}
@@ -1775,23 +1740,23 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
                 </select>
               </div>
               <div className="min-w-[200px]">
-                <label htmlFor="gstStartDate" className="block text-sm font-semibold text-gray-700 mb-2">Start Date</label>
+                <label htmlFor="gstStartDate" className="label-text">Start Date</label>
                 <input
                   type="date"
                   id="gstStartDate"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                  className="erp-input"
                 />
               </div>
               <div className="min-w-[200px]">
-                <label htmlFor="gstEndDate" className="block text-sm font-semibold text-gray-700 mb-2">End Date</label>
+                <label htmlFor="gstEndDate" className="label-text">End Date</label>
                 <input
                   type="date"
                   id="gstEndDate"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                  className="erp-input"
                 />
               </div>
             </div>
@@ -1799,7 +1764,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
             <div className="flex justify-end mb-4">
               <button
                 onClick={() => window.print()}
-                className="px-6 py-2 bg-red-600 text-white text-sm font-semibold rounded-[4px] hover:bg-red-700 shadow-none border border-slate-200-none border border-slate-200 transition-colors"
+                className="erp-button-primary bg-rose-600 hover:bg-rose-700"
                 title="Create PDF"
               >
                 Create PDF
@@ -1815,7 +1780,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ vouchers = [], ledgers = [], 
         {reportType === 'AIReport' && (
           <div className="space-y-6">
             {/* Simple Heading */}
-            <h2 className="text-xl font-semibold text-gray-800 mb-4">AI Report</h2>
+            <h2 className="section-title mb-4">AI Report</h2>
 
             {/* Simple Input Interface */}
             <div className="bg-white rounded-[4px] border border-gray-200 shadow-none border border-slate-200-none border border-slate-200 p-6">

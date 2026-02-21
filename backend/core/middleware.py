@@ -13,7 +13,7 @@ class TenantMiddleware(MiddlewareMixin):
 
 class ExceptionLoggingMiddleware:
     """
-    Log unhandled exceptions to a file for debugging.
+    Log unhandled exceptions with full context for production debugging.
     """
     def __init__(self, get_response):
         self.get_response = get_response
@@ -23,15 +23,22 @@ class ExceptionLoggingMiddleware:
 
     def process_exception(self, request, exception):
         import traceback
-        import os
-        from django.conf import settings
+        import logging
         
-        log_path = os.path.join(settings.BASE_DIR, 'traceback.log')
-        with open(log_path, 'a', encoding='utf-8') as f:
-            f.write(f"\\n--- Exception at {str(os.environ.get('DJANGO_SETTINGS_MODULE'))} ---\\n")
-            f.write(f"Path: {request.path}\\n")
-            f.write(f"User: {request.user}\\n")
-            traceback.print_exc(file=f)
+        logger = logging.getLogger('django.request')
         
-        return None # Let Django handle the 500 response
+        # Extract context
+        user_id = getattr(request.user, 'id', 'Anonymous')
+        tenant_id = getattr(request, 'tenant_id', 'None')
+        method = request.method
+        path = request.get_full_path()
+        
+        # Log the error with context
+        logger.error(
+            f"EXCEPTION: Method={method} Path={path} UserID={user_id} TenantID={tenant_id}\n"
+            f"Traceback:\n{traceback.format_exc()}"
+        )
+        
+        # Return None to let Django/DRF handle the response formatting
+        return None
 

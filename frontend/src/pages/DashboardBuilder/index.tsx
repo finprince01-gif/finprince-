@@ -50,11 +50,18 @@ const DashboardBuilderPage: React.FC<DashboardBuilderPageProps> = ({ vouchers, l
 
     // Initialize & Persistence
     useEffect(() => {
-        const saved = localStorage.getItem(STORAGE_KEY);
+        const saved = sessionStorage.getItem(STORAGE_KEY) || localStorage.getItem(STORAGE_KEY);
         if (saved) {
             try {
                 const parsed = JSON.parse(saved);
-                if (Array.isArray(parsed)) setWidgets(parsed);
+                if (Array.isArray(parsed)) {
+                    setWidgets(parsed);
+                    // Migrate to sessionStorage if it was in localStorage
+                    if (!sessionStorage.getItem(STORAGE_KEY)) {
+                        sessionStorage.setItem(STORAGE_KEY, saved);
+                        localStorage.removeItem(STORAGE_KEY);
+                    }
+                }
             } catch (e) { console.error(e); }
         } else {
             // Default Template
@@ -86,7 +93,8 @@ const DashboardBuilderPage: React.FC<DashboardBuilderPageProps> = ({ vouchers, l
     }, [setWidgets]);
 
     const handleSave = () => {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(widgets));
+        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(widgets));
+        localStorage.removeItem(STORAGE_KEY);
         window.dispatchEvent(new Event('dashboard-layout-updated'));
         showSuccess('BI Dashboard Configuration Saved!');
         onNavigate?.('Dashboard');

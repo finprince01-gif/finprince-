@@ -327,12 +327,16 @@ class HttpClient {
     }
 
     public saveAuthData(data: { tenant_id?: string; company_name?: string }) {
-        if (data.tenant_id) localStorage.setItem('tenantId', data.tenant_id);
-        if (data.company_name) localStorage.setItem('companyName', data.company_name);
+        if (data.tenant_id) sessionStorage.setItem('tenantId', data.tenant_id);
+        if (data.company_name) sessionStorage.setItem('companyName', data.company_name);
     }
 
     public clearAuthData() {
         clearTokens();
+        sessionStorage.removeItem('tenantId');
+        sessionStorage.removeItem('companyName');
+
+        // Also clear from localStorage if they were previously there
         localStorage.removeItem('tenantId');
         localStorage.removeItem('companyName');
     }
