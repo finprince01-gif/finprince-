@@ -153,7 +153,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       // 2. Vendor GST Details
       try {
         const gst = await httpClient.get<any[]>('/api/vendors/gst-details/');
-        setVendorGstDetails(Array.isArray(gst) ? gst : []);
+        setVendorGstDetails(Array.isArray(gst) ? gst : ((gst as any).results || []));
       } catch (err) {
         console.warn('Failed to fetch Vendor GST Details', err);
       }
@@ -424,7 +424,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       } catch (error) {
         console.error('Error fetching Cash/Bank ledgers:');
         // Fallback to filtering from ledgers prop
-        const fallback = ledgers.filter(l => l.group === 'Bank Accounts' || l.group === 'Cash-in-Hand');
+        const fallback = ledgers.filter(l => {
+          const g = (l.group || '').toLowerCase();
+          return g.includes('cash') || g.includes('bank') || g.includes('od') || g.includes('cc');
+        });
         setCashBankLedgers(fallback);
       }
     };
@@ -1008,14 +1011,26 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   }, [party, ledgers, companyDetails]);
 
   const { partyLedgers, accountLedgers, allLedgers, partyOptions } = useMemo(() => {
-    const partyLedgers = [...ledgers]; // Allow all ledgers to be selected as a party across all voucher types
-    const accountLedgers = cashBankLedgers.length > 0 ? cashBankLedgers : ledgers.filter(l => l.group === 'Bank Accounts' || l.group === 'Cash-in-Hand');
+    // Helper to identify cash/bank accounts robustly
+    const isCashBank = (l: Ledger) => {
+      const g = (l.group || '').toLowerCase();
+      return g.includes('cash') || g.includes('bank') || g.includes('od') || g.includes('cc');
+    };
+
+    const accountLedgers = cashBankLedgers.length > 0
+      ? cashBankLedgers
+      : ledgers.filter(isCashBank);
+
     const allLedgers = [...ledgers];
 
-    // Combine Ledgers with rich Vendor Reference Names for Purchase Vouchers
+    // partyLedgers (excluding cash/bank for Receipt/Payment party selection if needed)
+    // For now, keeping it as all ledgers but we can filter it in the UI or here
+    const partyLedgers = ledgers.filter(l => !isCashBank(l));
+
     // Combine Ledgers with rich Vendor/Customer names
+    // Filter out cash/bank accounts from party options to avoid accounting errors
     const partyOptions = [...new Set([
-      ...ledgers.map(l => l.name),
+      ...ledgers.filter(l => !isCashBank(l)).map(l => l.name),
       ...richVendors.map(v => v.vendor_name),
       ...richCustomers.map(c => c.customer_name)
     ])].filter(Boolean);

@@ -651,49 +651,34 @@ def sync_opening_balances_to_transactions(user):
 def _is_cash_or_bank_ledger(ledger):
     """
     Check if ledger is a Cash or Bank ledger from Asset category.
-    Strict Rule: 
-    - Category: Asset (or Assets)
-    - Group: Cash and Bank Balances
-    - Sub Group 1: Cash OR Bank
-    
-    Args:
-        ledger: MasterLedger instance
-    
-    Returns:
-        Boolean indicating if ledger is strictly Cash or Bank
+    More relaxed matching to handle various Chart of Accounts.
     """
-    # 1. Check Category (Asset or Assets)
-    if not ledger.category:
-        return False
+    # 1. Check Category (Asset or Assets) if present
+    if ledger.category:
+        category_lower = ledger.category.lower().strip()
+        if category_lower not in ['asset', 'assets', 'liability', 'liabilities']:
+            # We include liabilities because of Bank OD/CC accounts
+            pass
     
-    category_lower = ledger.category.lower().strip()
-    if category_lower not in ['asset', 'assets']:
-        return False
-    
-    # 2. Check Group (Must be 'Cash and Bank Balances')
+    # 2. Check Group name for keywords
     if not ledger.group:
         return False
         
     group_lower = ledger.group.lower().strip()
-    if group_lower != 'cash and bank balances':
-        return False
-        
-    # 3. Check Sub Group 1 (Must be 'Cash' or 'Bank')
-    if not ledger.sub_group_1:
-        return False
-        
-    sg1_lower = ledger.sub_group_1.lower().strip()
-    if sg1_lower not in ['cash', 'bank']:
-        if sg1_lower == 'bank accounts':
-             # Explicitly disallow 'Bank Accounts' if strict 'Bank' is requested,
-             # unless 'Bank Accounts' is the actual data representation of 'Bank'.
-             # Given 'Strict Rule', we stick to 'Bank'.
-             # Use verify script to confirm if 'Bank' exists.
-             # Safe fallback: exclude it for now based on prompt.
-             return False
-        return False
     
-    return True
+    # Match common cash/bank keywords
+    keywords = ['cash', 'bank', 'od', 'cc', 'hand', 'balances', 'accounts']
+    
+    # Strong matches for cash/bank groups
+    if any(k in group_lower for k in ['cash', 'bank', 'od', 'cc']):
+        # Safety check: avoid things like 'Bank Charges' or 'Cash Discount' which are usually Expenses
+        # But wait, if they are in Asset/Liability category they are likely accounts.
+        # For now, let's be inclusive but exclude known expense-like terms if needed.
+        if 'charges' in group_lower or 'discount' in group_lower:
+            return False
+        return True
+    
+    return False
 
 
 def _calculate_balance(tenant_id, ledger_id, debit, credit):

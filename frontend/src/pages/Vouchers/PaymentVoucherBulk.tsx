@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { showError, showSuccess } from '../../utils/toast';
 import { httpClient } from '../../services/httpClient';
 
@@ -54,34 +54,32 @@ const PaymentVoucherBulk: React.FC = () => {
   // Posting note
   const [postingNote, setPostingNote] = useState<string>('');
 
-  // Ledgers
-  const [cashBankLedgers, setCashBankLedgers] = useState<any[]>([]);
+  // Ledgers state
   const [allLedgers, setAllLedgers] = useState<any[]>([]);
+
+  // Filter Pay From options (Cash and Bank accounts)
+  const payFromLedgers = useMemo(() => {
+    return allLedgers.filter(l => {
+      const group = (l.group || '').toLowerCase();
+      return (
+        group.includes('cash') ||
+        group.includes('bank') ||
+        group.includes('od') ||
+        group.includes('cc')
+      );
+    });
+  }, [allLedgers]);
+
+  // Filter Pay To options: All ledgers EXCEPT Pay From accounts
+  const payToOptions = useMemo(() => {
+    const payFromIds = new Set(payFromLedgers.map(l => l.id));
+    return allLedgers.filter(l => !payFromIds.has(l.id));
+  }, [allLedgers, payFromLedgers]);
 
   // Fetch data
   useEffect(() => {
-    fetchCashBankLedgers();
     fetchAllLedgers();
   }, []);
-
-  const fetchCashBankLedgers = async () => {
-    try {
-      const token = httpClient.getToken();
-      const response = await fetch(`${API_BASE_URL}/api/ledgers/cash-bank/`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setCashBankLedgers(data);
-      }
-    } catch (error) {
-      console.error('Error fetching cash/bank ledgers:');
-    }
-  };
 
   const fetchAllLedgers = async () => {
     try {
@@ -251,7 +249,7 @@ const PaymentVoucherBulk: React.FC = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="">Select</option>
-                {cashBankLedgers.map(ledger => (
+                {payFromLedgers.map(ledger => (
                   <option key={ledger.id} value={ledger.name}>{ledger.name}</option>
                 ))}
               </select>
@@ -281,7 +279,7 @@ const PaymentVoucherBulk: React.FC = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                   >
                     <option value="">Vendor Name</option>
-                    {allLedgers.map(ledger => (
+                    {payToOptions.map(ledger => (
                       <option key={ledger.id} value={ledger.name}>{ledger.name}</option>
                     ))}
                   </select>
