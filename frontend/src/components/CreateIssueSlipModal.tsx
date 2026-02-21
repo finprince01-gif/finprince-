@@ -100,7 +100,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                 const [locResponse, soResponse, custResponse, invResponse] = await Promise.all([
                     httpClient.get<any>('/api/inventory/locations/').catch(() => []),
                     apiService.getSalesVouchers({ status: 'Pending' }).catch(() => []),
-                    apiService.getSalesCustomers().catch(() => []),
+                    apiService.getPortalCustomers().catch(() => []),
                     apiService.getStockItems().catch(() => [])
                 ]);
 
@@ -133,8 +133,9 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
             return;
         }
 
+        // Customer Portal returns customer_name field
         const customer = customersList.find(c => c.customer_name === customerName);
-        if (customer && customer.branches) {
+        if (customer && customer.branches && customer.branches.length > 0) {
             setAvailableBranches(customer.branches);
         } else {
             setAvailableBranches([]);
@@ -149,16 +150,22 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
             return;
         }
 
+        // Customer Portal returns customer_name and branches with branch_reference_name
         const customer = customersList.find(c => c.customer_name === customerName);
         if (customer && customer.branches) {
-            const selectedBranch = customer.branches.find((b: any) => b.branch_reference_name === branch || b.reference_name === branch);
+            const selectedBranch = customer.branches.find(
+                (b: any) => (b.branch_reference_name || b.reference_name) === branch
+            );
             if (selectedBranch) {
+                // Portal serializer returns camelCase fields (addressLine1, city, etc.)
+                const addr1 = selectedBranch.addressLine1 || selectedBranch.address_line_1 || '';
+                const addr2 = selectedBranch.addressLine2 || selectedBranch.address_line_2 || '';
                 const city = selectedBranch.city ? `, ${selectedBranch.city}` : '';
                 const state = selectedBranch.state ? `, ${selectedBranch.state}` : '';
                 const pin = selectedBranch.pincode ? ` - ${selectedBranch.pincode}` : '';
-                const fullAddr = `${selectedBranch.address_line_1 || selectedBranch.addressLine1 || ''}${selectedBranch.address_line_2 || selectedBranch.addressLine2 ? ', ' + (selectedBranch.address_line_2 || selectedBranch.addressLine2) : ''}${city}${state}${pin}`;
+                const fullAddr = `${addr1}${addr2 ? ', ' + addr2 : ''}${city}${state}${pin}`;
 
-                setAddress(fullAddr);
+                setAddress(fullAddr.trim().replace(/^,\s*/, ''));
                 setGstin(selectedBranch.gstin || '');
             }
         }

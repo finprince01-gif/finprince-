@@ -1139,6 +1139,37 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                 return row;
             }));
         }
+
+        // Sync UQC (uom) to the UOM field in the INR tab when it changes in Foreign Currency tab
+        if (field === 'uom') {
+            setItemRows(prev => prev.map(row => {
+                if (row.id === id) {
+                    return { ...row, uom: value };
+                }
+                return row;
+            }));
+        }
+
+        // Sync INR Rate = FC Rate × Conversion Rate when itemRate changes in Foreign Currency tab
+        if (field === 'itemRate') {
+            const cleanValue = parseFloat(value) < 0 ? '0' : value;
+            const convRate = parseFloat(exchangeRate) || 1;
+            const inrRate = (parseFloat(cleanValue) || 0) * convRate;
+            setItemRows(prev => prev.map(row => {
+                if (row.id === id) {
+                    const qty = parseFloat(row.qty) || 0;
+                    const taxable = (qty * inrRate).toFixed(2);
+                    // Recalculate invoice value
+                    const igst = parseFloat(row.igst) || 0;
+                    const cgst = parseFloat(row.cgst) || 0;
+                    const sgst = parseFloat(row.sgst) || 0;
+                    const cess = parseFloat(row.cess) || 0;
+                    const invoiceVal = (parseFloat(taxable) + igst + cgst + sgst + cess).toFixed(2);
+                    return { ...row, itemRate: inrRate.toFixed(2), taxableValue: taxable, invoiceValue: invoiceVal };
+                }
+                return row;
+            }));
+        }
     };
 
     const handleAddForeignItemRow = () => {
@@ -1200,23 +1231,61 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
         setPaymentPayable(payable.toFixed(2));
     }, [itemRows, paymentTdsIncomeTax, paymentTdsGst, paymentAdvance]);
 
-    // Sync qty and description from Foreign Currency tab → INR tab whenever foreign rows change
+    // Sync qty, description, and INR rate from Foreign Currency tab → INR tab whenever foreign rows change
     React.useEffect(() => {
+        const convRate = parseFloat(exchangeRate) || 1;
         setItemRows(prev => prev.map((inrRow, idx) => {
             const foreignRow = foreignItemRows[idx];
             if (!foreignRow) return inrRow;
             const qty = foreignRow.qty;
             const description = foreignRow.description;
-            const rate = parseFloat(inrRow.itemRate) || 0;
+            // Calculate INR rate from FC rate × conversion rate
+            const fcRate = parseFloat(foreignRow.itemRate) || 0;
+            const inrRate = fcRate > 0 ? (fcRate * convRate).toFixed(2) : inrRow.itemRate;
+            const rate = parseFloat(inrRate) || parseFloat(inrRow.itemRate) || 0;
             const taxable = (parseFloat(qty) || 0) * rate;
+            // Recalculate invoice value
+            const igst = parseFloat(inrRow.igst) || 0;
+            const cgst = parseFloat(inrRow.cgst) || 0;
+            const sgst = parseFloat(inrRow.sgst) || 0;
+            const cess = parseFloat(inrRow.cess) || 0;
+            const invoiceVal = (taxable + igst + cgst + sgst + cess).toFixed(2);
             return {
                 ...inrRow,
                 qty,
+                uom: foreignRow.uom || inrRow.uom,
                 description,
+                itemRate: inrRate,
                 taxableValue: taxable > 0 ? taxable.toFixed(2) : inrRow.taxableValue,
+                invoiceValue: invoiceVal,
             };
         }));
     }, [foreignItemRows]);
+
+    // Recalculate INR rates when exchange rate changes
+    React.useEffect(() => {
+        const convRate = parseFloat(exchangeRate) || 1;
+        setItemRows(prev => prev.map((inrRow, idx) => {
+            const foreignRow = foreignItemRows[idx];
+            if (!foreignRow) return inrRow;
+            const fcRate = parseFloat(foreignRow.itemRate) || 0;
+            if (fcRate === 0) return inrRow; // Don't overwrite manually-set INR rates if FC rate isn't set
+            const inrRate = (fcRate * convRate).toFixed(2);
+            const qty = parseFloat(inrRow.qty) || 0;
+            const taxable = qty * parseFloat(inrRate);
+            const igst = parseFloat(inrRow.igst) || 0;
+            const cgst = parseFloat(inrRow.cgst) || 0;
+            const sgst = parseFloat(inrRow.sgst) || 0;
+            const cess = parseFloat(inrRow.cess) || 0;
+            const invoiceVal = (taxable + igst + cgst + sgst + cess).toFixed(2);
+            return {
+                ...inrRow,
+                itemRate: inrRate,
+                taxableValue: taxable.toFixed(2),
+                invoiceValue: invoiceVal,
+            };
+        }));
+    }, [exchangeRate]);
 
     const handleNext = () => {
         // Validation
@@ -2088,8 +2157,13 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                         type="number"
                                                         value={row.itemRate}
                                                         min="0"
-                                                        onChange={(e) => handleItemRowChange(row.id, 'itemRate', e.target.value)}
-                                                        className="w-24 px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm"
+                                                        readOnly={activeTab === 'item_tax_inr'}
+                                                        onChange={activeTab === 'item_tax_inr' ? undefined : (e) => handleItemRowChange(row.id, 'itemRate', e.target.value)}
+                                                        title={activeTab === 'item_tax_inr' ? 'Rate (INR) is auto-calculated as Rate (FC) × Conversion Rate' : undefined}
+                                                        className={`w-24 px-2 py-1 border-0 rounded text-sm ${activeTab === 'item_tax_inr'
+                                                            ? 'bg-gray-100 text-gray-600 cursor-not-allowed select-none'
+                                                            : 'focus:ring-1 focus:ring-indigo-500'
+                                                            }`}
                                                         placeholder="Rate"
                                                     />
                                                 </td>
@@ -3412,13 +3486,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                             <label className="block text-sm font-medium text-gray-700 mb-1">
                                                 Eway Bill - Available
                                             </label>
-                                            <input
-                                                type="text"
-                                                value={entry.available}
-                                                onChange={(e) => handleEwayEntryChange(entry.id, 'available', e.target.value)}
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                placeholder="Yes/No"
-                                            />
+
                                             <div className="flex gap-4">
                                                 <button
                                                     type="button"
