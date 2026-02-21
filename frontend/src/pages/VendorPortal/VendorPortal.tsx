@@ -1546,6 +1546,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         item_code: string;
         item_name: string;
         hsn_code?: string;
+        uom?: string;
+        unit?: string;
     }
 
     const [inventoryItems, setInventoryItems] = useState<SimplifiedInventoryItem[]>([]);
@@ -1554,7 +1556,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         { id: 2, hsnSacCode: '', itemCode: '', itemName: '', supplierItemCode: '', supplierItemName: '' },
     ]);
 
-    // Fetch Inventory Items for Dropdown
+    // Fetch Inventory Items for Dropdown (used by Products/Services tab and Create PO modal)
     useEffect(() => {
         const fetchItems = async () => {
             try {
@@ -1564,11 +1566,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 handleApiError(error, 'Fetch Inventory Items');
             }
         };
-
-        if (activeMasterSubTab === 'Products/Services') {
-            fetchItems();
-        }
-    }, [activeMasterSubTab]);
+        fetchItems();
+    }, []);
 
     const handleAddItem = () => {
         setItems([...items, {
@@ -4451,16 +4450,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                 value={item.itemCode}
                                                                                 onChange={(e) => {
                                                                                     const selectedCode = e.target.value;
-                                                                                    const selectedItem = availableVendorItems.find(i => i.item_code === selectedCode);
-
+                                                                                    const selectedInvItem = inventoryItems.find(i => i.item_code === selectedCode);
                                                                                     setPOItems(prevItems => prevItems.map(pItem => {
                                                                                         if (pItem.id === item.id) {
                                                                                             return {
                                                                                                 ...pItem,
                                                                                                 itemCode: selectedCode,
-                                                                                                itemName: selectedItem ? (selectedItem.item_name || '') : '',
-                                                                                                supplierItemCode: selectedItem ? (selectedItem.supplier_item_code || '') : '',
-                                                                                                uom: selectedItem ? (selectedItem.unit || '') : '',
+                                                                                                itemName: selectedInvItem ? (selectedInvItem.item_name || '') : '',
+                                                                                                uom: selectedInvItem ? (selectedInvItem.uom || selectedInvItem.unit || '') : '',
                                                                                             };
                                                                                         }
                                                                                         return pItem;
@@ -4468,10 +4465,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                 }}
                                                                                 className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
                                                                             >
-                                                                                <option value="">Select Item</option>
-                                                                                {availableVendorItems.map((vItem) => (
-                                                                                    <option key={vItem.id} value={vItem.item_code}>
-                                                                                        {vItem.item_code}
+                                                                                <option value="">Select Item Code</option>
+                                                                                {inventoryItems.map((invItem) => (
+                                                                                    <option key={invItem.id} value={invItem.item_code}>
+                                                                                        {invItem.item_code}
                                                                                     </option>
                                                                                 ))}
                                                                             </select>
@@ -4481,16 +4478,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                 value={item.itemName}
                                                                                 onChange={(e) => {
                                                                                     const selectedName = e.target.value;
-                                                                                    const selectedItem = availableVendorItems.find(i => i.item_name === selectedName);
-
+                                                                                    const selectedInvItem = inventoryItems.find(i => i.item_name === selectedName);
                                                                                     setPOItems(prevItems => prevItems.map(pItem => {
                                                                                         if (pItem.id === item.id) {
                                                                                             return {
                                                                                                 ...pItem,
-                                                                                                itemCode: selectedItem ? (selectedItem.item_code || '') : '',
+                                                                                                itemCode: selectedInvItem ? (selectedInvItem.item_code || '') : '',
                                                                                                 itemName: selectedName,
-                                                                                                supplierItemCode: selectedItem ? (selectedItem.supplier_item_code || '') : '',
-                                                                                                uom: selectedItem ? (selectedItem.unit || '') : '',
+                                                                                                uom: selectedInvItem ? (selectedInvItem.uom || selectedInvItem.unit || '') : '',
                                                                                             };
                                                                                         }
                                                                                         return pItem;
@@ -4498,10 +4493,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                 }}
                                                                                 className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
                                                                             >
-                                                                                <option value="">Select Item</option>
-                                                                                {availableVendorItems.map((vItem) => (
-                                                                                    <option key={vItem.id} value={vItem.item_name}>
-                                                                                        {vItem.item_name}
+                                                                                <option value="">Select Item Name</option>
+                                                                                {inventoryItems.map((invItem) => (
+                                                                                    <option key={invItem.id} value={invItem.item_name}>
+                                                                                        {invItem.item_name}
                                                                                     </option>
                                                                                 ))}
                                                                             </select>

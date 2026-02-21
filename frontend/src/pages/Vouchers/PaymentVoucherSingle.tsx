@@ -79,12 +79,10 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
         fetchLedgers();
     }, []);
 
-    // Filter Pay From options
+    // Filter Pay From options (Cash and Bank accounts)
     const payFromLedgers = useMemo(() => {
         return allLedgers.filter(l => {
             const group = (l.group || '').toLowerCase();
-            // Robust fuzzy matching to include "Cash and Bank Accounts", "Bank OD/CC Account" 
-            // and related standard accounting groups to ensure the list is populated correctly.
             return (
                 group.includes('cash') ||
                 group.includes('bank') ||

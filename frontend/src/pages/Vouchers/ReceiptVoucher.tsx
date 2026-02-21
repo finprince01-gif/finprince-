@@ -78,13 +78,20 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
         fetchLedgers();
     }, []);
 
-    // Filter Receive In (Debit) options: Cash/Bank
+    // Filter Receive In (Debit) options: Cash and Bank accounts
     const receiveInLedgers = useMemo(() => {
-        const targetGroups = ['Cash-in-Hand', 'Bank Accounts', 'Bank OD A/c', 'Bank OD/CC Accounts', 'Cash and Bank Accounts'];
-        return allLedgers.filter(l => targetGroups.includes(l.group));
+        return allLedgers.filter(l => {
+            const group = (l.group || '').toLowerCase();
+            return (
+                group.includes('cash') ||
+                group.includes('bank') ||
+                group.includes('od') ||
+                group.includes('cc')
+            );
+        });
     }, [allLedgers]);
 
-    // Filter Receive From (Credit) options: All ledgers EXCEPT Receive In
+    // Filter Receive From (Credit) options: All ledgers EXCEPT Receive In accounts
     const receiveFromOptions = useMemo(() => {
         const receiveInIds = new Set(receiveInLedgers.map(l => l.id));
         return allLedgers.filter(l => !receiveInIds.has(l.id));

@@ -121,6 +121,7 @@ class VendorGSTDetailsListSerializer(serializers.ModelSerializer):
         model = VendorMasterGSTDetails
         fields = [
             'id',
+            'vendor_basic_detail',
             'gstin',
             'gst_registration_type',
             'legal_name',

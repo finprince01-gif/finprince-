@@ -88,16 +88,16 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
                 }
 
                 // Fetch Locations
-                const locResponse = await httpClient.get<Location[]>('/api/inventory/locations/');
-                setLocations(locResponse || []);
+                const locResponse = await httpClient.get<any>('/api/inventory/locations/');
+                setLocations(Array.isArray(locResponse) ? locResponse : (locResponse?.results || []));
 
                 // Fetch Vendors (Basic Details)
-                const vendorsResponse = await apiService.getRichVendors();
-                setVendors(vendorsResponse || []);
+                const vendorsResponse = await apiService.getRichVendors() as any;
+                setVendors(Array.isArray(vendorsResponse) ? vendorsResponse : (vendorsResponse?.results || []));
 
                 // Fetch Items
-                const itemsResponse = await apiService.getStockItems();
-                setItemsList(itemsResponse || []);
+                const itemsResponse = await apiService.getStockItems() as any;
+                setItemsList(Array.isArray(itemsResponse) ? itemsResponse : (itemsResponse?.results || []));
 
             } catch (error) {
                 console.error('Failed to fetch locations:');
@@ -199,15 +199,17 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
 
             // Logic for Item Selection
             if (field === 'itemCode' || field === 'itemName') {
-                const selectedStockItem = itemsList.find(i =>
-                    (field === 'itemCode' ? i.item_code : i.item_name) === value
-                );
+                const selectedStockItem = itemsList.find(i => {
+                    const code = i.item_code || i.code || '';
+                    const name = i.item_name || i.name || '';
+                    return (field === 'itemCode' ? code : name) === value;
+                });
 
                 if (selectedStockItem) {
-                    updatedItem.itemCode = selectedStockItem.item_code;
-                    updatedItem.itemName = selectedStockItem.item_name;
-                    updatedItem.hsnCode = selectedStockItem.hsn_sac_code || '';
-                    updatedItem.uom = selectedStockItem.base_unit || '';
+                    updatedItem.itemCode = selectedStockItem.item_code || selectedStockItem.code || '';
+                    updatedItem.itemName = selectedStockItem.item_name || selectedStockItem.name || '';
+                    updatedItem.hsnCode = selectedStockItem.hsn_code || selectedStockItem.hsn_sac_code || '';
+                    updatedItem.uom = selectedStockItem.uom || selectedStockItem.base_unit || selectedStockItem.unit || '';
                 }
             }
 
@@ -265,7 +267,7 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
             }))
         };
 
-        
+
         onSave(payload);
         onClose();
     };
@@ -281,12 +283,7 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
 
                 <div className="p-6 space-y-6 flex-1 overflow-y-auto">
                     {/* Top Row */}
-                    <div className="mb-4">
-                        <label className="flex items-center gap-2">
-                            <input type="radio" checked readOnly className="text-indigo-600 focus:ring-indigo-500" />
-                            <span className="text-sm font-bold text-gray-700 uppercase">PURCHASES</span>
-                        </label>
-                    </div>
+
 
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                         <div>
@@ -452,7 +449,10 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
                                                     className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none"
                                                 >
                                                     <option value="">Select</option>
-                                                    {itemsList.map(i => <option key={i.id} value={i.item_code}>{i.item_code}</option>)}
+                                                    {itemsList.map(i => {
+                                                        const code = i.item_code || i.code || '';
+                                                        return <option key={i.id} value={code}>{code}</option>;
+                                                    })}
                                                 </select>
                                             </td>
                                             <td className="p-2">
@@ -462,7 +462,10 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
                                                     className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none"
                                                 >
                                                     <option value="">Select Item</option>
-                                                    {itemsList.map(i => <option key={i.id} value={i.item_name}>{i.item_name}</option>)}
+                                                    {itemsList.map(i => {
+                                                        const name = i.item_name || i.name || '';
+                                                        return <option key={i.id} value={name}>{name}</option>;
+                                                    })}
                                                 </select>
                                             </td>
                                             <td className="p-2">
