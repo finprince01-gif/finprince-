@@ -17,13 +17,13 @@ class VendorMasterCategory(models.Model):
     )
     group = models.CharField(
         max_length=255,
-        null=True,
+        default='',
         blank=True,
         help_text="Group under category (optional)"
     )
     subgroup = models.CharField(
         max_length=255,
-        null=True,
+        default='',
         blank=True,
         help_text="Subgroup under group (optional)"
     )
@@ -151,7 +151,7 @@ class Vendor(models.Model):
     
     # Category
     category = models.ForeignKey(
-        InventoryMasterCategory,
+        VendorMasterCategory,
         on_delete=models.SET_NULL,
         related_name='vendors',
         null=True,

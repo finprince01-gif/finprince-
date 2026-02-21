@@ -569,14 +569,14 @@ const ServicePage: React.FC<ServicePageProps> = () => {
       if (selectedNode.level === 0) {
         payload = {
           category: selectedNode.data.category,
-          group: formData.group.trim() || null,
-          subgroup: formData.subgroup.trim() || null
+          group: formData.group.trim() || '',
+          subgroup: ''
         };
       } else if (selectedNode.level === 1) {
         payload = {
           category: selectedNode.data.category,
-          group: selectedNode.data.group,
-          subgroup: formData.subgroup.trim()
+          group: selectedNode.data.group || '',
+          subgroup: formData.subgroup.trim() || ''
         };
       }
 

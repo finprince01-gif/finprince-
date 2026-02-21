@@ -561,36 +561,14 @@ const InventoryPage: React.FC = () => {
   };
 
   // Helper function for Creating Category from Wizard
-  const handleCreateCategory = async (data: { category: string; group: string | null; subgroup: string | null }) => {
+  const handleCreateCategory = async (data: { category: string; group: string; subgroup: string }) => {
     try {
-      // 1. Ensure Root Category exists if we are creating a Group or Subgroup
-      if (data.group) {
-        try {
-          await httpClient.post('/api/inventory/master-categories/', {
-            category: data.category,
-            group: null,
-            subgroup: null
-          });
-        } catch (e) {
-          // Ignore if already exists (400 Bad Request usually due to unique constraint)
-        }
-      }
-
-      // 2. Ensure Group exists if we are creating a Subgroup
-      if (data.group && data.subgroup) {
-        try {
-          await httpClient.post('/api/inventory/master-categories/', {
-            category: data.category,
-            group: data.group,
-            subgroup: null
-          });
-        } catch (e) {
-          // Ignore if group already exists
-        }
-      }
-
-      // 3. Create the requested item
-      await httpClient.post('/api/inventory/master-categories/', data);
+      // Create only the exact record requested — no extra placeholder rows
+      await httpClient.post('/api/inventory/master-categories/', {
+        category: data.category,
+        group: data.group || '',
+        subgroup: data.subgroup || ''
+      });
       setCategoryUpdateCount(prev => prev + 1);
     } catch (error) {
       console.error("Error creating category:");

@@ -10,10 +10,20 @@ class ServiceGroupSerializer(serializers.ModelSerializer):
     """
     Serializer for Service Group
     """
+    full_path = serializers.ReadOnlyField()
+    group = serializers.CharField(required=False, allow_null=True, allow_blank=True, default='')
+    subgroup = serializers.CharField(required=False, allow_null=True, allow_blank=True, default='')
+    
     class Meta:
         model = ServiceGroup
-        fields = ['id', 'tenant_id', 'category', 'group', 'subgroup', 'is_active']
-        read_only_fields = ['id', 'tenant_id']
+        fields = ['id', 'tenant_id', 'category', 'group', 'subgroup', 'full_path', 'is_active']
+        read_only_fields = ['id', 'tenant_id', 'full_path']
+
+    def validate_group(self, value):
+        return value if value is not None else ''
+
+    def validate_subgroup(self, value):
+        return value if value is not None else ''
 
 
 class ServiceSerializer(serializers.ModelSerializer):

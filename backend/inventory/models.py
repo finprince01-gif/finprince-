@@ -13,13 +13,13 @@ class InventoryMasterCategory(BaseModel):
     )
     group = models.CharField(
         max_length=255,
-        null=True,
+        default='',
         blank=True,
         help_text="Group under category (optional)"
     )
     subgroup = models.CharField(
         max_length=255,
-        null=True,
+        default='',
         blank=True,
         help_text="Subgroup under group (optional)"
     )
@@ -42,6 +42,10 @@ class InventoryMasterCategory(BaseModel):
         if self.subgroup:
             parts.append(self.subgroup)
         return " > ".join(parts)
+    
+    @property
+    def full_path(self):
+        return str(self)
 
 
 class InventoryLocation(BaseModel):

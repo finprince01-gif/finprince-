@@ -22,13 +22,13 @@ class ServiceGroup(BaseModel):
     )
     group = models.CharField(
         max_length=100,
-        null=True,
+        default='',
         blank=True,
         help_text="Group under category (optional)"
     )
     subgroup = models.CharField(
         max_length=100,
-        null=True,
+        default='',
         blank=True,
         help_text="Subgroup under group (optional)"
     )
@@ -51,6 +51,10 @@ class ServiceGroup(BaseModel):
         if self.subgroup:
             parts.append(self.subgroup)
         return " > ".join(parts)
+    
+    @property
+    def full_path(self):
+        return str(self)
 
 
 class Service(models.Model):
