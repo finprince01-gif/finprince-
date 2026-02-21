@@ -83,16 +83,15 @@ const PayrollPage: React.FC = () => {
 
     return (
         <div>
-            {/* Header */}
-            <div className="flex items-center justify-between mb-6">
+            <div className="erp-section-title flex items-center justify-between">
                 <div>
-                    <h2 className="text-2xl font-bold text-gray-800">Payroll Management</h2>
-                    <p className="text-sm text-gray-600 mt-1">Manage employees, process pay runs, and handle statutory compliance.</p>
+                    <h1 className="page-title">Payroll Management</h1>
+                    <p className="helper-text">Manage employees, process pay runs, and handle statutory compliance.</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <button
                         onClick={() => setShowProcessPayRunModal(true)}
-                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] text-sm font-medium flex items-center gap-2 transition-colors shadow-none border border-slate-200-none border border-slate-200"
+                        className="erp-button-primary flex items-center gap-2"
                     >
                         <Icon name="plus" className="w-4 h-4" />
                         Process Pay Run
@@ -101,21 +100,16 @@ const PayrollPage: React.FC = () => {
             </div>
 
             {/* Tab Navigation */}
-            <div className="mb-6">
-                <div className="flex space-x-8 border-b border-gray-200">
-                    {tabs.map((tab) => (
-                        <button
-                            key={tab}
-                            onClick={() => setActiveTab(tab)}
-                            className={`whitespace-nowrap py-2 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === tab
-                                ? 'border-indigo-600 text-indigo-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                }`}
-                        >
-                            {tab}
-                        </button>
-                    ))}
-                </div>
+            <div className="erp-tab-container">
+                {tabs.map((tab) => (
+                    <button
+                        key={tab}
+                        onClick={() => setActiveTab(tab)}
+                        className={`erp-tab ${activeTab === tab ? 'active' : ''}`}
+                    >
+                        {tab}
+                    </button>
+                ))}
             </div>
 
             {/* Main Content */}
@@ -179,7 +173,7 @@ const DashboardContent: React.FC = () => {
         <div className="space-y-6">
             {/* Metrics Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 p-5 border border-gray-100 hover:shadow-none border border-slate-200-none border border-slate-200 transition-shadow-none border border-slate-200">
+                <div className="bg-white rounded-[4px] p-5">
                     <div className="flex items-start justify-between">
                         <div>
                             <p className="text-xs text-gray-600 mb-2 font-medium">Total Employees</p>
@@ -191,7 +185,7 @@ const DashboardContent: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 p-5 border border-gray-100 hover:shadow-none border border-slate-200-none border border-slate-200 transition-shadow-none border border-slate-200">
+                <div className="bg-white rounded-[4px] p-5">
                     <div className="flex items-start justify-between">
                         <div>
                             <p className="text-xs text-gray-600 mb-2 font-medium">Monthly Payroll</p>
@@ -205,7 +199,7 @@ const DashboardContent: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 p-5 border border-gray-100 hover:shadow-none border border-slate-200-none border border-slate-200 transition-shadow-none border border-slate-200">
+                <div className="bg-white rounded-[4px] p-5">
                     <div className="flex items-start justify-between">
                         <div>
                             <p className="text-xs text-gray-600 mb-2 font-medium">Pending Pay Runs</p>
@@ -217,7 +211,7 @@ const DashboardContent: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 p-5 border border-gray-100 hover:shadow-none border border-slate-200-none border border-slate-200 transition-shadow-none border border-slate-200">
+                <div className="bg-white rounded-[4px] p-5">
                     <div className="flex items-start justify-between">
                         <div>
                             <p className="text-xs text-gray-600 mb-2 font-medium">Compliance Status</p>
@@ -231,7 +225,7 @@ const DashboardContent: React.FC = () => {
             </div>
 
             {/* Recent Activity */}
-            <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 p-6 border border-gray-100">
+            <div className="bg-white rounded-[4px] p-6">
                 <h2 className="text-lg font-bold text-gray-900 mb-4">Recent Payroll Activity</h2>
                 <div className="flex flex-col items-center justify-center py-20">
                     <div className="w-20 h-20 rounded-[4px] bg-gray-100 flex items-center justify-center mb-4">
@@ -256,7 +250,7 @@ const EmployeesContent: React.FC<{ employees: Employee[]; onRefresh: () => void 
 
     return (
         <>
-            <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-100">
+            <div className="bg-white rounded-[4px]">
                 <div className="p-6 border-b border-gray-200">
                     <div className="flex items-center justify-between">
                         <h2 className="text-xl font-bold text-gray-900">Employee List</h2>
@@ -364,9 +358,9 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
         bank_name: ''
     });
 
-    // Effect to auto-populate tenant_id from localStorage
+    // Effect to auto-populate tenant_id from sessionStorage
     useEffect(() => {
-        const storedTenantId = localStorage.getItem('tenantId');
+        const storedTenantId = sessionStorage.getItem('tenantId') || localStorage.getItem('tenantId');
         if (storedTenantId) {
             setFormData(prev => ({ ...prev, tenant_id: storedTenantId }));
         }
@@ -382,7 +376,7 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
 
             // Format the data properly for backend
             const payload = {
-                tenant_id: formData.tenant_id || localStorage.getItem('tenantId'),
+                tenant_id: formData.tenant_id || sessionStorage.getItem('tenantId') || localStorage.getItem('tenantId'),
                 employee_name: formData.employee_name,
                 employee_code: formData.employee_code,
                 email: formData.email,
@@ -416,7 +410,7 @@ const AddEmployeeModal: React.FC<{ onClose: () => void; onSuccess: () => void }>
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-[4px] w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
                 <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white z-10">
                     <div>
                         <h2 className="text-xl font-bold text-gray-900">Add New Employee</h2>
@@ -717,7 +711,7 @@ const ProcessPayRunModal: React.FC<{ onClose: () => void; onSuccess: () => void 
         pay_period: '',
         start_date: '',
         end_date: '',
-        tenant_id: localStorage.getItem('tenantId') || '',
+        tenant_id: sessionStorage.getItem('tenantId') || localStorage.getItem('tenantId') || '',
     });
     const [isProcessing, setIsProcessing] = useState(false);
 
@@ -733,7 +727,7 @@ const ProcessPayRunModal: React.FC<{ onClose: () => void; onSuccess: () => void 
             const payRun = await httpClient.post<PayRun>('/api/payroll/pay-runs/', formData);
 
             // Process it immediately
-            const tenantId = payRun.tenant_id || localStorage.getItem('tenantId');
+            const tenantId = payRun.tenant_id || sessionStorage.getItem('tenantId') || localStorage.getItem('tenantId');
             await httpClient.post(`/api/payroll/pay-runs/${payRun.id}/process/?tenant_id=${tenantId}`);
 
             showSuccess('Pay run created and processed successfully!');
@@ -748,7 +742,7 @@ const ProcessPayRunModal: React.FC<{ onClose: () => void; onSuccess: () => void 
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 w-full max-w-2xl mx-4">
+            <div className="bg-white rounded-[4px] w-full max-w-2xl mx-4">
                 <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                     <div>
                         <h2 className="text-xl font-bold text-gray-900">Process Pay Run</h2>
@@ -953,7 +947,7 @@ const SalaryTemplatesContent: React.FC = () => {
 
     const fetchTemplates = async () => {
         try {
-            const tenantId = localStorage.getItem('tenantId');
+            const tenantId = sessionStorage.getItem('tenantId') || localStorage.getItem('tenantId');
             const response = await httpClient.get<any[]>(`/api/payroll/salary-templates/?tenant_id=${tenantId}`);
             setTemplates(response);
         } catch (error) {
@@ -1013,7 +1007,7 @@ const CreateTemplateModal: React.FC<{ onClose: () => void; onSuccess: () => void
     const [formData, setFormData] = useState({
         template_name: '',
         description: '',
-        tenant_id: localStorage.getItem('tenantId') || ''
+        tenant_id: sessionStorage.getItem('tenantId') || localStorage.getItem('tenantId') || ''
     });
 
     const handleSubmit = async () => {

@@ -1813,7 +1813,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 bg-white px-4 py-2 border border-slate-200 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200">
+                <div className="flex items-center gap-2 bg-white px-4 py-2 border border-slate-200 rounded-[4px] shadow-none">
                   <span className="text-sm font-medium text-gray-700">1 Foreign Currency =</span>
                   <input
                     type="text"
@@ -1827,7 +1827,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               </div>
 
               {/* Foreign Currency Table */}
-              <div className="overflow-x-auto border border-gray-200 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200">
+              <div className="overflow-x-auto border border-gray-200 rounded-[4px] shadow-none">
                 <table className="w-full">
                   <thead className="bg-indigo-600 text-white">
                     <tr>
@@ -1970,7 +1970,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 </div>
 
                 {/* Items Table */}
-                <div className="overflow-x-auto border border-gray-200 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200">
+                <div className="overflow-x-auto border border-gray-200 rounded-[4px] shadow-none">
                   <table className="w-full">
                     <thead className="bg-indigo-600 text-white">
                       <tr>
@@ -2266,13 +2266,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <div className="flex items-center justify-between mb-6">
                       <button
                         type="button"
-                        className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                        className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-[4px] shadow-none text-sm font-medium hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                       >
                         Terms & Conditions
                       </button>
                       <button
                         type="button"
-                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] shadow-none text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                       >
                         Edit Masters
                       </button>
@@ -4516,25 +4516,25 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       {/* Header Section */}
       <div className="grid grid-cols-2 gap-6 mb-6 max-w-2xl">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="erp-label">
             Date <span className="text-red-500">*</span>
           </label>
           <input
             type="date"
             value={date}
             onChange={e => setDate(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="erp-input"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="erp-label">
             Voucher Number <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
             value={voucherNumber}
             readOnly
-            className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
+            className="erp-input bg-gray-50 text-gray-500"
           />
         </div>
       </div>
@@ -4542,14 +4542,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       {/* Expense Rows */}
       <div className="space-y-6">
         {expenseRows.map((row, index) => (
-          <div key={row.id} className="border-2 border-gray-200 rounded-[4px] p-6 bg-white shadow-none border border-slate-200-none border border-slate-200">
+          <div key={row.id} className="erp-container border-2">
             {/* Row Header */}
-            <div className="flex justify-between items-center mb-4">
-              <h4 className="text-sm font-semibold text-gray-700">Expense Entry #{index + 1}</h4>
+            <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-100">
+              <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Expense Entry #{index + 1}</h4>
               {expenseRows.length > 1 && (
                 <button
                   onClick={() => handleRemoveExpenseRow(row.id)}
-                  className="text-red-500 hover:text-red-700"
+                  className="text-red-500 hover:text-red-700 transition-colors"
                   title="Remove this expense"
                 >
                   <Icon name="trash" className="w-4 h-4" />
@@ -4560,7 +4560,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             {/* Main Fields Row */}
             <div className="grid grid-cols-5 gap-4 mb-4">
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
+                <label className="erp-label">
                   Expenses <span className="text-red-500">*</span>
                 </label>
                 <SearchableSelect
@@ -4572,7 +4572,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
+                <label className="erp-label">
                   Post To <span className="text-red-500">*</span>
                 </label>
                 <SearchableSelect
@@ -4584,38 +4584,38 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
+                <label className="erp-label">
                   Bill Ref No <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={row.billRefNo}
                   onChange={e => handleExpenseRowChange(row.id, 'billRefNo', e.target.value)}
-                  className={`w-full px-3 py-2 border rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${!row.billRefNo ? 'border-red-300' : 'border-gray-300'}`}
+                  className={`erp-input ${!row.billRefNo ? 'border-red-300' : ''}`}
                   placeholder="Invoice #"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
+                <label className="erp-label">
                   Entry Note <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={row.entryNote}
                   onChange={e => handleExpenseRowChange(row.id, 'entryNote', e.target.value)}
-                  className={`w-full px-3 py-2 border rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${!row.entryNote ? 'border-red-300' : 'border-gray-300'}`}
+                  className={`erp-input ${!row.entryNote ? 'border-red-300' : ''}`}
                   placeholder="Note"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
+                <label className="erp-label">
                   Total Amount <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
                   value={row.totalAmount || ''}
                   onChange={e => handleExpenseRowChange(row.id, 'totalAmount', parseFloat(e.target.value) || 0)}
-                  className={`w-full px-3 py-2 border rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${row.totalAmount <= 0 ? 'border-red-300' : 'border-gray-300'}`}
+                  className={`erp-input ${row.totalAmount <= 0 ? 'border-red-300' : ''}`}
                   placeholder="0.00"
                 />
               </div>
@@ -4625,21 +4625,21 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             {!row.showTax && (
               <button
                 onClick={() => handleToggleTax(row.id)}
-                className="inline-flex items-center px-4 py-2 text-sm font-medium text-slate-700 bg-indigo-50/50 border border-indigo-300 rounded-[4px] hover:bg-indigo-100"
+                className="erp-button-secondary py-1.5 px-3 text-xs"
               >
-                <Icon name="plus" className="w-4 h-4 mr-2" />
-                Add Tax
+                <Icon name="plus" className="w-3.5 h-3.5 mr-2" />
+                Add Tax Details
               </button>
             )}
 
             {/* GST Section */}
             {row.showTax && (
-              <div className="mt-4 p-4 bg-indigo-50/50 border border-slate-200 rounded-[4px]">
+              <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-xl">
                 <div className="flex justify-between items-center mb-3">
-                  <h5 className="text-xs font-semibold text-gray-700">GST Details</h5>
+                  <h5 className="text-[11px] font-bold text-slate-700 uppercase tracking-widest">GST Details</h5>
                   <button
                     onClick={() => handleToggleTax(row.id)}
-                    className="text-xs text-indigo-600 hover:text-indigo-800"
+                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-800"
                   >
                     Hide
                   </button>
@@ -4647,13 +4647,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
                 <div className="grid grid-cols-6 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      GST Rate <span className="text-red-500">*</span>
+                    <label className="erp-label">
+                      Rate <span className="text-red-500">*</span>
                     </label>
                     <select
                       value={row.gstRate}
                       onChange={e => handleExpenseRowChange(row.id, 'gstRate', parseFloat(e.target.value))}
-                      className="w-full px-2 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="erp-select"
                     >
                       {gstRateOptions.map(rate => (
                         <option key={rate} value={rate}>{rate}%</option>
@@ -4661,56 +4661,56 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Taxable Value <span className="text-red-500">*</span>
+                    <label className="erp-label">
+                      Taxable <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="number"
                       value={row.taxableValue || ''}
                       onChange={e => handleExpenseRowChange(row.id, 'taxableValue', parseFloat(e.target.value) || 0)}
-                      className="w-full px-2 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="erp-input"
                       placeholder="0.00"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">IGST</label>
+                    <label className="erp-label">IGST</label>
                     <input
                       type="number"
                       value={row.igst || ''}
                       onChange={e => handleExpenseRowChange(row.id, 'igst', parseFloat(e.target.value) || 0)}
-                      className="w-full px-2 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-50"
+                      className="erp-input bg-gray-50"
                       placeholder="0.00"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">CGST</label>
+                    <label className="erp-label">CGST</label>
                     <input
                       type="number"
                       value={row.cgst || ''}
                       onChange={e => handleExpenseRowChange(row.id, 'cgst', parseFloat(e.target.value) || 0)}
                       disabled={row.igst > 0}
-                      className={`w-full px-2 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${row.igst > 0 ? 'bg-gray-100 cursor-not-allowed' : 'bg-gray-50'}`}
+                      className={`erp-input ${row.igst > 0 ? 'bg-gray-100 cursor-not-allowed' : 'bg-gray-50'}`}
                       placeholder="0.00"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">SGST</label>
+                    <label className="erp-label">SGST</label>
                     <input
                       type="number"
                       value={row.sgst || ''}
                       onChange={e => handleExpenseRowChange(row.id, 'sgst', parseFloat(e.target.value) || 0)}
                       disabled={row.igst > 0}
-                      className={`w-full px-2 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${row.igst > 0 ? 'bg-gray-100 cursor-not-allowed' : 'bg-gray-50'}`}
+                      className={`erp-input ${row.igst > 0 ? 'bg-gray-100 cursor-not-allowed' : 'bg-gray-50'}`}
                       placeholder="0.00"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">CESS</label>
+                    <label className="erp-label">CESS</label>
                     <input
                       type="number"
                       value={row.cess || ''}
                       onChange={e => handleExpenseRowChange(row.id, 'cess', parseFloat(e.target.value) || 0)}
-                      className="w-full px-2 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="erp-input"
                       placeholder="0.00"
                     />
                   </div>
@@ -4724,30 +4724,30 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       {/* More Expenses Button */}
       <button
         onClick={handleAddExpenseRow}
-        className="mt-4 inline-flex items-center px-4 py-2 text-sm font-medium text-slate-700 bg-indigo-50/50 border border-indigo-300 rounded-[4px] hover:bg-indigo-100"
+        className="erp-button-secondary mt-4"
       >
         <Icon name="plus" className="w-4 h-4 mr-2" />
-        More Expenses
+        Add Another Expense
       </button>
 
       {/* File Upload Section */}
-      <div className="mt-6 p-4 border-2 border-dashed border-gray-300 rounded-[4px]">
+      <div className="mt-8 p-6 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
         <div className="flex items-center justify-between">
           <div>
-            <h5 className="text-sm font-medium text-gray-700 mb-1">Upload Supporting Documents</h5>
-            <p className="text-xs text-gray-500">PDF, JPG only (Optional)</p>
+            <h5 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-1">Supporting Documents</h5>
+            <p className="text-xs text-gray-400">PDF, JPG, PNG up to 10MB (Optional)</p>
           </div>
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center px-4 py-2 text-sm font-medium text-slate-700 bg-indigo-50/50 border border-indigo-300 rounded-[4px] hover:bg-indigo-100"
+            className="erp-button-secondary"
           >
             <Icon name="upload" className="w-4 h-4 mr-2" />
-            Upload
+            Upload Files
           </button>
           <input
             ref={fileInputRef}
             type="file"
-            accept=".pdf,.jpg,.jpeg"
+            accept=".pdf,.jpg,.jpeg,.png"
             multiple
             onChange={handleFileUpload}
             className="hidden"
@@ -4756,17 +4756,21 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
         {/* Uploaded Files List */}
         {uploadedFiles.length > 0 && (
-          <div className="mt-4 space-y-2">
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-3">
             {uploadedFiles.map((file, index) => (
-              <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                <div className="flex items-center">
-                  <Icon name="document" className="w-4 h-4 mr-2 text-gray-500" />
-                  <span className="text-sm text-gray-700">{file.name}</span>
-                  <span className="ml-2 text-xs text-gray-500">({(file.size / 1024).toFixed(1)} KB)</span>
+              <div key={index} className="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-xl shadow-sm">
+                <div className="flex items-center min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center mr-3 flex-shrink-0">
+                    <Icon name="document" className="w-4 h-4 text-indigo-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-700 truncate">{file.name}</p>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-widest">{(file.size / 1024).toFixed(1)} KB</p>
+                  </div>
                 </div>
                 <button
                   onClick={() => handleRemoveFile(index)}
-                  className="text-red-500 hover:text-red-700"
+                  className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                 >
                   <Icon name="trash" className="w-4 h-4" />
                 </button>
@@ -4777,30 +4781,29 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       </div>
 
       {/* Posting Note */}
-      <div className="mt-6">
-        <label className="block text-sm font-medium text-gray-700 mb-1">Posting Note</label>
+      <div className="mt-8">
+        <label className="erp-label">Posting Note / Narration</label>
         <textarea
           value={narration}
           onChange={e => setNarration(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-          rows={3}
-          placeholder="Enter posting note..."
+          className="erp-input h-32 py-3 resize-none"
+          placeholder="Enter detailed narration for this transaction..."
         />
       </div>
 
       {/* Action Buttons */}
-      <div className="mt-8 pt-4 border-t flex justify-end space-x-3">
+      <div className="mt-8 pt-6 border-t border-slate-100 flex justify-end gap-3">
         <button
           onClick={resetForm}
-          className="inline-flex items-center justify-center px-6 py-2 border border-gray-300 text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+          className="erp-button-secondary px-8"
         >
           Cancel
         </button>
         <button
           onClick={handleSaveExpenseVoucher}
-          className="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          className="erp-button-primary px-10"
         >
-          Post & Close
+          Post Voucher
         </button>
       </div>
     </>
@@ -4809,192 +4812,171 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const renderJournalForm = () => (
     <>
       {/* Top Row: Date and Voucher Number */}
-      <div className="grid grid-cols-2 gap-4 mb-6 max-w-md">
+      <div className="grid grid-cols-2 gap-6 mb-6 max-w-2xl">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+          <label className="erp-label">Date</label>
           <input
             type="date"
             value={date}
             onChange={e => setDate(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="erp-input"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Voucher Number</label>
+          <label className="erp-label">Voucher Number</label>
           <input
             type="text"
             value={voucherNumber}
             readOnly
-            className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
+            className="erp-input bg-gray-50 text-gray-500"
           />
         </div>
       </div>
 
       {/* Journal Entries Table */}
-      <div className="border-2 border-gray-200 rounded-[4px] p-6">
-        <table className="min-w-full">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="table-header">Ledger</th>
-              <th className="table-header">Note</th>
-              <th className="table-header w-32">Ref. No.</th>
-              <th className="table-header w-40">Debit</th>
-              <th className="table-header w-40">Credit</th>
-              <th className="w-12"></th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {entries.map((entry, index) => (
-              <tr key={index}>
-                <td className="px-4 py-2">
-                  <SearchableSelect
-                    value={entry.ledger}
-                    onChange={(val) => handleEntryChange(index, 'ledger', val)}
-                    options={allLedgers.map(l => l.name)}
-                    placeholder="Select Ledger"
-                  />
-                </td>
-                <td className="px-4 py-2">
-                  <input
-                    type="text"
-                    value={entry.note}
-                    onChange={e => handleEntryChange(index, 'note', e.target.value)}
-                    placeholder="Note"
-                    className="table-input"
-                  />
-                </td>
-                <td className="px-4 py-2">
-                  <input
-                    type="text"
-                    value={entry.refNo}
-                    onChange={e => handleEntryChange(index, 'refNo', e.target.value)}
-                    placeholder="Ref #"
-                    className="table-input"
-                  />
-                </td>
-                <td className="px-4 py-2">
-                  <input
-                    type="number"
-                    value={entry.debit}
-                    onChange={e => handleEntryChange(index, 'debit', parseFloat(e.target.value) || 0)}
-                    className="table-input"
-                  />
-                </td>
-                <td className="px-4 py-2">
-                  <input
-                    type="number"
-                    value={entry.credit}
-                    onChange={e => handleEntryChange(index, 'credit', parseFloat(e.target.value) || 0)}
-                    className="table-input"
-                  />
-                </td>
-                <td className="px-4 py-2">
-                  <button
-                    onClick={() => handleRemoveEntryRow(index)}
-                    className="text-red-500 hover:text-red-700 p-1"
-                  >
-                    <Icon name="trash" className="w-4 h-4" />
-                  </button>
-                </td>
+      <div className="erp-container p-0 overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100">
+          <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Journal Entries</h3>
+        </div>
+        <div className="erp-table-container border-none rounded-none shadow-none">
+          <table className="erp-table">
+            <thead>
+              <tr>
+                <th>Ledger</th>
+                <th>Note</th>
+                <th className="w-32">Ref. No.</th>
+                <th className="w-40 text-right">Debit</th>
+                <th className="w-40 text-right">Credit</th>
+                <th className="w-12"></th>
               </tr>
-            ))}
-          </tbody>
-          <tfoot className="bg-gray-50 font-semibold border-t-2 border-gray-200">
-            <tr>
-              <td colSpan={3} className="px-4 py-3 text-right text-sm">Total</td>
-              <td className="px-4 py-3 text-sm">{totalDebit.toFixed(2)}</td>
-              <td className="px-4 py-3 text-sm">{totalCredit.toFixed(2)}</td>
-              <td></td>
-            </tr>
-          </tfoot>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {entries.map((entry, index) => (
+                <tr key={index}>
+                  <td className="px-4 py-3">
+                    <SearchableSelect
+                      value={entry.ledger}
+                      onChange={(val) => handleEntryChange(index, 'ledger', val)}
+                      options={allLedgers.map(l => l.name)}
+                      placeholder="Select Ledger"
+                    />
+                  </td>
+                  <td className="px-4 py-3">
+                    <input
+                      type="text"
+                      value={entry.note}
+                      onChange={e => handleEntryChange(index, 'note', e.target.value)}
+                      placeholder="Note"
+                      className="erp-input h-9"
+                    />
+                  </td>
+                  <td className="px-4 py-3">
+                    <input
+                      type="text"
+                      value={entry.refNo}
+                      onChange={e => handleEntryChange(index, 'refNo', e.target.value)}
+                      placeholder="Ref #"
+                      className="erp-input h-9"
+                    />
+                  </td>
+                  <td className="px-4 py-3">
+                    <input
+                      type="number"
+                      value={entry.debit || ''}
+                      onChange={e => handleEntryChange(index, 'debit', parseFloat(e.target.value) || 0)}
+                      className="erp-input h-9 text-right font-mono"
+                      placeholder="0.00"
+                    />
+                  </td>
+                  <td className="px-4 py-3">
+                    <input
+                      type="number"
+                      value={entry.credit || ''}
+                      onChange={e => handleEntryChange(index, 'credit', parseFloat(e.target.value) || 0)}
+                      className="erp-input h-9 text-right font-mono"
+                      placeholder="0.00"
+                    />
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <button
+                      onClick={() => handleRemoveEntryRow(index)}
+                      className="text-red-400 hover:text-red-600 transition-colors"
+                    >
+                      <Icon name="trash" className="w-4 h-4" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot className="bg-slate-50 font-bold border-t border-slate-200">
+              <tr>
+                <td colSpan={3} className="px-6 py-4 text-right text-xs uppercase tracking-wider text-slate-500">Total</td>
+                <td className="px-6 py-4 text-right text-sm font-mono text-slate-900 border-l border-slate-100">₹{totalDebit.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                <td className="px-6 py-4 text-right text-sm font-mono text-slate-900 border-l border-slate-100">₹{totalCredit.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
 
-        <button
-          onClick={handleAddEntryRow}
-          className="mt-4 text-sm text-indigo-600 hover:text-indigo-800 font-medium flex items-center"
-        >
-          <Icon name="plus" className="w-4 h-4 mr-1" /> Add Row
-        </button>
+        <div className="p-4 border-t border-slate-100 bg-slate-50/50">
+          <button
+            onClick={handleAddEntryRow}
+            className="erp-button-secondary py-1.5 px-3 text-xs"
+          >
+            <Icon name="plus" className="w-3.5 h-3.5 mr-2" /> Add Entry Row
+          </button>
+        </div>
       </div>
 
       {/* Posting Note Section */}
-      <div className="mt-6 max-w-md">
-        <label className="block text-sm font-medium text-gray-700 mb-1">Posting Note</label>
+      <div className="mt-8">
+        <label className="erp-label">Posting Note / Narration</label>
         <textarea
           value={narration}
           onChange={e => setNarration(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-          rows={3}
-          placeholder="Enter posting note..."
+          className="erp-input h-32 py-3 resize-none"
+          placeholder="Enter detailed narration for this journal entry..."
         />
         {!isJournalBalanced && totalDebit > 0 && (
-          <p className="text-red-500 text-sm mt-2">Totals do not match!</p>
+          <div className="mt-3 flex items-center text-red-600 bg-red-50 p-3 rounded-lg border border-red-100">
+            <Icon name="warning" className="w-4 h-4 mr-2" />
+            <span className="text-sm font-medium">Out of Balance: Difference of ₹{Math.abs(totalDebit - totalCredit).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+          </div>
         )}
       </div>
     </>
   );
 
   return (
-    <div className="space-y-6" style={{ background: '#EEF2FF', minHeight: '100%', margin: '-24px', padding: '24px' }}>
+    <div className="space-y-6">
       {/* Page Header */}
-      <div style={{ paddingBottom: '12px', borderBottom: '1px solid #E2E8F0' }}>
-        <h1
-          style={{
-            fontSize: '15px',
-            fontWeight: 700,
-            color: '#1F2937',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            marginBottom: '4px',
-          }}
-        >
-          Voucher Entry
-        </h1>
-        <p style={{ fontSize: '13px', color: '#475569', fontWeight: 400 }}>
-          Record transactions — sales, purchases, payments, and more
-        </p>
+      <div className="erp-section-title">
+        <div>
+          <h1 className="page-title">Voucher Entry</h1>
+          <p className="helper-text mb-0">
+            Record transactions — sales, purchases, payments, and more
+          </p>
+        </div>
       </div>
 
       {/* Main Tabs */}
-      <div
-        style={{
-          display: 'flex',
-          borderBottom: '1px solid #E2E8F0',
-          gap: '4px',
-          overflowX: 'auto',
-          marginBottom: '0',
-        }}
-      >
+      <div className="erp-tab-container">
         {availableVoucherTypes.map(type => (
           <button
             key={type.id}
             onClick={() => { setVoucherType(type.id); resetForm(); }}
-            style={{
-              padding: '10px 20px',
-              fontSize: '13px',
-              fontWeight: voucherType === type.id ? 600 : 500,
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              color: voucherType === type.id ? '#4F46E5' : '#64748B',
-              border: 'none',
-              borderBottom: voucherType === type.id ? '2px solid #4F46E5' : '2px solid transparent',
-              background: 'transparent',
-              cursor: 'pointer',
-              marginBottom: '-1px',
-              whiteSpace: 'nowrap',
-              flexShrink: 0,
-              transition: 'color 0.15s ease, border-color 0.15s ease',
-            }}
+            className={`erp-tab ${voucherType === type.id ? 'active' : ''}`}
           >
             {type.label}
           </button>
         ))}
       </div>
 
-      <div className="erp-card p-6">
+      <div className="erp-container">
         <div className="flex justify-between items-center border-b pb-4 mb-6">
           <div className="flex items-center space-x-4">
-            <h3 className="text-lg font-semibold text-gray-900">{voucherType} Voucher</h3>
+            <h3 className="erp-section-title border-none mb-0 pb-0">{voucherType} Voucher</h3>
             {subscriptionUsage && (
               <div className={`px-3 py-1 rounded-full text-xs font-medium ${isLimitReached ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
                 Usage: {subscriptionUsage.used} / {subscriptionUsage.limit}
@@ -5004,7 +4986,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           <div className="flex items-center space-x-2">
             <button
               onClick={() => isLimitReached ? handleLimitReached() : setIsInvoiceScannerOpen(true)}
-              className={`inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded shadow-sm text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${isLimitReached ? 'bg-gray-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+              className={`erp-button-primary ${isLimitReached ? 'opacity-50 cursor-not-allowed cursor-not-allowed cursor-not-allowed !bg-gray-400 !shadow-none' : ''}`}
               title={isLimitReached ? "Limit Reached" : "Upload Invoices"}
             >
               <Icon name="upload" className="w-4 h-4 mr-2" />
@@ -5012,7 +4994,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             </button>
             <button
               onClick={() => isLimitReached ? handleLimitReached() : setIsMassUploadOpen(true)}
-              className={`inline-flex items-center justify-center px-4 py-2 border border-purple-200 text-sm font-medium rounded shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 ${isLimitReached ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200' : 'text-purple-700 bg-white hover:bg-purple-50'}`}
+              className={`erp-button-secondary ${isLimitReached ? 'opacity-50 cursor-not-allowed cursor-not-allowed cursor-not-allowed !bg-gray-100 !text-gray-400' : 'text-purple-700'}`}
               title={isLimitReached ? "Limit Reached" : "Mass Upload"}
             >
               <Icon name="upload" className="w-4 h-4 mr-2" />
@@ -5021,7 +5003,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             <div className="relative" ref={importMenuRef}>
               <button
                 onClick={() => isLimitReached ? handleLimitReached() : setIsImportMenuOpen(prev => !prev)}
-                className={`inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded shadow-sm text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${isLimitReached ? 'bg-gray-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+                className={`erp-button-primary ${isLimitReached ? 'opacity-50 cursor-not-allowed cursor-not-allowed cursor-not-allowed !bg-gray-400 !shadow-none' : ''}`}
               >
                 <Icon name="upload" className="w-5 h-5 mr-2" />
                 Import Vouchers
@@ -5049,8 +5031,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         </div>
         <style>{`
           .form-label { display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.25rem; }
-          .form-input { display: block; width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem; box-shadow-none border border-slate-200: 0 1px 2px 0 rgb(0 0 0 / 0.05); outline: none; transition: border-color 0.15s ease-in-out, box-shadow-none border border-slate-200 0.15s ease-in-out; }
-          .form-input:focus { border-color: #3b82f6; box-shadow-none border border-slate-200: 0 0 0 1px #3b82f6; }
+          .form-input { display: block; width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); outline: none; transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out; }
+          .form-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 1px #3b82f6; }
           .table-input { 
             width: 100%; 
             border: 1px solid transparent; 
@@ -5064,7 +5046,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
            .table-input:focus { 
             background-color: white;
             border-color: #3b82f6;
-            box-shadow-none border border-slate-200: 0 0 0 1px #3b82f6;
+            box-shadow: 0 0 0 1px #3b82f6;
           }
           .table-input[readOnly] {
             background-color: #f9fafb;
@@ -5097,7 +5079,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         {/* Hide page-level buttons for Receipt, Payment, Expenses and Sales since they have their own buttons */}
         {voucherType !== 'Receipt' && voucherType !== 'Payment' && voucherType !== 'Expenses' && voucherType !== 'Sales' && (
           <div className="mt-8 pt-4 border-t flex justify-end space-x-3">
-            <button onClick={resetForm} className="inline-flex items-center justify-center px-6 py-2 border border-gray-300 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+            <button
+              onClick={resetForm}
+              className="erp-button-secondary"
+            >
               Cancel
             </button>
 
@@ -5113,21 +5098,25 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   else if (purchaseActiveTab === 'supply') setPurchaseActiveTab('due');
                   else if (purchaseActiveTab === 'due') setPurchaseActiveTab('transit');
                 }}
-                className="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="erp-button-primary"
               >
                 Next
               </button>
             ) : (
-              <>
-                <>
-                  <button onClick={handleSaveVoucher} className="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                    Post & Close
-                  </button>
-                  <button onClick={handleSaveVoucher} className="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                    Post & Print/Email
-                  </button>
-                </>
-              </>
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleSaveVoucher}
+                  className="erp-button-primary"
+                >
+                  Post & Close
+                </button>
+                <button
+                  onClick={handleSaveVoucher}
+                  className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                >
+                  Post & Print/Email
+                </button>
+              </div>
             )}
           </div>
         )}
@@ -5138,20 +5127,22 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       {/* Recent / Imported Vouchers - show below the form so imports are visible immediately */}
       {
         vouchers && vouchers.length > 0 && (
-          <div className="mt-8 bg-white p-6 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-slate-200">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Vouchers</h3>
-            <div className="overflow-x-auto">
-              <table className="min-w-full">
-                <thead className="bg-slate-100"><tr>
-                  <th className="table-header">Date</th>
-                  <th className="table-header">Type</th>
-                  <th className="table-header">Inv No.</th>
-                  <th className="table-header">Party</th>
-                  <th className="table-header text-right">Taxable</th>
-                  <th className="table-header text-right">Tax</th>
-                  <th className="table-header text-right">Total</th>
+          <div className="mt-8 erp-container p-0 overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100">
+              <h3 className="erp-section-title border-none mb-0 pb-0 shadow-none">Recent Vouchers</h3>
+            </div>
+            <div className="erp-table-container border-none rounded-none shadow-none">
+              <table className="erp-table">
+                <thead><tr>
+                  <th>Date</th>
+                  <th>Type</th>
+                  <th>Inv No.</th>
+                  <th>Party</th>
+                  <th className="text-right">Taxable</th>
+                  <th className="text-right">Tax</th>
+                  <th className="text-right">Total</th>
                 </tr></thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="divide-y divide-gray-200">
                   {vouchers.slice().sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((v, idx) => (
                     <tr key={`${v.type}-${v.date}-${(v as any).invoiceNo || (v as any).party || ''}-${idx}`}>
                       <td className="px-4 py-2 text-sm text-gray-700">{v.date}</td>
@@ -5282,7 +5273,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           </div>
         )
       }
-    </div >
+    </div>
   );
 };
 

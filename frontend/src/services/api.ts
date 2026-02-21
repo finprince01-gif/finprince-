@@ -533,7 +533,9 @@ class ApiService {
         // Save tokens to memory (cleared on refresh)
         if (data.access && data.refresh) {
             httpClient.setTokens(data.access, data.refresh);
-            // Also clear legacy localStorage tokens if present
+            // Also clear legacy localStorage/sessionStorage tokens if present
+            sessionStorage.removeItem('token');
+            sessionStorage.removeItem('refreshToken');
             localStorage.removeItem('token');
             localStorage.removeItem('refreshToken');
         }
@@ -581,6 +583,8 @@ class ApiService {
         // Auto-login handling
         if (data.access && data.refresh) {
             httpClient.setTokens(data.access, data.refresh);
+            sessionStorage.removeItem('token');
+            sessionStorage.removeItem('refreshToken');
             localStorage.removeItem('token');
             localStorage.removeItem('refreshToken');
         }

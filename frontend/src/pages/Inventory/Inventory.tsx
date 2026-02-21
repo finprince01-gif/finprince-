@@ -302,6 +302,7 @@ const InventoryPage: React.FC = () => {
   const [grnType, setGrnType] = useState('purchases');
   const [grnNumber, setGrnNumber] = useState('');
   const [grnSelectedSeriesId, setGrnSelectedSeriesId] = useState<number | null>(null);
+  const [grnSelectedSeriesName, setGrnSelectedSeriesName] = useState('');
   const [grnDate, setGrnDate] = useState('');
   const [grnTime, setGrnTime] = useState('');
   const [grnLocation, setGrnLocation] = useState('');
@@ -1817,6 +1818,10 @@ const InventoryPage: React.FC = () => {
     }
     const id = parseInt(seriesId, 10);
     setGrnSelectedSeriesId(id);
+    const series = grnSeriesList.find((s: any) => s.id === id);
+    if (series) {
+      setGrnSelectedSeriesName(series.name);
+    }
     try {
       const response = await httpClient.get<{ grn_no: string; series_name: string }>(
         `/api/inventory/master-voucher-grn/${id}/next-number/`
@@ -2075,6 +2080,7 @@ const InventoryPage: React.FC = () => {
       const payload = {
         grn_type: grnType,
         grn_no: grnNumber,
+        grn_series_name: grnSelectedSeriesName,
         date: grnDate || null,
         time: grnTime || null,
         location_id: grnLocation || null, // Assuming this is ID
@@ -6371,11 +6377,11 @@ const InventoryPage: React.FC = () => {
     return (
       <div className="space-y-6">
         {/* Header with Buttons */}
-        <div className="bg-white p-6 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-300">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-gray-800">Inventory Items</h3>
+        <div className="erp-container">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="erp-section-title border-none pb-0 mb-0">Inventory Items</h3>
             <div className="flex gap-3">
-              <button className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50">
+              <button className="erp-button-secondary">
                 📥 Upload Excel
               </button>
               <button
@@ -6383,7 +6389,7 @@ const InventoryPage: React.FC = () => {
                   setSelectedItemDetail({ isNew: true });
                   setEditFormData({ isNew: true, itemCode: '', itemName: '', description: '', category: '', uom: '', rate: '', hsnCode: '', gstRate: '' });
                 }}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700"
+                className="erp-button-primary"
               >
                 ➕ Add Item
               </button>
@@ -6400,18 +6406,18 @@ const InventoryPage: React.FC = () => {
           </div>
 
           {/* Items Table */}
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50 sticky top-0">
+          <div className="erp-table-container">
+            <table className="erp-table">
+              <thead>
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Item Code</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Item Name</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">HSN Code</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">GST Rate</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">UOM</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rate</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Action</th>
+                  <th>Item Code</th>
+                  <th>Item Name</th>
+                  <th>Category</th>
+                  <th>HSN Code</th>
+                  <th>GST Rate</th>
+                  <th>UOM</th>
+                  <th>Rate</th>
+                  <th className="text-center">Action</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -7139,9 +7145,9 @@ const InventoryPage: React.FC = () => {
         </div>
 
         {/* Right Column - Existing Issue Slip Series */}
-        <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-300">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-800">Issue Slip Series Preview</h3>
+        <div className="erp-container p-0 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200 bg-slate-50">
+            <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider">Issue Slip Series Preview</h3>
           </div>
           <div className="max-h-96 overflow-y-auto">
             {loadingIssueSlipSeries ? (
@@ -7242,19 +7248,14 @@ const InventoryPage: React.FC = () => {
 
   const renderMaster = () => (
     <div className="space-y-6">
-      <div className="flex space-x-6 border-b border-slate-200">
+      <div className="erp-tab-container mb-0">
         {masterSubTabs.map((subTab) => (
           <button
             key={subTab}
             onClick={() => setActiveMasterSubTab(subTab)}
-            className={`pb-3 px-4 text-[13px] font-semibold uppercase tracking-wider transition-all relative ${activeMasterSubTab === subTab
-              ? 'text-indigo-600'
-              : 'text-slate-500 hover:text-slate-700'
-              }`}
+            className={`erp-tab ${activeMasterSubTab === subTab ? 'active' : ''}`}
           >
-            {subTab}            {activeMasterSubTab === subTab && (
-              <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-600" />
-            )}
+            {subTab}
           </button>
         ))}
       </div>
@@ -7276,54 +7277,22 @@ const InventoryPage: React.FC = () => {
   );
 
   return (
-    <div className="space-y-6" style={{ background: '#EEF2FF', minHeight: '100%', margin: '-24px', padding: '24px' }}>
+    <div className="space-y-6">
       {/* Page Section Title */}
-      <div style={{ paddingBottom: '12px', borderBottom: '1px solid #E2E8F0' }}>
-        <h1
-          style={{
-            fontSize: '15px',
-            fontWeight: 700,
-            color: '#1F2937',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            marginBottom: '4px',
-          }}
-        >
-          Inventory Management
-        </h1>
-        <p style={{ fontSize: '13px', color: '#475569', fontWeight: 400 }}>
+      <div className="erp-section-title">
+        <h1 className="page-title">Inventory Management</h1>
+        <p className="helper-text mb-0">
           Manage categories, locations, items, and operations
         </p>
       </div>
 
       {/* Main Tabs */}
-      <div
-        style={{
-          display: 'flex',
-          borderBottom: '1px solid #E2E8F0',
-          gap: '4px',
-          marginBottom: '0',
-        }}
-      >
+      <div className="erp-tab-container">
         {visibleTabs.map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            style={{
-              padding: '10px 20px',
-              fontSize: '13px',
-              fontWeight: activeTab === tab ? 600 : 500,
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              color: activeTab === tab ? '#4F46E5' : '#64748B',
-              border: 'none',
-              borderBottom: activeTab === tab ? '2px solid #4F46E5' : '2px solid transparent',
-              background: 'transparent',
-              cursor: 'pointer',
-              marginBottom: '-1px',
-              position: 'relative',
-              transition: 'color 0.15s ease, border-color 0.15s ease',
-            }}
+            className={`erp-tab ${activeTab === tab ? 'active' : ''}`}
           >
             {tab}
           </button>
@@ -7331,7 +7300,7 @@ const InventoryPage: React.FC = () => {
       </div>
 
       {/* Tab Content */}
-      <div className="animate-in fade-in slide-in-from-bottom-1 duration-300">
+      <div className="animate-in fade-in duration-300">
         {activeTab === 'Master' && renderMaster()}
         {activeTab === 'Operations' && renderOperations()}
       </div>

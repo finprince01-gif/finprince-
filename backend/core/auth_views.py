@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework import status
 from django.conf import settings
 from .token import MyTokenObtainPairSerializer
-from .exceptions import BusinessError
+from .exceptions import BusinessException
 
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
@@ -28,7 +28,7 @@ class CookieTokenObtainPairView(TokenObtainPairView):
                 msg = str(e)
                 if hasattr(e, 'detail'):
                     msg = e.detail
-                raise BusinessError(msg)
+                raise BusinessException(msg)
                 
             token_data = serializer.validated_data
 
@@ -174,7 +174,7 @@ class ForgotUserIDView(APIView):
         identifier = request.data.get('identifier') # email or phone
         
         if not identifier:
-            raise BusinessError('Email or Phone is required')
+            raise BusinessException('Email or Phone is required')
             
         users = User.objects.filter(models.Q(email=identifier) | models.Q(phone=identifier))
         
@@ -205,7 +205,7 @@ class ForgotPasswordView(APIView):
         new_password = request.data.get('new_password')
         
         if not all([username, identifier, new_password]):
-            raise BusinessError('Username, Identifier (Email/Phone), and New Password are required')
+            raise BusinessException('Username, Identifier (Email/Phone), and New Password are required')
             
         try:
             user = User.objects.get(

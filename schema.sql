@@ -2556,3 +2556,8 @@ ADD COLUMN state VARCHAR(100) NULL,
 ADD COLUMN country VARCHAR(100) NULL,
 ADD COLUMN pincode VARCHAR(20) NULL;
 
+-- Updates for Inventory Operation Schema (2026-02-21)
+ALTER TABLE `inventory_operation_new_grn`
+ADD COLUMN `grn_series_name` VARCHAR(255) DEFAULT NULL AFTER `grn_no`;
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

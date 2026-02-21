@@ -97,19 +97,27 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
         // Tokens are handled by apiService
         if ((response as any).user) {
           const user = (response as any).user;
-          localStorage.setItem('user', JSON.stringify(user));
-          localStorage.setItem('companyName', user.company_name || companyName);
-          localStorage.setItem('userPlan', user.selected_plan || user.selectedPlan || selectedPlan);
-          localStorage.setItem('tenantId', user.tenant_id || user.tenantId);
+          sessionStorage.setItem('user', JSON.stringify(user));
+          sessionStorage.setItem('companyName', user.company_name || companyName);
+          sessionStorage.setItem('userPlan', user.selected_plan || user.selectedPlan || selectedPlan);
+          sessionStorage.setItem('tenantId', user.tenant_id || user.tenantId);
+
+          // Cleanup legacy localStorage
+          localStorage.removeItem('user');
+          localStorage.removeItem('companyName');
+          localStorage.removeItem('userPlan');
+          localStorage.removeItem('tenantId');
         }
         if ((response as any).permissions) {
-          localStorage.setItem('permissions', JSON.stringify((response as any).permissions));
+          sessionStorage.setItem('permissions', JSON.stringify((response as any).permissions));
+          localStorage.removeItem('permissions');
         }
         setSuccessMessage('Registration successful! Redirecting...');
         setTimeout(() => { window.location.href = '/'; }, 1500);
       } else {
         setSuccessMessage('Account created! Redirecting to login...');
-        localStorage.setItem('companyName', companyName);
+        sessionStorage.setItem('companyName', companyName);
+        localStorage.removeItem('companyName');
         setTimeout(() => { onSwitchToLogin(); }, 1500);
       }
     } catch (err: any) {

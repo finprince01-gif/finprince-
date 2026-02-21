@@ -326,7 +326,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        
+
 
         if (!selectedNode) {
             showWarning('Please select a category or group.');
@@ -335,7 +335,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
 
         // If we're in edit mode, handle the edit
         if (isEditing && selectedNode.data.id && onEditCategory) {
-            
+
 
             try {
                 // Determine if we are updating a Group or Subgroup based on showSubgroup prop
@@ -507,14 +507,14 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
         <div className="flex flex-col h-[calc(100vh-140px)]">
             <div className="px-6 pt-4 pb-3 flex items-center gap-2">
                 <Icon name="tag" className="w-5 h-5 text-gray-600" />
-                <h3 className="text-lg font-semibold text-gray-800">Create Category</h3>
+                <h3 className="section-title">Create Category</h3>
             </div>
             <div className="flex flex-col md:flex-row gap-5 px-6 pb-6 flex-1 min-h-0">
                 {/* Left Panel: Category Tree */}
                 <div className="w-full md:w-1/2 bg-white rounded-[4px] border border-gray-200 flex flex-col">
                     <div className="p-4 border-b border-gray-200">
-                        <h3 className="font-semibold text-gray-800 text-sm">Select Category</h3>
-                        <p className="text-xs text-gray-500 mt-0.5">Single click to select level. Double click to expand/collapse categories.</p>
+                        <h3 className="section-title text-sm">Select Category</h3>
+                        <p className="helper-text mt-0.5">Single click to select level. Double click to expand/collapse categories.</p>
 
                     </div>
 
@@ -530,14 +530,14 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                 {/* Right Panel: Creation Form */}
                 <div className="w-full md:w-1/2 bg-white rounded-[4px] border border-gray-200">
                     <div className="p-5">
-                        <h3 className="font-semibold text-gray-800 text-sm mb-6">Category Preview</h3>
+                        <h3 className="section-title text-sm mb-6">Category Preview</h3>
                         <form onSubmit={handleSubmit} className="space-y-5">
                             {/* Logic for Creation Inputs based on Selection Level */}
                             <div className="space-y-5">
 
                                 {/* 1. Category Display (Always Fixed) */}
                                 <div>
-                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                                    <label className="label-text">
                                         CATEGORY
                                     </label>
                                     {selectedNode ? (
@@ -554,7 +554,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                                 {/* 2. Group Input/Display */}
                                 {selectedNode && (
                                     <div>
-                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                                        <label className="label-text">
                                             GROUP
                                         </label>
 
@@ -607,7 +607,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                                 {/* 3. Subgroup Input - CONDITIONAL */}
                                 {showSubgroup && selectedNode && selectedNode.level >= 1 && (
                                     <div>
-                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                                        <label className="label-text">
                                             SUBGROUP
                                         </label>
 
@@ -655,7 +655,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                                             onClick={(e) => {
                                                 e.preventDefault();
                                                 e.stopPropagation();
-                                                
+
                                                 setIsEditing(true);
                                             }}
                                             className="flex-1 py-2.5 px-4 rounded font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm bg-blue-600 text-white hover:bg-blue-700 cursor-pointer focus:ring-blue-500"

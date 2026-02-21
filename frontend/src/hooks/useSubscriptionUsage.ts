@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiService } from '../services/api';
 import { httpClient } from '../services/httpClient';
+import { hasStoredSession } from '../services/authService';
 
 export interface SubscriptionUsage {
     plan: string;
@@ -54,13 +55,13 @@ export const useSubscriptionUsage = () => {
     useEffect(() => {
         // Only fetch if we have a session (refresh token exists)
         // Note: httpClient.get will handle automatic access token refresh if needed.
-        const hasSession = localStorage.getItem('refresh_token') !== null;
+        const hasSession = hasStoredSession();
         if (!hasSession) return;
 
         fetchUsage();
         // Poll every minute to stay in sync with backend
         const interval = setInterval(() => {
-            if (localStorage.getItem('refresh_token') !== null) {
+            if (hasStoredSession()) {
                 fetchUsage();
             }
         }, 60000);

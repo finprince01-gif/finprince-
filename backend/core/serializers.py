@@ -6,6 +6,8 @@ from .models import CompanyFullInfo, Tenant, User
 
 # User model imported inside Meta or methods to avoid AppRegistryNotReady
 
+from .exceptions import BusinessException
+
 class UserSignupSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
     company_name = serializers.CharField(required=True)
@@ -16,10 +18,45 @@ class UserSignupSerializer(serializers.ModelSerializer):
     class Meta:
         model = 'core.User'
         fields = ['username', 'email', 'password', 'company_name', 'phone', 'selected_plan', 'logo']
+        extra_kwargs = {
+            'username': {'validators': []},
+            'email': {'validators': []},
+        }
+
+    def validate_username(self, value):
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        if User.objects.filter(username=value).exists():
+            raise BusinessException(
+                detail="Username is already registered.",
+                error_code="USER_ALREADY_EXISTS",
+                status_code=400,
+                field="username"
+            )
+        return value
+
+    def validate_email(self, value):
+        if not value:
+            return value
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        if User.objects.filter(email=value).exists():
+            raise BusinessException(
+                detail="Email is already registered.",
+                error_code="EMAIL_ALREADY_REGISTERED",
+                status_code=400,
+                field="email"
+            )
+        return value
 
     def validate_company_name(self, value):
         if Tenant.objects.filter(name=value).exists():
-            raise serializers.ValidationError("Company Name already registered.")
+            raise BusinessException(
+                detail="Company name already registered.",
+                error_code="COMPANY_ALREADY_REGISTERED",
+                status_code=400,
+                field="company_name"
+            )
         return value
     
     def validate_phone(self, value):
@@ -29,8 +66,14 @@ class UserSignupSerializer(serializers.ModelSerializer):
         # Basic phone validation
         if not re.match(r'^\+?[1-9]\d{1,14}$', value):
             raise serializers.ValidationError("Invalid phone number format. Use international format (e.g., +1234567890)")
+        
         if User.objects.filter(phone=value).exists():
-            raise serializers.ValidationError("Phone number already registered")
+            raise BusinessException(
+                detail="This phone number is already registered.",
+                error_code="PHONE_ALREADY_REGISTERED",
+                status_code=400,
+                field="phone"
+            )
         return value
 
     def create(self, validated_data):
@@ -59,9 +102,6 @@ class UserSignupSerializer(serializers.ModelSerializer):
             tenant_id=tenant_uuid,
             logo_path=logo_path_str
         )
-
-
-        
         return user
 
 class CompanySettingsSerializer(serializers.ModelSerializer):
@@ -82,10 +122,6 @@ class CompanySettingsSerializer(serializers.ModelSerializer):
         parts = [p for p in [obj.address_line1, obj.address_line2, obj.city, obj.state, obj.pincode] if p]
         return ", ".join(parts) if parts else ""
 
-
-
-
-
 # Registration Flow Serializers
 
 class RegisterInitiateSerializer(serializers.Serializer):
@@ -102,7 +138,12 @@ class RegisterInitiateSerializer(serializers.Serializer):
         from django.contrib.auth import get_user_model
         User = get_user_model()
         if User.objects.filter(username=value).exists():
-            raise serializers.ValidationError("Username already exists")
+            raise BusinessException(
+                detail="Username is already registered.",
+                error_code="USER_ALREADY_EXISTS",
+                status_code=400,
+                field="username"
+            )
         return value
     
     def validate_phone(self, value):
@@ -111,13 +152,24 @@ class RegisterInitiateSerializer(serializers.Serializer):
         User = get_user_model()
         if not re.match(r'^\+?[1-9]\d{1,14}$', value):
             raise serializers.ValidationError("Invalid phone number format")
+            
         if User.objects.filter(phone=value).exists():
-            raise serializers.ValidationError("Phone number already registered")
+            raise BusinessException(
+                detail="This phone number is already registered.",
+                error_code="PHONE_ALREADY_REGISTERED",
+                status_code=400,
+                field="phone"
+            )
         return value
     
     def validate_company_name(self, value):
         if Tenant.objects.filter(name=value).exists():
-            raise serializers.ValidationError("Company name already registered")
+            raise BusinessException(
+                detail="Company name already registered.",
+                error_code="COMPANY_ALREADY_REGISTERED",
+                status_code=400,
+                field="company_name"
+            )
         return value
 
 

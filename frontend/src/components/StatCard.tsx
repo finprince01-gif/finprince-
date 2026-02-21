@@ -33,60 +33,24 @@ const StatCard: React.FC<StatCardProps> = ({
     return (
         <div
             onClick={onClick}
+            className={`erp-kpi-card group ${onClick ? 'cursor-pointer hover:shadow-xl hover:-translate-y-1' : ''} ${className}`}
             style={{
-                background: '#FFFFFF',
-                border: '1px solid #E2E8F0',
-                borderRadius: '16px',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.04)',
-                padding: '20px 24px',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                transition: 'box-shadow 0.2s ease, border-color 0.2s ease',
-                cursor: onClick ? 'pointer' : 'default',
+                borderColor: theme.accent,
+                borderWidth: '1.5px',
+                borderStyle: 'solid'
             }}
-            className={`dark:bg-slate-900 dark:border-slate-800 hover:border-[#C7D2FE] hover:shadow-lg dark:hover:bg-slate-800 transition-all ${className}`}
         >
             {/* Top Row */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div className="flex justify-between items-start">
                 <div>
-                    <p
-                        style={{
-                            fontSize: '11px',
-                            fontWeight: 700,
-                            color: '#64748B',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.1em',
-                            marginBottom: '8px',
-                        }}
-                        className="dark:text-slate-400"
-                    >
+                    <p className="erp-kpi-label mb-2">
                         {title}
                     </p>
-                    <h3
-                        style={{
-                            fontSize: '24px',
-                            fontWeight: 700,
-                            color: '#1F2937',
-                            letterSpacing: '-0.02em',
-                            lineHeight: '1',
-                        }}
-                        className="dark:text-slate-100"
-                    >
+                    <h3 className="erp-kpi-value">
                         {value}
                     </h3>
                     {subValue && (
-                        <p
-                            style={{
-                                fontSize: '11px',
-                                fontWeight: 600,
-                                color: '#94A3B8',
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.08em',
-                                marginTop: '4px',
-                            }}
-                            className="dark:text-slate-500"
-                        >
+                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-1.5">
                             {subValue}
                         </p>
                     )}
@@ -94,21 +58,12 @@ const StatCard: React.FC<StatCardProps> = ({
 
                 {icon && (
                     <div
-                        style={{
-                            width: '40px',
-                            height: '40px',
-                            borderRadius: '12px',
-                            background: theme.iconBg,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            flexShrink: 0,
-                        }}
-                        className="dark:bg-slate-800"
+                        className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-110"
+                        style={{ background: theme.iconBg }}
                     >
                         <Icon
                             name={icon as any}
-                            className="w-5 h-5"
+                            className="w-6 h-6"
                             style={{ color: theme.iconColor }}
                         />
                     </div>
@@ -116,30 +71,14 @@ const StatCard: React.FC<StatCardProps> = ({
             </div>
 
             {/* Trend Row */}
-            {trend && (
-                <div style={{ display: 'flex', alignItems: 'center', marginTop: '16px' }}>
-                    <span
-                        style={{
-                            fontSize: '11px',
-                            fontWeight: 700,
-                            padding: '2px 8px',
-                            borderRadius: '999px',
-                            background: trend.startsWith('+') ? '#ECFDF5' : '#FFF1F2',
-                            color: trend.startsWith('+') ? '#059669' : '#E11D48',
-                            letterSpacing: '0.03em',
-                        }}
-                    >
-                        {trend}
-                    </span>
-                    <span
-                        style={{
-                            fontSize: '11px',
-                            color: '#94A3B8',
-                            fontWeight: 500,
-                            marginLeft: '8px',
-                        }}
-                        className="dark:text-slate-500"
-                    >
+            {(trend || trendLabel) && (
+                <div className="flex items-center mt-6 pt-4 border-t border-slate-50">
+                    {trend && (
+                        <span className={`erp-badge ${trend.startsWith('+') ? 'erp-badge-success' : 'erp-badge-danger'}`}>
+                            {trend}
+                        </span>
+                    )}
+                    <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider ml-2">
                         {trendLabel}
                     </span>
                 </div>

@@ -1084,14 +1084,15 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const [legalName, setLegalName] = useState('');
     const [tradeName, setTradeName] = useState('');
     const [createdVendorId, setCreatedVendorId] = useState<number | null>(() => {
-        const saved = localStorage.getItem('currentVendorId');
+        const saved = sessionStorage.getItem('currentVendorId') || localStorage.getItem('currentVendorId');
         return saved ? parseInt(saved) : null;
     });
 
     // Persist vendor ID
     useEffect(() => {
         if (createdVendorId) {
-            localStorage.setItem('currentVendorId', createdVendorId.toString());
+            sessionStorage.setItem('currentVendorId', createdVendorId.toString());
+            localStorage.removeItem('currentVendorId');
         }
     }, [createdVendorId]);
 
@@ -1202,6 +1203,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         setLegalName('');
         setTradeName('');
         setCreatedVendorId(null);
+        sessionStorage.removeItem('currentVendorId');
         localStorage.removeItem('currentVendorId');
     };
 
@@ -1238,7 +1240,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 const basicRes: any = await httpClient.post('/api/vendors/basic-details/', basicPayload);
                 newId = basicRes.id;
                 setCreatedVendorId(newId);
-                localStorage.setItem('currentVendorId', newId.toString());
+                sessionStorage.setItem('currentVendorId', newId.toString());
+                localStorage.removeItem('currentVendorId');
                 console.log('✅ Basic details created. Vendor ID:', newId);
             } else {
                 console.log('Updating existing vendor basic details for ID:', newId);
@@ -1469,6 +1472,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
             // Cleanup on full success
             setCreatedVendorId(null);
+            sessionStorage.removeItem('currentVendorId');
             localStorage.removeItem('currentVendorId');
 
             // Reset all form states
@@ -1818,33 +1822,22 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
     return (
         <div className="space-y-8">
-            {/* Page Header */}
-            <div className="flex items-end justify-between border-b border-slate-200 pb-6">
+            <div className="erp-section-title flex items-end justify-between">
                 <div>
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Procurement</p>
-                    <h2 className="text-[20px] font-bold text-slate-900">
-                        Vendor Portal
-                    </h2>
+                    <h1 className="page-title">Vendor Portal</h1>
+                    <p className="helper-text">Procurement management</p>
                 </div>
             </div>
 
             {/* Main Tabs */}
-            <div className="flex space-x-8 border-b border-slate-200">
+            <div className="erp-tab-container">
                 {availableTabs.map((tab) => (
                     <button
                         key={tab}
                         onClick={() => setActiveTab(tab as VendorTab)}
-                        className={`
-                            whitespace-nowrap pb-4 text-[13px] font-bold uppercase tracking-wider transition-all relative
-                            ${activeTab === tab
-                                ? 'text-indigo-600'
-                                : 'text-slate-400 hover:text-slate-600'}
-                        `}
+                        className={`erp-tab ${activeTab === tab ? 'active' : ''}`}
                     >
                         {tab}
-                        {activeTab === tab && (
-                            <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-600" />
-                        )}
                     </button>
                 ))}
             </div>
@@ -1852,9 +1845,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             {activeTab === 'Master' && (
                 <>
                     <div className="erp-card p-0 overflow-hidden">
-                        {/* Sub-tabs for Vendor Master */}
-                        <div className="px-6 pt-4 border-b border-gray-200">
-                            <nav className="flex space-x-8">
+                        <div className="erp-tab-container !mb-0 px-6 pt-4">
+                            <nav className="flex space-x-2">
                                 {['Category', 'PO Settings', 'Vendor Creation']
                                     .filter(subTab => isSuperuser || hasTabAccess('Vendor Portal', subTab))
                                     .map((subTab) => {
@@ -1866,10 +1858,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             <button
                                                 key={subTab}
                                                 onClick={() => setActiveMasterSubTab(subTab as MasterSubTab)}
-                                                className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors ${isActive
-                                                    ? 'border-indigo-500 text-indigo-600'
-                                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                                    }`}
+                                                className={`erp-tab ${isActive ? 'active' : ''}`}
                                             >
                                                 {subTab}
                                             </button>
@@ -1925,13 +1914,13 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                             <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
                                 {/* Left Box: Form (Questions) */}
                                 <div className="lg:col-span-1 border-r border-gray-200 pr-0 lg:pr-8">
-                                    <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                                    <h3 className="section-title mb-4">
                                         {isEditModePO ? 'Edit Series' : 'New PO Series'}
                                     </h3>
                                     <form onSubmit={handlePOSubmit} className="space-y-4">
                                         {/* Name */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            <label className="label-text">
                                                 Name of PO Series <span className="text-red-500">*</span>
                                             </label>
                                             <input
@@ -1946,7 +1935,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
                                         {/* Category */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            <label className="label-text">
                                                 Category <span className="text-red-500">*</span>
                                             </label>
                                             <CategoryHierarchicalDropdown
@@ -1963,7 +1952,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         {/* Prefix & Suffix */}
                                         <div className="grid grid-cols-2 gap-4">
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">Prefix</label>
+                                                <label className="label-text">Prefix</label>
                                                 <input
                                                     type="text"
                                                     value={poPrefix}
@@ -1973,7 +1962,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">Suffix</label>
+                                                <label className="label-text">Suffix</label>
                                                 <input
                                                     type="text"
                                                     value={poSuffix}
@@ -1986,7 +1975,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
                                         {/* Digits Only */}
                                         <div className="mt-4">
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Digits</label>
+                                            <label className="label-text">Digits</label>
                                             <input
                                                 type="number"
                                                 min="1"
@@ -2028,14 +2017,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
                                 {/* Right Box: Existing Locations (Existing Series) */}
                                 <div className="lg:col-span-2">
-                                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Existing Series</h3>
+                                    <h3 className="section-title mb-4">Existing Series</h3>
                                     <div className="border border-slate-200 rounded-[4px] overflow-hidden">
-                                        <table className="min-w-full divide-y divide-gray-200">
+                                        <table className="erp-table min-w-full">
                                             <thead className="bg-gray-50">
                                                 <tr>
-                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
-                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
+                                                    <th className="table-header">Name</th>
+                                                    <th className="table-header">Category</th>
+                                                    <th className="table-header">Details</th>
                                                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                                 </tr>
                                             </thead>
@@ -2083,8 +2072,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
                         {activeMasterSubTab === 'Vendor Creation' && (
                             <div className="p-6">
-                                <h3 className="text-lg font-semibold text-gray-800 mb-4">Vendor Creation</h3>
-                                <p className="text-gray-600">Select a tab below to configure vendor details:</p>
+                                <h3 className="section-title mb-2">Vendor Creation</h3>
+                                <p className="helper-text mb-6">Select a tab below to configure vendor details:</p>
                                 <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-4">
                                     {['Basic Details', 'GST Details', 'Products/Services', 'TDS & Other Statutory', 'Banking Info', 'Terms & Conditions'].map((tab) => (
                                         <button
@@ -2110,7 +2099,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                     >
                                         <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                                     </button>
-                                    <h3 className="text-lg font-semibold text-gray-800">Basic Details</h3>
+                                    <h3 className="section-title">Basic Details</h3>
                                 </div>
 
                                 <form className="space-y-6" onSubmit={handleBasicDetailsSubmit}>
@@ -2118,7 +2107,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         {/* Vendor Code */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            <label className="label-text">
                                                 Vendor Code
                                             </label>
                                             <input
@@ -2132,7 +2121,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
                                         {/* Vendor Name */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            <label className="label-text">
                                                 Vendor Name <span className="text-red-500">*</span>
                                             </label>
                                             <input
@@ -2147,7 +2136,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
                                         {/* Vendor Category */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            <label className="label-text">
                                                 Vendor Category <span className="text-red-500">*</span>
                                             </label>
                                             <CategoryHierarchicalDropdown
@@ -2162,7 +2151,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
                                         {/* PAN No */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            <label className="label-text">
                                                 PAN No.
                                             </label>
                                             <input
@@ -2177,7 +2166,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
                                         {/* Contact Person */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            <label className="label-text">
                                                 Contact Person
                                             </label>
                                             <input
@@ -2191,7 +2180,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
                                         {/* Email address */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            <label className="label-text">
                                                 Email address <span className="text-red-500">*</span>
                                             </label>
                                             <input
@@ -2206,7 +2195,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
                                         {/* Contact No */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            <label className="label-text">
                                                 Contact No <span className="text-red-500">*</span>
                                             </label>
                                             <input
@@ -2228,7 +2217,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                     {/* Is Also Customer */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                                         <div className="col-span-2">
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            <label className="label-text">
                                                 Is this vendor also a customer?
                                             </label>
                                             <div className="flex gap-2">
@@ -2264,7 +2253,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                     {/* TCS Applicable under GST */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                                         <div className="col-span-2">
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            <label className="label-text">
                                                 TCS Applicable under GST
                                             </label>
                                             <div className="flex gap-2">
@@ -2327,7 +2316,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         >
                                             <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                                         </button>
-                                        <h3 className="text-lg font-semibold text-gray-800">GST Details</h3>
+                                        <h3 className="section-title">GST Details</h3>
                                     </div>
                                     <button
                                         type="button"
@@ -2367,7 +2356,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     {/* GSTIN & Fetch */}
                                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                         <div>
-                                                            <label className="block text-sm font-medium text-gray-700 mb-2">GSTIN</label>
+                                                            <label className="label-text">GSTIN</label>
                                                             <div className="flex gap-2">
                                                                 <input
                                                                     type="text"
@@ -2390,7 +2379,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         </div>
 
                                                         <div>
-                                                            <label className="block text-sm font-medium text-gray-700 mb-2">Registration Type</label>
+                                                            <label className="label-text">Registration Type</label>
                                                             <select
                                                                 value={record.registrationType}
                                                                 onChange={(e) => handleGstChange(record.id, 'registrationType', e.target.value)}
@@ -2406,7 +2395,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         {record.registrationType !== 'Unregistered' && (
                                                             <>
                                                                 <div>
-                                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Legal Name</label>
+                                                                    <label className="label-text">Legal Name</label>
                                                                     <input
                                                                         type="text"
                                                                         value={record.legalName || ''}
@@ -2415,7 +2404,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                     />
                                                                 </div>
                                                                 <div>
-                                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Trade Name</label>
+                                                                    <label className="label-text">Trade Name</label>
                                                                     <input
                                                                         type="text"
                                                                         value={record.tradeName || ''}
@@ -2541,12 +2530,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         >
                                             <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                                         </button>
-                                        <h3 className="text-lg font-semibold text-gray-800">TDS & Other Statutory</h3>
+                                        <h3 className="section-title">TDS & Other Statutory</h3>
                                     </div>
                                     <form onSubmit={handleTDSDetailsSubmit} className="space-y-6">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                <label className="label-text">
                                                     MSME Udyam No
                                                 </label>
                                                 <div className="flex gap-2">
@@ -2580,7 +2569,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 )}
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                <label className="label-text">
                                                     FSSAI License No
                                                 </label>
                                                 <div className="flex gap-2">
@@ -2614,7 +2603,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 )}
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                <label className="label-text">
                                                     Import Export Code (IEC)
                                                 </label>
                                                 <div className="flex gap-2">
@@ -2648,7 +2637,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 )}
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                <label className="label-text">
                                                     EOU Status
                                                 </label>
                                                 <div className="flex gap-2">
@@ -2682,7 +2671,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 )}
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                <label className="label-text">
                                                     TDS Section Applicable
                                                 </label>
                                                 <select
@@ -2719,7 +2708,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                                         </svg>
                                                         <div className="flex-1">
-                                                            <h4 className="text-sm font-semibold text-slate-700 mb-2">TDS Rate Information</h4>
+                                                            <h4 className="section-title mb-2">TDS Rate Information</h4>
                                                             <div className="space-y-1 text-sm text-slate-700">
                                                                 <p><span className="font-medium">TDS Rate:</span> {rateInfo.tdsRate}</p>
                                                                 <p><span className="font-medium">Penalty Rate:</span> {rateInfo.penaltyRate}</p>
@@ -2746,7 +2735,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            <label className="label-text">
                                                 Dispute Redressal Terms
                                             </label>
                                             <textarea
@@ -2789,7 +2778,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         >
                                             <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                                         </button>
-                                        <h3 className="text-lg font-semibold text-gray-800">Products/Services</h3>
+                                        <h3 className="section-title">Products/Services</h3>
                                     </div>
                                     <div className="space-y-6">
                                         {/* Table for Items */}
@@ -2937,7 +2926,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         >
                                             <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                                         </button>
-                                        <h3 className="text-lg font-semibold text-gray-800">Banking Information</h3>
+                                        <h3 className="section-title">Banking Information</h3>
                                     </div>
                                     <form onSubmit={handleBankingDetailsSubmit} className="space-y-6">
                                         <div className="space-y-8">
@@ -2960,7 +2949,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     )}
 
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        <label className="label-text">
                                                             Bank account No.
                                                         </label>
                                                         <input
@@ -2973,7 +2962,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     </div>
 
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        <label className="label-text">
                                                             Bank Name
                                                         </label>
                                                         <input
@@ -2986,7 +2975,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     </div>
 
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        <label className="label-text">
                                                             IFSC Code
                                                         </label>
                                                         <input
@@ -3000,7 +2989,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     </div>
 
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        <label className="label-text">
                                                             Branch Name
                                                         </label>
                                                         <input
@@ -3013,7 +3002,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     </div>
 
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        <label className="label-text">
                                                             Swift Code
                                                         </label>
                                                         <input
@@ -3026,7 +3015,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     </div>
 
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        <label className="label-text">
                                                             Associate to a vendor branch
                                                         </label>
                                                         <div className="relative">
@@ -3140,11 +3129,11 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         >
                                             <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                                         </button>
-                                        <h3 className="text-lg font-semibold text-gray-800">Terms & Conditions</h3>
+                                        <h3 className="section-title">Terms & Conditions</h3>
                                     </div>
                                     <form onSubmit={handleFinish} className="space-y-6">
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            <label className="label-text">
                                                 Credit Limit
                                             </label>
                                             <input
@@ -3158,7 +3147,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            <label className="label-text">
                                                 Credit Period
                                             </label>
                                             <input
@@ -3171,7 +3160,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            <label className="label-text">
                                                 Credit Terms
                                             </label>
                                             <textarea
@@ -3184,7 +3173,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            <label className="label-text">
                                                 Penalty Terms
                                             </label>
                                             <textarea
@@ -3197,7 +3186,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            <label className="label-text">
                                                 Delivery Terms
                                             </label>
                                             <textarea
@@ -3210,7 +3199,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            <label className="label-text">
                                                 Warranty / Guarantee Details
                                             </label>
                                             <textarea
@@ -3223,7 +3212,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            <label className="label-text">
                                                 Force Majeure
                                             </label>
                                             <textarea
@@ -3236,7 +3225,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            <label className="label-text">
                                                 Dispute Redressal Terms
                                             </label>
                                             <textarea
@@ -3304,7 +3293,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                 <div>
                                     {activePOSubTab === 'Dashboard' && (
                                         <div>
-                                            <h3 className="text-lg font-semibold text-gray-800 mb-4">Purchase Orders</h3>
+                                            <h3 className="section-title">Purchase Orders</h3>
                                             <p className="text-gray-600 mb-6">Select an option to manage purchase orders:</p>
                                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                                 {['Create PO', 'Pending PO', 'Executed PO']
@@ -3334,7 +3323,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                 <svg className="w-5 h-5 text-gray-400 group-hover:text-indigo-500 transform group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                                                             </div>
                                                             <div className="font-semibold text-gray-900 text-lg">{tab}</div>
-                                                            <div className="text-sm text-gray-500 mt-2">
+                                                            <div className="helper-text mt-2">
                                                                 {tab === 'Create PO' ? 'Create new purchase orders' :
                                                                     tab === 'Pending PO' ? 'View and manage pending orders' :
                                                                         'History of completed orders'}
@@ -3356,8 +3345,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                                                 </button>
                                                 <div>
-                                                    <h3 className="text-xl font-bold text-gray-800">{activePOSubTab}</h3>
-                                                    <p className="text-sm text-gray-500">Manage your {activePOSubTab.toLowerCase()} details here.</p>
+                                                    <h3 className="section-title">{activePOSubTab}</h3>
+                                                    <p className="helper-text">Manage your {activePOSubTab.toLowerCase()} details here.</p>
                                                 </div>
                                             </div>
 
@@ -3402,15 +3391,15 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
                                                         {activeCreatePOSubTab === 'Pending for Approval' && (
                                                             <div className="erp-card overflow-hidden border border-slate-200">
-                                                                <table className="min-w-full divide-y divide-gray-200">
+                                                                <table className="erp-table min-w-full">
                                                                     <thead className="bg-indigo-50/50">
                                                                         <tr>
-                                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO#</th>
-                                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO Date</th>
-                                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Vendor Name</th>
-                                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Branch</th>
-                                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Delivery Date</th>
-                                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Amount</th>
+                                                                            <th className="table-header">PO#</th>
+                                                                            <th className="table-header">PO Date</th>
+                                                                            <th className="table-header">Vendor Name</th>
+                                                                            <th className="table-header">Branch</th>
+                                                                            <th className="table-header">Delivery Date</th>
+                                                                            <th className="table-header">Amount</th>
                                                                             <th className="px-6 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Action</th>
                                                                         </tr>
                                                                     </thead>
@@ -3451,15 +3440,15 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         )}
                                                         {activeCreatePOSubTab === 'Mail PO' && (
                                                             <div className="erp-card overflow-hidden border border-slate-200">
-                                                                <table className="min-w-full divide-y divide-gray-200">
+                                                                <table className="erp-table min-w-full">
                                                                     <thead className="bg-slate-50/50">
                                                                         <tr>
-                                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO#</th>
-                                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO Date</th>
-                                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Vendor Name</th>
-                                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Branch</th>
-                                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Delivery Date</th>
-                                                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Amount</th>
+                                                                            <th className="table-header">PO#</th>
+                                                                            <th className="table-header">PO Date</th>
+                                                                            <th className="table-header">Vendor Name</th>
+                                                                            <th className="table-header">Branch</th>
+                                                                            <th className="table-header">Delivery Date</th>
+                                                                            <th className="table-header">Amount</th>
                                                                             <th className="px-6 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Action</th>
                                                                         </tr>
                                                                     </thead>
@@ -3506,16 +3495,16 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 </>
                                             )}          {activePOSubTab === 'Pending PO' && (
                                                 <div className="erp-card overflow-hidden border border-slate-200">
-                                                    <table className="min-w-full divide-y divide-gray-200">
+                                                    <table className="erp-table min-w-full">
                                                         <thead className="bg-slate-50/50">
                                                             <tr>
-                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO#</th>
-                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO Date</th>
-                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Vendor Name</th>
-                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Branch</th>
-                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Delivery Date</th>
-                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Amount</th>
-                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Status</th>
+                                                                <th className="table-header">PO#</th>
+                                                                <th className="table-header">PO Date</th>
+                                                                <th className="table-header">Vendor Name</th>
+                                                                <th className="table-header">Branch</th>
+                                                                <th className="table-header">Delivery Date</th>
+                                                                <th className="table-header">Amount</th>
+                                                                <th className="table-header">Status</th>
                                                                 <th className="px-6 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Action</th>
                                                             </tr>
                                                         </thead>
@@ -3558,16 +3547,16 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             )}
                                             {activePOSubTab === 'Executed PO' && (
                                                 <div className="erp-card overflow-hidden border border-slate-200">
-                                                    <table className="min-w-full divide-y divide-gray-200">
+                                                    <table className="erp-table min-w-full">
                                                         <thead className="bg-slate-50/50">
                                                             <tr>
-                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO#</th>
-                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">PO Date</th>
-                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Vendor Name</th>
-                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Branch</th>
-                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Delivery Date</th>
-                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Amount</th>
-                                                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Status</th>
+                                                                <th className="table-header">PO#</th>
+                                                                <th className="table-header">PO Date</th>
+                                                                <th className="table-header">Vendor Name</th>
+                                                                <th className="table-header">Branch</th>
+                                                                <th className="table-header">Delivery Date</th>
+                                                                <th className="table-header">Amount</th>
+                                                                <th className="table-header">Status</th>
                                                                 <th className="px-6 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Action</th>
                                                             </tr>
                                                         </thead>
@@ -3617,8 +3606,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                     {activeProcurementSubTab === 'Dashboard' ? (
                                         <div>
                                             <div className="mb-8">
-                                                <h2 className="text-2xl font-bold text-gray-800">Procurement</h2>
-                                                <p className="text-sm text-gray-500 mt-1">Select a procurement category to manage.</p>
+                                                <h2 className="section-title">Procurement</h2>
+                                                <p className="helper-text mt-1">Select a procurement category to manage.</p>
                                             </div>
 
                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -3690,8 +3679,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                             </>
                                                         )}
                                                     </div>
-                                                    <h2 className="text-2xl font-bold text-gray-800">{activeProcurementSubTab}</h2>
-                                                    <p className="text-sm text-gray-500">Manage {activeProcurementSubTab.toLowerCase()} details here.</p>
+                                                    <h2 className="section-title">{activeProcurementSubTab}</h2>
+                                                    <p className="helper-text">Manage {activeProcurementSubTab.toLowerCase()} details here.</p>
                                                 </div>
                                                 <div className="flex space-x-2">
                                                     <button
@@ -3705,15 +3694,15 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
                                             {procurementViewMode === 'list' && (
                                                 <div className="erp-card border border-slate-200 overflow-hidden">
-                                                    <table className="min-w-full divide-y divide-gray-200">
+                                                    <table className="erp-table min-w-full">
                                                         <thead className="bg-gray-50">
                                                             <tr>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vendor Code</th>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vendor Name</th>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">0-45 Days</th>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">45-90 Days</th>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{">"}6M</th>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{">"}1YR</th>
+                                                                <th className="table-header">Vendor Code</th>
+                                                                <th className="table-header">Vendor Name</th>
+                                                                <th className="table-header">0-45 Days</th>
+                                                                <th className="table-header">45-90 Days</th>
+                                                                <th className="table-header">{">"}6M</th>
+                                                                <th className="table-header">{">"}1YR</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody className="bg-white divide-y divide-gray-200">
@@ -3741,7 +3730,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             {procurementViewMode === 'ledger' && selectedProcurementVendor && (
                                                 <div className="erp-card border border-slate-200 overflow-hidden p-0">
                                                     <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 bg-gray-50">
-                                                        <h3 className="text-lg font-bold text-gray-800">{selectedProcurementVendor.name}</h3>
+                                                        <h3 className="section-title">{selectedProcurementVendor.name}</h3>
                                                         <button
                                                             onClick={() => setProcurementViewMode('month')}
                                                             className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
@@ -3751,7 +3740,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     </div>
 
                                                     <div className="overflow-x-auto">
-                                                        <table className="min-w-full divide-y divide-gray-200">
+                                                        <table className="erp-table min-w-full">
                                                             <thead className="bg-gray-50">
                                                                 <tr>
                                                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">Date</th>
@@ -3886,7 +3875,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             {procurementViewMode === 'month' && selectedProcurementVendor && (
                                                 <div className="erp-card border border-slate-200 p-0">
                                                     <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 bg-gray-50">
-                                                        <h3 className="text-lg font-bold text-gray-800">{selectedProcurementVendor.name}</h3>
+                                                        <h3 className="section-title">{selectedProcurementVendor.name}</h3>
                                                         <div className="flex items-center space-x-3">
                                                             {/* Month Filter Dropdown */}
                                                             <div className="relative">
@@ -3956,7 +3945,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         const totalMonthCredit = filteredMonthData.reduce((sum, entry) => sum + (entry.credit !== '-' ? parseFloat(entry.credit.replace(/,/g, '')) : 0), 0);
 
                                                         return (
-                                                            <table className="min-w-full divide-y divide-gray-200">
+                                                            <table className="erp-table min-w-full">
                                                                 <thead className="bg-gray-50">
                                                                     <tr>
                                                                         <th className="px-6 py-3 text-left text-base font-medium text-gray-700">Month</th>
@@ -3998,8 +3987,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                     {activePaymentSubTab === 'Dashboard' ? (
                                         <div>
                                             <div className="mb-8">
-                                                <h2 className="text-2xl font-bold text-gray-800">Payment</h2>
-                                                <p className="text-sm text-gray-500 mt-1">Select a procurement category to manage.</p>
+                                                <h2 className="section-title">Payment Overview</h2>
+                                                <p className="helper-text mt-1">Select a procurement category to manage payments.</p>
                                             </div>
 
                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -4061,7 +4050,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         <span className="text-indigo-600 font-medium">{activePaymentSubTab}</span>
                                                     </div>
                                                     <h2 className="text-2xl font-bold text-gray-800">{activePaymentSubTab}</h2>
-                                                    <p className="text-sm text-gray-500">Manage {activePaymentSubTab.toLowerCase()} payments here.</p>
+                                                    <p className="helper-text">Manage {activePaymentSubTab.toLowerCase()} payments here.</p>
                                                 </div>
                                                 <button
                                                     onClick={() => setActivePaymentSubTab('Dashboard')}
@@ -4086,7 +4075,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             {/* Payment Bills Table */}
                                             <div className="erp-card border border-slate-200 overflow-hidden">
                                                 <div className="overflow-x-auto">
-                                                    <table className="min-w-full divide-y divide-gray-200">
+                                                    <table className="erp-table min-w-full">
                                                         <thead className="bg-gray-50">
                                                             <tr>
                                                                 {[
@@ -4257,7 +4246,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
                                         <div className="relative top-10 mx-auto p-8 border w-11/12 max-w-6xl shadow-none border border-slate-200 rounded-[4px] bg-white mb-20">
                                             <div className="flex justify-between items-center mb-6">
-                                                <h3 className="text-2xl font-bold text-gray-900">Create PO</h3>
+                                                <h3 className="section-title">Create PO</h3>
                                                 <button
                                                     onClick={() => setShowCreatePOModal(false)}
                                                     className="text-gray-400 hover:text-gray-500"
@@ -4272,7 +4261,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 {/* Consolidated Form Fields */}
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">PO Series Name</label>
+                                                        <label className="label-text">PO Series Name</label>
                                                         <select
                                                             value={createPOForm.poSeriesName}
                                                             onChange={(e) => handleCreatePOFormChange('poSeriesName', e.target.value)}
@@ -4285,7 +4274,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     </div>
 
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">PO #</label>
+                                                        <label className="label-text">PO #</label>
                                                         <input
                                                             type="text"
                                                             value={createPOForm.poNumber}
@@ -4295,7 +4284,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     </div>
 
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Vendor Name</label>
+                                                        <label className="label-text">Vendor Name</label>
                                                         <select
                                                             value={createPOForm.vendorName}
                                                             onChange={(e) => handleCreatePOFormChange('vendorName', e.target.value)}
@@ -4311,7 +4300,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     </div>
 
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Branch</label>
+                                                        <label className="label-text">Branch</label>
                                                         <select
                                                             value={createPOForm.branch}
                                                             onChange={(e) => handleCreatePOFormChange('branch', e.target.value)}
@@ -4327,7 +4316,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     </div>
 
                                                     <div className="col-span-1 md:col-span-2">
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Address Line 2</label>
+                                                        <label className="label-text">Address Line 2</label>
                                                         <input
                                                             type="text"
                                                             value={createPOForm.addressLine2}
@@ -4337,7 +4326,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     </div>
 
                                                     <div className="col-span-1 md:col-span-2">
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Address Line 3</label>
+                                                        <label className="label-text">Address Line 3</label>
                                                         <input
                                                             type="text"
                                                             value={createPOForm.addressLine3}
@@ -4347,7 +4336,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     </div>
 
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">City</label>
+                                                        <label className="label-text">City</label>
                                                         <input
                                                             type="text"
                                                             value={createPOForm.city}
@@ -4357,7 +4346,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     </div>
 
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">State</label>
+                                                        <label className="label-text">State</label>
                                                         <input
                                                             type="text"
                                                             value={createPOForm.state}
@@ -4367,7 +4356,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     </div>
 
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Country</label>
+                                                        <label className="label-text">Country</label>
                                                         <input
                                                             type="text"
                                                             value={createPOForm.country}
@@ -4377,7 +4366,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     </div>
 
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Pincode</label>
+                                                        <label className="label-text">Pincode</label>
                                                         <input
                                                             type="text"
                                                             value={createPOForm.pincode}
@@ -4387,7 +4376,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     </div>
 
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+                                                        <label className="label-text">Email Address</label>
                                                         <input
                                                             type="email"
                                                             value={createPOForm.emailAddress}
@@ -4397,7 +4386,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     </div>
 
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Contract No</label>
+                                                        <label className="label-text">Contract No</label>
                                                         <input
                                                             type="text"
                                                             value={createPOForm.contractNo}
@@ -4410,7 +4399,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 {/* Items Section */}
                                                 <div>
                                                     <div className="flex justify-between items-center mb-4">
-                                                        <h4 className="text-lg font-semibold text-gray-900">Items</h4>
+                                                        <h4 className="section-title">Items</h4>
                                                         <button
                                                             onClick={handleAddPOItem}
                                                             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] text-white bg-indigo-600 hover:bg-indigo-700"
@@ -4627,7 +4616,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 {/* Summary Section */}
                                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Total Taxable Value</label>
+                                                        <label className="label-text">Total Taxable Value</label>
                                                         <input
                                                             type="text"
                                                             value={poItems.reduce((sum, item) => sum + (parseFloat(item.taxableValue) || 0), 0).toFixed(2)}
@@ -4636,7 +4625,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         />
                                                     </div>
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Total Tax</label>
+                                                        <label className="label-text">Total Tax</label>
                                                         <input
                                                             type="text"
                                                             value={poItems.reduce((sum, item) => {
@@ -4649,7 +4638,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         />
                                                     </div>
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Total Value</label>
+                                                        <label className="label-text">Total Value</label>
                                                         <input
                                                             type="text"
                                                             value={poItems.reduce((sum, item) => sum + (parseFloat(item.netValue) || 0), 0).toFixed(2)}
@@ -4662,7 +4651,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 {/* Receive By and Receive At */}
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Receive By</label>
+                                                        <label className="label-text">Receive By</label>
                                                         <input
                                                             type="date"
                                                             value={createPOForm.receiveBy || ''}
@@ -4672,7 +4661,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         />
                                                     </div>
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Receive At</label>
+                                                        <label className="label-text">Receive At</label>
                                                         <select
                                                             value={createPOForm.receiveAt || ''}
                                                             onChange={(e) => handleCreatePOFormChange('receiveAt', e.target.value)}
@@ -4688,7 +4677,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
                                                 {/* Delivery Terms */}
                                                 <div className="mt-6">
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Delivery Terms</label>
+                                                    <label className="label-text">Delivery Terms</label>
                                                     <textarea
                                                         value={createPOForm.deliveryTerms || ''}
                                                         onChange={(e) => handleCreatePOFormChange('deliveryTerms', e.target.value)}
@@ -4725,7 +4714,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
                                         <div className="relative top-10 mx-auto p-8 border w-11/12 max-w-5xl shadow-none border border-slate-200 rounded-[4px] bg-white mb-20">
                                             <div className="flex justify-between items-center mb-6">
-                                                <h3 className="text-2xl font-bold text-gray-900">Purchase Order Details</h3>
+                                                <h3 className="section-title">Purchase Order Details</h3>
                                                 <button
                                                     onClick={() => setShowViewPOModal(false)}
                                                     className="text-gray-400 hover:text-gray-500"
@@ -4763,7 +4752,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 {/* Additional Fields */}
                                                 <div className="grid grid-cols-2 gap-6">
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Receive by</label>
+                                                        <label className="label-text">Receive by</label>
                                                         <input
                                                             type="date"
                                                             value={createPOForm.receiveBy}
@@ -4774,7 +4763,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     </div>
 
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Receive at</label>
+                                                        <label className="label-text">Receive at</label>
                                                         <select
                                                             value={createPOForm.receiveAt}
                                                             onChange={(e) => handleCreatePOFormChange('receiveAt', e.target.value)}
@@ -4788,7 +4777,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
                                                     </div>
                                                     <div className="col-span-2">
-                                                        <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                                                        <label className="label-text">Address</label>
                                                         {isEditingPO ? (
                                                             <textarea
                                                                 value={selectedPO.address}
@@ -4805,7 +4794,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
                                             {/* Items Section - Placeholder */}
                                             <div>
-                                                <h4 className="text-lg font-semibold text-gray-900 mb-4">Items</h4>
+                                                <h4 className="section-title mb-4">Items</h4>
                                                 <div className="bg-gray-50 p-4 rounded-[4px]">
                                                     <p className="text-gray-600 text-center py-4">
                                                         Item details will be displayed here when connected to backend
@@ -4816,25 +4805,25 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             {/* Totals Section - Placeholder */}
                                             <div className="grid grid-cols-3 gap-6 bg-gray-50 p-4 rounded-[4px] border-t-2 border-gray-300">
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-1">Total Taxable Value</label>
+                                                    <label className="label-text">Total Taxable Value</label>
                                                     <p className="text-lg font-semibold text-gray-900">? 0.00</p>
                                                 </div>
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-1">Total Tax</label>
+                                                    <label className="label-text">Total Tax</label>
                                                     <p className="text-lg font-semibold text-gray-900">? 0.00</p>
                                                 </div>
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-1">Total Value</label>
+                                                    <label className="label-text">Total Value</label>
                                                     <p className="text-lg font-bold text-indigo-900">? 0.00</p>
                                                 </div>
                                             </div>
 
                                             {/* Additional Information - Placeholder */}
                                             <div>
-                                                <h4 className="text-lg font-semibold text-gray-900 mb-4">Additional Information</h4>
+                                                <h4 className="section-title mb-4">Additional Information</h4>
                                                 <div className="grid grid-cols-2 gap-6 bg-gray-50 p-4 rounded-[4px]">
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-1">Receive By</label>
+                                                        <label className="label-text">Receive By</label>
                                                         {isEditingPO ? (
                                                             <input
                                                                 type="date"
@@ -4847,7 +4836,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         )}
                                                     </div>
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-1">Receive At</label>
+                                                        <label className="label-text">Receive At</label>
                                                         {isEditingPO ? (
                                                             <input
                                                                 type="text"
@@ -4861,7 +4850,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         )}
                                                     </div>
                                                     <div className="col-span-2">
-                                                        <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Terms</label>
+                                                        <label className="label-text">Delivery Terms</label>
                                                         {isEditingPO ? (
                                                             <textarea
                                                                 value={selectedPO.deliveryTerms || ''}
@@ -4952,15 +4941,15 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
                                         <div className="relative top-20 mx-auto p-8 border w-full max-w-md shadow-none border border-slate-200 rounded-[4px] bg-white">
                                             <div className="mb-6">
-                                                <h3 className="text-2xl font-bold text-gray-900">Cancel Purchase Order</h3>
-                                                <p className="text-sm text-gray-500 mt-2">PO Number: <span className="font-semibold text-gray-700">{selectedPO.poNumber}</span></p>
-                                                <p className="text-sm text-gray-500">Vendor: <span className="font-semibold text-gray-700">{selectedPO.vendorName}</span></p>
+                                                <h3 className="section-title">Cancel Purchase Order</h3>
+                                                <p className="helper-text mt-2">PO Number: <span className="font-semibold text-gray-700">{selectedPO.poNumber}</span></p>
+                                                <p className="helper-text">Vendor: <span className="font-semibold text-gray-700">{selectedPO.vendorName}</span></p>
                                             </div>
 
                                             <div className="space-y-4">
                                                 {/* Cancellation Reason */}
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    <label className="label-text">
                                                         Reason for Cancellation <span className="text-red-500">*</span>
                                                     </label>
                                                     <textarea
@@ -5000,7 +4989,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
                                         <div className="relative top-20 mx-auto p-8 border w-full max-w-md shadow-none border border-slate-200 rounded-[4px] bg-white">
                                             <div className="mb-6">
-                                                <h3 className="text-2xl font-bold text-gray-900">Post Payment</h3>
+                                                <h3 className="section-title">Post Payment</h3>
                                                 <p className="text-sm text-gray-500 mt-1">Bill: {selectedBillForPayment.voucherNo} - {selectedBillForPayment.vendorReferenceName}</p>
                                                 <p className="text-sm font-medium text-gray-700 mt-1">Amount: {selectedBillForPayment.amount}</p>
                                             </div>
@@ -5008,7 +4997,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             <div className="space-y-4">
                                                 {/* Date of Payment */}
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    <label className="label-text">
                                                         Date of payment
                                                     </label>
                                                     <input
@@ -5021,7 +5010,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
                                                 {/* Bank Account Dropdown */}
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    <label className="label-text">
                                                         Bank account
                                                     </label>
                                                     <select
@@ -5042,7 +5031,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 {/* Bank Reference No (hidden if cash is selected) */}
                                                 {postPaymentForm.bankAccount && postPaymentForm.bankAccount !== 'cash' && (
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        <label className="label-text">
                                                             Bank Reference No.
                                                         </label>
                                                         <input

@@ -59,14 +59,17 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignup, onForg
         throw new Error("Invalid login response from server.");
       }
 
-      // Save tenant ID to localStorage (for data isolation)
+      // Save tenant ID to sessionStorage (for data isolation)
       if (data.user?.tenant_id || data.user?.tenantId) {
-        localStorage.setItem("tenantId", data.user.tenant_id ?? data.user.tenantId);
+        const tid = data.user.tenant_id ?? data.user.tenantId;
+        sessionStorage.setItem("tenantId", tid);
+        localStorage.removeItem("tenantId"); // Ensure it's not in localStorage
       }
 
-      // Save company name to localStorage (for display)
+      // Save company name to sessionStorage (for display)
       if (data.user?.company_name) {
-        localStorage.setItem("companyName", data.user.company_name);
+        sessionStorage.setItem("companyName", data.user.company_name);
+        localStorage.removeItem("companyName"); // Ensure it's not in localStorage
       }
 
 

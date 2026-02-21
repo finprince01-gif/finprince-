@@ -232,14 +232,14 @@ const ServicePage: React.FC<ServicePageProps> = () => {
   const fetchServiceGroups = async () => {
     setLoading(true);
     try {
-      
+
       const response = await httpClient.get<ServiceGroup[]>('/api/services/groups/');
-      
+
       if (response && Array.isArray(response)) {
-        
+
         setApiData(response);
       } else {
-        
+
       }
     } catch (error) {
       handleApiError(error, 'Fetch Service Groups');
@@ -409,7 +409,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
   };
 
   const buildTree = (data: ServiceGroup[]) => {
-    
+
     const rootMap = new Map<string, TreeNode>();
 
     // Initialize System Categories
@@ -454,12 +454,12 @@ const ServicePage: React.FC<ServicePageProps> = () => {
     });
 
     // Add API data
-    
+
     data.forEach(item => {
-      
+
       // Basic validation: skip empty categories
       if (!item.category || !item.category.trim()) {
-        
+
         return;
       }
 
@@ -467,7 +467,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
       let categoryNode = rootMap.get(categoryKey);
 
       if (!categoryNode) {
-        
+
         categoryNode = {
           id: categoryKey,
           name: item.category,
@@ -486,7 +486,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
         );
 
         if (!groupNode) {
-          
+
           groupNode = {
             id: groupKey,
             name: item.group,
@@ -508,7 +508,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
             data: { category: item.category, group: item.group, subgroup: item.subgroup }
           };
           if (!groupNode.children.find(child => child.name === item.subgroup)) {
-            
+
             groupNode.children.push(subgroupNode);
           }
         }
@@ -516,7 +516,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
     });
 
     const treeArray = Array.from(rootMap.values());
-    
+
     setTreeData(treeArray);
   };
 
@@ -580,12 +580,12 @@ const ServicePage: React.FC<ServicePageProps> = () => {
         };
       }
 
-      
+
       const response = await httpClient.post('/api/services/groups/', payload);
-      
+
 
       setFormData(prev => ({ ...prev, group: '', subgroup: '' }));
-      
+
       await fetchServiceGroups();
       showSuccess('Service Group created successfully!');
     } catch (error: any) {
@@ -649,33 +649,22 @@ const ServicePage: React.FC<ServicePageProps> = () => {
 
   return (
     <div className="space-y-8">
-      {/* Page Header */}
-      <div className="flex items-end justify-between border-b border-slate-200 pb-6">
+      <div className="erp-section-title">
         <div>
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Operations</p>
-          <h2 className="text-[20px] font-bold text-slate-900">
-            Services
-          </h2>
+          <h1 className="page-title">Services</h1>
+          <p className="helper-text">Operations and service management</p>
         </div>
       </div>
 
       {/* Main Tabs */}
-      <div className="flex space-x-8 border-b border-slate-200">
+      <div className="erp-tab-container">
         {availableTabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`
-              whitespace-nowrap pb-4 text-[13px] font-bold uppercase tracking-wider transition-all relative
-              ${activeTab === tab.id
-                ? 'text-indigo-600'
-                : 'text-slate-400 hover:text-slate-600'}
-            `}
+            className={`erp-tab ${activeTab === tab.id ? 'active' : ''}`}
           >
             {tab.label}
-            {activeTab === tab.id && (
-              <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-600" />
-            )}
           </button>
         ))}
       </div>
@@ -806,7 +795,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
       {activeTab === 'service-list' && !showCreateForm && !selectedService && (
         <div className="bg-white rounded-[4px] erp-card min-h-[500px] p-6">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold text-gray-800">Service List</h2>
+            <h2 className="section-title">Service List</h2>
             <button
               onClick={handleOpenCreateModal}
               className="px-4 py-2 bg-indigo-600 text-white rounded-[4px] hover:bg-indigo-700 transition-colors font-medium"
@@ -880,7 +869,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
           </div>
 
           <div className="bg-white rounded-[4px] border border-slate-200 p-8">
-            <h2 className="text-2xl font-semibold text-gray-800 mb-8">Create New Service List</h2>
+            <h2 className="section-title mb-8">Create New Service List</h2>
 
             <div className="space-y-6 max-w-4xl">
               {/* Service Name */}

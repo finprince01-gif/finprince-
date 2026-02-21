@@ -17,7 +17,7 @@ from .serializers import (
     CompanySettingsSerializer
 )
 from .utils import TenantQuerysetMixin, IsTenantMember
-from .exceptions import UsageLimitExceeded, BusinessError, ExternalServiceError
+from .exceptions import UsageLimitExceeded, BusinessException, ExternalServiceError
 
 class SignupView(generics.CreateAPIView):
     permission_classes = [AllowAny]
@@ -76,7 +76,7 @@ class AgentMessageView(views.APIView):
         use_grounding = request.data.get('useGrounding', False)
 
         if not msg:
-            raise BusinessError('Message is required.')
+            raise BusinessException('Message is required.')
 
         # Extract user and tenant info
         user_id = str(request.user.id)
@@ -171,11 +171,12 @@ def health_with_metrics(request):
         cache_status = 'error'
 
     # Basic AI stats (without authentication)
+    stats = ai_service.get_stats()
     ai_stats = {
-        'total_requests': ai_service.stats.get('total_requests', 0),
-        'cache_hits': ai_service.stats.get('cache_hit', 0),
-        'queue_size': ai_service.request_queue.size(),
-        'active_flights': len(ai_service.single_flight)
+        'total_requests': stats.get('total_requests', 0),
+        'cache_hits': stats.get('cache_hits', 0),
+        'circuit_breaker_open': stats.get('circuit_breaker_open', False),
+        'api_keys_unhealthy': stats.get('api_keys_unhealthy', 0)
     }
 
     return Response({
@@ -337,7 +338,7 @@ class AIProxyView(views.APIView):
             # Handle agent messages
             msg = request.data.get('message', '').strip()
             if not msg:
-                raise BusinessError('Message is required.')
+                raise BusinessException('Message is required.')
 
             request_data = {
                 'message': msg,
@@ -346,7 +347,7 @@ class AIProxyView(views.APIView):
             }
             result = ai_service.make_request('agent', request_data, user_id, tenant_id)
         else:
-            raise BusinessError('Invalid action.')
+            raise BusinessException('Invalid action.')
 
         if 'error' in result:
             raise ExternalServiceError(result.get('error', 'AI service is temporarily unavailable.'))

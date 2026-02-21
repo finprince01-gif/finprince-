@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'rbac',  # Role-Based Access Control
     'rest_framework_simplejwt',
     'reports',
+    'drf_spectacular',
 ]
 
 MIDDLEWARE = [
@@ -207,6 +208,7 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ),
     'EXCEPTION_HANDLER': 'core.exception_handler.custom_exception_handler',
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 SIMPLE_JWT = {
@@ -222,6 +224,18 @@ SIMPLE_JWT = {
     'AUTH_COOKIE_HTTPONLY': True,  # Prevent JavaScript access
     'AUTH_COOKIE_SAMESITE': 'Lax',
     'AUTH_COOKIE_DOMAIN': '.finpixe.com' if not DEBUG else None,  # Share across subdomains
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'AI Accounting API',
+    'DESCRIPTION': 'Enterprise-grade AI-powered accounting system API.',
+    'VERSION': '0.0.3',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_PATCH': True,
+    'COMPONENT_SPLIT_REQUEST': True,
+    'SECURITY': [
+        {'Bearer': []},
+    ],
 }
 
 # Static Files (Whitenoise)
@@ -281,16 +295,20 @@ SESSION_COOKIE_AGE = 86400  # 24 hours
 SESSION_SAVE_EVERY_REQUEST = False  # Only save if modified
 
 # Logging Configuration
+LOGS_DIR = os.path.join(BASE_DIR, 'logs')
+if not os.path.exists(LOGS_DIR):
+    os.makedirs(LOGS_DIR)
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
-        'simple': {
-            'format': '{message}',
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
             'style': '{',
         },
-        'verbose': {
-            'format': '{levelname} {asctime} {module} {message}',
+        'simple': {
+            'format': '{levelname} {message}',
             'style': '{',
         },
     },
@@ -299,33 +317,41 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': 'simple',
         },
-        'file': {
+        'file_error': {
             'level': 'ERROR',
-            'class': 'logging.FileHandler',
-            'filename': os.path.join(BASE_DIR, 'debug.log'),
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(LOGS_DIR, 'error.log'),
+            'maxBytes': 1024 * 1024 * 5,  # 5 MB
+            'backupCount': 5,
+            'formatter': 'verbose',
+        },
+        'file_debug': {
+            'level': 'DEBUG',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(LOGS_DIR, 'debug.log'),
+            'maxBytes': 1024 * 1024 * 5,  # 5 MB
+            'backupCount': 5,
             'formatter': 'verbose',
         },
     },
     'root': {
-        'handlers': ['console', 'file'],
+        'handlers': ['console', 'file_error'],
         'level': 'INFO',
     },
     'loggers': {
-        'django.server': {
-            'handlers': ['console'],
-            'level': 'ERROR', # Suppress "INFO basehttp" logs
-            'propagate': False,
-        },
-        'core.auth_views': {
-            'handlers': ['console'],
-            'level': 'INFO',
-            'handlers': ['console'],
+        'django': {
+            'handlers': ['console', 'file_error'],
             'level': 'INFO',
             'propagate': False,
         },
-        'login': {
-            'handlers': ['console', 'file'],
-            'level': 'INFO',
+        'django.request': {
+            'handlers': ['file_error'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        'core': {
+            'handlers': ['console', 'file_debug'],
+            'level': 'DEBUG',
             'propagate': False,
         },
     },
