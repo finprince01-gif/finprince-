@@ -316,25 +316,44 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
                     {/* Top Row */}
 
 
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">GRN NO.</label>
-                            <input
-                                type="radio"
-                                name="grnType"
-                                checked={grnType === 'sales_return'}
-                                onChange={() => {
-                                    setGrnType('sales_return');
-                                    setVendorName('');
-                                    setCustomerName('');
-                                    setBranch('');
-                                    setAddress('');
-                                    setGstin('');
-                                }}
-                                className="text-indigo-600 focus:ring-indigo-500"
-                            />
-                            <span className="text-sm font-bold text-gray-700 uppercase">SALES RETURN</span>
-                        </label>
+                    <div className="bg-gray-50 p-4 rounded-[4px] border border-gray-200">
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-3">GRN TYPE</label>
+                        <div className="flex gap-8">
+                            <label className="flex items-center gap-2 cursor-pointer group">
+                                <input
+                                    type="radio"
+                                    name="grnType"
+                                    checked={grnType === 'purchases'}
+                                    onChange={() => {
+                                        setGrnType('purchases');
+                                        setVendorName('');
+                                        setCustomerName('');
+                                        setBranch('');
+                                        setAddress('');
+                                        setGstin('');
+                                    }}
+                                    className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                                />
+                                <span className="text-sm font-bold text-gray-700 uppercase group-hover:text-indigo-600 transition-colors">PURCHASES</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer group">
+                                <input
+                                    type="radio"
+                                    name="grnType"
+                                    checked={grnType === 'sales_return'}
+                                    onChange={() => {
+                                        setGrnType('sales_return');
+                                        setVendorName('');
+                                        setCustomerName('');
+                                        setBranch('');
+                                        setAddress('');
+                                        setGstin('');
+                                    }}
+                                    className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                                />
+                                <span className="text-sm font-bold text-gray-700 uppercase group-hover:text-indigo-600 transition-colors">SALES RETURN</span>
+                            </label>
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
