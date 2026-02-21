@@ -524,6 +524,7 @@ class InventoryOperationNewGRN(BaseModel):
     """
     grn_type = models.CharField(max_length=50, default='purchases') # purchases, sales_return
     grn_no = models.CharField(max_length=100, null=True, blank=True)
+    grn_series_name = models.CharField(max_length=255, null=True, blank=True)
     date = models.DateField(null=True, blank=True)
     time = models.TimeField(null=True, blank=True)
     

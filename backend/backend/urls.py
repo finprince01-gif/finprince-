@@ -7,28 +7,21 @@ from django.conf.urls.static import static
 from core.auth_views import CookieTokenObtainPairView, CookieTokenRefreshView, LogoutView
 from core.token import MyTokenObtainPairSerializer
 from core.views import AdminSubscriptionsView, AdminPaymentsView
+from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 import threading
 import sys
 
-def check_db_connection():
-    from django.db import connection
-    try:
-        connection.ensure_connection()
 
-    except Exception as e:
-        pass
-
-# Run only once on startup (prevent partial execution during autoreload)
-if 'runserver' in sys.argv and threading.current_thread() is threading.main_thread():
-    # Only run in the main thread to avoid duplicates
-    pass
-# Hack: Use AppConfig.ready() is better, but this is a quick spot for urls.py
-check_db_connection()
 
 
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    
+    # API Documentation
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
     
     # Admin API (for admin-subscription-panel) - accept both with/without trailing slash
     path('api/admin/subscriptions', AdminSubscriptionsView.as_view(), name='admin-subscriptions-no-slash'),

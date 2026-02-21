@@ -71,7 +71,7 @@ import { extractInvoiceDataWithRetry, getAgentResponse, getGroundedAgentResponse
 
 // API Service - Handles all HTTP requests to Django backend
 import { apiService, httpClient } from '../services';
-import { isAuthenticated } from '../services/authService';
+import { hasStoredSession, getRefreshToken } from '../services/authService';
 
 // Initial Data - Default data for new companies (fallback if backend is empty)
 import { initialLedgers, initialLedgerGroups } from '../store/initialData';
@@ -147,13 +147,13 @@ const App: React.FC = () => {
   };
 
   /**
-   * Get the user's subscription plan from localStorage
+   * Get the user's subscription plan from sessionStorage
    * Used to determine which features are available
-   * Returns: 'Basic', 'Pro', or 'Enterprise'
+   * Returns: 'Free', 'Starter', or 'Pro'
    */
   const getUserPlan = () => {
-    // Try to get plan from user data stored in localStorage
-    const userPlan = localStorage.getItem('userPlan');
+    // Try to get plan from user data stored in sessionStorage first, then fallback to localStorage for migration
+    const userPlan = sessionStorage.getItem('userPlan') || localStorage.getItem('userPlan');
     return userPlan;
   };
 
@@ -162,8 +162,12 @@ const App: React.FC = () => {
   // ============================================================================
 
   // Authentication state - tracks if user is logged in
-  // Check for refresh token to persist login across reloads
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => isAuthenticated());
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  // Authentication loading state - prevents UI jump while verifying token
+  const [isAuthenticating, setIsAuthenticating] = useState<boolean>(() => hasStoredSession());
+
+  // Current path state for routing
+  const [currentPath, setCurrentPath] = useState(window.location.pathname);
 
   // View state - determines whether to show login or signup page
   const [view, setView] = useState<'login' | 'signup' | 'forgot-password'>('login');
@@ -341,34 +345,101 @@ const App: React.FC = () => {
     }
   }, [loadCachedData, cacheTenantData]);
 
-  // Handle URL query parameters for routing (e.g. ?view=signup)
+  // Handle URL query parameters and path-based routing
   useEffect(() => {
+    const handleLocationChange = () => {
+      setCurrentPath(window.location.pathname);
+    };
+
+    // Listen for browser back/forward buttons
+    window.addEventListener('popstate', handleLocationChange);
+
     const params = new URLSearchParams(window.location.search);
 
-    // Auth view
+    // Auth view from query params
     const viewParam = params.get('view');
     if (viewParam === 'signup') {
       setView('signup');
     } else if (viewParam === 'login') {
       setView('login');
+    } else if (viewParam === 'forgot-password') {
+      setView('forgot-password');
     }
+
+    // Auth view from path
+    if (window.location.pathname === '/signup') setView('signup');
+    else if (window.location.pathname === '/login') setView('login');
+    else if (window.location.pathname === '/forgot-password') setView('forgot-password');
 
     // Page navigation
     const pageParam = params.get('page');
     if (pageParam) {
-      // Validate pageParam matches Page type if needed
       setCurrentPage(pageParam as Page);
     }
+
+    return () => window.removeEventListener('popstate', handleLocationChange);
   }, []);
 
 
+
+  // AUTH VALIDATION: On startup, if a session exists, validate it with the backend
+  useEffect(() => {
+    const validateToken = async () => {
+      // If we don't even have a refresh token, we're definitely not logged in
+      if (!hasStoredSession()) {
+        setIsAuthenticating(false);
+        return;
+      }
+
+      try {
+        // Attempt to call a protected endpoint to validate the session.
+        // This will trigger a token refresh if the access token is missing/expired.
+        await apiService.getMyPermissions();
+        setIsLoggedIn(true);
+      } catch (err: any) {
+        console.warn('⚠️ Authentication validation failed:', err.message || 'Unknown error');
+        // Clear all tokens and push to login if validation fails (401, network error, etc.)
+        handleLogout();
+      } finally {
+        setIsAuthenticating(false);
+      }
+    };
+
+    validateToken();
+  }, []);
 
   // Load data on initial mount and login state changes
   useEffect(() => {
     const loadInitialData = async () => {
       try {
-        const savedCompanyName = localStorage.getItem('companyName');
-        const savedTenantId = localStorage.getItem('tenantId');
+        // Try to get from sessionStorage first
+        let savedCompanyName = sessionStorage.getItem('companyName');
+        let savedTenantId = sessionStorage.getItem('tenantId');
+
+        // Migration/Cleanup: If not in sessionStorage but in localStorage, move it and clear from localStorage
+        if (!savedCompanyName) {
+          savedCompanyName = localStorage.getItem('companyName');
+          if (savedCompanyName) {
+            sessionStorage.setItem('companyName', savedCompanyName);
+            localStorage.removeItem('companyName');
+          }
+        }
+        if (!savedTenantId) {
+          savedTenantId = localStorage.getItem('tenantId');
+          if (savedTenantId) {
+            sessionStorage.setItem('tenantId', savedTenantId);
+            localStorage.removeItem('tenantId');
+          }
+        }
+
+        // Migrate userPlan
+        if (!sessionStorage.getItem('userPlan')) {
+          const legacyPlan = localStorage.getItem('userPlan');
+          if (legacyPlan) {
+            sessionStorage.setItem('userPlan', legacyPlan);
+            localStorage.removeItem('userPlan');
+          }
+        }
 
         // Set initial company details
         const initialCompanyDetails = { ...defaultCompanyDetails, name: savedCompanyName || 'Your Company Name' };
@@ -415,51 +486,62 @@ const App: React.FC = () => {
 
 
   // Handle login: be forgiving about the shape of incoming data (client may pass either full response or just user)
-  const handleLogin = async (payload: any) => {
+  const handleLogin = useCallback(async (payload: any) => {
     try {
       // payload could be:
       // 1) full response { success: true, user: {...}, permissions: [...] }
       // 2) user object only (older LoginPage code passed data.user)
       const user = payload?.user || payload;
-      const permissions = payload?.permissions || [];
 
       // Extract tenant ID from user data
       const tenantId = user?.tenantId || user?.tenant_id || null;
 
-      // Save tenant ID (tokens are in HttpOnly cookies)
+      // Save tenant ID (tokens are already in memory via apiService)
       if (tenantId) {
-        localStorage.setItem('tenantId', tenantId);
+        sessionStorage.setItem('tenantId', tenantId);
       }
-
-      // Save permissions - RBAC removed
-      // (Logic removed)
 
       // Save user-related data (company name) - always update from user data
       const userCompanyName = user?.company_name || user?.companyName || 'Your Company';
-      localStorage.setItem('companyName', userCompanyName);
+      sessionStorage.setItem('companyName', userCompanyName);
       setCompanyDetails(prev => ({ ...prev, name: userCompanyName }));
 
       // Save user's plan for access control
       const userSelectedPlan = user?.selected_plan || user?.selectedPlan || 'Free';
-      localStorage.setItem('userPlan', userSelectedPlan);
+      sessionStorage.setItem('userPlan', userSelectedPlan);
 
       // Clear logout flag since user is logging in
-      localStorage.removeItem('loggedOut');
+      sessionStorage.removeItem('loggedOut');
+      localStorage.removeItem('loggedOut'); // Also clear from legacy localStorage
 
       // Set login state first
       setIsLoggedIn(true);
+
+      // Update URL to dashboard after successful login
+      window.history.pushState({}, '', '/dashboard');
+      setCurrentPath('/dashboard');
+
       setView('login'); // reset view
 
       // Immediately load tenant-scoped data after login
       await loadTenantData(tenantId);
 
+      // Show welcome message
+      const displayName = user?.username || user?.first_name || 'User';
+      const capitalizedName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
+
+      showSuccess(
+        `Great to see you! Stay driven, stay focused, and let's turn your vision into reality today.`,
+        `Warm Welcome, ${capitalizedName}! ✨`,
+        6000
+      );
+
     } catch (err) {
-
-      setIsLoggedIn(true);
+      console.error('Login implementation error:', err);
     }
-  };
+  }, [loadTenantData]);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     try {
       // Update server login status to Offline before clearing local data
       await httpClient.post('/api/auth/logout/');
@@ -469,11 +551,18 @@ const App: React.FC = () => {
 
     // Clear authentication data
     httpClient.clearAuthData();
+    sessionStorage.removeItem('companyName');
+    sessionStorage.removeItem('tenantId');
+    sessionStorage.removeItem('userPlan');
+
+    // Also clear from legacy localStorage
     localStorage.removeItem('companyName');
     localStorage.removeItem('tenantId');
+    localStorage.removeItem('userPlan');
 
     // Set logout flag to prevent auto-login
-    localStorage.setItem('loggedOut', 'true');
+    sessionStorage.setItem('loggedOut', 'true');
+    localStorage.removeItem('loggedOut'); // No need to keep it in localStorage anymore
 
     // Clear all tenant cache data
     clearTenantCache();
@@ -483,13 +572,17 @@ const App: React.FC = () => {
     setCurrentPage('Dashboard');
     setView('login'); // Show login page after logout
 
+    // Update URL to login
+    window.history.pushState({}, '', '/login');
+    setCurrentPath('/login');
+
     // Clear in-memory state
     setLedgers([]);
     setLedgerGroups([]);
     setVouchers([]);
     setCompanyDetails({ ...defaultCompanyDetails, name: 'Your Company Name' });
     setStockItems([]);
-  };
+  }, [clearTenantCache]);
 
   // Check user active status frequently when logged in (exclude admin users)
   // DISABLED: This was causing 401 errors when cookies expired
@@ -500,12 +593,12 @@ const App: React.FC = () => {
 
     /* Original code - disabled
     if (!isLoggedIn) return;
-
-    const tenantId = localStorage.getItem('tenantId');
-
+  
+    const tenantId = sessionStorage.getItem('tenantId') || localStorage.getItem('tenantId');
+  
     // Don't check status for admin users (they can't be deactivated)
     if (!tenantId) return;
-
+  
     const checkUserStatus = async () => {
       try {
         // Only check if we have authentication cookies
@@ -529,11 +622,11 @@ const App: React.FC = () => {
         // Don't logout on API errors, just log the warning
       }
     };
-
+  
     // Check immediately, then every 5 seconds when online
     checkUserStatus();
     const statusInterval = setInterval(checkUserStatus, 5000); // More frequent checks
-
+  
     return () => clearInterval(statusInterval);
     */
   }, [isLoggedIn, handleLogout]);
@@ -1036,12 +1129,17 @@ const App: React.FC = () => {
 
   const renderPage = () => {
     if (!isDataLoaded) {
-      return <div className="flex items-center justify-center h-full text-gray-500">Loading Data...</div>;
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[400px]">
+          <div className="w-10 h-10 border-4 border-slate-200 border-t-indigo-500 rounded-full animate-spin mb-4"></div>
+          <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest animate-pulse">Syncing Workspace Data...</p>
+        </div>
+      );
     }
 
     // Plan-based feature restrictions (only for premium features now)
     switch (currentPage) {
-      case 'Dashboard': return <DashboardPage onNavigate={handleNavigate} companyName={companyDetails.name} vouchers={vouchers} ledgers={ledgers} isAdmin={localStorage.getItem('tenantId') === null || localStorage.getItem('tenantId') === 'null'} />;
+      case 'Dashboard': return <DashboardPage onNavigate={handleNavigate} companyName={companyDetails.name} vouchers={vouchers} ledgers={ledgers} isAdmin={(sessionStorage.getItem('tenantId') || localStorage.getItem('tenantId')) === null || (sessionStorage.getItem('tenantId') || localStorage.getItem('tenantId')) === 'null'} />;
       case 'Masters': return <MastersPage
         ledgers={ledgers}
         ledgerGroups={ledgerGroups}
@@ -1091,18 +1189,71 @@ const App: React.FC = () => {
     }
   };
 
-  if (!isLoggedIn) {
-    if (view === "signup") return <SignupPage onSwitchToLogin={() => setView("login")} onBack={() => window.location.href = (import.meta as any).env.VITE_LANDING_URL || 'http://localhost:3000'} />;
-    if (view === "forgot-password") return <ForgotPasswordPage onBackToLogin={() => setView("login")} />;
-    return <LoginPage
-      onLogin={handleLogin}
-      onSwitchToSignup={() => setView("signup")}
-      onForgotPassword={() => setView("forgot-password")}
-      onBack={() => window.location.href = (import.meta as any).env.VITE_LANDING_URL || 'http://localhost:3000'}
-    />;
+  const isAuthPath = currentPath === '/login' || currentPath === '/signup' || currentPath === '/forgot-password';
+
+  // 1. Show global loader while verifying session on startup
+  if (isAuthenticating) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen erp-main-bg">
+        <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-6 shadow-xl shadow-indigo-100"></div>
+        <div className="flex flex-col items-center gap-2">
+          <p className="text-indigo-600 font-bold tracking-[0.2em] uppercase text-[11px]">Secure Authentication</p>
+          <p className="text-slate-400 font-medium animate-pulse text-[10px] uppercase tracking-widest">Verifying session with server...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Auth Flow (Login/Signup)
+  if (!isLoggedIn || isAuthPath) {
+    // Determine which view to show based on path first, then fallback to view state
+    let activeAuthView = view;
+    if (currentPath === '/signup') activeAuthView = 'signup';
+    else if (currentPath === '/forgot-password') activeAuthView = 'forgot-password';
+    else if (currentPath === '/login') activeAuthView = 'login';
+
+    if (activeAuthView === "signup") {
+      return (
+        <SignupPage
+          onSwitchToLogin={() => {
+            window.history.pushState({}, '', '/login');
+            setCurrentPath('/login');
+            setView("login");
+          }}
+          onBack={() => window.location.href = (import.meta as any).env.VITE_LANDING_URL || 'http://localhost:3000'}
+        />
+      );
+    }
+    if (activeAuthView === "forgot-password") {
+      return (
+        <ForgotPasswordPage
+          onBackToLogin={() => {
+            window.history.pushState({}, '', '/login');
+            setCurrentPath('/login');
+            setView("login");
+          }}
+        />
+      );
+    }
+    return (
+      <LoginPage
+        onLogin={handleLogin}
+        onSwitchToSignup={() => {
+          window.history.pushState({}, '', '/signup');
+          setCurrentPath('/signup');
+          setView("signup");
+        }}
+        onForgotPassword={() => {
+          window.history.pushState({}, '', '/forgot-password');
+          setCurrentPath('/forgot-password');
+          setView("forgot-password");
+        }}
+        onBack={() => window.location.href = (import.meta as any).env.VITE_LANDING_URL || 'http://localhost:3000'}
+      />
+    );
   }
   return (
-    <div className="flex h-screen font-sans overflow-hidden" style={{ background: '#EEF2FF' }}>
+    <div className="flex min-h-screen font-sans erp-main-bg">
       {isSidebarOpen && (
         <Sidebar
           currentPage={currentPage}
@@ -1112,65 +1263,29 @@ const App: React.FC = () => {
         />
       )}
       <main
-        className={`flex-1 ${isSidebarOpen ? 'ml-[260px]' : 'ml-0'} h-full overflow-y-auto transition-all duration-300`}
-        style={{ background: '#EEF2FF' }}
+        className={`flex-1 ${isSidebarOpen ? 'ml-[260px]' : 'ml-0'} min-h-screen transition-all duration-300 erp-main-bg`}
       >
         {/* ── Sticky Header ─────────────────────────────────── */}
-        <div
-          className="sticky top-0 z-30 backdrop-blur-md flex items-center justify-between"
-          style={{
-            background: '#FFFFFF',
-            borderBottom: '1px solid #E2E8F0',
-            padding: '16px 24px',
-          }}
-        >
-          <div className="flex items-center gap-4">
+        <div className="sticky top-0 z-30 backdrop-blur-md flex items-center justify-between erp-header">
+          <div className="flex items-center gap-6">
             {/* Sidebar Toggle */}
             <button
               onClick={toggleSidebar}
-              className="flex flex-col gap-1 rounded-xl active:scale-95 transition-all"
-              style={{
-                padding: '8px',
-                background: '#F8FAFC',
-                border: '1px solid #E2E8F0',
-                width: '40px',
-                height: '40px',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
+              className="flex items-center justify-center w-10 h-10 rounded-[10px] bg-white border border-[#E2E8F0] shadow-[0_2px_6px_rgba(0,0,0,0.05)] hover:bg-[#F8FAFC] transition-all duration-200 active:scale-95"
               title={isSidebarOpen ? 'Hide Sidebar' : 'Show Sidebar'}
             >
-              <div className="flex flex-col gap-[5px] w-5">
-                <span className="h-0.5 w-5 bg-indigo-600 rounded-full transition-all" />
-                <span className={`h-0.5 bg-indigo-600 rounded-full transition-all ${isSidebarOpen ? 'w-5' : 'w-3'}`} />
-                <span className={`h-0.5 bg-indigo-600 rounded-full transition-all ${isSidebarOpen ? 'w-5' : 'w-4'}`} />
-              </div>
+              <Icon
+                name="menu"
+                className="w-[18px] h-[18px] text-[#475569]"
+              />
             </button>
 
             {/* Page Title */}
             <div className="flex flex-col">
-              <h2
-                className="leading-none"
-                style={{
-                  fontSize: '14px',
-                  fontWeight: 700,
-                  color: '#1F2937',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.08em',
-                }}
-              >
+              <h2 className="text-[13px] font-bold text-slate-900 uppercase tracking-widest leading-none">
                 {currentPage}
               </h2>
-              <span
-                style={{
-                  fontSize: '10px',
-                  color: '#94A3B8',
-                  fontWeight: 500,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.12em',
-                  marginTop: '3px',
-                }}
-              >
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.15em] mt-1.5 leading-none">
                 {companyDetails.name || 'Ai Accounting'}
               </span>
             </div>

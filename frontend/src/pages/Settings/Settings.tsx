@@ -50,8 +50,9 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
       // Assuming apiService has a method or we use direct put.
       await apiService.updateSubscriptionPlan(plan);
 
-      // Update local storage and reload
-      localStorage.setItem('userPlan', plan);
+      // Update storage and reload
+      sessionStorage.setItem('userPlan', plan);
+      localStorage.removeItem('userPlan');
 
       // Refresh usage
       await refetchUsage();
@@ -91,8 +92,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
           setDetails(existingSettings);
         } else {
           // Pre-fill with signup data if no settings exist
-          const signupCompanyName = localStorage.getItem('companyName') || '';
-          const signupEmail = localStorage.getItem('signupEmail') || '';
+          const signupCompanyName = sessionStorage.getItem('companyName') || localStorage.getItem('companyName') || '';
+          const signupEmail = sessionStorage.getItem('signupEmail') || localStorage.getItem('signupEmail') || '';
 
           setDetails(prev => ({
             ...prev,
@@ -103,8 +104,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
       } catch (error) {
 
         // Pre-fill with signup data as fallback
-        const signupCompanyName = localStorage.getItem('companyName') || '';
-        const signupEmail = localStorage.getItem('signupEmail') || '';
+        const signupCompanyName = sessionStorage.getItem('companyName') || localStorage.getItem('companyName') || '';
+        const signupEmail = sessionStorage.getItem('signupEmail') || localStorage.getItem('signupEmail') || '';
 
         setDetails(prev => ({
           ...prev,
@@ -169,20 +170,18 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
 
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex items-end justify-between border-b border-slate-200 pb-6">
+      <div className="erp-section-title flex items-center justify-between">
         <div>
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Configuration</p>
-          <h2 className="text-[20px] font-bold text-slate-900">
-            System Settings
-          </h2>
+          <h1 className="page-title">System Settings</h1>
+          <p className="helper-text mb-0">Configure your company profile and preferences</p>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Dark Mode</span>
+          <span className="helper-text">Dark Mode</span>
           <button
             onClick={toggleTheme}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${theme === 'dark' ? 'bg-indigo-600' : 'bg-slate-200'
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${theme === 'dark' ? 'bg-indigo-600' : 'bg-slate-200'
               }`}
           >
             <span
@@ -194,37 +193,29 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
       </div>
 
       {/* Main Tabs */}
-      <div className="flex space-x-8 border-b border-slate-200">
+      <div className="erp-tab-container">
         {availableTabs.map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`
-              whitespace-nowrap pb-4 text-[13px] font-bold uppercase tracking-wider transition-all relative
-              ${activeTab === tab
-                ? 'text-indigo-600'
-                : 'text-slate-400 hover:text-slate-600'}
-            `}
+            className={`erp-tab ${activeTab === tab ? 'active' : ''}`}
           >
             {tab}
-            {activeTab === tab && (
-              <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-600" />
-            )}
           </button>
         ))}
       </div>
 
       {activeTab === 'Company Profile' && (
-        <div className="erp-card p-8">
+        <div className="erp-container">
           <div className="space-y-10">
             {/* Company Information Section */}
             <div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-6 pb-2 border-b border-gray-200">
+              <h2 className="section-title mb-6 pb-2 border-b border-slate-100">
                 Company Information
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="label-text">
                     Company Name
                   </label>
                   <input
@@ -233,14 +224,11 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                     value={details.name || ''}
                     onChange={handleChange}
                     disabled={!isEditMode}
-                    className={`w-full px-4 py-3 border rounded-[4px] transition-colors ${isEditMode
-                      ? 'border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
-                      : 'border-gray-200 bg-gray-50 text-gray-700 cursor-not-allowed'
-                      }`}
+                    className="erp-input"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="label-text">
                     Company Logo
                   </label>
                   <input
@@ -252,7 +240,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                   />
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="label-text">
                     Address
                   </label>
                   <textarea
@@ -260,7 +248,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                     rows={4}
                     value={details.address || ''}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-[4px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors resize-none"
+                    className="erp-input resize-none"
                     placeholder="Enter company address"
                   />
                 </div>
@@ -269,12 +257,12 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
 
             {/* Contact Information Section */}
             <div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-6 pb-2 border-b border-gray-200">
+              <h2 className="section-title mb-6 pb-2 border-b border-slate-100">
                 Contact Information
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="label-text">
                     Email
                   </label>
                   <input
@@ -283,15 +271,12 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                     value={details.email || ''}
                     onChange={handleChange}
                     disabled={!isEditMode}
-                    className={`w-full px-4 py-3 border rounded-[4px] transition-colors ${isEditMode
-                      ? 'border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
-                      : 'border-gray-200 bg-gray-50 text-gray-700 cursor-not-allowed'
-                      }`}
+                    className="erp-input"
                     placeholder="company@example.com"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="label-text">
                     Phone
                   </label>
                   <input
@@ -299,12 +284,12 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                     name="phone"
                     value={details.phone || ''}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-[4px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                    className="erp-input"
                     placeholder="+91 9876543210"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="label-text">
                     Website
                   </label>
                   <input
@@ -312,7 +297,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                     name="website"
                     value={details.website || ''}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-[4px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                    className="erp-input"
                     placeholder="https://www.company.com"
                   />
                 </div>
@@ -321,12 +306,12 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
 
             {/* Tax & Legal Information Section */}
             <div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-6 pb-2 border-b border-gray-200">
+              <h2 className="section-title mb-6 pb-2 border-b border-slate-100">
                 Tax & Legal Information
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="label-text">
                     GSTIN
                   </label>
                   <input
@@ -334,19 +319,19 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                     name="gstin"
                     value={details.gstin || ''}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-[4px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                    className="erp-input"
                     placeholder="22AAAAA0000A1Z5"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="label-text">
                     State
                   </label>
                   <select
                     name="state"
                     value={details.state || ''}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-[4px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors bg-white"
+                    className="erp-select"
                   >
                     <option value="">Select State</option>
                     {indianStates.map(state => (
@@ -355,7 +340,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="label-text">
                     PAN
                   </label>
                   <input
@@ -363,12 +348,12 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                     name="pan"
                     value={details.pan || ''}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-[4px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                    className="erp-input"
                     placeholder="AAAAA0000A"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="label-text">
                     CIN
                   </label>
                   <input
@@ -376,7 +361,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                     name="cin"
                     value={details.cin || ''}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-[4px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                    className="erp-input"
                     placeholder="U12345MH2020PLC123456"
                   />
                 </div>
@@ -387,10 +372,10 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
           </div>
 
           {/* Action Buttons */}
-          <div className="mt-10 pt-6 border-t border-gray-200">
+          <div className="mt-10 pt-6 border-t border-slate-100">
             <div className="flex justify-end gap-3">
               {isSaved && (
-                <div className="mr-4 flex items-center text-sm text-indigo-600">
+                <div className="mr-4 flex items-center helper-text text-green-600 font-semibold">
                   <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                   </svg>
@@ -402,10 +387,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                 type="button"
                 onClick={handleEdit}
                 disabled={isEditMode}
-                className={`px-6 py-3 font-medium rounded-[4px] focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors shadow-none border border-slate-200-none border border-slate-200 ${isEditMode
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-500'
-                  }`}
+                className="erp-button-secondary"
               >
                 Edit Settings
               </button>
@@ -413,7 +395,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
               <button
                 type="submit"
                 onClick={handleSubmit}
-                className="px-6 py-3 bg-indigo-600 text-white font-medium rounded-[4px] hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors shadow-none border border-slate-200-none border border-slate-200"
+                className="erp-button-primary px-8"
               >
                 Save
               </button>
@@ -422,7 +404,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
                 <button
                   type="button"
                   onClick={handleCancel}
-                  className="px-6 py-3 bg-gray-300 text-gray-700 font-medium rounded-[4px] hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors shadow-none border border-slate-200-none border border-slate-200"
+                  className="erp-button-secondary"
                 >
                   Cancel
                 </button>
@@ -433,16 +415,16 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
       )}
 
       {activeTab === 'Tax Settings' && (
-        <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200 p-8 text-center">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Tax Settings</h2>
-          <p className="text-gray-500">Tax configuration options will be available soon.</p>
+        <div className="erp-container p-8 text-center">
+          <h2 className="section-title mb-4">Tax Settings</h2>
+          <p className="helper-text">Tax configuration options will be available soon.</p>
         </div>
       )}
 
       {activeTab === 'Regional Settings' && (
-        <div className="bg-white rounded-[4px] shadow-none border border-slate-200 p-8 text-center">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Regional Settings</h2>
-          <p className="text-gray-500">Regional and language settings will be available soon.</p>
+        <div className="erp-container p-8 text-center">
+          <h2 className="section-title mb-4">Regional Settings</h2>
+          <p className="helper-text">Regional and language settings will be available soon.</p>
         </div>
       )}
 
@@ -450,7 +432,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
         <div className="space-y-8">
           {/* Current Usage Card */}
           <div className="erp-card p-8">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6 pb-2 border-b border-gray-200">
+            <h2 className="section-title mb-6 pb-2 border-b border-gray-200">
               Subscription Status
             </h2>
             {subscriptionUsage ? (

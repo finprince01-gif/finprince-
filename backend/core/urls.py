@@ -27,7 +27,7 @@ urlpatterns = [
     path('auth/check-phone/', check_phone, name='check-phone'),
     path('auth/forgot-userid/', ForgotUserIDView.as_view(), name='forgot-userid'),
     path('auth/forgot-password/', ForgotPasswordView.as_view(), name='forgot-password'),
-    path('health/', health_check, name='health'), # /api/health
+    path('health/', health_with_metrics, name='health'), # /api/health
 
     # Reports
     path('reports/daybook/excel/', DayBookExcelView.as_view(), name='report-daybook-excel'),

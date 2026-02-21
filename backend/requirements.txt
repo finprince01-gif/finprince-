@@ -29,3 +29,6 @@ packaging
 numpy
 setuptools
 wheel
+drf-spectacular
+pytest
+pytest-django

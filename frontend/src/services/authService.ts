@@ -5,7 +5,7 @@
  * ============================================================================
  * Manages authentication state (tokens)
  * - Access Token: Stored in memory (variable) - SECURE
- * - Refresh Token: Stored in localStorage - PERSISTENT
+ * - Refresh Token: Stored in sessionStorage - SESSION ONLY
  */
 
 // Memory storage for access token (cleared on page reload)
@@ -19,7 +19,7 @@ const REFRESH_TOKEN_KEY = "refresh_token";
  */
 export const setTokens = (access: string, refresh: string) => {
     accessToken = access;
-    localStorage.setItem(REFRESH_TOKEN_KEY, refresh);
+    sessionStorage.setItem(REFRESH_TOKEN_KEY, refresh);
 };
 
 /**
@@ -30,21 +30,28 @@ export const getAccessToken = () => accessToken;
 /**
  * Get the stored refresh token
  */
-export const getRefreshToken = () => localStorage.getItem(REFRESH_TOKEN_KEY);
+export const getRefreshToken = () => sessionStorage.getItem(REFRESH_TOKEN_KEY);
 
 /**
  * Clear all authentication tokens (Logout)
  */
 export const clearTokens = () => {
     accessToken = null;
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    sessionStorage.removeItem(REFRESH_TOKEN_KEY);
 
     // Clean up legacy keys if they exist
+    sessionStorage.removeItem("token");
+    sessionStorage.removeItem("refreshToken");
+
+    // Also clear from localStorage if they were previously there
     localStorage.removeItem("token");
     localStorage.removeItem("refreshToken");
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
 };
 
 /**
- * Check if user is potentially authenticated (has refresh token)
+ * Check if the user has a stored session (refresh token)
+ * Note: This does NOT mean the user is authenticated, only that a session exists locally.
  */
-export const isAuthenticated = () => !!localStorage.getItem(REFRESH_TOKEN_KEY);
+export const hasStoredSession = () => !!sessionStorage.getItem(REFRESH_TOKEN_KEY);
+

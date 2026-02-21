@@ -54,7 +54,19 @@ class TenantModelSerializerMixin:
             validated_data['tenant_id'] = 1
         return super().update(instance, validated_data)
 
+from core.exceptions import TenantAccessDenied
+
 class IsTenantMember(permissions.BasePermission):
+    """
+    Permission to check if the user is a valid member of a tenant.
+    Requirement #7: Multi-tenant safety.
+    """
     def has_permission(self, request, view):
-        # Ensure user is authenticated and has a tenant_id
-        return request.user.is_authenticated and getattr(request.user, 'tenant_id', None) is not None
+        if not request.user.is_authenticated:
+            return False
+            
+        tenant_id = getattr(request.user, 'tenant_id', None)
+        if tenant_id is None:
+            raise TenantAccessDenied("Access denied for this tenant.")
+            
+        return True

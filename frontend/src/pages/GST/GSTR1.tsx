@@ -183,22 +183,22 @@ export default function GSTR1Page() {
     return (
         <div className="space-y-6">
             {/* Period Selector */}
-            <div className="bg-white rounded-[4px] shadow-none border border-slate-200 p-6">
-                <div className="flex items-center gap-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Financial Year</label>
+            <div className="erp-container">
+                <div className="flex flex-wrap items-end gap-6">
+                    <div className="flex-1 min-w-[200px]">
+                        <label className="block text-sm font-semibold text-slate-700 mb-2">Financial Year</label>
                         <select
                             value={period.year}
                             onChange={(e) => setPeriod({ ...period, year: e.target.value })}
-                            className="px-4 py-2 border border-gray-300 rounded-[4px]"
+                            className="erp-select"
                         >
+                            {/* ... years ... */}
                             {(() => {
                                 const years = [];
                                 const today = new Date();
                                 const currentYear = today.getFullYear();
-                                const currentMonth = today.getMonth(); // 0 is January
+                                const currentMonth = today.getMonth();
 
-                                // GST Financial Year starts in April (index 3)
                                 let fyStartYear = currentMonth >= 3 ? currentYear : currentYear - 1;
 
                                 for (let i = 0; i < 11; i++) {
@@ -211,12 +211,12 @@ export default function GSTR1Page() {
                             })()}
                         </select>
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Month</label>
+                    <div className="flex-1 min-w-[200px]">
+                        <label className="block text-sm font-semibold text-slate-700 mb-2">Month</label>
                         <select
                             value={period.month}
                             onChange={(e) => setPeriod({ ...period, month: e.target.value })}
-                            className="px-4 py-2 border border-gray-300 rounded-[4px]"
+                            className="erp-select"
                         >
                             <option>January</option>
                             <option>February</option>
@@ -232,47 +232,44 @@ export default function GSTR1Page() {
                             <option>December</option>
                         </select>
                     </div>
-                    <button
-                        onClick={fetchData}
-                        className="mt-7 px-6 py-2 bg-indigo-600 text-white rounded-[4px] hover:bg-indigo-700 flex items-center gap-2"
-                        disabled={isLoading}
-                    >
-                        {isLoading ? 'Generating...' : 'Generate Return'}
-                    </button>
-                    <button
-                        onClick={handleDownloadExcel}
-                        className="mt-7 px-6 py-2 bg-indigo-600 text-white rounded-[4px] hover:bg-indigo-700 flex items-center gap-2"
-                        disabled={isLoading}
-                    >
-                        Download Excel
-                    </button>
-                    <button
-                        onClick={handleDownloadJson}
-                        className="mt-7 px-6 py-2 bg-yellow-600 text-white rounded-[4px] hover:bg-yellow-700 flex items-center gap-2"
-                        disabled={isLoading}
-                    >
-                        Download JSON
-                    </button>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={fetchData}
+                            className="erp-button-primary"
+                            disabled={isLoading}
+                        >
+                            {isLoading ? 'Generating...' : 'Generate Return'}
+                        </button>
+                        <button
+                            onClick={handleDownloadExcel}
+                            className="erp-button-secondary"
+                            disabled={isLoading}
+                        >
+                            Download Excel
+                        </button>
+                        <button
+                            onClick={handleDownloadJson}
+                            className="erp-button-secondary bg-amber-50 text-amber-700 border-amber-100 hover:bg-amber-100"
+                            disabled={isLoading}
+                        >
+                            Download JSON
+                        </button>
+                    </div>
                 </div>
             </div>
 
             {/* Sub Tabs */}
-            <div className="bg-white rounded-[4px] shadow-none border border-slate-200">
-                <div className="border-b border-gray-200 px-6">
-                    <div className="flex gap-8 overflow-x-auto">
-                        {subTabs.map((tab) => (
-                            <button
-                                key={tab}
-                                onClick={() => setActiveSubTab(tab)}
-                                className={`py-4 px-1 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeSubTab === tab
-                                    ? 'border-indigo-600 text-slate-700'
-                                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                                    }`}
-                            >
-                                {tab} {stats[tab] !== undefined && stats[tab] > 0 ? `(${stats[tab]})` : ''}
-                            </button>
-                        ))}
-                    </div>
+            <div className="erp-container p-0">
+                <div className="erp-tab-container mb-0 border-b border-slate-100 px-6 overflow-x-auto">
+                    {subTabs.map((tab) => (
+                        <button
+                            key={tab}
+                            onClick={() => setActiveSubTab(tab)}
+                            className={`erp-tab ${activeSubTab === tab ? 'active' : ''}`}
+                        >
+                            {tab} {stats[tab] !== undefined && stats[tab] > 0 ? `(${stats[tab]})` : ''}
+                        </button>
+                    ))}
                 </div>
 
                 {/* Content */}
@@ -286,10 +283,10 @@ export default function GSTR1Page() {
 
                     {!isLoading && activeSubTab === 'B2B' && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-4">B2B Invoices - Business to Registered Business</h3>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full border border-gray-200">
-                                    <thead className="bg-gray-50">
+                            <h3 className="erp-section-title border-none pb-0 mb-4">B2B Invoices - Business to Registered Business</h3>
+                            <div className="erp-table-container">
+                                <table className="erp-table">
+                                    <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">GSTIN</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Recipient Name</th>
@@ -334,11 +331,11 @@ export default function GSTR1Page() {
 
                     {!isLoading && activeSubTab === 'B2BA' && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-4">B2BA - B2B Invoices (Amendment)</h3>
+                            <h3 className="erp-section-title border-none pb-0 mb-4">B2BA - B2B Invoices (Amendment)</h3>
                             <p className="text-sm text-gray-600 mb-4">Amended details of B2B invoices</p>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full border border-gray-200">
-                                    <thead className="bg-gray-50">
+                            <div className="erp-table-container">
+                                <table className="erp-table">
+                                    <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">GSTIN/UIN of Recipient*</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Name of Recipient</th>
@@ -371,10 +368,10 @@ export default function GSTR1Page() {
 
                     {!isLoading && activeSubTab === 'B2CL' && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-4">B2C Large - Invoices above ₹2.5 Lakhs</h3>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full border border-gray-200">
-                                    <thead className="bg-gray-50">
+                            <h3 className="erp-section-title border-none pb-0 mb-4">B2C Large - Invoices above ₹2.5 Lakhs</h3>
+                            <div className="erp-table-container">
+                                <table className="erp-table">
+                                    <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Invoice No</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Invoice Date</th>
@@ -411,11 +408,11 @@ export default function GSTR1Page() {
 
                     {!isLoading && activeSubTab === 'B2CLA' && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-4">B2CLA - B2C Large (Amendment)</h3>
+                            <h3 className="erp-section-title border-none pb-0 mb-4">B2CLA - B2C Large (Amendment)</h3>
                             <p className="text-sm text-gray-600 mb-4">Amended details of B2C Large invoices</p>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full border border-gray-200">
-                                    <thead className="bg-gray-50">
+                            <div className="erp-table-container">
+                                <table className="erp-table">
+                                    <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Original Invoice number</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Original Invoice Date</th>
@@ -444,11 +441,11 @@ export default function GSTR1Page() {
 
                     {!isLoading && activeSubTab === 'B2CS' && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-4">B2C Small - Summary of Small Invoices</h3>
+                            <h3 className="erp-section-title border-none pb-0 mb-4">B2C Small - Summary of Small Invoices</h3>
                             <p className="text-sm text-gray-600 mb-4">Aggregated summary by Place of Supply and Tax Rate</p>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full border border-gray-200">
-                                    <thead className="bg-gray-50">
+                            <div className="erp-table-container">
+                                <table className="erp-table">
+                                    <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Type</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Place of Supply</th>
@@ -485,11 +482,11 @@ export default function GSTR1Page() {
 
                     {!isLoading && activeSubTab === 'B2CSA' && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-4">B2CSA - B2C Small (Amendment)</h3>
+                            <h3 className="erp-section-title border-none pb-0 mb-4">B2CSA - B2C Small (Amendment)</h3>
                             <p className="text-sm text-gray-600 mb-4">Amended details of B2C Small supplies</p>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full border border-gray-200">
-                                    <thead className="bg-gray-50">
+                            <div className="erp-table-container">
+                                <table className="erp-table">
+                                    <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Type*</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Financial Year</th>
@@ -517,11 +514,11 @@ export default function GSTR1Page() {
 
                     {!isLoading && activeSubTab === 'CDNR' && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-4">CDNR - Credit/Debit Notes (Registered)</h3>
+                            <h3 className="erp-section-title border-none pb-0 mb-4">CDNR - Credit/Debit Notes (Registered)</h3>
                             <p className="text-sm text-gray-600 mb-4">Credit and Debit Notes issued to registered taxpayers</p>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full border border-gray-200">
-                                    <thead className="bg-gray-50">
+                            <div className="erp-table-container">
+                                <table className="erp-table">
+                                    <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">GSTIN/UIN*</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Name of Recipient</th>
@@ -570,11 +567,11 @@ export default function GSTR1Page() {
 
                     {!isLoading && activeSubTab === 'CDNRA' && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-4">CDNRA - Credit/Debit Notes (Registered) Amendment</h3>
+                            <h3 className="erp-section-title border-none pb-0 mb-4">CDNRA - Credit/Debit Notes (Registered) Amendment</h3>
                             <p className="text-sm text-gray-600 mb-4">Amended Credit/Debit Notes issued to registered taxpayers</p>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full border border-gray-200">
-                                    <thead className="bg-gray-50">
+                            <div className="erp-table-container">
+                                <table className="erp-table">
+                                    <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">GSTIN/UIN*</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Name of Recipient</th>
@@ -607,11 +604,11 @@ export default function GSTR1Page() {
 
                     {!isLoading && activeSubTab === 'CDNUR' && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-4">CDNUR - Credit/Debit Notes (Unregistered)</h3>
+                            <h3 className="erp-section-title border-none pb-0 mb-4">CDNUR - Credit/Debit Notes (Unregistered)</h3>
                             <p className="text-sm text-gray-600 mb-4">Credit and Debit Notes issued to unregistered taxpayers</p>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full border border-gray-200">
-                                    <thead className="bg-gray-50">
+                            <div className="erp-table-container">
+                                <table className="erp-table">
+                                    <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">UR Type*</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Note Number*</th>
@@ -654,11 +651,11 @@ export default function GSTR1Page() {
 
                     {!isLoading && activeSubTab === 'AT' && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-4">AT - Advance Tax</h3>
+                            <h3 className="erp-section-title border-none pb-0 mb-4">AT - Advance Tax</h3>
                             <p className="text-sm text-gray-600 mb-4">Tax collected in advance (TCS/TDS)</p>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full border border-gray-200">
-                                    <thead className="bg-gray-50">
+                            <div className="erp-table-container">
+                                <table className="erp-table">
+                                    <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Place of Supply(POS)*</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Rate*</th>
@@ -689,11 +686,11 @@ export default function GSTR1Page() {
 
                     {!isLoading && activeSubTab === 'ATADJ' && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-4">ATADJ - Advance Tax Adjustment</h3>
+                            <h3 className="erp-section-title border-none pb-0 mb-4">ATADJ - Advance Tax Adjustment</h3>
                             <p className="text-sm text-gray-600 mb-4">Adjustment of advance tax paid</p>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full border border-gray-200">
-                                    <thead className="bg-gray-50">
+                            <div className="erp-table-container">
+                                <table className="erp-table">
+                                    <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Place of Supply(POS)*</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Rate*</th>
@@ -724,11 +721,11 @@ export default function GSTR1Page() {
 
                     {!isLoading && activeSubTab === 'EXPA' && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-4">EXPA - Amended Export</h3>
+                            <h3 className="erp-section-title border-none pb-0 mb-4">EXPA - Amended Export</h3>
                             <p className="text-sm text-gray-600 mb-4">Amended Exports supplies including SEZ</p>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full border border-gray-200">
-                                    <thead className="bg-gray-50">
+                            <div className="erp-table-container">
+                                <table className="erp-table">
+                                    <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Export Type*</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Original Invoice number*</th>
@@ -758,11 +755,11 @@ export default function GSTR1Page() {
 
                     {!isLoading && activeSubTab === 'ATA' && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-4">ATA - Advance Tax (Amendment)</h3>
+                            <h3 className="erp-section-title border-none pb-0 mb-4">ATA - Advance Tax (Amendment)</h3>
                             <p className="text-sm text-gray-600 mb-4">Amended Advance tax liability for tax already paid on advance received</p>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full border border-gray-200">
-                                    <thead className="bg-gray-50">
+                            <div className="erp-table-container">
+                                <table className="erp-table">
+                                    <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Place of Supply(POS)*</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Rate*</th>
@@ -784,11 +781,11 @@ export default function GSTR1Page() {
 
                     {!isLoading && activeSubTab === 'ATADJA' && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-4">ATADJA - Advance Tax Adjustment (Amendment)</h3>
+                            <h3 className="erp-section-title border-none pb-0 mb-4">ATADJA - Advance Tax Adjustment (Amendment)</h3>
                             <p className="text-sm text-gray-600 mb-4">Amended Adjustment of tax liability for tax already paid on advance received</p>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full border border-gray-200">
-                                    <thead className="bg-gray-50">
+                            <div className="erp-table-container">
+                                <table className="erp-table">
+                                    <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Financial Year</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Original Month*</th>
@@ -813,11 +810,11 @@ export default function GSTR1Page() {
 
                     {!isLoading && activeSubTab === 'ECO' && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-4">ECO - E-Commerce Operator</h3>
+                            <h3 className="erp-section-title border-none pb-0 mb-4">ECO - E-Commerce Operator</h3>
                             <p className="text-sm text-gray-600 mb-4">Supplies through E-C Details of supplies through Electronic Commerce Operator</p>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full border border-gray-200">
-                                    <thead className="bg-gray-50">
+                            <div className="erp-table-container">
+                                <table className="erp-table">
+                                    <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Nature of Supply*</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Place of Supply(POS)/ GSTIN*</th>
@@ -843,11 +840,11 @@ export default function GSTR1Page() {
 
                     {!isLoading && activeSubTab === 'ECOA' && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-4">ECOA - Amended E-Commerce Operator</h3>
+                            <h3 className="erp-section-title border-none pb-0 mb-4">ECOA - Amended E-Commerce Operator</h3>
                             <p className="text-sm text-gray-600 mb-4">Amended Supplies IT Details of amended supplies through Electronic Commerce Operator</p>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full border border-gray-200">
-                                    <thead className="bg-gray-50">
+                            <div className="erp-table-container">
+                                <table className="erp-table">
+                                    <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Nature of Supply*</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Original Month*</th>
@@ -875,11 +872,11 @@ export default function GSTR1Page() {
 
                     {!isLoading && activeSubTab === 'ECOB2B' && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-4">ECOB2B - Supplies UIA 9/5</h3>
+                            <h3 className="erp-section-title border-none pb-0 mb-4">ECOB2B - Supplies UIA 9/5</h3>
                             <p className="text-sm text-gray-600 mb-4">Details of supplies (via E-Commerce) 15 B2B</p>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full border border-gray-200">
-                                    <thead className="bg-gray-50">
+                            <div className="erp-table-container">
+                                <table className="erp-table">
+                                    <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">GSTIN/UIN of Supplier</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">GSTIN/UIN of Recipient</th>
@@ -909,11 +906,11 @@ export default function GSTR1Page() {
 
                     {!isLoading && activeSubTab === 'ECOURP2B' && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-4">ECOURP2B - Supplies via E-Commerce to URP B2B</h3>
+                            <h3 className="erp-section-title border-none pb-0 mb-4">ECOURP2B - Supplies via E-Commerce to URP B2B</h3>
                             <p className="text-sm text-gray-600 mb-4">Details of supplies made through e-commerce to unregistered persons (B2B)</p>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full border border-gray-200">
-                                    <thead className="bg-gray-50">
+                            <div className="erp-table-container">
+                                <table className="erp-table">
+                                    <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">GSTIN/UIN of Recipient</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Recipient Name</th>
@@ -941,11 +938,11 @@ export default function GSTR1Page() {
 
                     {!isLoading && activeSubTab === 'ECOB2C' && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-4">ECOB2C - Supplies via E-Commerce to B2C</h3>
+                            <h3 className="erp-section-title border-none pb-0 mb-4">ECOB2C - Supplies via E-Commerce to B2C</h3>
                             <p className="text-sm text-gray-600 mb-4">Details of supplies made through e-commerce to consumers (B2C)</p>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full border border-gray-200">
-                                    <thead className="bg-gray-50">
+                            <div className="erp-table-container">
+                                <table className="erp-table">
+                                    <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">GSTIN/UIN of Supplier</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Supplier Name</th>
@@ -969,11 +966,11 @@ export default function GSTR1Page() {
 
                     {!isLoading && activeSubTab === 'ECOURP2C' && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-4">ECOURP2C - Supplies via E-Commerce to URP B2C</h3>
+                            <h3 className="erp-section-title border-none pb-0 mb-4">ECOURP2C - Supplies via E-Commerce to URP B2C</h3>
                             <p className="text-sm text-gray-600 mb-4">Details of supplies made through e-commerce to unregistered persons (B2C)</p>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full border border-gray-200">
-                                    <thead className="bg-gray-50">
+                            <div className="erp-table-container">
+                                <table className="erp-table">
+                                    <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Place of Supply*</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Rate*</th>
@@ -995,11 +992,11 @@ export default function GSTR1Page() {
 
                     {!isLoading && activeSubTab === 'ECOAB2B' && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-4">ECOAB2B - Amended Supplies via E-Commerce to B2B</h3>
+                            <h3 className="erp-section-title border-none pb-0 mb-4">ECOAB2B - Amended Supplies via E-Commerce to B2B</h3>
                             <p className="text-sm text-gray-600 mb-4">Amended details of supplies made through e-commerce to B2B customers</p>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full border border-gray-200">
-                                    <thead className="bg-gray-50">
+                            <div className="erp-table-container">
+                                <table className="erp-table">
+                                    <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">GSTIN/UIN of Supplier</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Supplier Name</th>
@@ -1031,11 +1028,11 @@ export default function GSTR1Page() {
 
                     {!isLoading && activeSubTab === 'ECOAB2C' && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-4">ECOAB2C - Amended Supplies via E-Commerce to B2C</h3>
+                            <h3 className="erp-section-title border-none pb-0 mb-4">ECOAB2C - Amended Supplies via E-Commerce to B2C</h3>
                             <p className="text-sm text-gray-600 mb-4">Amended details of supplies made through e-commerce to B2C customers</p>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full border border-gray-200">
-                                    <thead className="bg-gray-50">
+                            <div className="erp-table-container">
+                                <table className="erp-table">
+                                    <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Financial Year*</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Original Month*</th>
@@ -1061,11 +1058,11 @@ export default function GSTR1Page() {
 
                     {!isLoading && activeSubTab === 'ECOAURP2B' && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-4">ECOAURP2B - Amended Supplies via E-Commerce to URP B2B</h3>
+                            <h3 className="erp-section-title border-none pb-0 mb-4">ECOAURP2B - Amended Supplies via E-Commerce to URP B2B</h3>
                             <p className="text-sm text-gray-600 mb-4">Amended details of supplies made through e-commerce to unregistered persons (B2B)</p>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full border border-gray-200">
-                                    <thead className="bg-gray-50">
+                            <div className="erp-table-container">
+                                <table className="erp-table">
+                                    <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">GSTIN/UIN of Recipient</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Recipient Name</th>
@@ -1095,11 +1092,11 @@ export default function GSTR1Page() {
 
                     {!isLoading && activeSubTab === 'ECOAURP2C' && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-4">ECOAURP2C - Amended Supplies via E-Commerce to URP B2C</h3>
+                            <h3 className="erp-section-title border-none pb-0 mb-4">ECOAURP2C - Amended Supplies via E-Commerce to URP B2C</h3>
                             <p className="text-sm text-gray-600 mb-4">Amended details of supplies made through e-commerce to unregistered persons (B2C)</p>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full border border-gray-200">
-                                    <thead className="bg-gray-50">
+                            <div className="erp-table-container">
+                                <table className="erp-table">
+                                    <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Financial Year*</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Original Month*</th>
@@ -1123,11 +1120,11 @@ export default function GSTR1Page() {
 
                     {!isLoading && activeSubTab === 'EXEMP' && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-4">EXEMP - Exempted Supplies</h3>
+                            <h3 className="erp-section-title border-none pb-0 mb-4">EXEMP - Exempted Supplies</h3>
                             <p className="text-sm text-gray-600 mb-4">Details of exempted, nil-rated and non-GST supplies</p>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full border border-gray-200">
-                                    <thead className="bg-gray-50">
+                            <div className="erp-table-container">
+                                <table className="erp-table">
+                                    <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Description</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Nil rated supplies</th>
@@ -1158,11 +1155,11 @@ export default function GSTR1Page() {
 
                     {!isLoading && activeSubTab === 'DOC' && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-4">DOC - Document Details</h3>
+                            <h3 className="erp-section-title border-none pb-0 mb-4">DOC - Document Details</h3>
                             <p className="text-sm text-gray-600 mb-4">Summary of documents issued during the period</p>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full border border-gray-200">
-                                    <thead className="bg-gray-50">
+                            <div className="erp-table-container">
+                                <table className="erp-table">
+                                    <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Nature of Document*</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Sr. No From*</th>
@@ -1195,10 +1192,10 @@ export default function GSTR1Page() {
 
                     {!isLoading && activeSubTab === 'EXP' && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-4">Exports</h3>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full border border-gray-200">
-                                    <thead className="bg-gray-50">
+                            <h3 className="erp-section-title border-none pb-0 mb-4">Exports</h3>
+                            <div className="erp-table-container">
+                                <table className="erp-table">
+                                    <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Export Type</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Invoice No</th>
@@ -1241,11 +1238,11 @@ export default function GSTR1Page() {
 
                     {!isLoading && activeSubTab === 'HSNB2B' && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-4">HSN Summary of B2B</h3>
+                            <h3 className="erp-section-title border-none pb-0 mb-4">HSN Summary of B2B</h3>
                             <p className="text-sm text-gray-600 mb-4">HSN wise summary of goods/services supplied during the tax period</p>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full border border-gray-200">
-                                    <thead className="bg-gray-50">
+                            <div className="erp-table-container">
+                                <table className="erp-table">
+                                    <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">HSN*</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Description</th>
@@ -1274,11 +1271,11 @@ export default function GSTR1Page() {
 
                     {!isLoading && activeSubTab === 'HSNB2C' && (
                         <div>
-                            <h3 className="text-lg font-semibold mb-4">HSN Summary of B2C</h3>
+                            <h3 className="erp-section-title border-none pb-0 mb-4">HSN Summary of B2C</h3>
                             <p className="text-sm text-gray-600 mb-4">HSN wise summary of goods/services supplied during the tax period</p>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full border border-gray-200">
-                                    <thead className="bg-gray-50">
+                            <div className="erp-table-container">
+                                <table className="erp-table">
+                                    <thead>
                                         <tr>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">HSN*</th>
                                             <th className="px-4 py-2 border text-left text-sm font-medium">Description</th>

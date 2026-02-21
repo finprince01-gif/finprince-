@@ -35,11 +35,18 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, companyName, 
 
     useEffect(() => {
         const loadWidgets = () => {
-            const saved = localStorage.getItem('bi_dashboard_config_v2');
+            const saved = sessionStorage.getItem('bi_dashboard_config_v2') || localStorage.getItem('bi_dashboard_config_v2');
             if (saved) {
                 try {
                     const parsed = JSON.parse(saved);
-                    if (Array.isArray(parsed)) setCustomWidgets(parsed);
+                    if (Array.isArray(parsed)) {
+                        setCustomWidgets(parsed);
+                        // Migrate to sessionStorage if it was in localStorage
+                        if (!sessionStorage.getItem('bi_dashboard_config_v2')) {
+                            sessionStorage.setItem('bi_dashboard_config_v2', saved);
+                            localStorage.removeItem('bi_dashboard_config_v2');
+                        }
+                    }
                 } catch (e) {
                     console.error("Failed to load dashboard layout");
                 }
@@ -54,6 +61,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, companyName, 
     const handleResetDefault = async () => {
         if (await confirm("Reset to default dashboard view?")) {
             setCustomWidgets([]);
+            sessionStorage.removeItem('bi_dashboard_config_v2');
             localStorage.removeItem('bi_dashboard_config_v2');
             showSuccess('Dashboard reset to default');
             setTimeout(() => window.location.reload(), 1000);
@@ -77,47 +85,30 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, companyName, 
         return { party, amount, type: v.type, date: v.date };
     };
 
+    const greeting = () => {
+        const hour = new Date().getHours();
+        if (hour < 12) return 'Good morning';
+        if (hour < 17) return 'Good afternoon';
+        return 'Good evening';
+    };
+
     return (
-        <div className="flex flex-col gap-6 animate-in fade-in duration-700 -m-6 p-6 min-h-screen" style={{ background: '#EEF2FF' }}>
+        <div className="flex flex-col gap-6 animate-in fade-in duration-700">
             {/* Minimal Header */}
-            <div style={{ paddingBottom: '12px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0' }}>
+            <div className="erp-section-title flex justify-between items-center mb-6">
                 <div>
-                    <h1
-                        style={{
-                            fontSize: '15px',
-                            fontWeight: 700,
-                            color: '#1F2937',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.05em',
-                            marginBottom: '4px',
-                        }}
-                    >
-                        Dashboard
+                    <h1 className="page-title text-2xl font-bold tracking-tight">
+                        {greeting()}, <span className="text-indigo-600 dark:text-indigo-400">Chief</span>
                     </h1>
-                    <p style={{ fontSize: '13px', color: '#475569', fontWeight: 400 }}>
-                        Welcome back — here is what's happening today.
+                    <p className="helper-text text-sm font-medium mt-1">
+                        Here's your financial overview for {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}.
                     </p>
                 </div>
                 <button
                     onClick={() => onNavigate('Dashboard Builder' as any)}
-                    style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        padding: '10px 18px',
-                        background: '#4F46E5',
-                        color: '#FFFFFF',
-                        border: 'none',
-                        borderRadius: '12px',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.08em',
-                        cursor: 'pointer',
-                        boxShadow: '0 2px 8px rgba(79,70,229,0.25)',
-                        gap: '6px',
-                    }}
+                    className="erp-button-primary"
                 >
-                    <Icon name="edit" className="w-3.5 h-3.5" />
+                    <Icon name="edit" className="w-3.5 h-3.5 mr-2" />
                     Edit Dashboard
                 </button>
             </div>
@@ -158,39 +149,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, companyName, 
             {/* Row 2: Hybrid Content - Revenue Box (BI) + Activity */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                 {/* Left Section: Revenue Analysis (The BI "Revenbox") */}
-                <div className="lg:col-span-8 space-y-4">
-                    <div
-                        style={{
-                            background: '#FFFFFF',
-                            border: '1px solid #E2E8F0',
-                            borderRadius: '16px',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.04)',
-                            overflow: 'hidden',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            minHeight: '580px',
-                        }}
-                    >
-                        <div
-                            style={{
-                                padding: '20px 24px',
-                                borderBottom: '1px solid #E2E8F0',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                background: '#FFFFFF',
-                            }}
-                        >
+                <div className="lg:col-span-8">
+                    <div className="erp-container flex flex-col min-h-[580px] p-0 overflow-hidden">
+                        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
                             <div>
-                                <h3
-                                    style={{
-                                        fontSize: '11px',
-                                        fontWeight: 700,
-                                        color: '#1F2937',
-                                        textTransform: 'uppercase',
-                                        letterSpacing: '0.12em',
-                                    }}
-                                >
+                                <h3 className="section-title">
                                     Revenue Analysis
                                 </h3>
                             </div>
@@ -238,29 +201,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, companyName, 
                 </div>
 
                 {/* Right Section: Recent Activity */}
-                <div
-                    style={{
-                        background: '#FFFFFF',
-                        border: '1px solid #E2E8F0',
-                        borderRadius: '16px',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.04)',
-                        overflow: 'hidden',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        height: '580px',
-                    }}
-                    className="lg:col-span-4"
-                >
-                    <div style={{ padding: '20px 24px', borderBottom: '1px solid #E2E8F0' }}>
-                        <h3
-                            style={{
-                                fontSize: '11px',
-                                fontWeight: 700,
-                                color: '#1F2937',
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.12em',
-                            }}
-                        >
+                <div className="erp-container lg:col-span-4 flex flex-col h-[580px] p-0 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-slate-100">
+                        <h3 className="section-title">
                             Recent Activity
                         </h3>
                     </div>
@@ -277,10 +220,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, companyName, 
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <div className="flex justify-between items-start">
-                                            <p className="text-[11px] font-black text-slate-700 truncate uppercase tracking-tight">{display.party || 'Seed Data'}</p>
-                                            <p className="text-[11px] font-black text-slate-900">₹{display.amount.toLocaleString()}</p>
+                                            <p className="helper-text font-semibold truncate uppercase tracking-tight">{display.party || 'Seed Data'}</p>
+                                            <p className="helper-text font-bold">₹{display.amount.toLocaleString()}</p>
                                         </div>
-                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{display.type} • {display.date}</p>
+                                        <p className="helper-text mt-0.5" style={{ fontSize: '11px' }}>{display.type} • {display.date}</p>
                                     </div>
                                     <ChevronRight size={12} className="text-slate-300 opacity-0 group-hover:opacity-100 transition-all" />
                                 </div>
@@ -288,10 +231,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, companyName, 
                         })}
                     </div>
 
-                    <div className="p-6 bg-slate-50/50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800">
+                    <div className="p-6 bg-slate-50 border-t border-slate-100 dark:border-slate-800">
                         <button
                             onClick={() => onNavigate('Reports')}
-                            className="w-full py-3 text-[10px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400 border-2 border-dashed border-indigo-100 dark:border-indigo-900 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-950/30 hover:border-indigo-200 transition-all"
+                            className="w-full erp-button-secondary border-dashed border-2 py-3"
                         >
                             View All Transactions
                         </button>
