@@ -5,8 +5,7 @@ This module handles all database interactions for PO settings.
 
 from django.db import transaction
 from django.core.exceptions import ObjectDoesNotExist
-from .models import VendorMasterPOSettings
-from inventory.models import InventoryMasterCategory
+from .models import VendorMasterPOSettings, VendorMasterCategory
 
 
 class POSettingsDatabase:
@@ -34,7 +33,7 @@ class POSettingsDatabase:
             category = None
             if category_id:
                 try:
-                    category = InventoryMasterCategory.objects.get(id=category_id)
+                    category = VendorMasterCategory.objects.get(id=category_id)
                 except ObjectDoesNotExist:
                     raise ValueError(f"Category with id {category_id} does not exist")
             
@@ -104,7 +103,7 @@ class POSettingsDatabase:
                 if 'category_id' in kwargs:
                     category_id = kwargs.pop('category_id')
                     if category_id:
-                        category = InventoryMasterCategory.objects.get(id=category_id)
+                        category = VendorMasterCategory.objects.get(id=category_id)
                         po_setting.category = category
                     else:
                         po_setting.category = None

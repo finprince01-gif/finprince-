@@ -10,6 +10,7 @@ interface MasterCategory {
     group: string | null;
     subgroup: string | null;
     is_active: boolean;
+    full_path?: string;
 }
 
 interface TreeNode {
@@ -29,8 +30,8 @@ interface TreeNode {
 interface InventoryCategoryWizardProps {
     onCreateCategory: (data: {
         category: string;
-        group: string | null;
-        subgroup: string | null;
+        group: string;
+        subgroup: string;
     }) => Promise<void>;
     onEditCategory?: (data: {
         id: number;
@@ -212,7 +213,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
             // 2. Subgroup without Group (direct under category)
             // 3. Just Group (no subgroup)
 
-            if (item.group) {
+            if (item.group && item.group !== '') {
                 if (excludeGroups.includes(item.group)) return;
 
                 // Case 1 & 3: Has a group
@@ -236,7 +237,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                 }
 
                 // Process Subgroup under Group
-                if (showSubgroup && item.subgroup) {
+                if (showSubgroup && item.subgroup && item.subgroup !== '') {
                     // Check if subgroup already exists to avoid duplicates
                     if (!groupNode.children.find(c => c.name === item.subgroup)) {
                         const subgroupNode: TreeNode = {
@@ -250,7 +251,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                         groupNode.children.push(subgroupNode);
                     }
                 }
-            } else if (showSubgroup && item.subgroup) {
+            } else if (showSubgroup && item.subgroup && item.subgroup !== '') {
                 // Case 2: Subgroup without Group (direct under category)
                 // Check if subgroup already exists to avoid duplicates
                 if (!rootNode.children.find(c => c.name === item.subgroup)) {
@@ -402,7 +403,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                 await onCreateCategory({
                     category: selectedNode.data.category,
                     group: formData.group.trim(),
-                    subgroup: null
+                    subgroup: ''
                 });
                 setFormData(prev => ({ ...prev, group: '', subgroup: '' })); // Clear inputs
                 showSuccess('Group created successfully!');
@@ -411,7 +412,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
             else if (showSubgroup && selectedNode.level === 1 && !selectedNode.data.subgroup) {
                 await onCreateCategory({
                     category: selectedNode.data.category,
-                    group: selectedNode.data.group,
+                    group: selectedNode.data.group || '',
                     subgroup: formData.subgroup.trim()
                 });
                 setFormData(prev => ({ ...prev, group: '', subgroup: '' })); // Clear inputs

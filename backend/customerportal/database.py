@@ -37,7 +37,15 @@ class CustomerMaster(models.Model):
     # Business Information
     gstin = models.CharField(max_length=15, null=True, blank=True)
     pan = models.CharField(max_length=10, null=True, blank=True)
-    category_id = models.IntegerField(null=True, blank=True)
+    category = models.ForeignKey(
+        'CustomerMasterCategory',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column='category_id',
+        db_constraint=False,
+        related_name='customer_masters'
+    )
     
     # Financial Information
     credit_limit = models.DecimalField(max_digits=15, decimal_places=2, default=0)
@@ -73,8 +81,8 @@ class CustomerMasterCategory(models.Model):
     id = models.AutoField(primary_key=True)
     tenant_id = models.CharField(max_length=36, db_index=True)
     category = models.CharField(max_length=100)
-    group = models.CharField(max_length=100, null=True, blank=True)
-    subgroup = models.CharField(max_length=100, null=True, blank=True)
+    group = models.CharField(max_length=100, default='', blank=True)
+    subgroup = models.CharField(max_length=100, default='', blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -83,13 +91,23 @@ class CustomerMasterCategory(models.Model):
         managed = False
         db_table = 'customer_master_category'
         unique_together = ['tenant_id', 'category', 'group', 'subgroup']
+        ordering = ['category', 'group', 'subgroup']
         indexes = [
             models.Index(fields=['tenant_id', 'is_active']),
             models.Index(fields=['category']),
         ]
     
     def __str__(self):
-        return f"{self.category} > {self.group} > {self.subgroup}" if self.group else self.category
+        parts = [self.category]
+        if self.group:
+            parts.append(self.group)
+        if self.subgroup:
+            parts.append(self.subgroup)
+        return " > ".join(parts)
+    
+    @property
+    def full_path(self):
+        return str(self)
 
 
 class CustomerMastersSalesQuotation(models.Model):

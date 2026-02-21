@@ -35,7 +35,7 @@ class CustomerMasterSerializer(serializers.ModelSerializer):
             'id', 'tenant_id', 'customer_code', 'customer_name',
             'email', 'phone', 'mobile',
             'address_line1', 'address_line2', 'city', 'state', 'country', 'pincode',
-            'gstin', 'pan', 'category_id',
+            'gstin', 'pan', 'category',
             'credit_limit', 'credit_days', 'opening_balance', 'current_balance',
             'is_active', 'is_deleted', 'created_at', 'updated_at', 'created_by'
         ]
@@ -44,14 +44,23 @@ class CustomerMasterSerializer(serializers.ModelSerializer):
 
 class CustomerMasterCategorySerializer(serializers.ModelSerializer):
     """Serializer for Customer Master Category"""
+    full_path = serializers.ReadOnlyField()
+    group = serializers.CharField(required=False, allow_null=True, allow_blank=True, default='')
+    subgroup = serializers.CharField(required=False, allow_null=True, allow_blank=True, default='')
     
     class Meta:
         model = CustomerMasterCategory
         fields = [
-            'id', 'tenant_id', 'category', 'group', 'subgroup',
+            'id', 'tenant_id', 'category', 'group', 'subgroup', 'full_path',
             'is_active', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'tenant_id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'tenant_id', 'created_at', 'updated_at', 'full_path']
+
+    def validate_group(self, value):
+        return value if value is not None else ''
+
+    def validate_subgroup(self, value):
+        return value if value is not None else ''
 
 
 class CustomerMastersSalesQuotationSerializer(serializers.ModelSerializer):

@@ -3,7 +3,6 @@ Serializers for Vendor Master PO Settings.
 """
 
 from rest_framework import serializers
-from .models import VendorMasterPOSettings
 from .models import VendorMasterPOSettings, VendorMasterCategory
 
 
@@ -12,7 +11,7 @@ class VendorMasterPOSettingsSerializer(serializers.ModelSerializer):
     Serializer for reading VendorMasterPOSettings data.
     Includes category details.
     """
-    category_name = serializers.CharField(source='category.name', read_only=True, allow_null=True)
+    category_name = serializers.CharField(source='category.full_path', read_only=True, allow_null=True)
     category_full_path = serializers.CharField(source='category.full_path', read_only=True, allow_null=True)
     preview_po_number = serializers.SerializerMethodField()
     

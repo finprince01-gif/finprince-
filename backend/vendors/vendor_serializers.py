@@ -3,8 +3,7 @@ Serializers for Vendor management.
 """
 
 from rest_framework import serializers
-from .models import Vendor
-from inventory.models import InventoryMasterCategory
+from .models import Vendor, VendorMasterCategory
 
 
 class VendorSerializer(serializers.ModelSerializer):
@@ -83,7 +82,7 @@ class VendorCreateSerializer(serializers.ModelSerializer):
     Serializer for creating vendors.
     """
     category = serializers.PrimaryKeyRelatedField(
-        queryset=InventoryMasterCategory.objects.all(),
+        queryset=VendorMasterCategory.objects.all(),
         required=False,
         allow_null=True
     )
@@ -170,7 +169,7 @@ class VendorUpdateSerializer(serializers.ModelSerializer):
     Serializer for updating vendors.
     """
     category = serializers.PrimaryKeyRelatedField(
-        queryset=InventoryMasterCategory.objects.all(),
+        queryset=VendorMasterCategory.objects.all(),
         required=False,
         allow_null=True
     )

@@ -272,8 +272,8 @@
     `id` BIGINT NOT NULL AUTO_INCREMENT,
     `tenant_id` VARCHAR(36) NOT NULL COMMENT 'Tenant ID for multi-tenancy',
     `category` VARCHAR(255) NOT NULL COMMENT 'Top-level category',
-    `group` VARCHAR(255) DEFAULT NULL COMMENT 'Group under category',
-    `subgroup` VARCHAR(255) DEFAULT NULL COMMENT 'Subgroup under group',
+    `group` VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'Group under category',
+    `subgroup` VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'Subgroup under group',
     `is_active` TINYINT(1) NOT NULL DEFAULT 1 COMMENT 'Whether this category is active',
     `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     `updated_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
@@ -452,8 +452,8 @@
     `id` BIGINT NOT NULL AUTO_INCREMENT,
     `tenant_id` CHAR(36) NOT NULL,
     `category` VARCHAR(255) NOT NULL,
-    `group` VARCHAR(255) DEFAULT NULL,
-    `subgroup` VARCHAR(255) DEFAULT NULL,
+    `group` VARCHAR(255) NOT NULL DEFAULT '',
+    `subgroup` VARCHAR(255) NOT NULL DEFAULT '',
     `is_active` TINYINT(1) NOT NULL DEFAULT 1,
     `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     `updated_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
@@ -955,8 +955,8 @@ CREATE TABLE `customer_master_category` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `tenant_id` varchar(36) NOT NULL COMMENT 'Tenant ID for multi-tenancy',
   `category` varchar(255) NOT NULL COMMENT 'Top-level category',
-  `group` varchar(255) DEFAULT NULL COMMENT 'Group under category',
-  `subgroup` varchar(255) DEFAULT NULL COMMENT 'Subgroup under group',
+  `group` varchar(255) NOT NULL DEFAULT '' COMMENT 'Group under category',
+  `subgroup` varchar(255) NOT NULL DEFAULT '' COMMENT 'Subgroup under group',
   `is_active` tinyint(1) NOT NULL DEFAULT '1' COMMENT 'Whether this category is active',
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
@@ -2368,8 +2368,8 @@ CREATE TABLE service_group (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     tenant_id VARCHAR(36) NOT NULL,
     category VARCHAR(100) NOT NULL,
-    `group` VARCHAR(100) NOT NULL,
-    subgroup VARCHAR(100),
+    `group` VARCHAR(100) NOT NULL DEFAULT '',
+    `subgroup` VARCHAR(100) NOT NULL DEFAULT '',
     is_active BOOLEAN DEFAULT TRUE,
     created_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
     updated_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
@@ -2559,5 +2559,38 @@ ADD COLUMN pincode VARCHAR(20) NULL;
 -- Updates for Inventory Operation Schema (2026-02-21)
 ALTER TABLE `inventory_operation_new_grn`
 ADD COLUMN `grn_series_name` VARCHAR(255) DEFAULT NULL AFTER `grn_no`;
+
+-- Updates to prevent duplication in category tables (2026-02-21)
+UPDATE `inventory_master_category` SET `group` = '' WHERE `group` IS NULL;
+UPDATE `inventory_master_category` SET `subgroup` = '' WHERE `subgroup` IS NULL;
+ALTER TABLE `inventory_master_category` 
+MODIFY COLUMN `group` VARCHAR(255) NOT NULL DEFAULT '',
+MODIFY COLUMN `subgroup` VARCHAR(255) NOT NULL DEFAULT '';
+
+UPDATE `vendor_master_category` SET `group` = '' WHERE `group` IS NULL;
+UPDATE `vendor_master_category` SET `subgroup` = '' WHERE `subgroup` IS NULL;
+ALTER TABLE `vendor_master_category` 
+MODIFY COLUMN `group` VARCHAR(255) NOT NULL DEFAULT '',
+MODIFY COLUMN `subgroup` VARCHAR(255) NOT NULL DEFAULT '';
+
+UPDATE `customer_master_category` SET `group` = '' WHERE `group` IS NULL;
+UPDATE `customer_master_category` SET `subgroup` = '' WHERE `subgroup` IS NULL;
+ALTER TABLE `customer_master_category` 
+MODIFY COLUMN `group` VARCHAR(255) NOT NULL DEFAULT '',
+MODIFY COLUMN `subgroup` VARCHAR(255) NOT NULL DEFAULT '';
+
+UPDATE `service_group` SET `group` = '' WHERE `group` IS NULL;
+UPDATE `service_group` SET `subgroup` = '' WHERE `subgroup` IS NULL;
+ALTER TABLE `service_group` 
+MODIFY COLUMN `group` VARCHAR(100) NOT NULL DEFAULT '',
+MODIFY COLUMN `subgroup` VARCHAR(100) NOT NULL DEFAULT '';
+
+-- Remove ghost placeholder rows created by "ensure root exists" logic (2026-02-21)
+-- These rows (group='', subgroup='') were inserted as side-effects and are never
+-- used by the UI tree (which builds roots from systemCategories constants).
+DELETE FROM `inventory_master_category` WHERE `group` = '' AND `subgroup` = '';
+DELETE FROM `vendor_master_category`    WHERE `group` = '' AND `subgroup` = '';
+DELETE FROM `customer_master_category`  WHERE `group` = '' AND `subgroup` = '';
+DELETE FROM `service_group`             WHERE `group` = '' AND `subgroup` = '';
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
