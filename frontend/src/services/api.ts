@@ -160,6 +160,15 @@ class ApiService {
     }
 
     /**
+     * Get customers from Customer Portal with full branch/GST info
+     * Used for Issue Slip and any form that needs customer_name + branches
+     * Returns: Array of customers with customer_name, branches (branch_reference_name, gstin, address fields)
+     */
+    async getPortalCustomers() {
+        return httpClient.get<any[]>('/api/customerportal/customers/');
+    }
+
+    /**
      * Get GST Details (Addresses) for a specific Vendor
      * @param vendorId - Vendor Basic Detail ID
      */
