@@ -15,6 +15,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({ value, onChange, op
     const containerRef = useRef<HTMLDivElement>(null);
     const portalRef = useRef<HTMLDivElement>(null);
     const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
+    const [isTyping, setIsTyping] = useState(false);
 
     const updatePosition = () => {
         if (containerRef.current) {
@@ -59,9 +60,11 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({ value, onChange, op
         };
     }, [isOpen]);
 
-    const filteredOptions = options.filter(opt =>
-        (opt || '').toLowerCase().includes((value || '').toLowerCase())
-    );
+    const filteredOptions = isTyping
+        ? options.filter(opt =>
+            (opt || '').toLowerCase().includes((value || '').toLowerCase())
+        )
+        : options;
 
     return (
         <div className={`relative ${className}`} ref={containerRef}>
@@ -72,14 +75,23 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({ value, onChange, op
                     value={value}
                     onChange={(e) => {
                         onChange(e.target.value);
-                        if (!isOpen) setIsOpen(true);
+                        if (!isOpen) {
+                            setIsOpen(true);
+                        }
+                        setIsTyping(true);
                     }}
-                    onFocus={() => setIsOpen(true)}
+                    onFocus={() => {
+                        setIsOpen(true);
+                        setIsTyping(false);
+                    }}
                     placeholder={placeholder}
                 />
                 <div
                     className="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer"
-                    onClick={() => setIsOpen(!isOpen)}
+                    onClick={() => {
+                        setIsOpen(!isOpen);
+                        setIsTyping(false);
+                    }}
                 >
                     <Icon name="chevron-down" className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                 </div>
@@ -104,6 +116,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({ value, onChange, op
                                 onClick={() => {
                                     onChange(opt);
                                     setIsOpen(false);
+                                    setIsTyping(false);
                                 }}
                             >
                                 {opt}

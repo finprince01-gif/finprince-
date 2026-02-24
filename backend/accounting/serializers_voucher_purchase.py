@@ -9,12 +9,13 @@ from .models_voucher_purchase import (
 
 class VoucherPurchaseSupplyForeignDetailsSerializer(serializers.ModelSerializer):
     purchase_order_no = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    purchase_ledger = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     items = serializers.ListField(child=serializers.DictField(), required=False, allow_empty=True)
 
     class Meta:
         model = VoucherPurchaseSupplyForeignDetails
-        fields = ['purchase_order_no', 'exchange_rate', 'description', 'items']
+        fields = ['purchase_order_no', 'purchase_ledger', 'exchange_rate', 'description', 'items']
 
     def validate_items(self, value):
         if not isinstance(value, list):
@@ -34,11 +35,12 @@ class VoucherPurchaseSupplyForeignDetailsSerializer(serializers.ModelSerializer)
 class VoucherPurchaseSupplyINRDetailsSerializer(serializers.ModelSerializer):
     purchase_order_no = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     purchase_ledger = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     items = serializers.ListField(child=serializers.DictField(), required=False, allow_empty=True)
 
     class Meta:
         model = VoucherPurchaseSupplyINRDetails
-        fields = ['purchase_order_no', 'purchase_ledger', 'items']
+        fields = ['purchase_order_no', 'purchase_ledger', 'description', 'items']
 
     def validate_items(self, value):
         if not isinstance(value, list):
@@ -113,13 +115,14 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):
             VoucherPurchaseSupplyForeignDetails.objects.create(
                 supplier_details=supplier_instance, 
                 tenant_id=tenant_id,
-                **supply_foreign_data
+                purchase_ledger=supply_foreign_data.get('purchase_ledger'),
+                **{k: v for k, v in supply_foreign_data.items() if k != 'purchase_ledger'}
             )
         
         if supply_inr_data is not None:
 
             # Ensure we only pass valid model fields if using raw data
-            valid_fields = {'purchase_order_no', 'purchase_ledger', 'items'}
+            valid_fields = {'purchase_order_no', 'purchase_ledger', 'description', 'items'}
             filtered_data = {k: v for k, v in supply_inr_data.items() if k in valid_fields}
             
             VoucherPurchaseSupplyINRDetails.objects.create(
@@ -166,7 +169,7 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):
              supply_inr_data = self.initial_data['supply_inr_details']
 
         if supply_inr_data is not None:
-            valid_fields = {'purchase_order_no', 'purchase_ledger', 'items'}
+            valid_fields = {'purchase_order_no', 'purchase_ledger', 'description', 'items'}
             filtered_data = {k: v for k, v in supply_inr_data.items() if k in valid_fields}
             
             VoucherPurchaseSupplyINRDetails.objects.update_or_create(

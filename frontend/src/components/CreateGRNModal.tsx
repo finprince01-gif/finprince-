@@ -133,7 +133,30 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
             try {
                 // Fetch Branches (GST Details)
                 const branchResponse = await apiService.getVendorGSTDetails(vendor.id);
-                setBranchOptions(Array.isArray(branchResponse) ? branchResponse : []);
+                const branches = Array.isArray(branchResponse) ? branchResponse : [];
+                setBranchOptions(branches);
+
+                // Auto-select if only one branch exists
+                if (branches.length === 1) {
+                    const onlyBranch = branches[0];
+                    const branchName = onlyBranch.reference_name || onlyBranch.trade_name || 'Main';
+                    setBranch(branchName);
+
+                    if (onlyBranch.branch_address) {
+                        setAddress(onlyBranch.branch_address);
+                    } else {
+                        const addressParts = [
+                            onlyBranch.address_line_1,
+                            onlyBranch.address_line_2,
+                            onlyBranch.city,
+                            onlyBranch.state,
+                            onlyBranch.pincode,
+                            onlyBranch.country
+                        ].filter(Boolean);
+                        setAddress(addressParts.join(', '));
+                    }
+                    setGstin(onlyBranch.gstin || '');
+                }
 
                 // Fetch Purchase Orders
                 const poResponse = await apiService.getVendorPurchaseOrders(selectedVendorName);
@@ -180,16 +203,20 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
         );
 
         if (selectedBranch) {
-            const addressParts = [
-                selectedBranch.address_line_1,
-                selectedBranch.address_line_2,
-                selectedBranch.city,
-                selectedBranch.state,
-                selectedBranch.pincode,
-                selectedBranch.country
-            ].filter(Boolean);
-
-            setAddress(addressParts.join(', '));
+            // Use branch_address if available, otherwise fallback to assembling from components
+            if (selectedBranch.branch_address) {
+                setAddress(selectedBranch.branch_address);
+            } else {
+                const addressParts = [
+                    selectedBranch.address_line_1,
+                    selectedBranch.address_line_2,
+                    selectedBranch.city,
+                    selectedBranch.state,
+                    selectedBranch.pincode,
+                    selectedBranch.country
+                ].filter(Boolean);
+                setAddress(addressParts.join(', '));
+            }
             setGstin(selectedBranch.gstin || '');
         }
     };
@@ -316,45 +343,7 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
                     {/* Top Row */}
 
 
-                    <div className="bg-gray-50 p-4 rounded-[4px] border border-gray-200">
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-3">GRN TYPE</label>
-                        <div className="flex gap-8">
-                            <label className="flex items-center gap-2 cursor-pointer group">
-                                <input
-                                    type="radio"
-                                    name="grnType"
-                                    checked={grnType === 'purchases'}
-                                    onChange={() => {
-                                        setGrnType('purchases');
-                                        setVendorName('');
-                                        setCustomerName('');
-                                        setBranch('');
-                                        setAddress('');
-                                        setGstin('');
-                                    }}
-                                    className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
-                                />
-                                <span className="text-sm font-bold text-gray-700 uppercase group-hover:text-indigo-600 transition-colors">PURCHASES</span>
-                            </label>
-                            <label className="flex items-center gap-2 cursor-pointer group">
-                                <input
-                                    type="radio"
-                                    name="grnType"
-                                    checked={grnType === 'sales_return'}
-                                    onChange={() => {
-                                        setGrnType('sales_return');
-                                        setVendorName('');
-                                        setCustomerName('');
-                                        setBranch('');
-                                        setAddress('');
-                                        setGstin('');
-                                    }}
-                                    className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
-                                />
-                                <span className="text-sm font-bold text-gray-700 uppercase group-hover:text-indigo-600 transition-colors">SALES RETURN</span>
-                            </label>
-                        </div>
-                    </div>
+
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div>
