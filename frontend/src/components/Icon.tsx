@@ -1,14 +1,20 @@
 import React from 'react';
 
-type IconName = 'dashboard' | 'layout-dashboard' | 'masters' | 'inventory' | 'vouchers' | 'reports' | 'plus' | 'trash' | 'upload' | 'close' | 'warning' | 'settings' | 'logout' | 'sparkles' | 'arrow-up-right' | 'arrow-down-left' | 'users' | 'wallet' | 'download' | 'check-circle' | 'x-circle' | 'spinner' | 'wand-sparkles' | 'bot' | 'vendor-portal' | 'customer-portal' | 'payroll' | 'service' | 'gst' | 'ledger' | 'search' | 'clock' | 'inbox' | 'x' | 'exclamation-triangle' | 'edit' | 'chevron-down' | 'document' | 'check' | 'scanner' | 'tag' | 'save' | 'menu';
+type IconName = 'dashboard' | 'layout-dashboard' | 'masters' | 'inventory' | 'vouchers' | 'reports' | 'plus' | 'trash' | 'upload' | 'close' | 'warning' | 'settings' | 'logout' | 'sparkles' | 'arrow-up-right' | 'arrow-down-left' | 'users' | 'wallet' | 'download' | 'check-circle' | 'x-circle' | 'spinner' | 'wand-sparkles' | 'bot' | 'vendor-portal' | 'customer-portal' | 'payroll' | 'service' | 'gst' | 'ledger' | 'search' | 'clock' | 'inbox' | 'x' | 'exclamation-triangle' | 'edit' | 'chevron-down' | 'document' | 'check' | 'scanner' | 'tag' | 'save' | 'menu' | 'receipt';
 
 interface IconProps {
   name: IconName;
   className?: string;
+  size?: number;
   style?: React.CSSProperties;
 }
 
-const Icon: React.FC<IconProps> = ({ name, className = 'w-5 h-5', style }) => {
+const Icon: React.FC<IconProps> = ({ name, className = '', size, style }) => {
+  const sizeStyle = size ? { width: `${size}px`, height: `${size}px` } : {};
+  const combinedStyle = { ...sizeStyle, ...style };
+  const defaultSizeClass = !size && !className.includes('w-') ? 'w-5 h-5' : '';
+  const combinedClassName = `${defaultSizeClass} ${className}`.trim();
+
   const icons: Record<IconName, React.ReactElement> = {
     // SIDEBAR ICONS - Enhanced Professional Detail Style
     dashboard: (
@@ -60,6 +66,11 @@ const Icon: React.FC<IconProps> = ({ name, className = 'w-5 h-5', style }) => {
       <>
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14 3v4a1 1 0 001 1h4" />
+      </>
+    ),
+    receipt: (
+      <>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9h6m-6 4h6" />
       </>
     ),
 
@@ -171,8 +182,8 @@ const Icon: React.FC<IconProps> = ({ name, className = 'w-5 h-5', style }) => {
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
-      className={className}
-      style={style}
+      className={combinedClassName}
+      style={combinedStyle}
     >
       {icons[name]}
     </svg>

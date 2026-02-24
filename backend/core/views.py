@@ -299,11 +299,11 @@ class AIProxyView(views.APIView):
 
             # Check AI Usage Limit
             from .usage_service import check_and_increment_usage
-            
+
             # Determine limit based on plan (default to FREE)
             plan = getattr(request.user, 'selected_plan', 'FREE') or 'FREE'
             plan = plan.upper()
-            
+
             # Basic limits - can be moved to a configuration file later
             LIMITS = {
                 'FREE': 5,
@@ -312,13 +312,13 @@ class AIProxyView(views.APIView):
                 'ENTERPRISE': 10000
             }
             limit = LIMITS.get(plan, 5)
-            
+
             if not check_and_increment_usage(tenant_id, limit):
                 raise UsageLimitExceeded(f"Monthly AI extraction limit of {limit} has been reached.")
 
             file_obj = request.FILES['file']
 
-            # Use updated invoice processing
+            # Use updated invoice processing — returns {'reply': json_string} or {'error': ...}
             from .ai_service import create_invoice_processing_request
             result = create_invoice_processing_request(
                 file_obj,
@@ -327,11 +327,117 @@ class AIProxyView(views.APIView):
                 tenant_id=tenant_id
             )
 
-            # Record the extraction event for usage tracking
-            if result and isinstance(result, dict) and 'reply' in result:
-                # User requested to skip database saving for extracted invoices.
-                # Data is returned to frontend for local storage handling.
-                pass
+            if 'error' in result:
+                raise ExternalServiceError(result.get('error', 'AI service is temporarily unavailable.'))
+
+            # ── Parse the raw AI text into {header, line_items} ────────────────
+            import json as _json
+            raw_text = result.get('reply', '').strip()
+
+            # Strip markdown code fences if present
+            if raw_text.startswith('```json'):
+                raw_text = raw_text[7:]
+            if raw_text.startswith('```'):
+                raw_text = raw_text[3:]
+            if raw_text.endswith('```'):
+                raw_text = raw_text[:-3]
+            raw_text = raw_text.strip()
+
+            try:
+                extracted = _json.loads(raw_text)
+            except Exception:
+                # Try to salvage by finding the outermost {} block
+                import re
+                match = re.search(r'\{[\s\S]*\}', raw_text)
+                if match:
+                    extracted = _json.loads(match.group(0))
+                else:
+                    return Response({'error': 'Failed to parse AI response as JSON.'}, status=500)
+
+            # Support both {header, line_items} and legacy flat/array formats
+            if isinstance(extracted, dict) and 'header' in extracted:
+                header = extracted.get('header', {})
+                line_items = extracted.get('line_items', [])
+            elif isinstance(extracted, list) and extracted:
+                # Legacy: array of flat objects — treat first element as header, no line items
+                header = extracted[0] if extracted else {}
+                line_items = []
+            else:
+                header = extracted if isinstance(extracted, dict) else {}
+                line_items = []
+
+            # Ensure line_items is a list
+            if isinstance(line_items, dict):
+                line_items = [line_items]
+
+            # ── Post-processing: normalise every line item ─────────────────────
+            import re as _re
+
+            # Numeric-only fields — strip currency symbols, commas, stray units
+            NUMERIC_FIELDS = {
+                'Item Rate', 'Taxable Amount', 'IGST Amount', 'CGST Amount',
+                'SGST Amount', 'Item Amount', 'Disc%',
+            }
+
+            for idx, item in enumerate(line_items, start=1):
+                # 1. Re-assign sequential S.No
+                item['S.No'] = str(idx)
+
+                # 2. Convert Python None / JSON null → empty string on every field
+                for k, v in item.items():
+                    if v is None:
+                        item[k] = ''
+
+                # 3. Auto-split Quantity + UOM if still combined (e.g. "8 NOS", "2.5 KG")
+                qty_raw = str(item.get('Quantity', '')).strip()
+                uom_raw = str(item.get('Quantity UOM', '')).strip()
+                if qty_raw and not uom_raw:
+                    # Try to split "8 NOS" or "2.500 KGS"
+                    m = _re.match(r'^([\d.,]+)\s*([A-Za-z]+)$', qty_raw)
+                    if m:
+                        item['Quantity'] = m.group(1)
+                        item['Quantity UOM'] = m.group(2).upper()
+
+                # 4. GST Rate — must be a plain percentage number, not a rupee amount
+                gst_rate = str(item.get('GST Rate', '')).strip()
+                if gst_rate:
+                    # Strip % symbol and spaces
+                    gst_rate = gst_rate.replace('%', '').strip()
+                    # If it looks like a rupee amount (>100 or has decimals suggesting amount)
+                    # and doesn't match a normal GST slab, clear it to avoid confusion
+                    try:
+                        gst_val = float(gst_rate.replace(',', ''))
+                        # Valid GST slabs: 0, 0.1, 0.25, 1.5, 3, 5, 6, 7.5, 9, 12, 14, 18, 28
+                        valid_slabs = {0, 0.1, 0.25, 1.5, 3, 5, 6, 7.5, 9, 12, 14, 18, 28}
+                        if gst_val > 28:
+                            # Likely a rupee amount misplaced — clear it
+                            item['GST Rate'] = ''
+                        else:
+                            item['GST Rate'] = str(gst_val) if gst_val not in valid_slabs else gst_rate
+                    except ValueError:
+                        item['GST Rate'] = ''
+
+                # 5. Numeric amount fields — strip commas, currency symbols, stray text
+                for field in NUMERIC_FIELDS:
+                    val = str(item.get(field, '')).strip()
+                    if val:
+                        # Keep only digits, dot, minus
+                        cleaned = _re.sub(r'[^\d.\-]', '', val.replace(',', ''))
+                        item[field] = cleaned if cleaned else ''
+
+                # 6. HSN/SAC — must be digits only (4-8 digit code), not a price
+                hsn = str(item.get('HSN/SAC', '')).strip()
+                if hsn:
+                    hsn_digits = _re.sub(r'[^\d]', '', hsn)
+                    item['HSN/SAC'] = hsn_digits if 4 <= len(hsn_digits) <= 8 else ''
+
+            return Response({
+                'success': True,
+                'data': {
+                    'header': header,
+                    'line_items': line_items,
+                }
+            })
 
 
         elif action == 'agent-message':
