@@ -206,6 +206,17 @@ export interface StockItem {
   hsn?: string;      // HSN/SAC code for GST
   gstRate?: number;  // GST rate (e.g., 18 for 18%)
   quantity?: number; // Current stock quantity
+  // Additional fields returned by API or used in forms
+  standard_rate?: number;
+  rate?: number;
+  item_code?: string;
+  code?: string;
+  item_name?: string;
+  hsn_sac?: string;
+  hsn_code?: string;
+  hsn_sac_code?: string;
+  uom?: string;
+  base_unit?: string;
 }
 
 export interface VoucherItem {

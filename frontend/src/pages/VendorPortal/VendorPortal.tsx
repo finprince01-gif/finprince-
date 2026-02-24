@@ -4316,6 +4316,16 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     </div>
 
                                                     <div className="col-span-1 md:col-span-2">
+                                                        <label className="label-text">Address Line 1</label>
+                                                        <input
+                                                            type="text"
+                                                            value={createPOForm.addressLine1}
+                                                            onChange={(e) => handleCreatePOFormChange('addressLine1', e.target.value)}
+                                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                        />
+                                                    </div>
+
+                                                    <div className="col-span-1 md:col-span-2">
                                                         <label className="label-text">Address Line 2</label>
                                                         <input
                                                             type="text"

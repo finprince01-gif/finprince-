@@ -199,6 +199,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
     const [customerBillingCurrency, setCustomerBillingCurrency] = useState('');
     const [billToAddress1, setBillToAddress1] = useState('');
     const [billToAddress2, setBillToAddress2] = useState('');
+    const [billToAddress3, setBillToAddress3] = useState('');
     const [billToCity, setBillToCity] = useState('');
     const [billToPincode, setBillToPincode] = useState('');
     const [billToState, setBillToState] = useState('');
@@ -206,6 +207,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
 
     const [shipToAddress1, setShipToAddress1] = useState('');
     const [shipToAddress2, setShipToAddress2] = useState('');
+    const [shipToAddress3, setShipToAddress3] = useState('');
     const [shipToCity, setShipToCity] = useState('');
     const [shipToPincode, setShipToPincode] = useState('');
     const [shipToState, setShipToState] = useState('');
@@ -216,12 +218,13 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
         if (sameAsBillTo) {
             setShipToAddress1(billToAddress1);
             setShipToAddress2(billToAddress2);
+            setShipToAddress3(billToAddress3);
             setShipToCity(billToCity);
             setShipToPincode(billToPincode);
             setShipToState(billToState);
             setShipToCountry(billToCountry);
         }
-    }, [sameAsBillTo, billToAddress1, billToAddress2, billToCity, billToPincode, billToState, billToCountry]);
+    }, [sameAsBillTo, billToAddress1, billToAddress2, billToAddress3, billToCity, billToPincode, billToState, billToCountry]);
 
     const customerOptions = useMemo(() => {
         return Array.from(new Set(customers.map(c => c.customer_name).filter(Boolean)));
@@ -298,6 +301,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                     if (branch.addressLine1 || branch.city || branch.state) {
                         setBillToAddress1(branch.addressLine1 || '');
                         setBillToAddress2(branch.addressLine2 || '');
+                        setBillToAddress3(branch.addressLine3 || '');
                         setBillToCity(branch.city || '');
                         setBillToPincode(branch.pincode || '');
                         setBillToState(branch.state || '');
@@ -306,6 +310,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                         // Fallback to old single address field
                         setBillToAddress1(branch.address);
                         setBillToAddress2('');
+                        setBillToAddress3('');
                         setBillToCity('');
                         setBillToState('');
                         setBillToPincode('');
@@ -316,6 +321,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                         const billTo = typeof customer.bill_to === 'string' ? JSON.parse(customer.bill_to) : customer.bill_to;
                         setBillToAddress1(billTo.address_line_1 || '');
                         setBillToAddress2(billTo.address_line_2 || '');
+                        setBillToAddress3(billTo.address_line_3 || '');
                         setBillToCity(billTo.city || '');
                         setBillToPincode(billTo.pincode || '');
                         setBillToState(billTo.state || '');
@@ -371,6 +377,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                 if (matchedBranch.addressLine1 || matchedBranch.city || matchedBranch.state) {
                     setBillToAddress1(matchedBranch.addressLine1 || '');
                     setBillToAddress2(matchedBranch.addressLine2 || '');
+                    setBillToAddress3(matchedBranch.addressLine3 || '');
                     setBillToCity(matchedBranch.city || '');
                     setBillToPincode(matchedBranch.pincode || '');
                     setBillToState(matchedBranch.state || '');
@@ -379,6 +386,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                     // Fallback to old single address field
                     setBillToAddress1(matchedBranch.address);
                     setBillToAddress2('');
+                    setBillToAddress3('');
                     setBillToCity('');
                     setBillToState('');
                     setBillToPincode('');
@@ -810,6 +818,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
             const billTo = {
                 address_line_1: billToAddress1,
                 address_line_2: billToAddress2,
+                address_line_3: billToAddress3,
                 city: billToCity,
                 pincode: billToPincode,
                 state: billToState,
@@ -819,6 +828,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
             const shipTo = {
                 address_line_1: shipToAddress1,
                 address_line_2: shipToAddress2,
+                address_line_3: shipToAddress3,
                 city: shipToCity,
                 pincode: shipToPincode,
                 state: shipToState,
@@ -1480,6 +1490,15 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         placeholder="Address Line 2"
                                     />
                                 </div>
+                                <div>
+                                    <input
+                                        type="text"
+                                        value={billToAddress3}
+                                        onChange={(e) => setBillToAddress3(e.target.value)}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="Address Line 3"
+                                    />
+                                </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <input
                                         type="text"
@@ -1555,6 +1574,15 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                         onChange={(e) => setShipToAddress2(e.target.value)}
                                         className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                         placeholder="Address Line 2"
+                                    />
+                                </div>
+                                <div>
+                                    <input
+                                        type="text"
+                                        value={shipToAddress3}
+                                        onChange={(e) => setShipToAddress3(e.target.value)}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="Address Line 3"
                                     />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
@@ -1761,9 +1789,9 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                     <button
                                         type="button"
                                         onClick={() => setStateType('within')}
-                                        className={`w-full px-4 py-2 border rounded-[4px] transition-colors ${stateType === 'within'
-                                            ? 'bg-white border-gray-400 text-gray-800 font-medium'
-                                            : 'bg-white border-gray-300 text-gray-600 hover:border-gray-400'
+                                        className={`w-full px-4 py-2 border rounded-[4px] transition-all duration-200 ${stateType === 'within'
+                                            ? 'bg-indigo-600 border-indigo-600 text-white shadow-md font-semibold scale-105'
+                                            : 'bg-white border-gray-300 text-gray-600 hover:border-indigo-400 hover:text-indigo-600'
                                             }`}
                                     >
                                         Within State
@@ -1774,9 +1802,9 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                     <button
                                         type="button"
                                         onClick={() => setStateType('other')}
-                                        className={`w-full px-4 py-2 border rounded-[4px] transition-colors ${stateType === 'other'
-                                            ? 'bg-white border-gray-400 text-gray-800 font-medium'
-                                            : 'bg-white border-gray-300 text-gray-600 hover:border-gray-400'
+                                        className={`w-full px-4 py-2 border rounded-[4px] transition-all duration-200 ${stateType === 'other'
+                                            ? 'bg-indigo-600 border-indigo-600 text-white shadow-md font-semibold scale-105'
+                                            : 'bg-white border-gray-300 text-gray-600 hover:border-indigo-400 hover:text-indigo-600'
                                             }`}
                                     >
                                         Other State
@@ -1787,9 +1815,9 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                     <button
                                         type="button"
                                         onClick={() => setStateType('export')}
-                                        className={`w-full px-4 py-2 border rounded-[4px] transition-colors ${stateType === 'export'
-                                            ? 'bg-yellow-100 border-yellow-400 text-gray-800 font-medium'
-                                            : 'bg-white border-gray-300 text-gray-600 hover:border-gray-400'
+                                        className={`w-full px-4 py-2 border rounded-[4px] transition-all duration-200 ${stateType === 'export'
+                                            ? 'bg-indigo-600 border-indigo-600 text-white shadow-md font-semibold scale-105'
+                                            : 'bg-white border-gray-300 text-gray-600 hover:border-indigo-400 hover:text-indigo-600'
                                             }`}
                                     >
                                         Export

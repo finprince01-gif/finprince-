@@ -114,10 +114,24 @@ export interface VoucherItem {
   totalAmount: number;
 }
 export interface StockItem {
-  id: string | number;
-  name: string;
-  gstRate?: number;
-  // Add other fields as needed based on backend/inventory/serializers.py or usage
+  id?: number | string;       // Unique identifier
+  name: string;      // Item name
+  group?: string;     // Stock group name
+  unit?: string;      // Unit of measurement
+  hsn?: string;      // HSN/SAC code for GST
+  gstRate?: number;  // GST rate (e.g., 18 for 18%)
+  quantity?: number; // Current stock quantity
+  // Additional fields returned by API or used in forms
+  standard_rate?: number;
+  rate?: number;
+  item_code?: string;
+  code?: string;
+  item_name?: string;
+  hsn_sac?: string;
+  hsn_code?: string;
+  hsn_sac_code?: string;
+  uom?: string;
+  base_unit?: string;
 }
 
 export interface Unit {
