@@ -280,7 +280,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     };
   }, []);
 
-  const [purchaseInputType, setPurchaseInputType] = useState('Intrastate'); // Default to Same State
+  const [purchaseInputTypes, setPurchaseInputTypes] = useState<string[]>(['Intrastate']); // Default to Same State
   const [invoiceInForeignCurrency, setInvoiceInForeignCurrency] = useState<'Yes' | 'No'>('No');
   const [vendorBillingCurrency, setVendorBillingCurrency] = useState('');
   const [purchaseSupportingDocument, setPurchaseSupportingDocument] = useState<File | null>(null);
@@ -6178,11 +6178,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 // Normalise to YYYY-MM-DD before setting so <input type="date"> renders correctly
                 if (firstRow['Voucher Date']) setDate(formatDateForInput(firstRow['Voucher Date']) || getTodayDate());
 
-                if (firstRow['Bill From']) setBillFrom(firstRow['Bill From']);
-                else if (firstRow['Buyer/Supplier - Address']) setBillFrom(firstRow['Buyer/Supplier - Address']);
+                if (firstRow['Bill From']) setBillFromAddress1(firstRow['Bill From']);
+                else if (firstRow['Buyer/Supplier - Address']) setBillFromAddress1(firstRow['Buyer/Supplier - Address']);
 
-                if (firstRow['Ship From']) setShipFrom(firstRow['Ship From']);
-                else if (firstRow['Consignee - Address']) setShipFrom(firstRow['Consignee - Address']);
+                if (firstRow['Ship From']) setShipFromAddress1(firstRow['Ship From']);
+                else if (firstRow['Consignee - Address']) setShipFromAddress1(firstRow['Consignee - Address']);
 
                 const mappedItems = data.map((row, idx) => ({
                   id: (Date.now() + idx).toString(),
