@@ -11,6 +11,58 @@ const isVoucher = (obj: any): obj is Voucher => {
     return obj && typeof obj.type === 'string' && typeof obj.date === 'string';
 };
 
+// ────────────────────────────────────────────────────────────────────────────────
+// Fuzzy Mapping Helpers
+// ────────────────────────────────────────────────────────────────────────────────
+
+const sanitize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const KEYWORD_RULES: Record<string, string[]> = {
+    'date': ['date', 'voucherdate', 'invoicedate', 'billingdate', 'vchdate'],
+    'narration': ['narration', 'remarks', 'note', 'description', 'particulars'],
+    'party': ['party', 'ledger', 'account', 'customer', 'vendor', 'supplier', 'name'],
+    'invoiceNo': ['invoiceno', 'invoicenumber', 'billno', 'refno', 'voucherno', 'supplierinvno'],
+    'isInterState': ['isinterstate', 'interstate', 'gsttype', 'is_interstate'],
+    'items': ['items', 'lineitems', 'productdetails', 'inventory', 'itemdetails'],
+    'account': ['account', 'ledger', 'bank', 'cash', 'ledgername'],
+    'amount': ['amount', 'value', 'total', 'grandtotal'],
+    'fromAccount': ['from', 'source', 'fromaccount', 'creditaccount', 'ledgerfrom'],
+    'toAccount': ['to', 'destination', 'toaccount', 'debitaccount', 'ledgerto'],
+    'entries': ['entries', 'journalentries', 'rows', 'detail']
+};
+
+/**
+ * Maps available keys in an object to target schema fields using rules.
+ */
+const getFuzzyMapping = (availableKeys: string[], targetFields: string[]) => {
+    const mapping: Record<string, string> = {};
+    const sanitizedAvailable = availableKeys.map(k => ({ original: k, sanitized: sanitize(k) }));
+
+    targetFields.forEach(field => {
+        const keywords = KEYWORD_RULES[field] || [];
+        const targetSanitized = sanitize(field);
+
+        // Priority 1: Exact sanitized match
+        let bestMatch = sanitizedAvailable.find(h => h.sanitized === targetSanitized);
+
+        // Priority 2: Keyword match
+        if (!bestMatch) {
+            bestMatch = sanitizedAvailable.find(h =>
+                keywords.some(kw => {
+                    const kwSanitized = sanitize(kw);
+                    return h.sanitized === kwSanitized || h.sanitized.includes(kwSanitized) || kwSanitized.includes(h.sanitized);
+                })
+            );
+        }
+
+        if (bestMatch) {
+            mapping[field] = bestMatch.original;
+        }
+    });
+
+    return mapping;
+};
+
 interface MassUploadModalProps {
     onClose: () => void;
     onComplete: (vouchers: Voucher[]) => void;
@@ -45,6 +97,7 @@ const UploadDropzone: React.FC<{ onFilesSelected: (files: FileList) => void }> =
         if (e.target.files && e.target.files.length > 0) {
             onFilesSelected(e.target.files);
         }
+        e.target.value = '';
     }
 
     return (
@@ -108,45 +161,118 @@ const MassUploadModal: React.FC<MassUploadModalProps> = ({ onClose, onComplete, 
                         const sheet = workbook.Sheets[sheetName];
                         if (sheet) {
                             const rows = XLSX.utils.sheet_to_json(sheet);
+                            if (rows.length === 0) return;
+
+                            // Build mapping dynamically from the first row
+                            const availableKeys = Object.keys(rows[0]);
+                            const targetFields = sheetType === 'SalesPurchases'
+                                ? ['date', 'narration', 'party', 'invoiceNo', 'isInterState', 'items']
+                                : sheetType === 'PaymentsReceipts'
+                                    ? ['date', 'narration', 'party', 'account', 'amount']
+                                    : sheetType === 'Contra'
+                                        ? ['date', 'narration', 'fromAccount', 'toAccount', 'amount']
+                                        : ['date', 'narration', 'entries'];
+
+                            const mapping = getFuzzyMapping(availableKeys, targetFields);
+                            console.log(`[MassUpload] Mapping for ${sheetName}:`, mapping);
+
                             rows.forEach((row: any) => {
                                 try {
-                                    let voucher: Partial<Voucher> = { date: new Date((row.date - (25567 + 1)) * 86400 * 1000).toISOString().split('T')[0], type: voucherType, narration: row.narration };
+                                    const getVal = (field: string) => {
+                                        const key = mapping[field];
+                                        return key ? row[key] : undefined;
+                                    };
+
+                                    const rawDate = getVal('date');
+                                    let formattedDate = new Date().toISOString().split('T')[0];
+                                    if (rawDate) {
+                                        // Handle Excel serial date or string
+                                        const d = typeof rawDate === 'number'
+                                            ? new Date((rawDate - (25567 + 1)) * 86400 * 1000)
+                                            : new Date(rawDate);
+                                        if (!isNaN(d.getTime())) {
+                                            formattedDate = d.toISOString().split('T')[0];
+                                        }
+                                    }
+
+                                    let voucher: Partial<Voucher> = {
+                                        date: formattedDate,
+                                        type: voucherType as any,
+                                        narration: String(getVal('narration') || '')
+                                    };
+
                                     if (sheetType === 'SalesPurchases') {
-                                        voucher = { ...voucher, party: row.party, invoiceNo: row.invoiceNo, isInterState: row.isInterState === 'TRUE', items: JSON.parse(row.items) } as Partial<SalesPurchaseVoucher>;
+                                        const rawItems = getVal('items');
+                                        let parsedItems = [];
+                                        try {
+                                            parsedItems = typeof rawItems === 'string' ? JSON.parse(rawItems) : (rawItems || []);
+                                        } catch (e) {
+                                            console.warn('Failed to parse items for row:', row);
+                                        }
+
+                                        voucher = {
+                                            ...voucher,
+                                            party: String(getVal('party') || ''),
+                                            invoiceNo: String(getVal('invoiceNo') || ''),
+                                            isInterState: String(getVal('isInterState')).toUpperCase() === 'TRUE',
+                                            items: parsedItems
+                                        } as Partial<SalesPurchaseVoucher>;
+
                                         // Recalculate totals
                                         const { items, isInterState } = voucher as SalesPurchaseVoucher;
-                                        const totals = items.reduce((acc, item) => {
-                                            const stockItem = stockItems.find(si => si.name === item.name);
-                                            const gstRate = stockItem?.gstRate || 0;
-                                            const taxable = item.qty * item.rate;
-                                            const tax = taxable * (gstRate / 100);
-                                            item.taxableAmount = taxable;
-                                            if (isInterState) {
-                                                item.igstAmount = tax; item.cgstAmount = 0; item.sgstAmount = 0;
-                                            } else {
-                                                item.igstAmount = 0; item.cgstAmount = tax / 2; item.sgstAmount = tax / 2;
-                                            }
-                                            item.totalAmount = taxable + tax;
-                                            acc.taxable += item.taxableAmount; acc.cgst += item.cgstAmount; acc.sgst += item.sgstAmount; acc.igst += item.igstAmount; acc.total += item.totalAmount;
-                                            return acc;
-                                        }, { taxable: 0, cgst: 0, sgst: 0, igst: 0, total: 0 });
-                                        (voucher as SalesPurchaseVoucher).totalTaxableAmount = totals.taxable;
-                                        (voucher as SalesPurchaseVoucher).totalCgst = totals.cgst;
-                                        (voucher as SalesPurchaseVoucher).totalSgst = totals.sgst;
-                                        (voucher as SalesPurchaseVoucher).totalIgst = totals.igst;
-                                        (voucher as SalesPurchaseVoucher).total = totals.total;
+                                        if (items && Array.isArray(items)) {
+                                            const totals = items.reduce((acc, item) => {
+                                                const stockItem = stockItems.find(si => si.name === item.name);
+                                                const gstRate = stockItem?.gstRate || 0;
+                                                const taxable = (Number(item.qty) || 0) * (Number(item.rate) || 0);
+                                                const tax = taxable * (gstRate / 100);
+                                                item.taxableAmount = taxable;
+                                                if (isInterState) {
+                                                    item.igstAmount = tax; item.cgstAmount = 0; item.sgstAmount = 0;
+                                                } else {
+                                                    item.igstAmount = 0; item.cgstAmount = tax / 2; item.sgstAmount = tax / 2;
+                                                }
+                                                item.totalAmount = taxable + tax;
+                                                acc.taxable += item.taxableAmount; acc.cgst += item.cgstAmount; acc.sgst += item.sgstAmount; acc.igst += item.igstAmount; acc.total += item.totalAmount;
+                                                return acc;
+                                            }, { taxable: 0, cgst: 0, sgst: 0, igst: 0, total: 0 });
+                                            (voucher as SalesPurchaseVoucher).totalTaxableAmount = totals.taxable;
+                                            (voucher as SalesPurchaseVoucher).totalCgst = totals.cgst;
+                                            (voucher as SalesPurchaseVoucher).totalSgst = totals.sgst;
+                                            (voucher as SalesPurchaseVoucher).totalIgst = totals.igst;
+                                            (voucher as SalesPurchaseVoucher).total = totals.total;
+                                        }
                                     } else if (sheetType === 'PaymentsReceipts') {
-                                        voucher = { ...voucher, party: row.party, account: row.account, amount: row.amount } as PaymentReceiptVoucher;
+                                        voucher = {
+                                            ...voucher,
+                                            party: String(getVal('party') || ''),
+                                            account: String(getVal('account') || ''),
+                                            amount: Number(getVal('amount') || 0)
+                                        } as PaymentReceiptVoucher;
                                     } else if (sheetType === 'Contra') {
-                                        voucher = { ...voucher, fromAccount: row.fromAccount, toAccount: row.toAccount, amount: row.amount } as ContraVoucher;
+                                        voucher = {
+                                            ...voucher,
+                                            fromAccount: String(getVal('fromAccount') || ''),
+                                            toAccount: String(getVal('toAccount') || ''),
+                                            amount: Number(getVal('amount') || 0)
+                                        } as ContraVoucher;
                                     } else if (sheetType === 'Journal') {
-                                        const entries = JSON.parse(row.entries);
-                                        const { debit, credit } = entries.reduce((acc: any, e: any) => ({ debit: acc.debit + e.debit, credit: acc.credit + e.credit }), { debit: 0, credit: 0 });
+                                        const rawEntries = getVal('entries');
+                                        let entries = [];
+                                        try {
+                                            entries = typeof rawEntries === 'string' ? JSON.parse(rawEntries) : (rawEntries || []);
+                                        } catch (e) {
+                                            console.warn('Failed to parse entries for row:', row);
+                                        }
+                                        const { debit, credit } = entries.reduce((acc: any, e: any) => ({
+                                            debit: acc.debit + (Number(e.debit) || 0),
+                                            credit: acc.credit + (Number(e.credit) || 0)
+                                        }), { debit: 0, credit: 0 });
                                         voucher = { ...voucher, entries, totalDebit: debit, totalCredit: credit } as JournalVoucher;
                                     }
                                     if (isVoucher(voucher)) allVouchers.push(voucher as Voucher);
                                 } catch (error) {
-                                    console.error('Error processing row:');
+                                    console.error('Error processing row:', error);
                                 }
                             });
                         }
@@ -439,7 +565,7 @@ const MassUploadModal: React.FC<MassUploadModalProps> = ({ onClose, onComplete, 
                                                 {file.status === 'success' && (Array.isArray(file.extractedData) ? `Excel file with ${file.extractedData.length} vouchers` : <input type="text" value={file.extractedData?.sellerName || ''} onChange={e => handleDataChange(file.id, 'sellerName', e.target.value)} className="review-input" />)}
                                             </td>
                                             <td className="p-3 text-right">
-                                                {file.status === 'success' && (Array.isArray(file.extractedData) ? file.extractedData.reduce((sum, v) => sum + (v.total || v.amount || 0), 0).toFixed(2) : <input type="number" value={Number(file.extractedData?.totalAmount || 0).toFixed(2)} readOnly className="review-input text-right font-mono bg-slate-100" />)}
+                                                {file.status === 'success' && (Array.isArray(file.extractedData) ? (file.extractedData as any[]).reduce((sum, v) => sum + (v.total || v.amount || 0), 0).toFixed(2) : <input type="number" value={Number(file.extractedData?.totalAmount || 0).toFixed(2)} readOnly className="review-input text-right font-mono bg-slate-100" />)}
                                             </td>
                                             <td className="p-3">
                                                 <button

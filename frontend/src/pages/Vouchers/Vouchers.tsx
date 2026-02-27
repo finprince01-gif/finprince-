@@ -9,6 +9,7 @@ import { showError, showSuccess, showInfo, confirm } from '../../utils/toast';
 
 import MassUploadModal from '../../components/MassUploadModal';
 import InvoiceScannerModal from '../../components/InvoiceScannerModal';
+import TallyMasterScannerModal from '../../components/TallyMasterScannerModal';
 import ErrorBoundary from '../../components/ErrorBoundary';
 import SalesVoucher from './SalesVoucher';
 import PaymentVoucherSingle from './PaymentVoucherSingle';
@@ -70,6 +71,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     }
   }, [availableVoucherTypes, voucherType]);
 
+  useEffect(() => {
+    const incomingType = (prefilledData as any)?.voucherType as VoucherType | undefined;
+    if (incomingType && availableVoucherTypes.some(v => v.id === incomingType) && incomingType !== voucherType) {
+      setVoucherType(incomingType);
+    }
+  }, [prefilledData, availableVoucherTypes, voucherType]);
+
   // Debug: Log ledgers data
   useEffect(() => {
 
@@ -80,7 +88,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   }, [ledgers]);
 
   const [isImportMenuOpen, setIsImportMenuOpen] = useState(false);
+  const [isScannerMenuOpen, setIsScannerMenuOpen] = useState(false);
+  const [isOthersSubmenuOpen, setIsOthersSubmenuOpen] = useState(false);
+  const [isTallySubmenuOpen, setIsTallySubmenuOpen] = useState(false);
   const importMenuRef = useRef<HTMLDivElement>(null);
+  const scannerMenuRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
   const excelInputRef = useRef<HTMLInputElement>(null);
@@ -89,6 +101,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
   // Invoice Scanner Modal state
   const [isInvoiceScannerOpen, setIsInvoiceScannerOpen] = useState(false);
+  const [scannerFiles, setScannerFiles] = useState<FileList | null>(null);
+  const scannerInputRef = useRef<HTMLInputElement>(null);
+  const [extractionMode, setExtractionMode] = useState<'finpixe' | 'tally'>('finpixe');
+
+  // Tally Master Scanner Modal state
+  const [isTallyMasterScannerOpen, setIsTallyMasterScannerOpen] = useState(false);
+  const [masterScannerFiles, setMasterScannerFiles] = useState<FileList | null>(null);
+  const masterScannerInputRef = useRef<HTMLInputElement>(null);
   const [uploadedInvoiceFiles, setUploadedInvoiceFiles] = useState<File[]>([]);
   const [extractedInvoiceData, setExtractedInvoiceData] = useState<any[]>([]);
   const [isExtracting, setIsExtracting] = useState(false);
@@ -96,6 +116,42 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   // Subscription Usage
   const { subscriptionUsage, isLimitReached, refetch } = useSubscriptionUsage();
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+
+  const handleScannerFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      setScannerFiles(files);
+      setIsInvoiceScannerOpen(true);
+    }
+  };
+
+  const handleMasterScannerFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      setMasterScannerFiles(files);
+      setIsTallyMasterScannerOpen(true);
+    }
+  };
+
+  const openScanner = (mode: 'finpixe' | 'tally' = 'finpixe') => {
+    setExtractionMode(mode);
+    if (isLimitReached) {
+      handleLimitReached();
+    } else {
+      scannerInputRef.current?.click();
+    }
+  };
+
+  // Local state for prefilled data to allow overrides from scanner
+  const [localPrefilledData, setLocalPrefilledData] = useState<ExtractedInvoiceData | null>(prefilledData);
+  useEffect(() => {
+    setLocalPrefilledData(prefilledData);
+  }, [prefilledData]);
+
+  const handleClearPrefilledData = () => {
+    clearPrefilledData();
+    setLocalPrefilledData(null);
+  };
 
   const handleLimitReached = () => {
     setIsUpgradeModalOpen(true);
@@ -178,6 +234,20 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       }
     };
     fetchData();
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (scannerMenuRef.current && !scannerMenuRef.current.contains(event.target as Node)) {
+        setIsScannerMenuOpen(false);
+        setIsOthersSubmenuOpen(false);
+        setIsTallySubmenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
 
   const [purchaseInputType, setPurchaseInputType] = useState('Intrastate'); // Default to Same State
@@ -656,92 +726,355 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       try {
         const data = e.target?.result;
         const workbook = XLSX.read(data, { type: 'array' });
-        let allVouchers: Voucher[] = [];
+        const allVouchers: Voucher[] = [];
         let failed = 0;
 
-        const processSheet = (sheetName: string, type: 'SalesPurchases' | 'PaymentsReceipts' | 'Contra' | 'Journal') => {
-          const sheet = workbook.Sheets[sheetName];
-          if (sheet) {
-            const rows = XLSX.utils.sheet_to_json(sheet);
-
-            // Helper for robust parsing
-            const parseDate = (val: any) => {
-              if (!val) return new Date().toISOString().split('T')[0];
-              if (typeof val === 'number') {
-                // Excel serial date
-                return new Date((val - (25567 + 1)) * 86400 * 1000).toISOString().split('T')[0];
-              }
-              // Try parsing string/date
-              const d = new Date(val);
-              return isNaN(d.getTime()) ? new Date().toISOString().split('T')[0] : d.toISOString().split('T')[0];
-            };
-
-            const parseBool = (val: any) => String(val).toUpperCase() === 'TRUE' || val === true;
-
-            rows.forEach((row: any) => {
-              try {
-                // Override type with current voucherType to ensure consistency
-                let voucher: Partial<Voucher> = {
-                  date: parseDate(row.date),
-                  type: voucherType as any,
-                  narration: row.narration
-                };
-
-                if (type === 'SalesPurchases') {
-                  voucher = {
-                    ...voucher,
-                    party: row.party,
-                    invoiceNo: row.invoiceNo,
-                    isInterState: parseBool(row.isInterState),
-                    items: JSON.parse(row.items)
-                  } as Partial<SalesPurchaseVoucher>;
-                  // Recalculate totals for data integrity
-                  const { items, isInterState } = voucher as SalesPurchaseVoucher;
-                  const totals = items.reduce((acc, item) => {
-                    const stockItem = stockItems.find(si => si.name === item.name);
-                    const gstRate = stockItem?.gstRate || 0;
-                    const taxable = item.qty * item.rate;
-                    const tax = taxable * (gstRate / 100);
-                    item.taxableAmount = taxable;
-                    if (isInterState) {
-                      item.igstAmount = tax; item.cgstAmount = 0; item.sgstAmount = 0;
-                    } else {
-                      item.igstAmount = 0; item.cgstAmount = tax / 2; item.sgstAmount = tax / 2;
-                    }
-                    item.totalAmount = taxable + tax;
-                    acc.taxable += item.taxableAmount; acc.cgst += item.cgstAmount; acc.sgst += item.sgstAmount; acc.igst += item.igstAmount; acc.total += item.totalAmount;
-                    return acc;
-                  }, { taxable: 0, cgst: 0, sgst: 0, igst: 0, total: 0 });
-                  (voucher as SalesPurchaseVoucher).totalTaxableAmount = totals.taxable;
-                  (voucher as SalesPurchaseVoucher).totalCgst = totals.cgst;
-                  (voucher as SalesPurchaseVoucher).totalSgst = totals.sgst;
-                  (voucher as SalesPurchaseVoucher).totalIgst = totals.igst;
-                  (voucher as SalesPurchaseVoucher).total = totals.total;
-                } else if (type === 'PaymentsReceipts') {
-                  voucher = { ...voucher, party: row.party, account: row.account, amount: row.amount } as PaymentReceiptVoucher;
-                } else if (type === 'Contra') {
-                  voucher = { ...voucher, fromAccount: row.fromAccount, toAccount: row.toAccount, amount: row.amount } as ContraVoucher;
-                } else if (type === 'Journal') {
-                  const entries = JSON.parse(row.entries);
-                  const { debit, credit } = entries.reduce((acc: any, e: any) => ({ debit: acc.debit + e.debit, credit: acc.credit + e.credit }), { debit: 0, credit: 0 });
-                  voucher = { ...voucher, entries, totalDebit: debit, totalCredit: credit } as JournalVoucher;
-                }
-
-                if (isVoucher(voucher)) allVouchers.push(voucher as Voucher); else failed++;
-              } catch { failed++; }
-            });
+        const parseDate = (val: any) => {
+          if (!val) return new Date().toISOString().split('T')[0];
+          if (typeof val === 'number') {
+            // Excel serial date
+            return new Date((val - (25567 + 1)) * 86400 * 1000).toISOString().split('T')[0];
           }
+          const d = new Date(val);
+          return isNaN(d.getTime()) ? new Date().toISOString().split('T')[0] : d.toISOString().split('T')[0];
         };
 
-        // Only process the sheet that matches the current voucherType
+        const parseBool = (val: any) => {
+          const normalized = String(val ?? '').trim().toLowerCase();
+          return normalized === 'true' || normalized === 'yes' || normalized === '1' || val === true;
+        };
+
+        const parseNumber = (val: any) => {
+          if (val === undefined || val === null || val === '') return 0;
+          if (typeof val === 'number') return Number.isFinite(val) ? val : 0;
+          const parsed = parseFloat(String(val).replace(/,/g, '').trim());
+          return Number.isNaN(parsed) ? 0 : parsed;
+        };
+
+        const normalizeHeaderKey = (key: string) => String(key || '')
+          .toLowerCase()
+          .trim()
+          .replace(/[^a-z0-9]/g, '');
+
+        const hasValue = (value: any) => value !== undefined && value !== null && String(value).trim() !== '';
+
+        const getRowValue = (row: Record<string, any>, keys: string[]) => {
+          const normalizedMap = new Map<string, any>();
+          Object.entries(row).forEach(([k, v]) => {
+            const normalized = normalizeHeaderKey(k);
+            if (!normalizedMap.has(normalized) || (!hasValue(normalizedMap.get(normalized)) && hasValue(v))) {
+              normalizedMap.set(normalized, v);
+            }
+          });
+
+          for (const key of keys) {
+            if (Object.prototype.hasOwnProperty.call(row, key)) {
+              const value = row[key];
+              if (hasValue(value)) {
+                return value;
+              }
+            }
+
+            const normalizedKey = normalizeHeaderKey(key);
+            if (normalizedMap.has(normalizedKey)) {
+              const value = normalizedMap.get(normalizedKey);
+              if (hasValue(value)) {
+                return value;
+              }
+            }
+          }
+          return undefined;
+        };
+
+        const FIELD_ALIASES = {
+          date: ['date', 'Voucher Date', 'Invoice Date', 'Bill Date'],
+          narration: ['narration', 'Narration', 'Remarks', 'Description', 'Note'],
+          party: ['party', 'Party', 'Party Name', 'Buyer/Supplier - Mailing Name', 'Vendor Name', 'Supplier Name', 'Customer Name', 'Vendor', 'Supplier'],
+          invoiceNo: ['invoiceNo', 'Supplier Invoice No', 'Invoice No', 'Invoice Number', 'Bill No', 'Ref No'],
+          isInterState: ['isInterState', 'Is Inter State', 'Inter State', 'Interstate'],
+          partyState: ['Buyer/Supplier - State', 'Party State', 'State'],
+          items: ['items', 'Items', 'Line Items', 'Item Details'],
+          itemName: ['Item Name', 'itemName', 'name', 'Product Name', 'Particulars'],
+          quantity: ['Quantity', 'Qty', 'qty'],
+          rate: ['Rate', 'rate', 'Unit Rate', 'Price'],
+          taxableValue: ['Taxable Value', 'Taxable Amount', 'taxableAmount'],
+          cgst: ['Central Tax (CGST)', 'CGST Amount', 'CGST', 'cgstAmount'],
+          sgst: ['State Tax (SGST)', 'SGST Amount', 'SGST', 'sgstAmount'],
+          igst: ['Integrated Tax (IGST)', 'IGST Amount', 'IGST', 'igstAmount'],
+          itemAmount: ['Item Amount', 'Line Total', 'totalAmount'],
+          account: ['account', 'Account', 'Paid From', 'Bank/Cash Ledger'],
+          amount: ['amount', 'Amount', 'Total Invoice Value', 'Total', 'Value'],
+          fromAccount: ['fromAccount', 'From Account', 'From Ledger'],
+          toAccount: ['toAccount', 'To Account', 'To Ledger'],
+          entries: ['entries', 'Entries', 'Journal Entries'],
+          debitLedger: ['Ledger (Debit)', 'Debit Ledger', 'Dr Ledger'],
+          creditLedger: ['Ledger (Credit)', 'Credit Ledger', 'Cr Ledger'],
+        };
+
+        const getWorksheetRows = (preferredSheetNames: string[]) => {
+          const sheetName = preferredSheetNames.find(name => workbook.Sheets[name]) || workbook.SheetNames[0];
+          if (!sheetName) return [];
+          const sheet = workbook.Sheets[sheetName];
+          return XLSX.utils.sheet_to_json(sheet, { defval: '' }) as Record<string, any>[];
+        };
+
         if (voucherType === 'Purchase' || voucherType === 'Sales') {
-          processSheet('SalesPurchases', 'SalesPurchases');
+          const rows = getWorksheetRows(['SalesPurchases', 'Invoices']);
+          const groups: Record<string, {
+            date: string;
+            narration: string;
+            party: string;
+            invoiceNo: string;
+            isInterState: boolean;
+            items: VoucherItem[];
+          }> = {};
+
+          rows.forEach((row, index) => {
+            try {
+              const date = parseDate(getRowValue(row, FIELD_ALIASES.date));
+              const narration = String(getRowValue(row, FIELD_ALIASES.narration) || '');
+              const party = String(getRowValue(row, FIELD_ALIASES.party) || '');
+              const invoiceNo = String(getRowValue(row, FIELD_ALIASES.invoiceNo) || '');
+              const explicitInterState = getRowValue(row, FIELD_ALIASES.isInterState);
+              const partyState = String(getRowValue(row, FIELD_ALIASES.partyState) || '');
+              const isInterState = explicitInterState !== undefined
+                ? parseBool(explicitInterState)
+                : (!!partyState && !!companyDetails.state && partyState.toLowerCase() !== companyDetails.state.toLowerCase());
+
+              const groupKey = (invoiceNo || party)
+                ? `${invoiceNo}|${party}|${date}`
+                : `row-${index}`;
+
+              if (!groups[groupKey]) {
+                groups[groupKey] = { date, narration, party, invoiceNo, isInterState, items: [] };
+              } else {
+                if (!groups[groupKey].party && party) groups[groupKey].party = party;
+                if (!groups[groupKey].invoiceNo && invoiceNo) groups[groupKey].invoiceNo = invoiceNo;
+                if (!groups[groupKey].narration && narration) groups[groupKey].narration = narration;
+              }
+
+              const rawItems = getRowValue(row, FIELD_ALIASES.items);
+              if (rawItems) {
+                let parsedItems: any[] = [];
+                if (Array.isArray(rawItems)) parsedItems = rawItems;
+                else if (typeof rawItems === 'string') {
+                  try { parsedItems = JSON.parse(rawItems); } catch { parsedItems = []; }
+                }
+
+                parsedItems.forEach((item: any) => {
+                  const name = String(item?.name ?? item?.itemName ?? item?.['Item Name'] ?? item?.['Product Name'] ?? '').trim();
+                  const qty = parseNumber(item?.qty ?? item?.quantity ?? item?.['Quantity'] ?? item?.['Qty']);
+                  const rate = parseNumber(item?.rate ?? item?.['Rate']);
+                  const taxableAmount = parseNumber(item?.taxableAmount ?? item?.taxableValue ?? item?.['Taxable Value'] ?? item?.['Taxable Amount']);
+                  const cgstAmount = parseNumber(item?.cgstAmount ?? item?.['CGST Amount'] ?? item?.['Central Tax (CGST)'] ?? item?.['CGST']);
+                  const sgstAmount = parseNumber(item?.sgstAmount ?? item?.['SGST Amount'] ?? item?.['State Tax (SGST)'] ?? item?.['SGST']);
+                  const igstAmount = parseNumber(item?.igstAmount ?? item?.['IGST Amount'] ?? item?.['Integrated Tax (IGST)'] ?? item?.['IGST']);
+                  const totalAmount = parseNumber(item?.totalAmount ?? item?.['Item Amount'] ?? item?.['Line Total']);
+
+                  if (!name && !qty && !rate && !taxableAmount && !totalAmount) return;
+
+                  groups[groupKey].items.push({
+                    name,
+                    qty: qty || 1,
+                    rate,
+                    taxableAmount,
+                    cgstAmount,
+                    sgstAmount,
+                    igstAmount,
+                    totalAmount,
+                  });
+                });
+              } else {
+                const name = String(getRowValue(row, FIELD_ALIASES.itemName) || '').trim();
+                const qty = parseNumber(getRowValue(row, FIELD_ALIASES.quantity));
+                const rate = parseNumber(getRowValue(row, FIELD_ALIASES.rate));
+                const taxableAmount = parseNumber(getRowValue(row, FIELD_ALIASES.taxableValue));
+                const cgstAmount = parseNumber(getRowValue(row, FIELD_ALIASES.cgst));
+                const sgstAmount = parseNumber(getRowValue(row, FIELD_ALIASES.sgst));
+                const igstAmount = parseNumber(getRowValue(row, FIELD_ALIASES.igst));
+                const totalAmount = parseNumber(getRowValue(row, FIELD_ALIASES.itemAmount));
+
+                if (!name && !qty && !rate && !taxableAmount && !totalAmount) return;
+
+                groups[groupKey].items.push({
+                  name,
+                  qty: qty || 1,
+                  rate,
+                  taxableAmount,
+                  cgstAmount,
+                  sgstAmount,
+                  igstAmount,
+                  totalAmount,
+                });
+              }
+            } catch {
+              failed++;
+            }
+          });
+
+          Object.values(groups).forEach(group => {
+            if (!group.items.length) {
+              failed++;
+              return;
+            }
+
+            const normalizedItems = group.items.map(item => {
+              const stockItem = stockItems.find(si => si.name?.toLowerCase() === (item.name || '').toLowerCase());
+              const gstRate = stockItem?.gstRate || 0;
+              const taxable = item.taxableAmount || (item.qty * item.rate);
+              let cgst = item.cgstAmount || 0;
+              let sgst = item.sgstAmount || 0;
+              let igst = item.igstAmount || 0;
+
+              if (!cgst && !sgst && !igst) {
+                const tax = taxable * (gstRate / 100);
+                if (group.isInterState) {
+                  igst = tax;
+                } else {
+                  cgst = tax / 2;
+                  sgst = tax / 2;
+                }
+              }
+
+              const total = item.totalAmount || (taxable + cgst + sgst + igst);
+              return {
+                ...item,
+                taxableAmount: taxable,
+                cgstAmount: cgst,
+                sgstAmount: sgst,
+                igstAmount: igst,
+                totalAmount: total,
+              };
+            });
+
+            const totals = normalizedItems.reduce((acc, item) => {
+              acc.taxable += item.taxableAmount;
+              acc.cgst += item.cgstAmount;
+              acc.sgst += item.sgstAmount;
+              acc.igst += item.igstAmount;
+              acc.total += item.totalAmount;
+              return acc;
+            }, { taxable: 0, cgst: 0, sgst: 0, igst: 0, total: 0 });
+
+            const voucher = {
+              date: group.date,
+              type: voucherType as any,
+              narration: group.narration,
+              party: group.party,
+              invoiceNo: group.invoiceNo,
+              isInterState: group.isInterState,
+              items: normalizedItems,
+              totalTaxableAmount: totals.taxable,
+              totalCgst: totals.cgst,
+              totalSgst: totals.sgst,
+              totalIgst: totals.igst,
+              total: totals.total,
+            } as SalesPurchaseVoucher;
+
+            if (isVoucher(voucher)) allVouchers.push(voucher as Voucher);
+            else failed++;
+          });
         } else if (voucherType === 'Payment' || voucherType === 'Receipt') {
-          processSheet('PaymentsReceipts', 'PaymentsReceipts');
+          const rows = getWorksheetRows(['PaymentsReceipts', 'Invoices']);
+          rows.forEach((row) => {
+            try {
+              const voucher = {
+                date: parseDate(getRowValue(row, FIELD_ALIASES.date)),
+                type: voucherType as any,
+                narration: String(getRowValue(row, FIELD_ALIASES.narration) || ''),
+                party: String(getRowValue(row, FIELD_ALIASES.party) || ''),
+                account: String(getRowValue(row, FIELD_ALIASES.account) || ''),
+                amount: parseNumber(getRowValue(row, FIELD_ALIASES.amount)),
+              } as PaymentReceiptVoucher;
+
+              if (!voucher.party && !voucher.account && !voucher.amount) return;
+
+              if (isVoucher(voucher)) allVouchers.push(voucher as Voucher);
+              else failed++;
+            } catch {
+              failed++;
+            }
+          });
         } else if (voucherType === 'Contra') {
-          processSheet('Contra', 'Contra');
+          const rows = getWorksheetRows(['Contra', 'Invoices']);
+          rows.forEach((row) => {
+            try {
+              const voucher = {
+                date: parseDate(getRowValue(row, FIELD_ALIASES.date)),
+                type: voucherType as any,
+                narration: String(getRowValue(row, FIELD_ALIASES.narration) || ''),
+                fromAccount: String(getRowValue(row, FIELD_ALIASES.fromAccount) || ''),
+                toAccount: String(getRowValue(row, FIELD_ALIASES.toAccount) || ''),
+                amount: parseNumber(getRowValue(row, FIELD_ALIASES.amount)),
+              } as ContraVoucher;
+
+              if (!voucher.fromAccount && !voucher.toAccount && !voucher.amount) return;
+
+              if (isVoucher(voucher)) allVouchers.push(voucher as Voucher);
+              else failed++;
+            } catch {
+              failed++;
+            }
+          });
         } else if (voucherType === 'Journal') {
-          processSheet('Journal', 'Journal');
+          const rows = getWorksheetRows(['Journal', 'Invoices']);
+          rows.forEach((row) => {
+            try {
+              let entries: JournalEntry[] = [];
+              const rawEntries = getRowValue(row, FIELD_ALIASES.entries);
+
+              if (rawEntries) {
+                let parsedEntries: any[] = [];
+                if (Array.isArray(rawEntries)) parsedEntries = rawEntries;
+                else if (typeof rawEntries === 'string') {
+                  try { parsedEntries = JSON.parse(rawEntries); } catch { parsedEntries = []; }
+                }
+
+                entries = parsedEntries.map((entry: any) => ({
+                  ledger: String(entry?.ledger || ''),
+                  note: String(entry?.note || ''),
+                  refNo: String(entry?.refNo || ''),
+                  debit: parseNumber(entry?.debit),
+                  credit: parseNumber(entry?.credit),
+                })).filter(entry => entry.ledger || entry.debit || entry.credit);
+              } else {
+                const amount = parseNumber(getRowValue(row, FIELD_ALIASES.amount));
+                const debitLedger = String(getRowValue(row, FIELD_ALIASES.debitLedger) || '');
+                const creditLedger = String(getRowValue(row, FIELD_ALIASES.creditLedger) || '');
+
+                if (debitLedger || creditLedger || amount) {
+                  entries = [
+                    { ledger: debitLedger, note: '', refNo: '', debit: amount, credit: 0 },
+                    { ledger: creditLedger, note: '', refNo: '', debit: 0, credit: amount },
+                  ].filter(entry => entry.ledger || entry.debit || entry.credit);
+                }
+              }
+
+              if (!entries.length) {
+                failed++;
+                return;
+              }
+
+              const totals = entries.reduce((acc, entry) => ({
+                debit: acc.debit + (entry.debit || 0),
+                credit: acc.credit + (entry.credit || 0),
+              }), { debit: 0, credit: 0 });
+
+              const voucher = {
+                date: parseDate(getRowValue(row, FIELD_ALIASES.date)),
+                type: voucherType as any,
+                narration: String(getRowValue(row, FIELD_ALIASES.narration) || ''),
+                entries,
+                totalDebit: totals.debit,
+                totalCredit: totals.credit,
+              } as JournalVoucher;
+
+              if (isVoucher(voucher)) allVouchers.push(voucher as Voucher);
+              else failed++;
+            } catch {
+              failed++;
+            }
+          });
         }
 
         if (allVouchers.length === 1) {
@@ -755,8 +1088,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             setParty(spVoucher.party);
             setIsInterState(spVoucher.isInterState || false);
 
-            // Map items
-            const mappedItems = spVoucher.items.map(item => ({
+            const mappedItems = (spVoucher.items || []).map(item => ({
               name: item.name,
               qty: item.qty,
               rate: item.rate,
@@ -766,7 +1098,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               igstAmount: item.igstAmount,
               totalAmount: item.totalAmount
             }));
-            setItems(mappedItems);
+            if (mappedItems.length > 0) setItems(mappedItems);
             setNarration(spVoucher.narration || '');
 
           } else if (voucher.type === 'Payment' || voucher.type === 'Receipt') {
@@ -795,7 +1127,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           setImportSummary({ success: 1, failed });
           showInfo("Voucher data loaded into form. Please review and save.");
 
-
         } else if (allVouchers.length > 1) {
           // Multiple vouchers - Bulk Review
           onMassUploadComplete(allVouchers);
@@ -803,7 +1134,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         } else {
           setImportSummary({ success: 0, failed });
           if (failed > 0) showError("No valid vouchers found.");
-
         }
 
       } catch (error) {
@@ -817,17 +1147,17 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const handleDownloadTemplate = () => {
     const wb = XLSX.utils.book_new();
 
-    // Define headers
-    const spHeaders = [["date", "type", "invoiceNo", "party", "isInterState", "narration", "items"]];
-    const prHeaders = [["date", "type", "account", "party", "amount", "narration"]];
-    const cHeaders = [["date", "type", "fromAccount", "toAccount", "amount", "narration"]];
-    const jHeaders = [["date", "type", "narration", "entries"]];
+    // Define headers (same as respective voucher upload expectations)
+    const spHeaders = [["Voucher Date", "Supplier Invoice No", "Buyer/Supplier - Mailing Name", "Buyer/Supplier - State", "Narration", "Item Name", "Quantity", "Rate", "Taxable Value", "Item Amount"]];
+    const prHeaders = [["Voucher Date", "Account", "Party", "Amount", "Narration"]];
+    const cHeaders = [["Voucher Date", "From Account", "To Account", "Amount", "Narration"]];
+    const jHeaders = [["Voucher Date", "Ledger (Debit)", "Ledger (Credit)", "Amount", "Narration"]];
 
     // Example data
-    spHeaders.push(["2023-01-01", "Sales", "INV-101", "Local Customer", "FALSE", "Sold goods", '[{"name": "Laptop", "qty": 1, "rate": 50000}]']);
-    prHeaders.push(["2023-01-02", "Payment", "HDFC Bank", "Local Supplier", "25000", "Paid for supplies"]);
-    cHeaders.push(["2023-01-03", "Contra", "Cash", "HDFC Bank", "10000", "Cash deposited"]);
-    jHeaders.push(["2023-01-04", "Journal", "Adjustment entry", '[{"ledger": "Rent Expense", "debit": 15000, "credit": 0}, {"ledger": "Cash", "debit": 0, "credit": 15000}]']);
+    spHeaders.push(["2023-01-01", "INV-101", "Local Customer", "Tamil Nadu", "Sold goods", "Laptop", "1", "50000", "50000", "59000"]);
+    prHeaders.push(["2023-01-02", "HDFC Bank", "Local Supplier", "25000", "Paid for supplies"]);
+    cHeaders.push(["2023-01-03", "Cash", "HDFC Bank", "10000", "Cash deposited"]);
+    jHeaders.push(["2023-01-04", "Rent Expense", "Cash", "15000", "Adjustment entry"]);
 
     // Create worksheets
     const spSheet = XLSX.utils.aoa_to_sheet(spHeaders);
@@ -917,24 +1247,26 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     }));
   }, [isInterState, stockItems]);
 
-  const formatDateForInput = (dateString: string) => {
+  const formatDateForInput = (dateString: string): string => {
     if (!dateString) return '';
-    // Handles YYYY-MM-DD and DD-MM-YYYY
-    const parts = dateString.split(/[-/]/);
+    // Split on any separator: - or /
+    const parts = dateString.split(/[-\/]/);
     if (parts.length === 3) {
-      if (parts[0].length === 4) { // YYYY-MM-DD
-        return dateString;
+      // YYYY-MM-DD or YYYY/MM/DD
+      if (parts[0].length === 4) {
+        return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
       }
-      if (parts[2].length === 4) { // DD-MM-YYYY
-        return `${parts[2]}-${parts[1]}-${parts[0]}`;
+      // DD-MM-YYYY or DD/MM/YYYY
+      if (parts[2].length === 4) {
+        return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
       }
     }
-    // Fallback for other formats, might not be perfect
+    // Last resort: let JS parse it (works for RFC-2822 / ISO strings)
     try {
-      return new Date(dateString).toISOString().split('T')[0];
-    } catch {
-      return '';
-    }
+      const d = new Date(dateString);
+      if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+    } catch { /* ignore */ }
+    return '';
   };
 
   useEffect(() => {
@@ -4969,50 +5301,128 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             )}
           </div>
           <div className="flex items-center space-x-2">
-            <button
-              onClick={() => isLimitReached ? handleLimitReached() : setIsInvoiceScannerOpen(true)}
-              className={`erp-button-primary ${isLimitReached ? 'opacity-50 cursor-not-allowed cursor-not-allowed cursor-not-allowed !bg-gray-400 !shadow-none' : ''}`}
-              title={isLimitReached ? "Limit Reached" : "Upload Invoices"}
-            >
-              <Icon name="upload" className="w-4 h-4 mr-2" />
-              Upload Invoices
-            </button>
-            <button
-              onClick={() => isLimitReached ? handleLimitReached() : setIsMassUploadOpen(true)}
-              className={`erp-button-secondary ${isLimitReached ? 'opacity-50 cursor-not-allowed cursor-not-allowed cursor-not-allowed !bg-gray-100 !text-gray-400' : 'text-purple-700'}`}
-              title={isLimitReached ? "Limit Reached" : "Mass Upload"}
-            >
-              <Icon name="upload" className="w-4 h-4 mr-2" />
-              Mass Upload
-            </button>
-            <div className="relative" ref={importMenuRef}>
+            <div className="relative" ref={scannerMenuRef}>
               <button
-                onClick={() => isLimitReached ? handleLimitReached() : setIsImportMenuOpen(prev => !prev)}
-                className={`erp-button-primary ${isLimitReached ? 'opacity-50 cursor-not-allowed cursor-not-allowed cursor-not-allowed !bg-gray-400 !shadow-none' : ''}`}
+                onClick={() => isLimitReached ? handleLimitReached() : setIsScannerMenuOpen(prev => !prev)}
+                className={`erp-button-primary ${isLimitReached ? 'opacity-50 cursor-not-allowed !bg-gray-400 !shadow-none' : ''}`}
+                title={isLimitReached ? "Limit Reached" : "Upload Invoices"}
               >
-                <Icon name="upload" className="w-5 h-5 mr-2" />
-                Import Vouchers
+                <Icon name="upload" className="w-4 h-4 mr-2" />
+                Upload Invoices
+                <Icon name="chevron-down" className="w-3 h-3 ml-2" />
               </button>
-              {isImportMenuOpen && (
-                <div className="origin-top-right absolute right-0 mt-2 w-56 rounded shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
-                  <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
-                    <a href="#" onClick={(e) => { e.preventDefault(); if (isLimitReached) { handleLimitReached(); return; } setIsInvoiceScannerOpen(true); setIsImportMenuOpen(false); }} className={`block px-4 py-2 text-sm ${isLimitReached ? 'text-gray-400 cursor-not-allowed' : 'text-gray-700 hover:bg-gray-100'}`} role="menuitem">Upload Invoices (Scan)</a>
-                    <a href="#" onClick={(e) => { e.preventDefault(); if (isLimitReached) { handleLimitReached(); return; } setIsMassUploadOpen(true); setIsImportMenuOpen(false); }} className={`block px-4 py-2 text-sm font-medium ${isLimitReached ? 'text-gray-400 cursor-not-allowed' : 'text-purple-600 hover:bg-gray-100'}`} role="menuitem">Bulk Upload (AI)</a>
-                    <a href="#" onClick={(e) => { e.preventDefault(); if (isLimitReached) { handleLimitReached(); return; } triggerFileUpload(imageInputRef); }} className={`block px-4 py-2 text-sm ${isLimitReached ? 'text-gray-400 cursor-not-allowed' : 'text-gray-700 hover:bg-gray-100'}`} role="menuitem">From Image/PDF {(voucherType === 'Purchase' || voucherType === 'Sales') ? '(AI)' : ''}</a>
-                    <a href="#" onClick={(e) => { e.preventDefault(); if (isLimitReached) { handleLimitReached(); return; } triggerFileUpload(jsonInputRef); setIsImportMenuOpen(false); }} className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">From JSON</a>
-                    <a href="#" onClick={(e) => { e.preventDefault(); if (isLimitReached) { handleLimitReached(); return; } triggerFileUpload(excelInputRef); setIsImportMenuOpen(false); }} className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">From Excel</a>
-                    <a href="#" onClick={(e) => { e.preventDefault(); handleDownloadTemplate(); }} className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">
-                      <Icon name="download" className="w-4 h-4 mr-2" />
-                      Download Template
-                    </a>
+
+              {isScannerMenuOpen && (
+                <div className="origin-top-right absolute right-0 mt-2 w-56 rounded shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-[60]">
+                  <div className="py-1" role="menu">
+                    <button
+                      onClick={() => { openScanner('finpixe'); setIsScannerMenuOpen(false); }}
+                      className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      role="menuitem"
+                    >
+                      <Icon name="sparkles" className="w-4 h-4 mr-3 text-indigo-500" />
+                      Finpixe (AI Scan)
+                    </button>
+                    <button
+                      onClick={() => setIsOthersSubmenuOpen(prev => !prev)}
+                      className="flex items-center justify-between w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      role="menuitem"
+                    >
+                      <div className="flex items-center">
+                        <Icon name="menu" className="w-4 h-4 mr-3 text-gray-500" />
+                        Others
+                      </div>
+                      <Icon name="chevron-down" className={`w-3 h-3 transition-transform ${isOthersSubmenuOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {isOthersSubmenuOpen && (
+                      <div className="bg-gray-50 py-1 shadow-inner">
+                        <button
+                          onClick={() => setIsTallySubmenuOpen(prev => !prev)}
+                          className="flex items-center justify-between w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
+                          role="menuitem"
+                        >
+                          <div className="flex items-center">
+                            <Icon name="document" className="w-3 h-3 mr-3" />
+                            Tally
+                          </div>
+                          <Icon name="chevron-down" className={`w-2.5 h-2.5 transition-transform ${isTallySubmenuOpen ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {isTallySubmenuOpen && (
+                          <div className="bg-gray-100/50 py-0.5 shadow-inner">
+                            <button
+                              onClick={() => { openScanner('tally'); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); setIsTallySubmenuOpen(false); }}
+                              className="flex items-center w-full text-left px-12 py-1.5 text-xs text-gray-500 hover:bg-gray-200"
+                              role="menuitem"
+                            >
+                              <Icon name="plus" className="w-3 h-3 mr-2" />
+                              Voucher
+                            </button>
+                            <button
+                              onClick={() => { masterScannerInputRef.current?.click(); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); setIsTallySubmenuOpen(false); }}
+                              className="flex items-center w-full text-left px-12 py-1.5 text-xs text-gray-500 hover:bg-gray-200"
+                              role="menuitem"
+                            >
+                              <Icon name="masters" className="w-3 h-3 mr-2" />
+                              Master
+                            </button>
+                          </div>
+                        )}
+                        <button
+                          onClick={() => { showInfo("Zoho import triggered"); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); }}
+                          className="flex items-center w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
+                          role="menuitem"
+                        >
+                          <Icon name="document" className="w-3 h-3 mr-3" />
+                          Zoho
+                        </button>
+                        <button
+                          onClick={() => { showInfo("SAP import triggered"); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); }}
+                          className="flex items-center w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
+                          role="menuitem"
+                        >
+                          <Icon name="document" className="w-3 h-3 mr-3" />
+                          SAP
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="border-t border-gray-100 my-1"></div>
+                    <button
+                      onClick={() => { excelInputRef.current?.click(); setIsScannerMenuOpen(false); }}
+                      className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      role="menuitem"
+                    >
+                      <Icon name="receipt" className="w-4 h-4 mr-3 text-green-500" />
+                      From Excel
+                    </button>
+                    <button
+                      onClick={() => { jsonInputRef.current?.click(); setIsScannerMenuOpen(false); }}
+                      className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      role="menuitem"
+                    >
+                      <Icon name="tag" className="w-4 h-4 mr-3 text-amber-500" />
+                      From JSON
+                    </button>
                   </div>
                 </div>
               )}
             </div>
+
+
+            <input type="file" ref={scannerInputRef} onClick={(e) => { (e.target as any).value = null; }} onChange={handleScannerFileChange} accept="image/*,.pdf" multiple className="hidden" />
+            <input type="file" ref={masterScannerInputRef} onClick={(e) => { (e.target as any).value = null; }} onChange={handleMasterScannerFileChange} accept="image/*,.pdf" multiple className="hidden" />
+            <input type="file" ref={excelInputRef} onChange={handleExcelFileChange} accept=".xlsx, .xls" className="hidden" />
+            <input type="file" ref={jsonInputRef} onChange={handleJsonFileChange} accept=".json" className="hidden" />
+            <input type="file" ref={imageInputRef} onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                if (voucherType === 'Purchase') setPurchaseSupportingDocument(file);
+                showInfo(`File "${file.name}" attached for manual entry.`);
+              }
+            }} accept="image/*,.pdf" className="hidden" />
           </div>
-          <input type="file" ref={imageInputRef} onChange={handleImageFileChange} accept="image/png, image/jpeg, application/pdf" className="hidden" />
-          <input type="file" ref={jsonInputRef} onChange={handleJsonFileChange} accept=".json" className="hidden" />
-          <input type="file" ref={excelInputRef} onChange={handleExcelFileChange} accept=".xlsx, .xls" className="hidden" />
         </div>
         <style>{`
           .form-label { display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.25rem; }
@@ -5041,9 +5451,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           .table-header { padding: 0.75rem 1rem; text-align: center; font-size: 0.75rem; font-weight: 600; color: #4b5563; text-transform: uppercase; letter-spacing: 0.05em; background-color: #f9fafb; }
         `}
         </style>
-        {voucherType === 'Sales' && <SalesVoucher prefilledData={prefilledData} clearPrefilledData={clearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} customers={richCustomers} />}
-        {voucherType === 'Payment' && <PaymentVoucherSingle prefilledData={prefilledData} clearPrefilledData={clearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} />}
-        {voucherType === 'Receipt' && <ReceiptVoucher prefilledData={prefilledData} clearPrefilledData={clearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} />}
+        {voucherType === 'Sales' && <SalesVoucher prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} customers={richCustomers} />}
+        {voucherType === 'Payment' && <PaymentVoucherSingle prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} />}
+        {voucherType === 'Receipt' && <ReceiptVoucher prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} />}
         {voucherType === 'Purchase' && renderSalesPurchaseForm()}
         {voucherType === 'Contra' && renderSimpleForm(voucherType)}
         {voucherType === 'Journal' && renderJournalForm()}
@@ -5151,23 +5561,21 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           </div>
         )
       }
-      {/* Mass Upload Modal */}
+
+
+      {/* Tally Master Scanner Modal */}
       {
-        isMassUploadOpen && (
-          <MassUploadModal
-            onClose={() => setIsMassUploadOpen(false)}
-            onComplete={(newVouchers) => {
-              if (onMassUploadComplete) {
-                onMassUploadComplete(newVouchers);
-              } else {
-                onAddVouchers(newVouchers);
-              }
-              setIsMassUploadOpen(false);
+        isTallyMasterScannerOpen && (
+          <TallyMasterScannerModal
+            initialFiles={masterScannerFiles}
+            onClose={() => {
+              setIsTallyMasterScannerOpen(false);
+              setMasterScannerFiles(null);
+              if (masterScannerInputRef.current) masterScannerInputRef.current.value = '';
             }}
-            ledgers={ledgers}
-            stockItems={stockItems}
-            companyDetails={companyDetails}
-            voucherType={voucherType}
+            onUpload={(data) => {
+              console.log('[VouchersPage] Tally Master records received:', data.length);
+            }}
           />
         )
       }
@@ -5176,9 +5584,84 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       {
         isInvoiceScannerOpen && (
           <InvoiceScannerModal
+            extractionMode={extractionMode}
+            initialFiles={scannerFiles}
+            voucherType={voucherType}
             onClose={() => {
               setIsInvoiceScannerOpen(false);
+              setScannerFiles(null);
               refetch(); // Refresh usage after scan
+            }}
+            onUpload={(data) => {
+              console.log('[VouchersPage] Data received from InvoiceScannerModal:', data);
+              if (!data || data.length === 0) return;
+
+              const firstRow = data[0];
+
+              if (voucherType === 'Purchase' || voucherType === 'Debit Note') {
+                // Map flat "Finpixe schema" columns to Purchase form internal state
+                // Strict mapping using deterministic keys from HEADER_FIELDS
+                if (firstRow['Supplier Invoice No']) setInvoiceNo(firstRow['Supplier Invoice No']);
+
+                // Flexible mapping for Party/Vendor
+                const partyVal = firstRow['Vendor Name'] || firstRow['Bill From'] || firstRow['Buyer/Supplier - Mailing Name'];
+                if (partyVal) setParty(partyVal);
+
+                if (firstRow['GSTIN']) setGstin(firstRow['GSTIN']);
+                // Normalise to YYYY-MM-DD before setting so <input type="date"> renders correctly
+                if (firstRow['Voucher Date']) setDate(formatDateForInput(firstRow['Voucher Date']) || getTodayDate());
+
+                if (firstRow['Bill From']) setBillFrom(firstRow['Bill From']);
+                else if (firstRow['Buyer/Supplier - Address']) setBillFrom(firstRow['Buyer/Supplier - Address']);
+
+                if (firstRow['Ship From']) setShipFrom(firstRow['Ship From']);
+                else if (firstRow['Consignee - Address']) setShipFrom(firstRow['Consignee - Address']);
+
+                const mappedItems = data.map((row, idx) => ({
+                  id: (Date.now() + idx).toString(),
+                  itemCode: row['Item Code'] || '',
+                  itemName: row['Item Name'] || '',
+                  hsnSac: row['HSN/SAC'] || '',
+                  qty: parseFloat(row['Quantity'] || '0') || 0,
+                  uom: row['UOM'] || '',
+                  rate: parseFloat(row['Rate'] || '0') || 0,
+                  taxableValue: parseFloat(row['Taxable Value'] || '0') || 0,
+                  foreignRate: 0,
+                  foreignAmount: 0,
+                  igst: parseFloat(row['Integrated Tax (IGST)'] || '0') || 0,
+                  cgst: parseFloat(row['Central Tax (CGST)'] || '0') || 0,
+                  sgst: parseFloat(row['State Tax (SGST)'] || '0') || 0,
+                  cess: parseFloat(row['Cess'] || '0') || 0,
+                  invoiceValue: parseFloat(row['Item Amount'] || '0') || 0,
+                  description: row['Description'] || ''
+                }));
+                console.log('[VouchersPage] Mapped Purchase Items:', mappedItems);
+                setPurchaseItems(mappedItems);
+              } else {
+                // For Sales, Payment, Receipt: use reconstructed ExtractedInvoiceData for sub-components
+                // Strict mapping for sub-component consumption
+                const lineItems = data.map(row => ({
+                  itemDescription: row['Item Name'] || '',
+                  hsnCode: row['HSN/SAC'] || '',
+                  quantity: parseFloat(row['Quantity'] || '0') || 0,
+                  rate: parseFloat(row['Rate'] || '0') || 0,
+                  amount: parseFloat(row['Item Amount'] || '0') || 0
+                }));
+
+                const reconstructed: any = {
+                  sellerName: firstRow['Vendor Name'] || firstRow['Bill From'] || firstRow['Buyer/Supplier - Mailing Name'] || '',
+                  invoiceNumber: firstRow['Supplier Invoice No'] || '',
+                  invoiceDate: formatDateForInput(firstRow['Voucher Date'] || '') || getTodayDate(),
+                  subtotal: parseFloat(firstRow['Total Taxable Value'] || '0') || 0,
+                  cgstAmount: parseFloat(firstRow['Total CGST'] || '0') || 0,
+                  sgstAmount: parseFloat(firstRow['Total SGST'] || '0') || 0,
+                  igstAmount: parseFloat(firstRow['Total IGST'] || '0') || 0,
+                  totalAmount: parseFloat(firstRow['Total Invoice Value'] || '0') || 0,
+                  lineItems
+                };
+                console.log('[VouchersPage] Reconstructed PrefilledData:', reconstructed);
+                setLocalPrefilledData(reconstructed);
+              }
             }}
           />
         )

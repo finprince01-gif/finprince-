@@ -186,3 +186,13 @@ class AIUsage(models.Model):
 
     def __str__(self):
         return f"{self.tenant_id} - {self.year}/{self.month}: {self.used_count}"
+
+class ExtractionPerformance(models.Model):
+    file_count = models.IntegerField(default=1)
+    processing_time_seconds = models.FloatField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = False
+        db_table = 'extraction_performance'
+

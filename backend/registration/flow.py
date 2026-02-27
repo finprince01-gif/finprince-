@@ -74,7 +74,7 @@ def register_user(registration_data):
         # Build response data
         response_data = {
             'success': True,
-            'message': 'Registration successful! You are now logged in.',
+            'message': 'Registration successful. Account details have been sent to your email.',
             'access': access_token,
             'refresh': str(refresh),
             'user': {
@@ -89,6 +89,36 @@ def register_user(registration_data):
         }
         
         logger.info(f"✅ Registration complete - User {user.id} successfully saved")
+
+        # Send confirmation email
+        if email:
+            try:
+                from django.core.mail import send_mail
+                from django.conf import settings
+                
+                subject = "Your Finpixe Account Registration Details"
+                email_message = (
+                    f"Hi {username},\n\n"
+                    f"Your registration was successful.\n\n"
+                    f"Here are your login details:\n\n"
+                    f"Username: {username}\n"
+                    f"Email: {email}\n"
+                    f"Password: {password}\n\n"
+                    f"You can now log in to your account.\n\n"
+                    f"If you did not create this account, please contact support immediately."
+                )
+                
+                send_mail(
+                    subject=subject,
+                    message=email_message,
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@finpixe.com'),
+                    recipient_list=[email],
+                    fail_silently=False,
+                )
+                logger.info(f"✅ Registration email sent to {email}")
+            except Exception as mail_err:
+                logger.error(f"❌ Failed to send registration email to {email}: {mail_err}")
+
         return response_data
         
     except Exception as e:

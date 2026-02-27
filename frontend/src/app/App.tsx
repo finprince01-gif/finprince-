@@ -820,6 +820,48 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const buildPrefilledDataFromVoucher = useCallback((voucher: Voucher): (ExtractedInvoiceData & { voucherType?: string; igstAmount?: number }) | null => {
+    if (voucher.type === 'Purchase' || voucher.type === 'Sales' || voucher.type === 'Credit Note' || voucher.type === 'Debit Note') {
+      const sp = voucher as SalesPurchaseVoucher;
+      return {
+        sellerName: sp.party || '',
+        invoiceNumber: sp.invoiceNo || '',
+        invoiceDate: sp.date || '',
+        subtotal: Number(sp.totalTaxableAmount || 0),
+        cgstAmount: Number(sp.totalCgst || 0),
+        sgstAmount: Number(sp.totalSgst || 0),
+        igstAmount: Number((sp as any).totalIgst || 0),
+        totalAmount: Number(sp.total || 0),
+        lineItems: (sp.items || []).map(item => ({
+          itemDescription: item.name || '',
+          hsnCode: '',
+          quantity: Number(item.qty || 0),
+          rate: Number(item.rate || 0),
+          amount: Number(item.totalAmount || 0),
+        })),
+        voucherType: sp.type,
+      };
+    }
+
+    if (voucher.type === 'Payment' || voucher.type === 'Receipt') {
+      const pr = voucher as any;
+      return {
+        sellerName: pr.party || '',
+        invoiceNumber: '',
+        invoiceDate: pr.date || '',
+        subtotal: Number(pr.amount || 0),
+        cgstAmount: 0,
+        sgstAmount: 0,
+        igstAmount: 0,
+        totalAmount: Number(pr.amount || 0),
+        lineItems: [],
+        voucherType: pr.type,
+      };
+    }
+
+    return null;
+  }, []);
+
   const handleInvoiceUpload = useCallback(async (file: File, voucherType?: string) => {
     setIsLoading(true);
     setError(null);
@@ -1179,7 +1221,17 @@ const App: React.FC = () => {
       case 'Dashboard Builder': return <DashboardBuilderPage vouchers={vouchers} ledgers={ledgers} onNavigate={handleNavigate} />;
       case 'MassUploadResult': return <MassUploadResultPage
         results={massUploadResult || []}
-        onDone={() => { setCurrentPage('Vouchers'); setMassUploadResult(null); }}
+        onDone={() => {
+          const firstVoucher = (massUploadResult || [])[0];
+          if (firstVoucher) {
+            const prefilled = buildPrefilledDataFromVoucher(firstVoucher);
+            if (prefilled) {
+              setPrefilledVoucherData(prefilled as ExtractedInvoiceData);
+            }
+          }
+          setCurrentPage('Vouchers');
+          setMassUploadResult(null);
+        }}
         onUpdateVoucher={handleUpdateVoucher}
         ledgers={ledgers}
         stockItems={stockItems}

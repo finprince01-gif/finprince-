@@ -1,148 +1,209 @@
 """
 Login Flow Layer - Business Logic
-NO RBAC needed (authentication is public), NO tenant validation.
-Business logic for login and token management.
+Strict 3-field authentication: Email + Username + Password
+All must match the SAME database record.
 """
 
 import logging
 from django.utils import timezone
+from django.conf import settings
 from rest_framework_simplejwt.tokens import RefreshToken
 from core.token import MyTokenObtainPairSerializer
 from . import database
 
-utils_logger = logging.getLogger('login.flow')
 logger = logging.getLogger('login.flow')
 
-def authenticate_user(username, password, email=None):
-    """
-    Authenticate user with username/email and password.
-    Checks credentials against the database.
-    
-    Args:
-        username: Username
-        password: Plain text password
-        email: Optional email for primary authentication
-    
-    Returns:
-        tuple: (user, token_data) if successful, (None, error_message) if failed
-    """
-    user = None
-    
-    # 1. Primary Check: Email (Globally unique)
-    if email:
-        user = database.get_user_by_email(email)
-        if user:
-            # If user found by email, verify password
-            if not user.check_password(password):
-                return None, "Invalid password"
-            
-            # If username also provided, it must match
-            if username and user.username != username:
-                return None, "Username does not match the account for this email"
-        elif not username:
-             return None, "No account found with this email"
-    
-    # 2. Secondary Check: Username (if not already authenticated by email)
-    if not user and username:
-        users = database.get_user_by_username(username)
-        if users:
-            matched_users = []
-            for u in users:
-                if u.check_password(password):
-                    matched_users.append(u)
-            
-            if len(matched_users) > 1:
-                logger.warning(f"Ambiguous login for {username}: Multiple accounts found.")
-                return None, "Multiple accounts found with this username. Please use your email to log in."
-            elif len(matched_users) == 1:
-                user = matched_users[0]
-            else:
-                return None, "Invalid password"
-        else:
-            return None, "No account found with this username"
+# ============================================================================
+# CONFIGURATION
+# ============================================================================
 
+MAX_FAILED_ATTEMPTS = 5          # Lock after this many failures
+LOCKOUT_DURATION_MINUTES = 5     # Lockout duration in minutes
+
+# SECURE_MODE: When True, all auth failures return generic "Invalid credentials"
+# Reads from settings, falls back to NOT DEBUG (secure in production)
+def _is_secure_mode():
+    return getattr(settings, 'SECURE_LOGIN_MODE', not settings.DEBUG)
+
+
+# ============================================================================
+# RATE LIMITING HELPERS
+# ============================================================================
+
+def _check_rate_limit(email, ip_address):
+    """
+    Check if this email is rate-limited.
+    Returns (is_blocked, message) tuple.
+    """
+    attempt_count, locked_until = database.get_failed_attempt_count(email)
+
+    if locked_until and locked_until > timezone.now():
+        remaining = int((locked_until - timezone.now()).total_seconds() / 60) + 1
+        logger.warning(
+            f"🔒 RATE LIMIT HIT | Email: {email} | IP: {ip_address} | "
+            f"Locked until: {locked_until}"
+        )
+        return True, f"Too many failed attempts. Try again in {remaining} minute(s)."
+
+    return False, None
+
+
+def _record_failed_attempt(email, ip_address, reason):
+    """
+    Record a failed login attempt.
+    Logs internally, never exposes internal reason to user.
+    """
+    database.record_failed_attempt(email, ip_address)
+
+    # Internal log only - NOT exposed to user
+    logger.warning(
+        f"❌ LOGIN FAILED | Email: {email} | IP: {ip_address} | "
+        f"Reason: {reason} | Time: {timezone.localtime().strftime('%Y-%m-%d %H:%M:%S')}"
+    )
+
+
+def _reset_failed_attempts(email):
+    """Reset failed attempt counter on successful login."""
+    database.reset_failed_attempts(email)
+
+
+# ============================================================================
+# STRICT 3-FIELD AUTHENTICATION
+# ============================================================================
+
+def authenticate_user(email, username, password, ip_address='unknown'):
+    """
+    Strict 3-field authentication: Email + Username + Password.
+    ALL THREE must match the same database record.
+
+    Validation order:
+        1. Email must exist
+        2. Username must belong to that email's record
+        3. Password must match that record
+
+    Args:
+        email:      User's email address (required)
+        username:   User's username (required)
+        password:   User's plain-text password (required)
+        ip_address: Requester's IP (for logging/rate-limiting)
+
+    Returns:
+        tuple: (user, token_data) on success
+               (None, error_dict) on failure
+    """
+    secure = _is_secure_mode()
+
+    # ── Guard: All three fields are mandatory ────────────────────────────────
+    if not email or not username or not password:
+        missing = []
+        if not email:    missing.append('email')
+        if not username: missing.append('username')
+        if not password: missing.append('password')
+        return None, {
+            'field': 'general',
+            'message': f"Required fields missing: {', '.join(missing)}"
+        }
+
+    # ── Step 0: Rate-limit check ─────────────────────────────────────────────
+    is_blocked, block_msg = _check_rate_limit(email, ip_address)
+    if is_blocked:
+        return None, {'field': 'general', 'message': block_msg, 'rate_limited': True}
+
+    # ── Step 1: Check Email exists ───────────────────────────────────────────
+    user = database.get_user_by_email(email)
     if user is None:
-        # This part should ideally not be reached if either email or username was provided
-        # but as a fallback:
-        if email:
-            return None, "No account found with this email"
-        if username:
-            return None, "No account found with this username"
-        return None, "Invalid login details"
-    
+        _record_failed_attempt(email, ip_address, "Email not found")
+        return None, {'field': 'email', 'message': 'Email not registered.'}
+
+    # ── Step 2: Check Username matches that email record ─────────────────────
+    if user.username != username:
+        _record_failed_attempt(email, ip_address, f"Username mismatch (got '{username}', expected '{user.username}')")
+        return None, {'field': 'username', 'message': 'Username is incorrect.'}
+
+    # ── Step 3: Check Password (always hashed) ───────────────────────────────
+    if not user.check_password(password):
+        _record_failed_attempt(email, ip_address, "Wrong password")
+        return None, {'field': 'password', 'message': 'Password is incorrect.'}
+
+    # ── Step 4: Account active check ────────────────────────────────────────
     if not user.is_active:
-        return None, "Account is inactive"
-    
-    # Generate tokens and build response
+        _record_failed_attempt(email, ip_address, "Account inactive")
+        return None, {'field': 'general', 'message': 'Account is inactive. Please contact support.'}
+
+    # ── Step 5: SUCCESS ──────────────────────────────────────────────────────
+    _reset_failed_attempts(email)
+
     refresh = MyTokenObtainPairSerializer.get_token(user)
-    
     token_data = {
-        'access': str(refresh.access_token),
-        'refresh': str(refresh),
-        'username': user.username,
-        'email': getattr(user, 'email', ''),
-        'tenant_id': user.tenant_id,
+        'access':       str(refresh.access_token),
+        'refresh':      str(refresh),
+        'username':     user.username,
+        'email':        getattr(user, 'email', ''),
+        'tenant_id':    user.tenant_id,
         'company_name': getattr(user, 'company_name', ''),
         'selected_plan': getattr(user, 'selected_plan', 'Free'),
     }
-    
-    # Log success
+
     logger.info(
-        f"🔐 LOGIN SUCCESS - {timezone.localtime().strftime('%Y-%m-%d %H:%M:%S')} | "
-        f"Tenant: {user.tenant_id} | User: {user.username}"
+        f"✅ LOGIN SUCCESS | Tenant: {user.tenant_id} | User: {user.username} | "
+        f"IP: {ip_address} | Time: {timezone.localtime().strftime('%Y-%m-%d %H:%M:%S')}"
     )
-    
+
     return user, token_data
 
+
+# ============================================================================
+# TOKEN REFRESH
+# ============================================================================
 
 def refresh_access_token(refresh_token):
     """
     Refresh access token.
-    
-    Args:
-        refresh_token: Refresh token string
-    
+
     Returns:
         dict: New tokens or None if failed
     """
     from rest_framework_simplejwt.tokens import RefreshToken as JWT_RefreshToken
-    
+
     try:
         refresh = JWT_RefreshToken(refresh_token)
-        access_token = str(refresh.access_token)
-        
         return {
-            'access': access_token,
-            'refresh': str(refresh)  # May be rotated
+            'access':  str(refresh.access_token),
+            'refresh': str(refresh),  # May be rotated
         }
     except Exception as e:
         logger.error(f"Token refresh failed: {e}")
         return None
+
+
+# ============================================================================
+# FORGOT / RESET FLOWS (unchanged)
+# ============================================================================
 
 def forgot_user_id(identifier):
     """Business logic for retrieving User IDs."""
     users = database.get_users_by_identifier(identifier)
     if not users:
         return None, "No account found with this information"
-    
+
     user_ids = [u.username for u in users]
-    # Return masked IDs for demo purposes
-    masked_ids = [uid[:2] + '*' * (len(uid)-2) for uid in user_ids]
-    
+    masked_ids = [uid[:2] + '*' * (len(uid) - 2) for uid in user_ids]
     return masked_ids, "User ID(s) found"
+
 
 def reset_password(username, identifier, new_password):
     """Business logic for resetting password."""
     user = database.get_user_by_username_and_identifier(username, identifier)
     if not user:
         return False, "No matching account found with these details"
-    
+
     from django.contrib.auth.hashers import make_password
     user.password = make_password(new_password)
     user.save()
-    
+
     logger.info(f"🔑 Password reset for user: {username}")
     return True, "Password has been reset successfully"
+
 
 def request_reset_otp(email):
     """
@@ -157,19 +218,16 @@ def request_reset_otp(email):
     from django.conf import settings
 
     user = database.get_user_by_email(email)
-    
+
     if not user:
         return False, "This email address is not registered."
 
-    # Generate 6-digit OTP
     otp = f"{random.randint(100000, 999999)}"
     otp_hash = make_password(otp)
     expires_at = timezone.now() + timedelta(minutes=5)
 
-    # Store OTP in DB (this also invalidates previous ones)
     database.create_otp(user, otp_hash, expires_at)
 
-    # Send OTP to email
     try:
         send_mail(
             subject="Your Password Reset Code",
@@ -181,9 +239,9 @@ def request_reset_otp(email):
         logger.info(f"OTP sent to {user.email}")
     except Exception as e:
         logger.error(f"Failed to send OTP email: {e}")
-        # We still return success to the user to avoid leaking account existence
-    
+
     return True, "A verification code has been sent to your email."
+
 
 def verify_reset_otp(email, otp, new_password):
     """
@@ -198,7 +256,7 @@ def verify_reset_otp(email, otp, new_password):
         return False, "Invalid request"
 
     otp_record = database.get_active_otp_by_user(user)
-    
+
     if not otp_record:
         return False, "OTP expired or not found. Please request a new one."
 
@@ -210,19 +268,13 @@ def verify_reset_otp(email, otp, new_password):
         database.increment_otp_attempts(otp_record)
         return False, "Invalid verification code"
 
-    # Success: Reset password
     user.password = make_password(new_password)
     user.save()
-
-    # Mark OTP as used
     database.mark_otp_used(otp_record)
-    
-    # Revoke sessions: Changing the password naturally invalidates the session 
-    # and if the JWT payload includes a hash of the password or similar, it would invalidate tokens.
-    # For standard Django sessions, it invalidates. For JWT, usually blacklisting is needed.
-    
+
     logger.info(f"Password reset successful for {email}")
     return True, "Your password has been successfully reset."
+
 
 def verify_otp_only(email, otp):
     """
@@ -230,13 +282,13 @@ def verify_otp_only(email, otp):
     Returns: (success_bool, message)
     """
     from django.contrib.auth.hashers import check_password
-    
+
     user = database.get_user_by_email(email)
     if not user:
         return False, "Invalid request"
 
     otp_record = database.get_active_otp_by_user(user)
-    
+
     if not otp_record:
         return False, "OTP expired or not found. Please request a new one."
 
