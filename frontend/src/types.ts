@@ -157,7 +157,7 @@ export interface BaseVoucher {
 }
 
 export interface SalesPurchaseVoucher extends BaseVoucher {
-  type: 'Purchase' | 'Sales';
+  type: 'Purchase' | 'Sales' | 'Credit Note' | 'Debit Note';
   isInterState: boolean;
   invoiceNo: string;
   dueDate?: string;
@@ -261,7 +261,7 @@ export interface MassUploadFile {
   id: string;
   file: File;
   status: MassUploadStatus;
-  extractedData?: ExtractedInvoiceData;
+  extractedData?: ExtractedInvoiceData | Voucher[];
   error?: string;
 }
 

@@ -8,10 +8,32 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from rest_framework import status
+from rest_framework.throttling import AnonRateThrottle
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from . import flow
+
+
+# ============================================================================
+# THROTTLE — secondary DRF-level guard (primary guard lives in flow.py)
+# ============================================================================
+
+class LoginThrottle(AnonRateThrottle):
+    """DRF-level secondary throttle: max 20 login requests/minute per IP."""
+    rate = '20/minute'
+
+
+# ============================================================================
+# HELPERS
+# ============================================================================
+
+def _get_client_ip(request):
+    """Extract the real client IP, honoring common proxy headers."""
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        return x_forwarded_for.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR', 'unknown')
 
 
 # ============================================================================
@@ -21,47 +43,63 @@ from . import flow
 @method_decorator(csrf_exempt, name='dispatch')
 class LoginView(APIView):
     """
-    User login endpoint.
-    All logic delegated to flow layer.
+    Strict 3-field user login endpoint.
+    Requires: email + username + password — all must match the same record.
+    All business logic delegated to flow layer.
     """
     permission_classes = [AllowAny]
     authentication_classes = []
-    
+    throttle_classes = [LoginThrottle]
+
     def post(self, request):
-        """Handle login request."""
+        """Handle login request with strict 3-field validation."""
         try:
-            username = request.data.get('username')
-            password = request.data.get('password')
-            email = request.data.get('email')  # Optional email for disambiguation
-            
-            if not (username or email) or not password:
-                return Response(
-                    {'detail': 'Username/Email and password required'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Delegate to flow layer (with optional email)
-            user, result = flow.authenticate_user(username, password, email)
-            
+            email    = request.data.get('email', '').strip()
+            username = request.data.get('username', '').strip()
+            password = request.data.get('password', '')
+
+            # ── Frontend guard: all three fields are mandatory ────────────────
+            missing_fields = []
+            if not email:    missing_fields.append('email')
+            if not username: missing_fields.append('username')
+            if not password: missing_fields.append('password')
+
+            if missing_fields:
+                errors = {f: f'{f.capitalize()} is required.' for f in missing_fields}
+                errors['field'] = missing_fields[0]  # first missing field
+                return Response(errors, status=status.HTTP_400_BAD_REQUEST)
+
+            # ── Extract IP for logging / rate-limiting ────────────────────────
+            ip_address = _get_client_ip(request)
+
+            # ── Delegate to flow layer ────────────────────────────────────────
+            user, result = flow.authenticate_user(email, username, password, ip_address)
+
             if user is None:
-                return Response(
-                    {'detail': result},
-                    status=status.HTTP_401_UNAUTHORIZED
-                )
-            
-            # Create response with tokens
+                error_dict = result if isinstance(result, dict) else {'field': 'general', 'message': result}
+
+                # Rate-limited → 429
+                if error_dict.get('rate_limited'):
+                    return Response(
+                        {'field': 'general', 'message': error_dict.get('message', 'Too many failed attempts. Try again later.')},
+                        status=status.HTTP_429_TOO_MANY_REQUESTS
+                    )
+
+                return Response(error_dict, status=status.HTTP_400_BAD_REQUEST)
+
+            # ── Build success response ────────────────────────────────────────
             response_data = {
-                'access': result['access'],
-                'refresh': result['refresh'],
-                'username': result['username'],
-                'email': result['email'],
-                'tenant_id': result['tenant_id'],
-                'company_name': result['company_name'],
+                'access':        result['access'],
+                'refresh':       result['refresh'],
+                'username':      result['username'],
+                'email':         result['email'],
+                'tenant_id':     result['tenant_id'],
+                'company_name':  result['company_name'],
                 'selected_plan': result.get('selected_plan', 'Free'),
             }
-            
+
             response = Response(response_data, status=status.HTTP_200_OK)
-            
+
             # Set HTTP-only cookies
             response.set_cookie(
                 key='access_token',
@@ -81,9 +119,9 @@ class LoginView(APIView):
                 max_age=settings.SIMPLE_JWT.get('REFRESH_TOKEN_LIFETIME').total_seconds(),
                 path='/api/auth/refresh/'
             )
-            
+
             return response
-            
+
         except Exception as e:
             return Response(
                 {'error': 'Internal Server Error', 'details': str(e)},
@@ -221,8 +259,6 @@ class ForgotPasswordView(APIView):
             'success': True,
             'message': message
         })
-
-from rest_framework.throttling import AnonRateThrottle
 
 class RequestOTPThrottle(AnonRateThrottle):
     rate = '10/hour'

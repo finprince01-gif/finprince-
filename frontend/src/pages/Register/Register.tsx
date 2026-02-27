@@ -112,10 +112,10 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
           sessionStorage.setItem('permissions', JSON.stringify((response as any).permissions));
           localStorage.removeItem('permissions');
         }
-        setSuccessMessage('Registration successful! Redirecting...');
+        setSuccessMessage((response as any).message || 'Registration successful! Redirecting...');
         setTimeout(() => { window.location.href = '/'; }, 1500);
       } else {
-        setSuccessMessage('Account created! Redirecting to login...');
+        setSuccessMessage((response as any).message || 'Account created! Redirecting to login...');
         sessionStorage.setItem('companyName', companyName);
         localStorage.removeItem('companyName');
         setTimeout(() => { onSwitchToLogin(); }, 1500);

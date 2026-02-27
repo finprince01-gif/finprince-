@@ -509,6 +509,10 @@ class ApiService {
         return httpClient.postFormData('/api/ai/extract-invoice/', formData);
     }
 
+    async getExtractionAverageTime() {
+        return httpClient.get<{ average_time_per_invoice: number }>('/api/extraction-average-time/');
+    }
+
     async extractStockItemsFromFile(file: File) {
         const formData = new FormData();
         formData.append('file', file);

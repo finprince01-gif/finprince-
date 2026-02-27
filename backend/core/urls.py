@@ -7,7 +7,8 @@ from .auth_views import (
 from .views import (
     CompanySettingsViewSet, health_check, check_status, check_phone,
     AgentMessageView, AIProxyView,
-    ai_metrics, health_with_metrics, AdminPaymentsView
+    ai_metrics, health_with_metrics, AdminPaymentsView,
+    extraction_average_time
 )
 from .admin_views import AdminSubscriptionsView, AdminUserStatusView
 from .direct_registration import DirectRegisterView
@@ -45,6 +46,7 @@ urlpatterns = [
     path('ai/<str:action>/', AIProxyView.as_view(), name='ai-proxy'),
     path('agent/message/', AgentMessageView.as_view()),  # Legacy endpoint, uses AI proxy internally
     path('metrics/ai/', ai_metrics, name='ai-metrics'),
+    path('extraction-average-time/', extraction_average_time, name='extraction-average-time'),
     
     path('', include(router.urls)),
 ]

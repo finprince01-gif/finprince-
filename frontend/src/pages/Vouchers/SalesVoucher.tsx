@@ -112,7 +112,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                     return {
                         id: index + 1,
                         itemCode: '',
-                        itemName: '', // AI extracted "description" usually goes to itemName in our simple setup
+                        itemName: item.itemDescription || '', // AI extracted "description" usually goes to itemName in our simple setup
                         salesLedger: '',
                         description: item.itemDescription || '',
                         hsnSac: item.hsnCode || '',
@@ -792,11 +792,12 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
     const [qtyMismatchError, setQtyMismatchError] = useState('');
 
     const validateQtyMatch = (): boolean => {
-        // Only validate foreign vs INR qty match for export invoices
-        if (stateType !== 'export') {
-            setQtyMismatchError('');
-            return true;
-        }
+        // This check is only meaningful for export invoices where the
+        // Foreign Currency tab is actually used.  For domestic (within / other)
+        // invoices the foreignItemRows array holds only blank placeholder rows,
+        // so comparing them against real INR rows always causes a false alarm.
+        if (stateType !== 'export') return true;
+
         for (let i = 0; i < Math.max(foreignItemRows.length, itemRows.length); i++) {
             const foreignQty = parseFloat(foreignItemRows[i]?.qty || '0') || 0;
             const inrQty = parseFloat(itemRows[i]?.qty || '0') || 0;
