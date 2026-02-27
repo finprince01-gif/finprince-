@@ -1,4 +1,4 @@
-import type { Voucher } from './types';
+import type { Voucher } from '../types';
 
 export const initialVouchers: Voucher[] = [
   // Sales Vouchers
@@ -111,8 +111,8 @@ export const initialVouchers: Voucher[] = [
     type: 'Journal',
     date: '2024-01-25',
     entries: [
-      { ledger: 'Salary', debit: 50000, credit: 0 },
-      { ledger: 'Cash', debit: 0, credit: 50000 }
+      { ledger: 'Salary', debit: 50000, credit: 0, note: '', refNo: '' },
+      { ledger: 'Cash', debit: 0, credit: 50000, note: '', refNo: '' }
     ],
     totalDebit: 50000,
     totalCredit: 50000,

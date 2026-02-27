@@ -123,6 +123,20 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
     const [singleAdvanceRefNo, setSingleAdvanceRefNo] = useState<string>('');
     const [singleAdvanceAmount, setSingleAdvanceAmount] = useState<number>(0);
 
+    // Sync balances
+    useEffect(() => {
+        const ledger = allLedgers.find(l => l.name === payFrom);
+        if (ledger) {
+            const bal = ledger.balance || 0;
+            const sign = bal >= 0 ? 'Dr' : 'Cr';
+            setPayFromBalance(`₹${Math.abs(bal).toLocaleString('en-IN', { minimumFractionDigits: 2 })} ${sign}`);
+            setRunningBalance(bal);
+        } else {
+            setPayFromBalance('₹0 Cr');
+            setRunningBalance(0);
+        }
+    }, [payFrom, allLedgers]);
+
     // Populate from AI Extraction
     useEffect(() => {
         if (prefilledData) {
@@ -308,6 +322,8 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
     const handleCancel = () => {
         setDate(getCurrentDate());
         setPayFrom('');
+        setPayFromBalance('₹0 Cr');
+        setRunningBalance(0);
         setPayTo('');
         setPendingTransactions(pendingTransactions.map(txn => ({ ...txn, payment: 0 })));
         setPaymentRows([

@@ -176,6 +176,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   // Contra
   const [fromAccount, setFromAccount] = useState('');
   const [toAccount, setToAccount] = useState('');
+  const [fromAccountBalance, setFromAccountBalance] = useState(0);
+  const [toAccountBalance, setToAccountBalance] = useState(0);
 
   // Purchase Voucher Tabs
   const [purchaseActiveTab, setPurchaseActiveTab] = useState<'supplier' | 'supply' | 'supply_foreign' | 'supply_inr' | 'due' | 'transit'>('supplier');
@@ -280,7 +282,20 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
   const [purchaseInputType, setPurchaseInputType] = useState('Intrastate'); // Default to Same State
   const [invoiceInForeignCurrency, setInvoiceInForeignCurrency] = useState<'Yes' | 'No'>('No');
+  const [vendorBillingCurrency, setVendorBillingCurrency] = useState('');
   const [purchaseSupportingDocument, setPurchaseSupportingDocument] = useState<File | null>(null);
+  const [purchasePreviewUrl, setPurchasePreviewUrl] = useState<string | null>(null);
+  const [isPurchasePreviewModalOpen, setIsPurchasePreviewModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (purchaseSupportingDocument) {
+      const url = URL.createObjectURL(purchaseSupportingDocument);
+      setPurchasePreviewUrl(url);
+      return () => URL.revokeObjectURL(url);
+    } else {
+      setPurchasePreviewUrl(null);
+    }
+  }, [purchaseSupportingDocument]);
 
   // Purchase Supply Details Tab State
   const [purchaseOrderNo, setPurchaseOrderNo] = useState('');
@@ -306,6 +321,18 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     amount: string;
     appliedNow: string;
   }>>([]);
+
+  const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
+  const [masterTermsData, setMasterTermsData] = useState<any>(null);
+
+  // Draft states for Edit Masters modal fields
+  const [draftCreditPeriod, setDraftCreditPeriod] = useState('');
+  const [draftCreditTerms, setDraftCreditTerms] = useState('');
+  const [draftPenaltyTerms, setDraftPenaltyTerms] = useState('');
+  const [draftDeliveryTerms, setDraftDeliveryTerms] = useState('');
+  const [draftWarrantyDetails, setDraftWarrantyDetails] = useState('');
+  const [draftForceMajeure, setDraftForceMajeure] = useState('');
+  const [draftDisputeTerms, setDraftDisputeTerms] = useState('');
 
   // Purchase Transit Details State
   const [purchaseTransitMode, setPurchaseTransitMode] = useState('Road');
@@ -402,31 +429,92 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [purchaseTransitRailBeyondFinalDest, setPurchaseTransitRailBeyondFinalDest] = useState('');
   const [purchaseTransitRailBeyondDestCountry, setPurchaseTransitRailBeyondDestCountry] = useState('');
 
-  // Mock Data for Verification
-  const mockPurchaseOrders: Record<string, typeof purchaseItems> = {
-    'PO-001': [
-      { id: '1', itemCode: 'ITM001', itemName: 'Dell Laptop', hsnSac: '8471', qty: 2, uom: 'Nos', rate: 50000, taxableValue: 100000, foreignRate: 0, foreignAmount: 0, igst: 18000, cgst: 0, sgst: 0, cess: 0, invoiceValue: 118000, description: '' },
-      { id: '2', itemCode: 'ITM002', itemName: 'Wireless Mouse', hsnSac: '8471', qty: 5, uom: 'Nos', rate: 500, taxableValue: 2500, foreignRate: 0, foreignAmount: 0, igst: 450, cgst: 0, sgst: 0, cess: 0, invoiceValue: 2950, description: '' }
-    ],
-    'PO-002': [
-      { id: '1', itemCode: 'ITM003', itemName: 'Office Chair', hsnSac: '9403', qty: 10, uom: 'Nos', rate: 4500, taxableValue: 45000, foreignRate: 0, foreignAmount: 0, igst: 8100, cgst: 0, sgst: 0, cess: 0, invoiceValue: 53100, description: '' }
-    ]
-  };
+  // Fetch Purchase Orders
+  const [availablePOs, setAvailablePOs] = useState<any[]>([]);
+  const [isFetchingPOs, setIsFetchingPOs] = useState(false);
 
   useEffect(() => {
-    if (purchaseOrderNo && mockPurchaseOrders[purchaseOrderNo]) {
-      setPurchaseItems(mockPurchaseOrders[purchaseOrderNo]);
+    const fetchPOs = async () => {
+      // Fetch all POs when on Purchase Voucher, without needing vendor filter
+      if (voucherType === 'Purchase') {
+        setIsFetchingPOs(true);
+        try {
+          const res = await apiService.getVendorPurchaseOrders(); // Fetch all
+          if (res?.data) {
+            setAvailablePOs(res.data);
+          } else if (Array.isArray(res)) {
+            setAvailablePOs(res);
+          } else {
+            setAvailablePOs([]);
+          }
+        } catch (error) {
+          console.error('Failed to fetch purchase orders:', error);
+          setAvailablePOs([]);
+        } finally {
+          setIsFetchingPOs(false);
+        }
+      } else {
+        setAvailablePOs([]);
+      }
+    };
 
-      // Auto-populate mock advance references
-      const mockRefs = [
-        { id: 1, date: '2026-01-10', refNo: `ADV/${purchaseOrderNo}/01`, amount: '5000.00', appliedNow: '0.00' },
-        { id: 2, date: '2026-01-25', refNo: `ADV/${purchaseOrderNo}/02`, amount: '3500.00', appliedNow: '0.00' }
-      ];
-      setPurchaseAdvanceRefs(mockRefs);
-    } else {
-      setPurchaseAdvanceRefs([]);
-    }
-  }, [purchaseOrderNo]);
+    // Always trigger a fetch on mount and whenever the user switches between tabs on Purchase Voucher
+    fetchPOs();
+  }, [voucherType, purchaseActiveTab]);
+
+  useEffect(() => {
+    const fetchPODetails = async () => {
+      if (purchaseOrderNo) {
+        const selectedPO = availablePOs.find(p => p.po_number === purchaseOrderNo);
+        if (selectedPO?.id) {
+          try {
+            const res = await apiService.getVendorPurchaseOrderById(selectedPO.id);
+            if (res.success && res.data?.items) {
+              const mappedItems = res.data.items.map((item: any, idx: number) => {
+                const qty = parseFloat(item.quantity) || 0;
+                const rate = parseFloat(item.final_rate) || 0;
+                const gstAmount = parseFloat(item.gst_amount) || 0;
+                const isInter = isInterState;
+
+                return {
+                  id: item.id?.toString() || String(idx),
+                  itemCode: item.item_code || '',
+                  itemName: item.item_name || '',
+                  hsnSac: '',
+                  qty: qty,
+                  uom: item.uom || '',
+                  rate: rate,
+                  taxableValue: parseFloat(item.taxable_value) || (qty * rate),
+                  foreignRate: 0,
+                  foreignAmount: 0,
+                  igst: isInter ? gstAmount : 0,
+                  cgst: isInter ? 0 : (gstAmount / 2),
+                  sgst: isInter ? 0 : (gstAmount / 2),
+                  cess: 0,
+                  invoiceValue: parseFloat(item.invoice_value) || 0,
+                  description: item.description || ''
+                };
+              });
+
+              setPurchaseItems(mappedItems.length > 0 ? mappedItems : [{ id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '' }]);
+
+              setPurchaseAdvanceRefs([]);
+
+              // Let's also auto-populate the party text if it isn't set yet.
+              if (!party && selectedPO.vendor_name) {
+                setParty(selectedPO.vendor_name);
+              }
+            }
+          } catch (error) {
+            console.error('Failed to fetch PO details:', error);
+          }
+        }
+      } else {
+        setPurchaseAdvanceRefs([]);
+      }
+    };
+    fetchPODetails();
+  }, [purchaseOrderNo, availablePOs, isInterState, party, setParty]);
 
   // Journal
   const [entries, setEntries] = useState<JournalEntry[]>([{ ledger: '', note: '', refNo: '', debit: 0, credit: 0 }, { ledger: '', note: '', refNo: '', debit: 0, credit: 0 }]);
@@ -546,6 +634,18 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       );
     });
   }, [ledgers]);
+
+  // Sync Contra balances
+  useEffect(() => {
+    if (voucherType === 'Contra') {
+      const allLedgers = ledgers || [];
+      const fromLedger = allLedgers.find(l => l.name === fromAccount);
+      setFromAccountBalance(fromLedger?.balance || 0);
+
+      const toLedger = allLedgers.find(l => l.name === toAccount);
+      setToAccountBalance(toLedger?.balance || 0);
+    }
+  }, [fromAccount, toAccount, ledgers, voucherType]);
 
   // Fetch receipt voucher configurations when voucher type is Receipt
   useEffect(() => {
@@ -1226,6 +1326,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     setNarration('');
     setFromAccount('');
     setToAccount('');
+    setFromAccountBalance(0);
+    setToAccountBalance(0);
+    setPurchaseSupportingDocument(null);
     setEntries([{ ledger: '', note: '', refNo: '', debit: 0, credit: 0 }, { ledger: '', note: '', refNo: '', debit: 0, credit: 0 }]);
     // Removed image clearing
   }, []);
@@ -1407,17 +1510,26 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     }
   }, [sameAsBillFrom]);
 
-  // Sync Input Type and Interstate status based on Party
+  // Sync Input Type and Interstate status based on Party and Foreign Currency
   useEffect(() => {
-    if (party && ledgers.length > 0 && companyDetails?.state) {
+    let baseGst = 'Intrastate';
+    if (invoiceInForeignCurrency === 'Yes') {
+      baseGst = 'Interstate';
+    } else if (party && ledgers.length > 0 && companyDetails?.state) {
       const partyLedger = ledgers.find(l => l.name.toLowerCase() === party.toLowerCase());
       if (partyLedger && partyLedger.state) {
         const isInter = partyLedger.state.toLowerCase() !== companyDetails.state.toLowerCase();
-        setIsInterState(isInter);
-        setPurchaseInputType(isInter ? 'Interstate' : 'Intrastate');
+        baseGst = isInter ? 'Interstate' : 'Intrastate';
       }
     }
-  }, [party, ledgers, companyDetails]);
+
+    setPurchaseInputTypes(prev => {
+      const newTypes = prev.filter(t => t !== 'Intrastate' && t !== 'Interstate');
+      newTypes.push(baseGst);
+      setIsInterState(baseGst === 'Interstate');
+      return newTypes;
+    });
+  }, [party, ledgers, companyDetails, invoiceInForeignCurrency]);
 
   const { partyLedgers, accountLedgers, allLedgers, partyOptions } = useMemo(() => {
     // Helper to identify cash/bank accounts robustly
@@ -1471,6 +1583,38 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     return { partyLedgers, accountLedgers, allLedgers, partyOptions };
   }, [ledgers, cashBankLedgers, richVendors, vendorGstDetails, richCustomers]);
 
+  const openTermsModal = () => {
+    // Pre-fill draft fields from current vendor/customer's T&C data
+    setDraftCreditPeriod(masterTermsData?.credit_period || '');
+    setDraftCreditTerms(masterTermsData?.credit_terms || '');
+    setDraftPenaltyTerms(masterTermsData?.penalty_terms || '');
+    setDraftDeliveryTerms(masterTermsData?.delivery_terms || '');
+    // Support both vendor and customer field names for warranty/dispute
+    setDraftWarrantyDetails(masterTermsData?.warranty_details || masterTermsData?.warranty_guarantee_details || '');
+    setDraftForceMajeure(masterTermsData?.force_majeure || '');
+    setDraftDisputeTerms(masterTermsData?.dispute_terms || masterTermsData?.dispute_redressal_terms || '');
+    setIsTermsModalOpen(true);
+  };
+
+  const saveTermsModal = () => {
+    // Build formatted display string from individual fields
+    const parts: string[] = [];
+    if (draftCreditPeriod) parts.push(`Credit Period: ${draftCreditPeriod}`);
+    if (draftCreditTerms) parts.push(`Credit Terms: ${draftCreditTerms}`);
+    if (draftPenaltyTerms) parts.push(`Penalty Terms: ${draftPenaltyTerms}`);
+    if (draftDeliveryTerms) parts.push(`Delivery Terms: ${draftDeliveryTerms}`);
+    if (draftWarrantyDetails) parts.push(`Warranty / Guarantee: ${draftWarrantyDetails}`);
+    if (draftForceMajeure) parts.push(`Force Majeure: ${draftForceMajeure}`);
+    if (draftDisputeTerms) parts.push(`Dispute & Redressal: ${draftDisputeTerms}`);
+
+    if (parts.length > 0) {
+      setPurchaseTerms(parts.join('\n\n'));
+    } else {
+      setPurchaseTerms('');
+    }
+    setIsTermsModalOpen(false);
+  };
+
   const handlePartyChange = (value: string) => {
     setParty(value);
 
@@ -1496,12 +1640,33 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           setAddressFields(vendor.billing_address);
         }
 
+        if (vendor.billing_currency) {
+          setVendorBillingCurrency(vendor.billing_currency);
+        } else {
+          setVendorBillingCurrency('');
+        }
+
         // Collect addresses for dropdown
         let addresses = [vendor.billing_address];
         vendorGstDetails.filter(g => g.vendor_basic_detail === vendor.id).forEach(g => {
           if (g.branch_address) addresses.push(g.branch_address);
         });
         setVendorAddresses(Array.from(new Set(addresses.filter(Boolean))));
+
+        // Auto-populate Terms & Conditions
+        const parts: string[] = [];
+        if (vendor.credit_period) parts.push(`Credit Period: ${vendor.credit_period}`);
+        if (vendor.credit_terms) parts.push(`Credit Terms: ${vendor.credit_terms}`);
+        if (vendor.penalty_terms) parts.push(`Penalty Terms: ${vendor.penalty_terms}`);
+        if (vendor.delivery_terms) parts.push(`Delivery Terms: ${vendor.delivery_terms}`);
+        const warranty = vendor.warranty_details || vendor.warranty_guarantee_details;
+        if (warranty) parts.push(`Warranty / Guarantee: ${warranty}`);
+        if (vendor.force_majeure) parts.push(`Force Majeure: ${vendor.force_majeure}`);
+        const dispute = vendor.dispute_terms || vendor.dispute_redressal_terms;
+        if (dispute) parts.push(`Dispute & Redressal: ${dispute}`);
+        setPurchaseTerms(parts.join('\n\n'));
+        setMasterTermsData(vendor);
+
         return;
       }
 
@@ -1521,6 +1686,21 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         // Collect addresses for dropdown
         let addresses = branches.map((b: any) => b.address).filter(Boolean);
         setVendorAddresses(Array.from(new Set(addresses)));
+
+        // Auto-populate Terms & Conditions
+        const parts: string[] = [];
+        if (customer.credit_period) parts.push(`Credit Period: ${customer.credit_period}`);
+        if (customer.credit_terms) parts.push(`Credit Terms: ${customer.credit_terms}`);
+        if (customer.penalty_terms) parts.push(`Penalty Terms: ${customer.penalty_terms}`);
+        if (customer.delivery_terms) parts.push(`Delivery Terms: ${customer.delivery_terms}`);
+        const warranty = customer.warranty_details || customer.warranty_guarantee_details;
+        if (warranty) parts.push(`Warranty / Guarantee: ${warranty}`);
+        if (customer.force_majeure) parts.push(`Force Majeure: ${customer.force_majeure}`);
+        const dispute = customer.dispute_terms || customer.dispute_redressal_terms;
+        if (dispute) parts.push(`Dispute & Redressal: ${dispute}`);
+        setPurchaseTerms(parts.join('\n\n'));
+        setMasterTermsData(customer);
+
         return;
       }
 
@@ -1627,7 +1807,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           state: shipFromState,
           country: shipFromCountry
         }),
-        input_type: purchaseInputType,
+        input_type: purchaseInputTypes.join(', '),
         invoice_in_foreign_currency: invoiceInForeignCurrency,
 
         due_details: {
@@ -1831,11 +2011,35 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       }
     }
 
-    // Auto-calculate Foreign Amount (Qty * Foreign Rate)
+    // Auto-calculate Foreign Amount (Qty * Foreign Rate) and sync to INR Rate if exchangeRate is set
     if (field === 'qty' || field === 'foreignRate') {
       const qty = parseFloat(item.qty.toString()) || 0;
       const fRate = parseFloat(item.foreignRate?.toString() || '0') || 0;
       item.foreignAmount = qty * fRate;
+
+      const exRate = parseFloat(exchangeRate) || 0;
+      if (exRate > 0) {
+        item.rate = fRate * exRate;
+        item.taxableValue = qty * item.rate;
+
+        // Recalculate taxes based on new taxable value
+        const selectedStockItem = stockItems.find((si: any) =>
+          (si.item_code || si.code) === item.itemCode ||
+          (si.name || si.item_name) === item.itemName
+        );
+        const gstRate = selectedStockItem?.gstRate || 0;
+        const totalTax = item.taxableValue * (gstRate / 100);
+
+        if (isInterState) {
+          item.igst = totalTax;
+          item.cgst = 0;
+          item.sgst = 0;
+        } else {
+          item.igst = 0;
+          item.cgst = totalTax / 2;
+          item.sgst = totalTax / 2;
+        }
+      }
     }
 
     // Auto-calculate Invoice Value (Taxable + Taxes)
@@ -2040,7 +2244,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Upload Supporting Document
                   </label>
-                  <div className="relative">
+                  <div className="relative group">
                     <input
                       type="file"
                       id="purchase-supporting-doc"
@@ -2050,18 +2254,60 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       className="hidden"
                       accept=".pdf,.jpg,.jpeg,.png"
                     />
-                    <button
-                      type="button"
-                      onClick={() => document.getElementById('purchase-supporting-doc')?.click()}
-                      className="w-full h-[42px] bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors flex items-center justify-center gap-2"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                      </svg>
-                      <span className="text-sm">Upload Document</span>
-                    </button>
-                    {purchaseSupportingDocument && (
-                      <p className="mt-2 text-xs text-indigo-600 font-medium truncate">✓ {purchaseSupportingDocument.name}</p>
+                    {!purchaseSupportingDocument ? (
+                      <button
+                        type="button"
+                        onClick={() => document.getElementById('purchase-supporting-doc')?.click()}
+                        className="w-full h-[42px] bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-all flex items-center justify-center gap-2 shadow-sm"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        <span className="text-sm">Upload Document</span>
+                      </button>
+                    ) : (
+                      <div className="relative border-2 border-dashed border-indigo-200 rounded-[4px] p-2 bg-indigo-50/30">
+                        {purchaseSupportingDocument.type.startsWith('image/') ? (
+                          <div
+                            className="relative aspect-video w-full overflow-hidden rounded-[2px] bg-white border border-indigo-100 cursor-pointer group/preview"
+                            onClick={() => setIsPurchasePreviewModalOpen(true)}
+                          >
+                            <img
+                              src={purchasePreviewUrl || ''}
+                              alt="Preview"
+                              className="w-full h-full object-contain transition-transform duration-300 group-hover/preview:scale-105"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/preview:opacity-100 transition-opacity flex items-center justify-center">
+                              <span className="text-white text-xs font-bold uppercase tracking-wider">Click to View</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div
+                            className="flex items-center gap-3 p-2 bg-white rounded border border-indigo-100 cursor-pointer hover:bg-indigo-50 transition-colors group/file"
+                            onClick={() => setIsPurchasePreviewModalOpen(true)}
+                          >
+                            <div className="p-2 bg-red-50 text-red-600 rounded">
+                              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                              </svg>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900 truncate uppercase tracking-tight leading-none">{purchaseSupportingDocument.name}</p>
+                              <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">PDF Document</p>
+                            </div>
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setPurchaseSupportingDocument(null)}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-lg hover:bg-red-600 transition-colors z-10"
+                          title="Remove File"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -2264,24 +2510,19 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <div className="flex gap-4">
                     <button
                       type="button"
-                      onClick={() => {
-                        setPurchaseInputType('Intrastate');
-                        setIsInterState(false);
-                      }}
-                      className={`flex-1 px-4 py-2 border rounded-[4px] transition-all duration-200 ${purchaseInputType === 'Intrastate'
+                      disabled={invoiceInForeignCurrency === 'Yes'}
+                      onClick={() => setInvoiceInForeignCurrency('No')}
+                      className={`flex-1 px-4 py-2 border rounded-[4px] transition-all duration-200 ${purchaseInputTypes.includes('Intrastate')
                         ? 'bg-indigo-600 border-indigo-600 text-white shadow-md font-semibold scale-105'
                         : 'bg-white border-gray-300 text-gray-600 hover:border-indigo-400 hover:text-indigo-600'
-                        }`}
+                        } ${invoiceInForeignCurrency === 'Yes' ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
                     >
                       CGST & SGST
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        setPurchaseInputType('Interstate');
-                        setIsInterState(true);
-                      }}
-                      className={`flex-1 px-4 py-2 border rounded-[4px] transition-all duration-200 ${purchaseInputType === 'Interstate'
+                      onClick={() => setInvoiceInForeignCurrency('Yes')}
+                      className={`flex-1 px-4 py-2 border rounded-[4px] transition-all duration-200 ${purchaseInputTypes.includes('Interstate')
                         ? 'bg-indigo-600 border-indigo-600 text-white shadow-md font-semibold scale-105'
                         : 'bg-white border-gray-300 text-gray-600 hover:border-indigo-400 hover:text-indigo-600'
                         }`}
@@ -2291,10 +2532,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <button
                       type="button"
                       onClick={() => {
-                        setPurchaseInputType('Import');
-                        setIsInterState(true);
+                        setPurchaseInputTypes(prev =>
+                          prev.includes('Import') ? prev.filter(t => t !== 'Import') : [...prev, 'Import']
+                        );
                       }}
-                      className={`flex-1 px-4 py-2 border rounded-[4px] transition-all duration-200 ${purchaseInputType === 'Import'
+                      className={`flex-1 px-4 py-2 border rounded-[4px] transition-all duration-200 ${purchaseInputTypes.includes('Import')
                         ? 'bg-indigo-600 border-indigo-600 text-white shadow-md font-semibold scale-105'
                         : 'bg-white border-gray-300 text-gray-600 hover:border-indigo-400 hover:text-indigo-600'
                         }`}
@@ -2350,10 +2592,12 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         value={purchaseOrderNo}
                         onChange={(e) => setPurchaseOrderNo(e.target.value)}
                         className="px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 min-w-[200px]"
+                        disabled={isFetchingPOs}
                       >
-                        <option value="">Select Purchase Order</option>
-                        <option value="PO-001">PO-001</option>
-                        <option value="PO-002">PO-002</option>
+                        <option value="">{isFetchingPOs ? 'Loading POs...' : 'Select Purchase Order'}</option>
+                        {availablePOs.map(po => (
+                          <option key={po.id} value={po.po_number}>{po.po_number}</option>
+                        ))}
                       </select>
                     </div>
                   </div>
@@ -2362,11 +2606,52 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
 
                 <div className="flex items-center gap-2 bg-white px-4 py-2 border border-slate-200 rounded-[4px] shadow-none">
-                  <span className="text-sm font-medium text-gray-700">1 Foreign Currency =</span>
+                  <span className="text-sm font-medium text-gray-700">1 {vendorBillingCurrency || 'Foreign Currency'} =</span>
                   <input
                     type="text"
                     value={exchangeRate}
-                    onChange={(e) => setExchangeRate(e.target.value)}
+                    onChange={(e) => {
+                      const exRateVal = e.target.value;
+                      setExchangeRate(exRateVal);
+
+                      // Auto-update all INR rates based on the new exchange rate
+                      const exRateNum = parseFloat(exRateVal) || 0;
+                      if (exRateNum > 0) {
+                        const updatedItems = purchaseItems.map(item => {
+                          const fRate = parseFloat(item.foreignRate?.toString() || '0') || 0;
+                          const qty = parseFloat(item.qty.toString()) || 0;
+
+                          const newRate = fRate * exRateNum;
+                          const newTaxable = qty * newRate;
+
+                          const selectedStockItem = stockItems.find((si: any) =>
+                            (si.item_code || si.code) === item.itemCode ||
+                            (si.name || si.item_name) === item.itemName
+                          );
+                          const gstRate = selectedStockItem?.gstRate || 0;
+                          const totalTax = newTaxable * (gstRate / 100);
+
+                          let igst = 0, cgst = 0, sgst = 0;
+                          if (isInterState) {
+                            igst = totalTax;
+                          } else {
+                            cgst = totalTax / 2;
+                            sgst = totalTax / 2;
+                          }
+
+                          return {
+                            ...item,
+                            rate: newRate,
+                            taxableValue: newTaxable,
+                            igst,
+                            cgst,
+                            sgst,
+                            invoiceValue: newTaxable + igst + cgst + sgst + (parseFloat(item.cess.toString()) || 0)
+                          };
+                        });
+                        setPurchaseItems(updatedItems);
+                      }
+                    }}
                     className="w-24 border-b-2 border-gray-300 focus:border-indigo-500 focus:outline-none px-2 py-1 text-center font-medium text-indigo-600"
                     placeholder="Rate"
                   />
@@ -2383,8 +2668,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       <th className="px-3 py-3 text-sm font-semibold text-center border-r border-indigo-500">Description</th>
                       <th className="px-3 py-3 text-sm font-semibold text-center w-32 border-r border-indigo-500">Quantity</th>
                       <th className="px-3 py-3 text-sm font-semibold text-center w-32 border-r border-indigo-500">UQC</th>
-                      <th className="px-3 py-3 text-sm font-semibold text-center w-40 border-r border-indigo-500">Rate</th>
-                      <th className="px-3 py-3 text-sm font-semibold text-center w-40 border-r border-indigo-500">Amount</th>
+                      <th className="px-3 py-3 text-sm font-semibold text-center w-40 border-r border-indigo-500">Rate ({vendorBillingCurrency || 'FC'})</th>
+                      <th className="px-3 py-3 text-sm font-semibold text-center w-40 border-r border-indigo-500">Amount ({vendorBillingCurrency || 'FC'})</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -2525,10 +2810,12 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     value={purchaseOrderNo}
                     onChange={(e) => setPurchaseOrderNo(e.target.value)}
                     className="px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 w-64"
+                    disabled={isFetchingPOs}
                   >
-                    <option value="">Select Purchase Order</option>
-                    <option value="PO-001">PO-001</option>
-                    <option value="PO-002">PO-002</option>
+                    <option value="">{isFetchingPOs ? 'Loading POs...' : 'Select Purchase Order'}</option>
+                    {availablePOs.map(po => (
+                      <option key={po.id} value={po.po_number}>{po.po_number}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -2855,31 +3142,34 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     </div>
                   </div>
 
-                  {/* Right Column: Terms & Conditions */}
-                  <div className="border border-gray-200 rounded-[4px] p-6 bg-white">
-                    <div className="flex items-center justify-between mb-6">
-                      <button
-                        type="button"
-                        className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-[4px] shadow-none text-sm font-medium hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                      >
-                        Terms & Conditions
-                      </button>
-                      <button
-                        type="button"
-                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] shadow-none text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                      >
-                        Edit Masters
-                      </button>
-                    </div>
+                  {/* Right Column - Edit Master */}
+                  <div className="border border-gray-200 rounded-[4px] p-6 bg-gray-50">
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between pb-4 border-b border-gray-200">
+                        <button
+                          type="button"
+                          className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-[4px] hover:bg-gray-50 transition-colors text-sm font-medium shadow-none border border-slate-200"
+                        >
+                          Terms & Conditions
+                        </button>
+                        <button
+                          type="button"
+                          onClick={openTermsModal}
+                          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors text-sm font-medium shadow-none border border-slate-200"
+                        >
+                          Edit Masters
+                        </button>
+                      </div>
 
-                    <div className="space-y-2">
-                      <h4 className="text-sm font-semibold text-gray-700">Edit Here</h4>
-                      <textarea
-                        value={purchaseTerms}
-                        onChange={(e) => setPurchaseTerms(e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-gray-600 placeholder-gray-400 resize-none h-64"
-                        placeholder="Enter terms and conditions..."
-                      />
+                      <div>
+                        <textarea
+                          value={purchaseTerms}
+                          readOnly
+                          className="w-full px-4 py-3 border border-gray-200 rounded-[4px] text-gray-700 resize-none bg-white cursor-default select-none"
+                          rows={12}
+                          placeholder="Select a vendor to auto-load their terms & conditions, or click Edit Masters to add manually."
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -4788,7 +5078,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 <div className="text-xs text-gray-500 mb-1">Balance</div>
                 <input
                   type="text"
-                  value="xxxxxxx"
+                  value={fromAccountBalance.toFixed(2)}
                   readOnly
                   className="w-full px-2 py-1 border border-gray-300 rounded bg-gray-50 text-gray-500 text-sm text-center"
                 />
@@ -4808,7 +5098,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               <div className="text-right">
                 <input
                   type="text"
-                  value="xxxxxxx"
+                  value={toAccountBalance.toFixed(2)}
                   readOnly
                   className="w-full px-2 py-1 border border-gray-300 rounded bg-gray-50 text-gray-500 text-sm text-center"
                 />
@@ -6059,6 +6349,208 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           </div>
         )
       }
+      {/* Terms & Conditions Master Modal */}
+      {isTermsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-[4px] shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 bg-gray-50">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Edit Terms &amp; Conditions</h2>
+                {masterTermsData && (
+                  <p className="text-sm text-gray-500 mt-0.5">{masterTermsData.vendor_name || masterTermsData.customer_name}</p>
+                )}
+              </div>
+              <button
+                onClick={() => setIsTermsModalOpen(false)}
+                className="p-1.5 hover:bg-red-50 hover:text-red-500 rounded-[4px] text-gray-400 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
+              {/* Credit Period */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Credit Period</label>
+                <input
+                  type="text"
+                  value={draftCreditPeriod}
+                  onChange={(e) => setDraftCreditPeriod(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400"
+                  placeholder="e.g., 30 Days"
+                />
+              </div>
+
+              {/* Credit Terms */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Credit Terms</label>
+                <textarea
+                  value={draftCreditTerms}
+                  onChange={(e) => setDraftCreditTerms(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 resize-none"
+                  rows={2}
+                  placeholder="Payment terms..."
+                />
+              </div>
+
+              {/* Delivery Terms */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Delivery Terms</label>
+                <textarea
+                  value={draftDeliveryTerms}
+                  onChange={(e) => setDraftDeliveryTerms(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 resize-none"
+                  rows={2}
+                  placeholder="FOB, CIF, etc..."
+                />
+              </div>
+
+              {/* Penalty Terms */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Penalty Terms</label>
+                <textarea
+                  value={draftPenaltyTerms}
+                  onChange={(e) => setDraftPenaltyTerms(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 resize-none"
+                  rows={2}
+                  placeholder="Late delivery penalties..."
+                />
+              </div>
+
+              {/* Warranty Details */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Warranty / Guarantee Details</label>
+                <textarea
+                  value={draftWarrantyDetails}
+                  onChange={(e) => setDraftWarrantyDetails(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 resize-none"
+                  rows={2}
+                  placeholder="Warranty period and scope..."
+                />
+              </div>
+
+              {/* Force Majeure */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Force Majeure</label>
+                <textarea
+                  value={draftForceMajeure}
+                  onChange={(e) => setDraftForceMajeure(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 resize-none"
+                  rows={2}
+                  placeholder="Standard force majeure clause..."
+                />
+              </div>
+
+              {/* Dispute Terms */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Dispute &amp; Redressal</label>
+                <textarea
+                  value={draftDisputeTerms}
+                  onChange={(e) => setDraftDisputeTerms(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 resize-none"
+                  rows={2}
+                  placeholder="Jurisdiction and arbitration..."
+                />
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+              <button
+                onClick={() => setIsTermsModalOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-[4px] hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveTermsModal}
+                className="px-6 py-2 text-sm font-medium text-white bg-indigo-600 rounded-[4px] hover:bg-indigo-700 transition-colors shadow-sm"
+              >
+                Save to Voucher
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Document Preview Modal */}
+      {isPurchasePreviewModalOpen && (
+        <div className="fixed inset-0 bg-black/75 z-[100] flex flex-col items-center justify-center p-4 backdrop-blur-sm">
+          <div className="w-full h-full max-w-6xl bg-white rounded-lg shadow-2xl flex flex-col overflow-hidden animate-zoom-in">
+            {/* Modal Header */}
+            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-50 text-indigo-600 rounded">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900 leading-none">
+                    Document Preview
+                  </h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {purchaseSupportingDocument?.name}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                {purchasePreviewUrl && (
+                  <a
+                    href={purchasePreviewUrl}
+                    download={purchaseSupportingDocument?.name}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Download
+                  </a>
+                )}
+                <button
+                  onClick={() => setIsPurchasePreviewModalOpen(false)}
+                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 bg-gray-100/50 relative overflow-auto flex items-center justify-center">
+              {purchaseSupportingDocument?.type.startsWith('image/') ? (
+                <img
+                  src={purchasePreviewUrl || ''}
+                  alt="Full Preview"
+                  className="max-w-full max-h-full object-contain p-4"
+                />
+              ) : (
+                <iframe
+                  src={purchasePreviewUrl || ''}
+                  className="w-full h-full border-none bg-white"
+                  title="PDF Preview"
+                />
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-center">
+              <button
+                onClick={() => setIsPurchasePreviewModalOpen(false)}
+                className="px-10 py-2.5 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-95"
+              >
+                Close Preview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

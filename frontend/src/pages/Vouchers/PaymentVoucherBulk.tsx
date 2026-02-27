@@ -100,6 +100,12 @@ const PaymentVoucherBulk: React.FC = () => {
     }
   };
 
+  // Sync Running Balance for Pay From
+  useEffect(() => {
+    const ledger = allLedgers.find(l => l.name === payFrom);
+    setRunningBalance(ledger?.balance || 0);
+  }, [payFrom, allLedgers]);
+
   // Handle vendor selection - fetch transactions
   const handleVendorSelect = async (vendorName: string) => {
     if (!vendorName) {
@@ -168,6 +174,7 @@ const PaymentVoucherBulk: React.FC = () => {
     setTransactions([]);
     setSelectedVendor('');
     setPayFrom('');
+    setRunningBalance(0);
     setPostingNote('');
     setShowAdvanceSection(false);
     setAdvanceRefNo('');

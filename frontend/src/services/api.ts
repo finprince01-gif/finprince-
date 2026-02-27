@@ -267,15 +267,30 @@ class ApiService {
 
     /**
      * Get Purchase Orders for a specific vendor
-     * @param vendorName - Vendor name to filter by
+     * @param vendorName - Vendor name to filter by (optional)
      * @param status - Optional status filter (e.g. 'Draft', 'Pending', 'Closed')
      */
-    async getVendorPurchaseOrders(vendorName: string, status?: string) {
-        let url = `/api/vendors/purchase-orders/?vendor_name=${encodeURIComponent(vendorName)}`;
+    async getVendorPurchaseOrders(vendorName?: string, status?: string) {
+        let url = `/api/vendors/purchase-orders/`;
+        let params = [];
+        if (vendorName) {
+            params.push(`vendorName=${encodeURIComponent(vendorName)}`);
+        }
         if (status) {
-            url += `&status=${encodeURIComponent(status)}`;
+            params.push(`status=${encodeURIComponent(status)}`);
+        }
+        if (params.length > 0) {
+            url += `?${params.join('&')}`;
         }
         return httpClient.get<{ success: boolean; data: any[] }>(url);
+    }
+
+    /**
+     * Get a specific Purchase Order by ID
+     * @param id - Purchase order ID
+     */
+    async getVendorPurchaseOrderById(id: number | string) {
+        return httpClient.get<{ success: boolean; data: any }>(`/api/vendors/purchase-orders/${id}/`);
     }
 
     /**

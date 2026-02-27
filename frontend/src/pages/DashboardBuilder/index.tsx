@@ -157,11 +157,19 @@ const DashboardBuilderPage: React.FC<DashboardBuilderPageProps> = ({ vouchers, l
 
     const handleMouseMove = (e: MouseEvent) => {
         if (activeDragId && !activeResizeId && canvasRef.current) {
-            const rect = canvasRef.current.getBoundingClientRect();
-            const x = e.clientX - rect.left + canvasRef.current.scrollLeft - dragOffset.x;
-            const y = e.clientY - rect.top + canvasRef.current.scrollTop - dragOffset.y;
-            const snappedX = Math.max(0, Math.round(x / GRID_SIZE) * GRID_SIZE);
-            const snappedY = Math.max(0, Math.round(y / GRID_SIZE) * GRID_SIZE);
+            const canvas = canvasRef.current;
+            const rect = canvas.getBoundingClientRect();
+            const widget = widgets.find(w => w.id === activeDragId);
+            if (!widget) return;
+
+            const rawX = e.clientX - rect.left + canvas.scrollLeft - dragOffset.x;
+            const rawY = e.clientY - rect.top + canvas.scrollTop - dragOffset.y;
+
+            // Clamp within canvas so widget can't leave the sheet
+            const maxX = Math.max(0, canvas.clientWidth - widget.width);
+            const maxY = Math.max(0, canvas.clientHeight - widget.height);
+            const snappedX = Math.min(maxX, Math.max(0, Math.round(rawX / GRID_SIZE) * GRID_SIZE));
+            const snappedY = Math.min(maxY, Math.max(0, Math.round(rawY / GRID_SIZE) * GRID_SIZE));
             updateWidget(activeDragId, { x: snappedX, y: snappedY });
         } else if (activeResizeId && canvasRef.current) {
             const deltaX = e.clientX - resizeStartPos.x;
@@ -170,8 +178,10 @@ const DashboardBuilderPage: React.FC<DashboardBuilderPageProps> = ({ vouchers, l
             let newHeight = resizeStartSize.height;
 
             if (resizeHandle === 'se') {
-                newWidth = Math.max(200, Math.round((resizeStartSize.width + deltaX) / GRID_SIZE) * GRID_SIZE);
-                newHeight = Math.max(150, Math.round((resizeStartSize.height + deltaY) / GRID_SIZE) * GRID_SIZE);
+                const maxW = canvasRef.current.clientWidth - resizeStartSize.x;
+                const maxH = canvasRef.current.clientHeight - resizeStartSize.y;
+                newWidth = Math.min(maxW, Math.max(200, Math.round((resizeStartSize.width + deltaX) / GRID_SIZE) * GRID_SIZE));
+                newHeight = Math.min(maxH, Math.max(150, Math.round((resizeStartSize.height + deltaY) / GRID_SIZE) * GRID_SIZE));
             }
             updateWidget(activeResizeId, { width: newWidth, height: newHeight });
         }
@@ -295,12 +305,16 @@ const DashboardBuilderPage: React.FC<DashboardBuilderPageProps> = ({ vouchers, l
                 <div className="flex-1 flex flex-col bg-slate-100/50 overflow-hidden relative">
                     <GlobalFilterBar customers={availableCustomers} vendors={availableVendors} />
 
-                    <div className="flex-1 overflow-auto p-12 custom-scrollbar">
+                    <div className="flex-1 overflow-auto p-4 custom-scrollbar">
                         <div
                             ref={canvasRef}
                             onClick={() => selectWidget(null)}
-                            className="relative min-w-[1250px] min-h-[900px] bg-white rounded-3xl border-2 border-slate-200 shadow-[0_0_100px_rgba(0,0,0,0.02)]"
+                            className="relative bg-white rounded-2xl border-2 border-slate-200 shadow-sm"
                             style={{
+                                minWidth: 600,
+                                minHeight: 360,
+                                width: '100%',
+                                height: '100%',
                                 backgroundImage: 'radial-gradient(#e2e8f0 1.5px, transparent 1.5px)',
                                 backgroundSize: '24px 24px'
                             }}

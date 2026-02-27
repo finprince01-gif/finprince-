@@ -286,6 +286,7 @@ class VendorMasterBasicDetail(models.Model):
         validators=[RegexValidator(regex=r'^\+?1?\d{9,15}$', message="Enter a valid contact number")]
     )
     vendor_category = models.CharField(max_length=200, blank=True, null=True, help_text="Vendor category")
+    billing_currency = models.CharField(max_length=10, blank=True, null=True, help_text="Billing currency")
     is_also_customer = models.BooleanField(default=False, help_text="Is this vendor also a customer?")
     tcs_applicable = models.BooleanField(default=False, help_text="Is TCS applicable for this vendor?")
     
