@@ -64,6 +64,7 @@ class VendorBasicDetailDatabase:
                 email=vendor_data.get('email'),
                 contact_no=vendor_data.get('contact_no'),
                 vendor_category=vendor_data.get('vendor_category'),
+                billing_currency=vendor_data.get('billing_currency'),
                 is_also_customer=vendor_data.get('is_also_customer', False),
                 tcs_applicable=vendor_data.get('tcs_applicable', False),
                 created_by=created_by
@@ -318,6 +319,7 @@ class VendorBasicDetailDatabase:
                     email=vendor_data.get('email'),
                     contact_no=vendor_data.get('contact_no'),
                     vendor_category=vendor_data.get('vendor_category'),
+                    billing_currency=vendor_data.get('billing_currency'),
                     is_also_customer=vendor_data.get('is_also_customer', False),
                     tcs_applicable=vendor_data.get('tcs_applicable', False),
                     created_by=created_by

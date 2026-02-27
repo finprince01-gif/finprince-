@@ -8,7 +8,7 @@ import { InventoryCategoryWizard } from '../../components/InventoryCategoryWizar
 import SearchableDropdown from '../../components/SearchableDropdown';
 import { showError, showSuccess, showInfo, showWarning, confirm } from '../../utils/toast';
 import { handleApiError } from '../../utils/errorHandler';
-
+import { BILLING_CURRENCIES } from '../../constants/customerPortalConstants';
 
 
 type VendorTab = 'Master' | 'Transaction';
@@ -1061,6 +1061,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const [vendorEmail, setVendorEmail] = useState('');
     const [contactNo, setContactNo] = useState('');
     const [vendorCategory, setVendorCategory] = useState('');
+    const [billingCurrency, setBillingCurrency] = useState('');
     const [isAlsoCustomer, setIsAlsoCustomer] = useState(false);
     const [tcsApplicable, setTcsApplicable] = useState(false);
     const [createCustomerPrompt, setCreateCustomerPrompt] = useState<boolean | null>(null);
@@ -1160,6 +1161,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         setVendorEmail('');
         setContactNo('');
         setVendorCategory('');
+        setBillingCurrency('');
         setIsAlsoCustomer(false);
         setTcsApplicable(false);
         setGstRecords([
@@ -1230,6 +1232,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 email: vendorEmail,
                 contact_no: contactNo,
                 vendor_category: vendorCategory || null,
+                billing_currency: billingCurrency || null,
                 is_also_customer: isAlsoCustomer,
                 tcs_applicable: tcsApplicable
             };
@@ -1483,6 +1486,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             setVendorEmail('');
             setContactNo('');
             setVendorCategory('');
+            setBillingCurrency('');
             setIsAlsoCustomer(false);
             setTcsApplicable(false);
 
@@ -2147,6 +2151,25 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 placeholder="Select Category"
                                                 className="w-full"
                                             />
+                                        </div>
+
+                                        {/* Billing Currency */}
+                                        <div>
+                                            <label className="label-text">
+                                                Billing Currency
+                                            </label>
+                                            <select
+                                                value={billingCurrency}
+                                                onChange={(e) => setBillingCurrency(e.target.value)}
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                            >
+                                                <option value="">Select Currency</option>
+                                                {BILLING_CURRENCIES.map((curr) => (
+                                                    <option key={curr.code} value={curr.code}>
+                                                        {curr.code} - {curr.name} ({curr.symbol})
+                                                    </option>
+                                                ))}
+                                            </select>
                                         </div>
 
                                         {/* PAN No */}

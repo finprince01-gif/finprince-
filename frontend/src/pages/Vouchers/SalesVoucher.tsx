@@ -140,6 +140,65 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
     const [salesInvoiceNo, setSalesInvoiceNo] = useState('');
     const [voucherName, setVoucherName] = useState('');
     const [salesVoucherConfigs, setSalesVoucherConfigs] = useState<any[]>([]);
+    const [selectedSeriesId, setSelectedSeriesId] = useState<number | null>(null);
+    // Ref so that handleVoucherNameChange always sees the latest configs (avoids stale closure)
+    const salesVoucherConfigsRef = React.useRef<any[]>([]);
+
+    // Helper: format number from config (mirrors backend _format_invoice_number logic)
+    const formatInvoiceNo = (config: any): string => {
+        const num = config.current_number || config.start_from || 1;
+        const start = config.start_from || 1;
+        const digits = config.required_digits || 4;
+        const prefix = config.prefix || '';
+        const suffix = config.suffix || '';
+
+        if (suffix && /^\d+$/.test(suffix)) {
+            // Numeric suffix: treat as part of the sequential number
+            // e.g. start=1, digits=4, suffix='24' → base=000124=124, offset=num-start
+            const baseStr = String(start).padStart(digits, '0') + suffix;
+            const base = parseInt(baseStr, 10);
+            const offset = num - start;
+            const fullNum = base + offset;
+            const totalDigits = digits + suffix.length;
+            return `${prefix}${String(fullNum).padStart(totalDigits, '0')}`;
+        } else {
+            // Non-numeric suffix: pad number then append suffix
+            return `${prefix}${String(num).padStart(digits, '0')}${suffix}`;
+        }
+    };
+
+    // Helper: fetch next number from backend and update display
+    const refreshInvoiceNumber = React.useCallback(async (seriesId: number, latestConfigs?: any[]) => {
+        try {
+            const res: any = await httpClient.get(`/api/masters/master-voucher-sales/${seriesId}/next-number/`);
+            if (res && res.invoice_number) {
+                setSalesInvoiceNo(res.invoice_number);
+            }
+        } catch {
+            // Fall back to local config calculation
+            const configs = latestConfigs || salesVoucherConfigs;
+            const config = configs.find((c: any) => c.id === seriesId);
+            if (config) setSalesInvoiceNo(formatInvoiceNo(config));
+        }
+    }, [salesVoucherConfigs]);
+
+    // Helper: increment backend counter after successful save, return next number
+    const incrementInvoiceNumber = React.useCallback(async (seriesId: number): Promise<string> => {
+        try {
+            const res: any = await httpClient.post(`/api/masters/master-voucher-sales/${seriesId}/increment-number/`, {});
+            if (res && res.next_invoice_number) {
+                // Update local configs cache with new current_number
+                setSalesVoucherConfigs(prev => prev.map(c =>
+                    c.id === seriesId ? { ...c, current_number: res.new_current_number } : c
+                ));
+                setSalesInvoiceNo(res.next_invoice_number);
+                return res.assigned_number;
+            }
+        } catch (e) {
+            console.error('Failed to increment invoice number', e);
+        }
+        return salesInvoiceNo;
+    }, [salesInvoiceNo]);
 
     React.useEffect(() => {
         const fetchSalesConfigs = async () => {
@@ -148,7 +207,18 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                 if (Array.isArray(data) && data.length > 0) {
                     setSalesVoucherConfigs(data);
                     if (!voucherName) {
-                        setVoucherName(data[0].voucher_name);
+                        const first = data[0];
+                        setVoucherName(first.voucher_name);
+                        setSelectedSeriesId(first.id);
+                        // Get accurate next number from backend
+                        if (first.enable_auto_numbering) {
+                            try {
+                                const res: any = await httpClient.get(`/api/masters/master-voucher-sales/${first.id}/next-number/`);
+                                if (res?.invoice_number) setSalesInvoiceNo(res.invoice_number);
+                            } catch {
+                                setSalesInvoiceNo(formatInvoiceNo(first));
+                            }
+                        }
                     }
                 } else {
                     setSalesVoucherConfigs([{ voucher_name: 'Main' }]);
@@ -162,17 +232,38 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
         fetchSalesConfigs();
     }, []);
 
-    // Effect to auto-populate Sales Invoice No based on selected series
+    // Keep ref in sync with state so handleVoucherNameChange never has a stale closure
     React.useEffect(() => {
-        if (voucherName && salesVoucherConfigs.length > 0) {
-            const config = salesVoucherConfigs.find((c: any) => c.voucher_name === voucherName);
-            if (config && config.enable_auto_numbering) {
-                const nextNum = config.current_number || config.start_from || 1;
-                const formatted = `${config.prefix || ''}${String(nextNum).padStart(config.required_digits || 4, '0')}${config.suffix || ''}`;
-                setSalesInvoiceNo(formatted);
+        salesVoucherConfigsRef.current = salesVoucherConfigs;
+    }, [salesVoucherConfigs]);
+
+    // When user changes the selected series — uses ref to avoid stale closure
+    const handleVoucherNameChange = React.useCallback(async (name: string) => {
+        setVoucherName(name);
+        // Always read from ref so we have the latest list
+        const configs = salesVoucherConfigsRef.current;
+        const config = configs.find((c: any) =>
+            c.voucher_name?.toLowerCase() === name?.toLowerCase()
+        );
+        if (config) {
+            setSelectedSeriesId(config.id);
+            // Always fetch from backend regardless of enable_auto_numbering
+            try {
+                const res: any = await httpClient.get(`/api/masters/master-voucher-sales/${config.id}/next-number/`);
+                if (res?.invoice_number) {
+                    setSalesInvoiceNo(res.invoice_number);
+                } else {
+                    setSalesInvoiceNo(formatInvoiceNo(config));
+                }
+            } catch {
+                setSalesInvoiceNo(formatInvoiceNo(config));
             }
+        } else {
+            // Series not found in config (manual entry or no auto-numbering)
+            setSalesInvoiceNo('');
         }
-    }, [voucherName, salesVoucherConfigs]);
+    }, []); // empty deps — reads from ref, never stale
+
 
     const [outwardSlipNo, setOutwardSlipNo] = useState('');
     const [outwardSlipOptions, setOutwardSlipOptions] = useState<string[]>([]);
@@ -402,6 +493,19 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
     const [stateType, setStateType] = useState<'within' | 'other' | 'export'>('within');
     const [exportType, setExportType] = useState('EXWP');
     const [supportingDocument, setSupportingDocument] = useState<File | null>(null);
+    const [salesPreviewUrl, setSalesPreviewUrl] = useState<string | null>(null);
+    const [isSalesPreviewModalOpen, setIsSalesPreviewModalOpen] = useState(false);
+
+    // Handle object URL creation and cleanup
+    React.useEffect(() => {
+        if (supportingDocument) {
+            const url = URL.createObjectURL(supportingDocument);
+            setSalesPreviewUrl(url);
+            return () => URL.revokeObjectURL(url);
+        } else {
+            setSalesPreviewUrl(null);
+        }
+    }, [supportingDocument]);
 
     // GST-Compliant Fields
     const [placeOfSupply, setPlaceOfSupply] = useState(''); // State code (01-38)
@@ -418,15 +522,19 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
     const [salesOrders, setSalesOrders] = useState<any[]>([]);
     const [salesQuotations, setSalesQuotations] = useState<any[]>([]);
     const [masterCustomers, setMasterCustomers] = useState<any[]>([]);
+    const [salesOrderSeriesList, setSalesOrderSeriesList] = useState<any[]>([]);
+    const [salesQuotationSeriesList, setSalesQuotationSeriesList] = useState<any[]>([]);
 
     React.useEffect(() => {
         const fetchSalesDocs = async () => {
             try {
-                const [soRes, sqGenRes, sqSpecRes, custRes] = await Promise.all([
+                const [soRes, sqGenRes, sqSpecRes, custRes, soSeriesRes, sqSeriesRes] = await Promise.all([
                     httpClient.get('/api/customerportal/sales-orders/').catch(() => []),
                     httpClient.get('/api/customerportal/sales-quotations-general/').catch(() => []),
                     httpClient.get('/api/customerportal/sales-quotations-specific/').catch(() => []),
-                    httpClient.get('/api/customerportal/customer-master/').catch(() => [])
+                    httpClient.get('/api/customerportal/customer-master/').catch(() => []),
+                    httpClient.get('/api/customerportal/sales-order-series/').catch(() => []),
+                    httpClient.get('/api/customerportal/sales-quotation-series/').catch(() => []),
                 ]);
 
                 const getList = (res: any) => Array.isArray(res) ? res : (res as any).results || [];
@@ -434,6 +542,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                 setSalesOrders(getList(soRes));
                 setSalesQuotations([...getList(sqGenRes), ...getList(sqSpecRes)]);
                 setMasterCustomers(getList(custRes));
+                setSalesOrderSeriesList(getList(soSeriesRes));
+                setSalesQuotationSeriesList(getList(sqSeriesRes));
             } catch (error) {
                 console.error('Error fetching sales documents:', error);
             }
@@ -521,21 +631,45 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
             return doc.customer_category || null;
         };
 
+        // Actual transaction records
         const orders = salesOrders.map(o => ({
             id: o.id,
             number: o.so_number || o.order_number || o.number || `Order-${o.id}`,
             type: 'Order',
-            customer: getCustomerName(o)
+            customer: getCustomerName(o),
+            isTransaction: true
         }));
 
         const quotations = salesQuotations.map(q => ({
             id: q.id,
             number: q.quote_number || q.quotation_number || q.number || `Quote-${q.id}`,
             type: 'Quotation',
-            customer: getCustomerName(q)
+            customer: getCustomerName(q),
+            isTransaction: true
         }));
 
-        const combined = [...orders, ...quotations];
+        // Series definitions (always available as reference numbers)
+        const orderSeriesOptions = salesOrderSeriesList.map(s => ({
+            id: s.id,
+            number: s.series_name || s.name,
+            type: 'Order Series',
+            customer: null,
+            isTransaction: false,
+            prefix: s.prefix,
+            suffix: s.suffix,
+        }));
+
+        const quotSeriesOptions = salesQuotationSeriesList.map(s => ({
+            id: s.id,
+            number: s.series_name || s.name,
+            type: 'Quotation Series',
+            customer: null,
+            isTransaction: false,
+            prefix: s.prefix,
+            suffix: s.suffix,
+        }));
+
+        const combined = [...orders, ...quotations, ...orderSeriesOptions, ...quotSeriesOptions];
         const uniqueMap = new Map();
         combined.forEach(doc => {
             if (doc.number && !uniqueMap.has(doc.number)) {
@@ -551,7 +685,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
             );
         }
         return filtered;
-    }, [salesOrders, salesQuotations, customerName, masterCustomers]);
+    }, [salesOrders, salesQuotations, salesOrderSeriesList, salesQuotationSeriesList, customerName, masterCustomers]);
+
     const [itemRows, setItemRows] = useState<ItemRow[]>([
         {
             id: 1,
@@ -657,6 +792,11 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
     const [qtyMismatchError, setQtyMismatchError] = useState('');
 
     const validateQtyMatch = (): boolean => {
+        // Only validate foreign vs INR qty match for export invoices
+        if (stateType !== 'export') {
+            setQtyMismatchError('');
+            return true;
+        }
         for (let i = 0; i < Math.max(foreignItemRows.length, itemRows.length); i++) {
             const foreignQty = parseFloat(foreignItemRows[i]?.qty || '0') || 0;
             const inrQty = parseFloat(itemRows[i]?.qty || '0') || 0;
@@ -668,6 +808,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
         setQtyMismatchError('');
         return true;
     };
+
 
     // Dispatch Details State
     const [skipDispatch, setSkipDispatch] = useState(false);
@@ -785,6 +926,21 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
     const [irn, setIrn] = useState('');
     const [ackNo, setAckNo] = useState('');
     const [exchangeRate, setExchangeRate] = useState('');
+
+    // Print Preview State
+    const [showPrintPreview, setShowPrintPreview] = useState(false);
+    const [postedVoucherData, setPostedVoucherData] = useState<any>(null);
+    const [companyInfo, setCompanyInfo] = useState<any>(null);
+
+    React.useEffect(() => {
+        const fetchCompany = async () => {
+            try {
+                const data = await httpClient.get<any>('/api/company-settings/').catch(() => null);
+                if (data) setCompanyInfo(data);
+            } catch { }
+        };
+        fetchCompany();
+    }, []);
 
     const tabs = stateType === 'export' ? [
         { id: 'invoice', label: 'Invoice Details' },
@@ -978,12 +1134,67 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
             await apiService.createSalesVoucherNew(payload);
             showSuccess('Sales Voucher Saved Successfully!');
 
+            // Increment series counter so next invoice gets auto-incremented number
+            if (selectedSeriesId) {
+                await incrementInvoiceNumber(selectedSeriesId);
+            }
+
             // Reset form or redirect logic here if needed
         } catch (error) {
             console.error('Failed to save sales voucher:');
             showError('Failed to save voucher. Please check inputs.');
         }
 
+    };
+
+    const handlePostAndPrint = async () => {
+        if (!validateQtyMatch()) {
+            setActiveTab('item_tax_inr');
+            return;
+        }
+        try {
+            const parseNum = (val: any) => {
+                if (val === '' || val === null || val === undefined) return 0;
+                const num = parseFloat(val);
+                return isNaN(num) ? 0 : num;
+            };
+            const formatDate = (val: string) => (!val || val.trim() === '') ? null : val;
+
+            const billTo = { address_line_1: billToAddress1, address_line_2: billToAddress2, address_line_3: billToAddress3, city: billToCity, pincode: billToPincode, state: billToState, country: billToCountry };
+            const shipTo = { address_line_1: shipToAddress1, address_line_2: shipToAddress2, address_line_3: shipToAddress3, city: shipToCity, pincode: shipToPincode, state: shipToState, country: shipToCountry };
+
+            const payload = {
+                date: formatDate(date), sales_invoice_no: salesInvoiceNo, voucher_name: voucherName, outward_slip_no: outwardSlipNo,
+                customer_name: customerName, bill_to: JSON.stringify(billTo), ship_to: JSON.stringify(shipTo), gstin, contact, tax_type: taxType,
+                state_type: stateType, export_type: exportType, exchange_rate: exchangeRate, supporting_document: supportingDocument,
+                sales_order_no: salesOrderNo, place_of_supply: placeOfSupply || null, reverse_charge: reverseCharge, invoice_type: invoiceType,
+                gst_export_type: stateType === 'export' ? gstExportType : null, port_code: stateType === 'export' ? portCode : null,
+                shipping_bill_number: stateType === 'export' ? shippingBillNumber : null, shipping_bill_date: stateType === 'export' ? formatDate(shippingBillDate) : null,
+                ecommerce_gstin: ecommerceGstin || null,
+                items: itemRows.map(row => ({ item_code: row.itemCode, item_name: row.itemName, hsn_sac: row.hsnSac, qty: parseNum(row.qty), uom: row.uom, item_rate: parseNum(row.itemRate), taxable_value: parseNum(row.taxableValue), igst: parseNum(row.igst), cgst: parseNum(row.cgst), sgst: parseNum(row.sgst), cess: parseNum(row.cess), invoice_value: parseNum(row.invoiceValue), sales_ledger: row.salesLedger, description: row.description, alternate_unit: row.alternateUnit })),
+                foreign_items: stateType === 'export' ? foreignItemRows.map(row => ({ description: row.description, quantity: parseNum(row.qty), uqc: row.uom, rate: parseNum(row.itemRate), amount: parseNum(row.invoiceValue) })) : [],
+                payment_details: { payment_taxable_value: calculateTotals().taxableValue, payment_igst: calculateTotals().igst, payment_cgst: calculateTotals().cgst, payment_sgst: calculateTotals().sgst, payment_cess: calculateTotals().cess, payment_state_cess: parseNum(paymentStateCess), payment_invoice_value: calculateTotals().invoiceValue, payment_tds_income_tax: parseNum(paymentTdsIncomeTax), payment_tds_gst: parseNum(paymentTdsGst), payment_advance: parseNum(paymentAdvance), payment_payable: parseNum(paymentPayable), posting_note: paymentPostingNote, terms_conditions: termsConditions, advance_references: JSON.stringify(advanceReferences) },
+                dispatch_details: { dispatch_from: dispatchFrom, mode_of_transport: modeOfTransport, dispatch_date: formatDate(dispatchDate), dispatch_time: formatDate(dispatchTime), delivery_type: deliveryType, self_third_party: selfThirdParty, transporter_id: transporterId, transporter_name: transporterName, vehicle_no: vehicleNo, lr_gr_consignment: lrGrConsignment, dispatch_document: dispatchDocument },
+                eway_bill_details: ewayValidationEntries.map(entry => ({ eway_bill_available: entry.available === 'Yes', eway_bill_no: entry.ewayBillNo || '', eway_bill_date: formatDate(entry.date || ''), validity_period: entry.validityPeriod || '', distance: entry.distance || '', irn, ack_no: ackNo }))
+            };
+
+            await apiService.createSalesVoucherNew(payload);
+            showSuccess('Sales Voucher Saved Successfully!');
+
+            // Increment series counter so next invoice gets auto-incremented number
+            if (selectedSeriesId) {
+                await incrementInvoiceNumber(selectedSeriesId);
+            }
+
+            // Prepare data for print preview
+            const totals = calculateTotals();
+            setPostedVoucherData({ ...payload, totals, billTo, shipTo });
+            setShowPrintPreview(true);
+
+        } catch (error) {
+            console.error('Failed to save sales voucher:');
+            showError('Failed to save voucher. Please check inputs.');
+        }
     };
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1356,7 +1567,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                 </label>
                                 <SearchableDropdown
                                     value={voucherName}
-                                    onChange={setVoucherName}
+                                    onChange={handleVoucherNameChange}
                                     options={salesVoucherConfigs.map(c => c.voucher_name)}
                                     placeholder="Select series"
                                 />
@@ -1412,32 +1623,78 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                 )}
                             </div>
 
-                            <div>
+                            <div className="space-y-3">
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Upload Supporting Document
                                 </label>
-                                <div className="relative">
-                                    <input
-                                        type="file"
-                                        id="supporting-doc"
-                                        onChange={handleFileUpload}
-                                        className="hidden"
-                                        accept=".pdf,.jpg,.jpeg,.png"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => document.getElementById('supporting-doc')?.click()}
-                                        className="w-full h-[42px] bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors flex items-center justify-center gap-2"
-                                    >
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                                        </svg>
-                                        <span className="text-sm">Upload Document</span>
-                                    </button>
-                                    {supportingDocument && (
-                                        <p className="absolute -bottom-6 left-0 text-xs text-indigo-600">✓ {supportingDocument.name}</p>
-                                    )}
-                                </div>
+                                {!supportingDocument ? (
+                                    <div className="relative group">
+                                        <input
+                                            type="file"
+                                            id="supporting-doc"
+                                            onChange={handleFileUpload}
+                                            className="hidden"
+                                            accept=".pdf,.jpg,.jpeg,.png"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => document.getElementById('supporting-doc')?.click()}
+                                            className="w-full h-[42px] bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-all flex items-center justify-center gap-2 shadow-sm"
+                                        >
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                            </svg>
+                                            <span className="text-sm">Upload Document</span>
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="relative border-2 border-dashed border-indigo-200 rounded-[4px] p-2 bg-indigo-50/30">
+                                        {supportingDocument.type.startsWith('image/') ? (
+                                            <div
+                                                className="relative aspect-video w-full overflow-hidden rounded-[2px] bg-white border border-indigo-100 cursor-pointer group/preview"
+                                                onClick={() => setIsSalesPreviewModalOpen(true)}
+                                            >
+                                                <img
+                                                    src={salesPreviewUrl || ''}
+                                                    alt="Preview"
+                                                    className="w-full h-full object-contain transition-transform duration-300 group-hover/preview:scale-105"
+                                                />
+                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/preview:opacity-100 transition-opacity flex items-center justify-center">
+                                                    <span className="text-white text-xs font-bold uppercase tracking-wider">Click to View</span>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div
+                                                className="flex items-center gap-3 p-2 bg-white rounded border border-indigo-100 cursor-pointer hover:bg-indigo-50 transition-colors group/file"
+                                                onClick={() => setIsSalesPreviewModalOpen(true)}
+                                            >
+                                                <div className="p-2 bg-red-50 text-red-600 rounded">
+                                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                                    </svg>
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-medium text-gray-900 truncate uppercase tracking-tight leading-none">{supportingDocument.name}</p>
+                                                    <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">PDF Document</p>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setSupportingDocument(null);
+                                            }}
+                                            className="absolute -top-2 -right-2 p-1 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-700 transition-colors z-10"
+                                            title="Remove file"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                )}
                             </div>
 
                             <div>
@@ -2072,14 +2329,49 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                             <select
                                 value={salesOrderNo}
                                 onChange={(e) => handleSalesDocChange(e.target.value)}
-                                className="px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                className="px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 min-w-[260px]"
                             >
                                 <option value="">Select Sales Order/Quotation</option>
-                                {salesDocOptions.map((doc, idx) => (
-                                    <option key={`${doc.type}-${doc.id}-${idx}`} value={doc.number}>
-                                        {doc.number} ({doc.type})
-                                    </option>
-                                ))}
+                                {/* Actual Sales Orders */}
+                                {salesDocOptions.filter(d => d.type === 'Order').length > 0 && (
+                                    <optgroup label="── Sales Orders ──">
+                                        {salesDocOptions.filter(d => d.type === 'Order').map((doc, idx) => (
+                                            <option key={`so-${doc.id}-${idx}`} value={doc.number}>
+                                                {doc.number}{doc.customer ? ` (${doc.customer})` : ''}
+                                            </option>
+                                        ))}
+                                    </optgroup>
+                                )}
+                                {/* Actual Quotations */}
+                                {salesDocOptions.filter(d => d.type === 'Quotation').length > 0 && (
+                                    <optgroup label="── Sales Quotations ──">
+                                        {salesDocOptions.filter(d => d.type === 'Quotation').map((doc, idx) => (
+                                            <option key={`sq-${doc.id}-${idx}`} value={doc.number}>
+                                                {doc.number}{doc.customer ? ` (${doc.customer})` : ''}
+                                            </option>
+                                        ))}
+                                    </optgroup>
+                                )}
+                                {/* Order Series */}
+                                {salesDocOptions.filter(d => d.type === 'Order Series').length > 0 && (
+                                    <optgroup label="── Sales Order Series ──">
+                                        {salesDocOptions.filter(d => d.type === 'Order Series').map((doc, idx) => (
+                                            <option key={`os-${doc.id}-${idx}`} value={doc.number}>
+                                                {doc.number}
+                                            </option>
+                                        ))}
+                                    </optgroup>
+                                )}
+                                {/* Quotation Series */}
+                                {salesDocOptions.filter(d => d.type === 'Quotation Series').length > 0 && (
+                                    <optgroup label="── Sales Quotation Series ──">
+                                        {salesDocOptions.filter(d => d.type === 'Quotation Series').map((doc, idx) => (
+                                            <option key={`qs-${doc.id}-${idx}`} value={doc.number}>
+                                                {doc.number}
+                                            </option>
+                                        ))}
+                                    </optgroup>
+                                )}
                             </select>
 
                         </div>
@@ -3744,9 +4036,10 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                             </button>
                             <button
                                 type="button"
-                                onClick={handlePost}
-                                className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors font-medium"
+                                onClick={handlePostAndPrint}
+                                className="px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[4px] transition-colors font-medium flex items-center gap-2"
                             >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                                 Post & Print/Email
                             </button>
 
@@ -3776,6 +4069,395 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                     />
                 )
             }
+            {/* Sales Supporting Document Preview Modal */}
+            {isSalesPreviewModalOpen && (
+                <div className="fixed inset-0 bg-black/75 z-[100] flex flex-col items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="w-full h-full max-w-6xl bg-white rounded-lg shadow-2xl flex flex-col overflow-hidden animate-zoom-in">
+                        {/* Modal Header */}
+                        <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-indigo-50 text-indigo-600 rounded">
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-900 leading-none">
+                                        Document Preview
+                                    </h3>
+                                    <p className="text-sm text-gray-500 mt-1">
+                                        {supportingDocument?.name}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                {salesPreviewUrl && (
+                                    <a
+                                        href={salesPreviewUrl}
+                                        download={supportingDocument?.name}
+                                        className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                                    >
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                        </svg>
+                                        Download
+                                    </a>
+                                )}
+                                <button
+                                    onClick={() => setIsSalesPreviewModalOpen(false)}
+                                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all"
+                                >
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="flex-1 bg-gray-100/50 relative overflow-auto flex items-center justify-center">
+                            {supportingDocument?.type.startsWith('image/') ? (
+                                <img
+                                    src={salesPreviewUrl || ''}
+                                    alt="Full Preview"
+                                    className="max-w-full max-h-full object-contain p-4"
+                                />
+                            ) : (
+                                <iframe
+                                    src={salesPreviewUrl || ''}
+                                    className="w-full h-full border-none bg-white"
+                                    title="PDF Preview"
+                                />
+                            )}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-center">
+                            <button
+                                onClick={() => setIsSalesPreviewModalOpen(false)}
+                                className="px-10 py-2.5 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-95"
+                            >
+                                Close Preview
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ===================== PRINT PREVIEW MODAL ===================== */}
+            {showPrintPreview && postedVoucherData && (
+                <div className="fixed inset-0 bg-black/80 z-[200] flex flex-col items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="w-full max-w-4xl bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden" style={{ maxHeight: '95vh' }}>
+                        {/* Modal Header */}
+                        <div className="flex justify-between items-center px-6 py-4 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white">
+                            <div className="flex items-center gap-3">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                <div>
+                                    <h3 className="text-lg font-bold">Invoice Print Preview</h3>
+                                    <p className="text-indigo-200 text-xs">Invoice #{postedVoucherData.sales_invoice_no}</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={() => {
+                                        const printContent = document.getElementById('sales-invoice-print-area');
+                                        if (!printContent) return;
+                                        const win = window.open('', '_blank');
+                                        if (!win) return;
+                                        win.document.write(`<html><head><title>Invoice ${postedVoucherData.sales_invoice_no}</title><style>body{font-family:Arial,sans-serif;margin:0;padding:20px;color:#111}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px;font-size:13px}th{background:#f5f5f5;font-weight:600}@media print{body{padding:0}}</style></head><body>${printContent.innerHTML}</body></html>`);
+                                        win.document.close();
+                                        win.focus();
+                                        win.print();
+                                    }}
+                                    className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                                    Print
+                                </button>
+                                <button
+                                    onClick={() => setShowPrintPreview(false)}
+                                    className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Invoice Content */}
+                        <div className="flex-1 overflow-auto bg-gray-100 p-6">
+                            <div id="sales-invoice-print-area" className="bg-white rounded-lg shadow-sm max-w-3xl mx-auto p-8">
+                                {/* Company Header */}
+                                <div className="flex justify-between items-start mb-6 pb-6 border-b-2 border-indigo-600">
+                                    <div>
+                                        {companyInfo?.logo_path && (
+                                            <img src={companyInfo.logo_path} alt="Logo" className="h-12 mb-2 object-contain" />
+                                        )}
+                                        <h2 className="text-xl font-bold text-gray-900">{companyInfo?.company_name || 'Your Company'}</h2>
+                                        <p className="text-sm text-gray-500">{companyInfo?.address_line1 || ''}{companyInfo?.city ? `, ${companyInfo.city}` : ''}{companyInfo?.state ? `, ${companyInfo.state}` : ''}{companyInfo?.pincode ? ` - ${companyInfo.pincode}` : ''}</p>
+                                        {companyInfo?.gstin && <p className="text-xs text-gray-500 mt-1">GSTIN: {companyInfo.gstin}</p>}
+                                        {companyInfo?.phone && <p className="text-xs text-gray-500">Ph: {companyInfo.phone}</p>}
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="inline-block bg-indigo-600 text-white text-xs font-bold px-4 py-1 rounded-full mb-3">TAX INVOICE</div>
+                                        <table className="text-sm text-right">
+                                            <tbody>
+                                                <tr><td className="pr-4 text-gray-500 font-medium">Invoice No.</td><td className="font-bold text-gray-900">{postedVoucherData.sales_invoice_no}</td></tr>
+                                                <tr><td className="pr-4 text-gray-500 font-medium">Date</td><td className="font-bold text-gray-900">{postedVoucherData.date}</td></tr>
+                                                {postedVoucherData.voucher_name && <tr><td className="pr-4 text-gray-500 font-medium">Voucher</td><td className="text-gray-700">{postedVoucherData.voucher_name}</td></tr>}
+                                                {postedVoucherData.sales_order_no && <tr><td className="pr-4 text-gray-500 font-medium">Order Ref.</td><td className="text-gray-700">{postedVoucherData.sales_order_no}</td></tr>}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                {/* Bill To / Ship To */}
+                                <div className="grid grid-cols-2 gap-6 mb-6">
+                                    <div className="bg-gray-50 rounded-lg p-4">
+                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Bill To</p>
+                                        <p className="font-semibold text-gray-900">{postedVoucherData.customer_name}</p>
+                                        {postedVoucherData.gstin && <p className="text-xs text-gray-500">GSTIN: {postedVoucherData.gstin}</p>}
+                                        {postedVoucherData.contact && <p className="text-xs text-gray-500">Contact: {postedVoucherData.contact}</p>}
+                                        {postedVoucherData.billTo && (
+                                            <p className="text-xs text-gray-600 mt-1">
+                                                {[postedVoucherData.billTo.address_line_1, postedVoucherData.billTo.address_line_2, postedVoucherData.billTo.address_line_3, postedVoucherData.billTo.city, postedVoucherData.billTo.state, postedVoucherData.billTo.pincode].filter(Boolean).join(', ')}
+                                            </p>
+                                        )}
+                                    </div>
+                                    <div className="bg-gray-50 rounded-lg p-4">
+                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Ship To</p>
+                                        {postedVoucherData.shipTo && (
+                                            <p className="text-xs text-gray-600">
+                                                {[postedVoucherData.shipTo.address_line_1, postedVoucherData.shipTo.address_line_2, postedVoucherData.shipTo.city, postedVoucherData.shipTo.state, postedVoucherData.shipTo.pincode].filter(Boolean).join(', ') || 'Same as Billing Address'}
+                                            </p>
+                                        )}
+                                        {postedVoucherData.place_of_supply && <p className="text-xs text-gray-500 mt-1">Place of Supply: {postedVoucherData.place_of_supply}</p>}
+                                        {postedVoucherData.tax_type && <p className="text-xs text-gray-500">Tax Type: {postedVoucherData.tax_type}</p>}
+                                        {postedVoucherData.invoice_type && <p className="text-xs text-gray-500">Invoice Type: {postedVoucherData.invoice_type}</p>}
+                                        {postedVoucherData.reverse_charge === 'Y' && <p className="text-xs text-amber-600 font-medium mt-1">⚠ Reverse Charge Applicable</p>}
+                                    </div>
+                                </div>
+
+                                {/* ── SECTION: Item & Tax Details ── */}
+                                <div className="mb-6">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <div className="h-px flex-1 bg-gray-200" />
+                                        <span className="text-xs font-bold text-indigo-600 uppercase tracking-widest px-2">Item &amp; Tax Details</span>
+                                        <div className="h-px flex-1 bg-gray-200" />
+                                    </div>
+                                    <table className="w-full text-sm mb-3" style={{ borderCollapse: 'collapse' }}>
+                                        <thead>
+                                            <tr style={{ background: '#4f46e5', color: 'white' }}>
+                                                <th style={{ padding: '9px 6px', textAlign: 'left', fontWeight: 600 }}>#</th>
+                                                <th style={{ padding: '9px 6px', textAlign: 'left', fontWeight: 600 }}>Item / Description</th>
+                                                <th style={{ padding: '9px 6px', textAlign: 'center', fontWeight: 600 }}>HSN</th>
+                                                <th style={{ padding: '9px 6px', textAlign: 'center', fontWeight: 600 }}>Qty</th>
+                                                <th style={{ padding: '9px 6px', textAlign: 'right', fontWeight: 600 }}>Rate</th>
+                                                <th style={{ padding: '9px 6px', textAlign: 'right', fontWeight: 600 }}>Taxable</th>
+                                                <th style={{ padding: '9px 6px', textAlign: 'right', fontWeight: 600 }}>CGST</th>
+                                                <th style={{ padding: '9px 6px', textAlign: 'right', fontWeight: 600 }}>SGST</th>
+                                                <th style={{ padding: '9px 6px', textAlign: 'right', fontWeight: 600 }}>IGST</th>
+                                                <th style={{ padding: '9px 6px', textAlign: 'right', fontWeight: 600 }}>Total</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {(postedVoucherData.items || []).map((item: any, i: number) => (
+                                                <tr key={i} style={{ background: i % 2 === 0 ? '#fafafa' : '#ffffff', borderBottom: '1px solid #e5e7eb' }}>
+                                                    <td style={{ padding: '7px 6px', color: '#6b7280' }}>{i + 1}</td>
+                                                    <td style={{ padding: '7px 6px' }}>
+                                                        <div className="font-medium text-gray-900">{item.item_name || item.item_code}</div>
+                                                        {item.description && <div className="text-xs text-gray-500">{item.description}</div>}
+                                                        {item.sales_ledger && <div className="text-xs text-indigo-500">{item.sales_ledger}</div>}
+                                                        {item.alternate_unit && <div className="text-xs text-gray-400">Alt: {item.alternate_unit}</div>}
+                                                    </td>
+                                                    <td style={{ padding: '7px 6px', textAlign: 'center', color: '#6b7280' }}>{item.hsn_sac || '-'}</td>
+                                                    <td style={{ padding: '7px 6px', textAlign: 'center' }}>{item.qty} {item.uom}</td>
+                                                    <td style={{ padding: '7px 6px', textAlign: 'right', fontFamily: 'monospace' }}>₹{Number(item.item_rate).toFixed(2)}</td>
+                                                    <td style={{ padding: '7px 6px', textAlign: 'right', fontFamily: 'monospace' }}>₹{Number(item.taxable_value).toFixed(2)}</td>
+                                                    <td style={{ padding: '7px 6px', textAlign: 'right', fontFamily: 'monospace' }}>₹{Number(item.cgst).toFixed(2)}</td>
+                                                    <td style={{ padding: '7px 6px', textAlign: 'right', fontFamily: 'monospace' }}>₹{Number(item.sgst).toFixed(2)}</td>
+                                                    <td style={{ padding: '7px 6px', textAlign: 'right', fontFamily: 'monospace' }}>₹{Number(item.igst).toFixed(2)}</td>
+                                                    <td style={{ padding: '7px 6px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700 }}>₹{Number(item.invoice_value).toFixed(2)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                    <div className="flex justify-end">
+                                        <div className="w-72 bg-indigo-50 rounded-lg p-4 border border-indigo-100">
+                                            <div className="space-y-1.5 text-sm">
+                                                <div className="flex justify-between"><span className="text-gray-500">Taxable Amount</span><span className="font-mono">₹{Number(postedVoucherData.totals?.taxableValue || 0).toFixed(2)}</span></div>
+                                                {Number(postedVoucherData.totals?.cgst || 0) > 0 && <div className="flex justify-between"><span className="text-gray-500">CGST</span><span className="font-mono">₹{Number(postedVoucherData.totals.cgst).toFixed(2)}</span></div>}
+                                                {Number(postedVoucherData.totals?.sgst || 0) > 0 && <div className="flex justify-between"><span className="text-gray-500">SGST</span><span className="font-mono">₹{Number(postedVoucherData.totals.sgst).toFixed(2)}</span></div>}
+                                                {Number(postedVoucherData.totals?.igst || 0) > 0 && <div className="flex justify-between"><span className="text-gray-500">IGST</span><span className="font-mono">₹{Number(postedVoucherData.totals.igst).toFixed(2)}</span></div>}
+                                                {Number(postedVoucherData.totals?.cess || 0) > 0 && <div className="flex justify-between"><span className="text-gray-500">Cess</span><span className="font-mono">₹{Number(postedVoucherData.totals.cess).toFixed(2)}</span></div>}
+                                                <div className="flex justify-between pt-2 border-t-2 border-indigo-600">
+                                                    <span className="font-bold text-gray-900 text-base">Grand Total</span>
+                                                    <span className="font-bold text-indigo-700 text-base font-mono">₹{Number(postedVoucherData.totals?.invoiceValue || 0).toFixed(2)}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* ── SECTION: Payment Details ── */}
+                                <div className="mb-6">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <div className="h-px flex-1 bg-gray-200" />
+                                        <span className="text-xs font-bold text-indigo-600 uppercase tracking-widest px-2">Payment Details</span>
+                                        <div className="h-px flex-1 bg-gray-200" />
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-3 text-sm mb-3">
+                                        {[
+                                            { label: 'Invoice Value', value: postedVoucherData.payment_details?.payment_invoice_value },
+                                            { label: 'TDS (Income Tax)', value: postedVoucherData.payment_details?.payment_tds_income_tax },
+                                            { label: 'TDS (GST)', value: postedVoucherData.payment_details?.payment_tds_gst },
+                                            { label: 'Advance Paid', value: postedVoucherData.payment_details?.payment_advance },
+                                            { label: 'State Cess', value: postedVoucherData.payment_details?.payment_state_cess },
+                                            { label: 'Net Payable', value: postedVoucherData.payment_details?.payment_payable },
+                                        ].map((row, i) => (
+                                            <div key={i} className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                                                <p className="text-xs text-gray-400 mb-1">{row.label}</p>
+                                                <p className="font-semibold text-gray-800 font-mono">₹{Number(row.value || 0).toFixed(2)}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {postedVoucherData.payment_details?.posting_note && (
+                                        <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 mb-2">
+                                            <p className="text-xs font-bold text-amber-700 mb-1">📝 Posting Note</p>
+                                            <p className="text-xs text-gray-700">{postedVoucherData.payment_details.posting_note}</p>
+                                        </div>
+                                    )}
+                                    {postedVoucherData.payment_details?.terms_conditions && (
+                                        <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                                            <p className="text-xs font-bold text-gray-500 mb-1">Terms &amp; Conditions</p>
+                                            <p className="text-xs text-gray-600 whitespace-pre-line">{postedVoucherData.payment_details.terms_conditions}</p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* ── SECTION: Dispatch Details ── */}
+                                {postedVoucherData.dispatch_details && Object.values(postedVoucherData.dispatch_details).some((v: any) => v && typeof v === 'string') && (
+                                    <div className="mb-6">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <div className="h-px flex-1 bg-gray-200" />
+                                            <span className="text-xs font-bold text-indigo-600 uppercase tracking-widest px-2">Dispatch Details</span>
+                                            <div className="h-px flex-1 bg-gray-200" />
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-3 text-sm">
+                                            {[
+                                                { label: 'Dispatch From', value: postedVoucherData.dispatch_details.dispatch_from },
+                                                { label: 'Mode of Transport', value: postedVoucherData.dispatch_details.mode_of_transport },
+                                                { label: 'Dispatch Date', value: postedVoucherData.dispatch_details.dispatch_date },
+                                                { label: 'Dispatch Time', value: postedVoucherData.dispatch_details.dispatch_time },
+                                                { label: 'Delivery Type', value: postedVoucherData.dispatch_details.delivery_type },
+                                                { label: 'Self / 3rd Party', value: postedVoucherData.dispatch_details.self_third_party },
+                                                { label: 'Transporter ID', value: postedVoucherData.dispatch_details.transporter_id },
+                                                { label: 'Transporter Name', value: postedVoucherData.dispatch_details.transporter_name },
+                                                { label: 'Vehicle No.', value: postedVoucherData.dispatch_details.vehicle_no },
+                                                { label: 'LR/GR/Consignment', value: postedVoucherData.dispatch_details.lr_gr_consignment },
+                                            ].filter(r => r.value).map((row, i) => (
+                                                <div key={i} className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                                                    <p className="text-xs text-gray-400 mb-1">{row.label}</p>
+                                                    <p className="text-sm font-medium text-gray-800">{row.value}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* ── SECTION: E-Invoice & E-way Bill ── */}
+                                {(postedVoucherData.eway_bill_details || []).some((e: any) => e.eway_bill_no || e.irn || e.ack_no) && (
+                                    <div className="mb-6">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <div className="h-px flex-1 bg-gray-200" />
+                                            <span className="text-xs font-bold text-indigo-600 uppercase tracking-widest px-2">E-Invoice &amp; E-way Bill</span>
+                                            <div className="h-px flex-1 bg-gray-200" />
+                                        </div>
+                                        {(postedVoucherData.eway_bill_details || []).map((eway: any, i: number) => (
+                                            <div key={i} className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-3">
+                                                <p className="text-xs font-bold text-blue-600 mb-2">E-way Bill #{i + 1}</p>
+                                                <div className="grid grid-cols-3 gap-3 text-xs">
+                                                    {[
+                                                        { label: 'E-way Bill No.', value: eway.eway_bill_no },
+                                                        { label: 'Date', value: eway.eway_bill_date },
+                                                        { label: 'Validity Period', value: eway.validity_period },
+                                                        { label: 'Distance', value: eway.distance },
+                                                        { label: 'IRN', value: eway.irn },
+                                                        { label: 'Ack. No.', value: eway.ack_no },
+                                                    ].filter(r => r.value).map((row, j) => (
+                                                        <div key={j}>
+                                                            <p className="text-gray-400">{row.label}</p>
+                                                            <p className="font-medium text-gray-700 break-all">{row.value}</p>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Footer: Bank Details + Signature */}
+                                <div className="border-t-2 border-gray-200 pt-4 flex justify-between items-end">
+                                    <div>
+                                        {companyInfo?.bank_name && (
+                                            <div className="text-xs text-gray-500">
+                                                <p className="font-semibold text-gray-700 mb-1">Bank Details</p>
+                                                <p>{companyInfo.bank_name}</p>
+                                                {companyInfo.bank_account_no && <p>A/C: {companyInfo.bank_account_no}</p>}
+                                                {companyInfo.bank_ifsc && <p>IFSC: {companyInfo.bank_ifsc}</p>}
+                                                {companyInfo.bank_branch && <p>Branch: {companyInfo.bank_branch}</p>}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="border-t border-gray-400 pt-2 w-44 text-xs text-gray-500 text-center">Authorised Signature</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Footer Buttons */}
+                        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-between items-center">
+                            <button
+                                onClick={() => setShowPrintPreview(false)}
+                                className="px-6 py-2.5 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-100 text-sm font-medium transition-colors"
+                            >
+                                Close
+                            </button>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => {
+                                        const printContent = document.getElementById('sales-invoice-print-area');
+                                        if (!printContent) return;
+                                        const win = window.open('', '_blank');
+                                        if (!win) return;
+                                        win.document.write(`<html><head><title>Invoice ${postedVoucherData.sales_invoice_no}</title><style>*{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:30px;color:#111;font-size:13px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px;font-size:12px}th{background:#f5f5f5;font-weight:600}h2{margin:0}@page{margin:15mm}@media print{body{padding:0}}</style></head><body>${printContent.innerHTML}</body></html>`);
+                                        win.document.close();
+                                        setTimeout(() => { win.focus(); win.print(); }, 500);
+                                    }}
+                                    className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                                    Print Invoice
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        const email = prompt('Enter recipient email address:');
+                                        if (email) {
+                                            const subject = encodeURIComponent(`Invoice ${postedVoucherData.sales_invoice_no} from ${companyInfo?.company_name || 'Our Company'}`);
+                                            const body = encodeURIComponent(`Dear ${postedVoucherData.customer_name},\n\nPlease find attached Invoice No. ${postedVoucherData.sales_invoice_no} dated ${postedVoucherData.date}.\n\nTotal Amount: ₹${Number(postedVoucherData.totals?.invoiceValue || 0).toFixed(2)}\n\nThank you for your business.\n\nRegards,\n${companyInfo?.company_name || ''}`);
+                                            window.open(`mailto:${email}?subject=${subject}&body=${body}`);
+                                        }
+                                    }}
+                                    className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                                    Email Invoice
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

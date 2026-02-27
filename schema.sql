@@ -339,6 +339,7 @@
     `email` varchar(255) NOT NULL COMMENT 'Email address',
     `contact_no` varchar(20) NOT NULL COMMENT 'Contact number',
     `vendor_category` varchar(200) DEFAULT NULL COMMENT 'Vendor category',
+    `billing_currency` varchar(10) DEFAULT NULL COMMENT 'Billing currency',
     `is_also_customer` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Is this vendor also a customer?',
     `tcs_applicable` tinyint(1) DEFAULT '0' COMMENT 'Is TCS applicable for this vendor?',
     `is_active` tinyint(1) NOT NULL DEFAULT '1' COMMENT 'Whether this vendor is active',

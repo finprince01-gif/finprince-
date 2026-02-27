@@ -126,6 +126,20 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
     const [singleAdvanceRefNo, setSingleAdvanceRefNo] = useState<string>('');
     const [singleAdvanceAmount, setSingleAdvanceAmount] = useState<number>(0);
 
+    // Sync balances
+    useEffect(() => {
+        const ledger = allLedgers.find(l => l.name === receiveIn);
+        if (ledger) {
+            const bal = ledger.balance || 0;
+            const sign = bal >= 0 ? 'Dr' : 'Cr';
+            setReceiveInBalance(`₹${Math.abs(bal).toLocaleString('en-IN', { minimumFractionDigits: 2 })} ${sign}`);
+            setRunningBalance(bal);
+        } else {
+            setReceiveInBalance('₹0 Dr');
+            setRunningBalance(0);
+        }
+    }, [receiveIn, allLedgers]);
+
     // Populate from AI Extraction
     useEffect(() => {
         if (prefilledData) {
@@ -296,6 +310,8 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
     const handleCancel = () => {
         setDate(getCurrentDate());
         setReceiveIn('');
+        setReceiveInBalance('₹0 Dr');
+        setRunningBalance(0);
         setReceiveFrom('');
         setPendingTransactions(pendingTransactions.map(txn => ({ ...txn, receipt: 0 })));
         setReceiptRows([
