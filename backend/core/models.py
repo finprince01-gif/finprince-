@@ -111,6 +111,7 @@ class BaseModel(models.Model):
     updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
 
     class Meta:
+        managed = False
         abstract = True
     
     def save(self, *args, **kwargs):

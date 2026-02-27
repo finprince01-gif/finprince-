@@ -153,6 +153,7 @@ class UserRole(BaseModel):
 #     change_summary = models.TextField(blank=True, null=True, help_text="Human-readable summary")
 #     
 #     class Meta:
+        managed = False
 #         db_table = 'rbac_permission_logs'
 #         ordering = ['-created_at']
 #     

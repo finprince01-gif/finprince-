@@ -33,6 +33,44 @@ class CompanySettingsViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
     queryset = CompanyFullInfo.objects.all()
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        if queryset.exists():
+            instance = queryset.first()
+            serializer = self.get_serializer(instance)
+            data = serializer.data
+            # User model might have the correct data while CompanyFullInfo has empty strings or nulls
+            if not data.get('email') or str(data.get('email')).strip() in ('', 'None'):
+                if getattr(request.user, 'email', None):
+                    data['email'] = request.user.email
+            if not data.get('phone') or str(data.get('phone')).strip() in ('', 'None'):
+                if getattr(request.user, 'phone', None):
+                    data['phone'] = request.user.phone
+            return Response(data)
+            
+        return Response({
+            'name': getattr(request.user, 'company_name', ''),
+            'email': getattr(request.user, 'email', ''),
+            'phone': getattr(request.user, 'phone', '')
+        })
+
+    def create(self, request, *args, **kwargs):
+        tid = request.user.tenant_id
+        instance = CompanyFullInfo.objects.filter(tenant_id=tid).first()
+        serializer = self.get_serializer(instance, data=request.data, partial=True) if instance else self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        logo_file = request.FILES.get('logo')
+        if logo_file:
+            from django.core.files.storage import default_storage
+            file_path = default_storage.save(f"logos/{tid}_{logo_file.name}", logo_file)
+            logo_path_str = default_storage.url(file_path)
+            serializer.save(tenant_id=tid, logo_path=logo_path_str)
+        else:
+            serializer.save(tenant_id=tid)
+            
+        return Response(serializer.data)
+
     def perform_create(self, serializer):
         tid = self.request.user.tenant_id
         serializer.save(tenant_id=tid)

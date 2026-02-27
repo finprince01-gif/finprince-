@@ -82,7 +82,7 @@ class ApiService {
         // If logo file is provided, use FormData for file upload
         if (data.logoFile) {
             const formData = new FormData();
-            formData.append('company_name', data.name);
+            if (data.name) formData.append('name', data.name);
             formData.append('logo', data.logoFile);
             if (data.tax_id) formData.append('tax_id', data.tax_id);
             if (data.address) formData.append('address', data.address);

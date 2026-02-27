@@ -88,8 +88,15 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ companyDetails, onSave }) =
         const existingSettings = await apiService.getCompanyDetails();
 
         if (existingSettings && Object.keys(existingSettings).length > 0) {
-          // Use existing settings from database
-          setDetails(existingSettings);
+          // Use existing settings from database but fill missing email/phone from signup if still missing
+          const signupCompanyName = sessionStorage.getItem('companyName') || localStorage.getItem('companyName') || '';
+          const signupEmail = sessionStorage.getItem('signupEmail') || localStorage.getItem('signupEmail') || '';
+
+          setDetails({
+            ...existingSettings,
+            name: existingSettings.name || signupCompanyName,
+            email: existingSettings.email || signupEmail,
+          });
         } else {
           // Pre-fill with signup data if no settings exist
           const signupCompanyName = sessionStorage.getItem('companyName') || localStorage.getItem('companyName') || '';

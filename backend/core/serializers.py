@@ -106,7 +106,7 @@ class UserSignupSerializer(serializers.ModelSerializer):
 
 class CompanySettingsSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source='company_name', required=False)
-    address = serializers.SerializerMethodField()
+    address = serializers.CharField(source='address_line1', allow_blank=True, required=False)
     logo = serializers.CharField(source='logo_path', read_only=True)
     
     class Meta:
@@ -118,9 +118,8 @@ class CompanySettingsSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'tenant_id']
 
-    def get_address(self, obj):
-        parts = [p for p in [obj.address_line1, obj.address_line2, obj.city, obj.state, obj.pincode] if p]
-        return ", ".join(parts) if parts else ""
+    def update(self, instance, validated_data):
+        return super().update(instance, validated_data)
 
 # Registration Flow Serializers
 
