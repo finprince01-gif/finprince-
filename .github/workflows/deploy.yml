@@ -1,0 +1,45 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Navigate to project or clone if missing
+            if [ ! -d "~/finpixe-automation" ]; then
+              git clone https://${{ secrets.GH_TOKEN }}@github.com/finpixe01/finpixe-automation.git ~/finpixe-automation
+            fi
+            cd ~/finpixe-automation
+            git pull origin main
+            
+            # Create .env from GitHub Secrets
+            echo "DB_NAME=${{ secrets.DB_NAME }}" > .env
+            echo "DB_USER=${{ secrets.DB_USER }}" >> .env
+            echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
+            echo "DJANGO_SECRET=${{ secrets.DJANGO_SECRET }}" >> .env
+            echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
+            echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
+            echo "EMAIL_HOST_USER=${{ secrets.EMAIL_HOST_USER }}" >> .env
+            echo "EMAIL_HOST_PASSWORD=${{ secrets.EMAIL_HOST_PASSWORD }}" >> .env
+            echo "DEFAULT_FROM_EMAIL=${{ secrets.EMAIL_HOST_USER }}" >> .env
+            
+            # Run the application
+            sudo docker-compose up --build -d
+            
+            # Run Database Migrations (CRITICAL for new backend changes)
+            sudo docker-compose exec -T backend python manage.py migrate
+            
+            sudo docker system prune -f
