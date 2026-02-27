@@ -132,21 +132,14 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                 setDate(prefilledData.invoiceDate);
             }
             if (prefilledData.sellerName) {
-                // Map Seller Name to Pay To (Vendor)
-                // Note: This sets the value, but the dropdown options (vendor1, vendor2) might not match the name string.
-                // ideally we should match against a list of vendors, but for now we set the value. 
-                // If it's a select box, it must match an option value.
-                // The current component mocks options (vendor1, vendor2).
-                // I will try to set it, but real implementation needs ID matching.
-                // For now, I'll set it to the name to see if it works or if user can type.
-                // The select at line 328 is hardcoded.
-                // I will skip setting 'payTo' if it's strictly a select with hardcoded values.
-                // But I should log it. And maybe set it if it matches 'vendor1' etc? NO.
-                // I'll leave 'payTo' empty unless I can match it.
-                // However, the user wants "Import Voucher" to work.
-
-                // Let's just set the date at least. And if 'payTo' can be free text? No, it's a select.
-                // setPayTo(prefilledData.sellerName); 
+                setPayTo(prefilledData.sellerName);
+            }
+            if (prefilledData.totalAmount) {
+                setSingleAdvanceAmount(prefilledData.totalAmount);
+                setShowSingleAdvanceSection(true);
+                if (prefilledData.invoiceNumber) {
+                    setSingleAdvanceRefNo(prefilledData.invoiceNumber);
+                }
             }
             if (clearPrefilledData) clearPrefilledData();
         }

@@ -30,9 +30,13 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignup, onForg
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   // UI states
   const [error, setError] = useState("");         // Error message to display
+  const [emailError, setEmailError] = useState("");
+  const [usernameError, setUsernameError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
   const [loading, setLoading] = useState(false);  // Loading state during API call
 
   /**
@@ -41,11 +45,28 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignup, onForg
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();  // Prevent default form submission
     setError("");        // Clear previous errors
+    setEmailError("");
+    setUsernameError("");
+    setPasswordError("");
     setLoading(true);    // Show loading state
 
-    // Validate: password is required, and at least one of email or username
-    if (!password || (!email && !username)) {
-      setError("Please enter your password and either your email or username.");
+    let hasClientError = false;
+
+    // Validate: all three fields are absolutely required for strict auth
+    if (!email) {
+      setEmailError("Email is required.");
+      hasClientError = true;
+    }
+    if (!username) {
+      setUsernameError("Username is required.");
+      hasClientError = true;
+    }
+    if (!password) {
+      setPasswordError("Password is required.");
+      hasClientError = true;
+    }
+
+    if (hasClientError) {
       setLoading(false);
       return;
     }
@@ -79,9 +100,15 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignup, onForg
     } catch (err: any) {
       console.error("❌ Login error:", err);
 
-      // Extract error message from various error formats
-      const msg = err?.detail || err?.message || (err && err.error) || "Network error. Please try again.";
-      setError(msg);
+      // Extract error message from structured response
+      const errorData = err?.data || err?.response?.data || err;
+      const msg = errorData?.message || errorData?.detail || err?.message || "Network error. Please try again.";
+      const field = errorData?.field;
+
+      if (field === 'email') setEmailError(msg);
+      else if (field === 'username') setUsernameError(msg);
+      else if (field === 'password') setPasswordError(msg);
+      else setEmailError(msg); // Fallback generic errors to the first field
     } finally {
       setLoading(false);  // Hide loading state
     }
@@ -96,7 +123,6 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignup, onForg
 
       <main className="login-card">
         <form className="login-form" onSubmit={handleLogin}>
-          {error && <div className="error-message">{error}</div>}
 
           <div className="form-group">
             <label className="form-label" htmlFor="email">EMAIL</label>
@@ -106,8 +132,12 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignup, onForg
               className="form-input"
               placeholder="Enter your email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setEmailError("");
+              }}
             />
+            {emailError && <div className="field-error-message">{emailError}</div>}
           </div>
 
           <div className="form-group">
@@ -118,21 +148,37 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignup, onForg
               className="form-input"
               placeholder="Enter your username"
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              onChange={(e) => {
+                setUsername(e.target.value);
+                setUsernameError("");
+              }}
             />
+            {usernameError && <div className="field-error-message">{usernameError}</div>}
           </div>
 
           <div className="form-group">
             <label className="form-label" htmlFor="password">PASSWORD</label>
-            <input
-              id="password"
-              type="password"
-              required
-              className="form-input"
-              placeholder="Enter your password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
+            <div className="input-with-icon">
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                className="form-input"
+                placeholder="Enter your password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setPasswordError("");
+                }}
+              />
+              <button type="button" className="input-icon-button" onClick={() => setShowPassword(!showPassword)}>
+                {showPassword ? (
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" /></svg>
+                ) : (
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                )}
+              </button>
+            </div>
+            {passwordError && <div className="field-error-message">{passwordError}</div>}
           </div>
 
           <button
@@ -145,8 +191,8 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignup, onForg
 
           <button
             type="submit"
-            disabled={loading}
-            className="sign-in-button"
+            disabled={loading || !email.trim() || !username.trim() || !password}
+            className={`sign-in-button ${(loading || !email.trim() || !username.trim() || !password) ? 'disabled' : ''}`}
           >
             {loading ? "Signing in..." : "Sign In"}
           </button>

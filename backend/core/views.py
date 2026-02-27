@@ -280,6 +280,9 @@ class AIProxyView(views.APIView):
     """Unified AI proxy endpoint for all AI operations"""
 
     def post(self, request, action):
+        import time
+        start_time = time.time()
+        
         # Require authentication for AI services
         if not request.user.is_authenticated:
             return Response({'error': 'AI service busy. Please try again later.'}, status=429)
@@ -299,11 +302,11 @@ class AIProxyView(views.APIView):
 
             # Check AI Usage Limit
             from .usage_service import check_and_increment_usage
-            
+
             # Determine limit based on plan (default to FREE)
             plan = getattr(request.user, 'selected_plan', 'FREE') or 'FREE'
             plan = plan.upper()
-            
+
             # Basic limits - can be moved to a configuration file later
             LIMITS = {
                 'FREE': 5,
@@ -312,27 +315,275 @@ class AIProxyView(views.APIView):
                 'ENTERPRISE': 10000
             }
             limit = LIMITS.get(plan, 5)
+
+            if not check_and_increment_usage(tenant_id, limit):
+                raise UsageLimitExceeded(f"Monthly AI extraction limit of {limit} has been reached.")
+
+            file_obj = request.FILES['file']
+            voucher_type = request.data.get('voucher_type', 'Purchase')
+            table_name = request.data.get('table_name', voucher_type)
             
+            import json as _json
+            columns_data = request.data.get('columns', '[]')
+            try:
+                columns_list = _json.loads(columns_data)
+            except Exception:
+                columns_list = []
+
+            # Use updated invoice processing — returns {'reply': json_string} or {'error': ...}
+            from .ai_service import create_dynamic_voucher_extraction_request
+            result = create_dynamic_voucher_extraction_request(
+                file_obj,
+                voucher_type=voucher_type,
+                table_name=table_name,
+                columns=columns_list,
+                mime_type=file_obj.content_type,
+                user_id=user_id,
+                tenant_id=tenant_id
+            )
+
+            if 'error' in result:
+                raise ExternalServiceError(result.get('error', 'AI service is temporarily unavailable.'))
+
+            # ── Parse the raw AI text into {header, line_items} ────────────────
+            raw_text = result.get('reply', '').strip()
+
+            # Strip markdown code fences if present
+            if raw_text.startswith('```json'):
+                raw_text = raw_text[7:]
+            if raw_text.startswith('```'):
+                raw_text = raw_text[3:]
+            if raw_text.endswith('```'):
+                raw_text = raw_text[:-3]
+            raw_text = raw_text.strip()
+
+            try:
+                extracted = _json.loads(raw_text)
+            except Exception:
+                # Try to salvage by finding the outermost {} block
+                import re
+                match = re.search(r'\{[\s\S]*\}', raw_text)
+                if match:
+                    extracted = _json.loads(match.group(0))
+                else:
+                    return Response({'error': 'Failed to parse AI response as JSON.'}, status=500)
+
+            # Support both dynamic output {data: {..., items: []}} and legacy formats
+            if isinstance(extracted, dict) and 'data' in extracted:
+                data_obj = extracted['data']
+                if isinstance(data_obj, list) and len(data_obj) > 0 and isinstance(data_obj[0], dict):
+                    # AI wrapped the object in an array instead of returning a singular dict
+                    data_obj = data_obj[0]
+
+                if isinstance(data_obj, dict):
+                    items = data_obj.pop('items', [])
+                    invoice_data = data_obj
+                elif isinstance(data_obj, list):
+                    # Fallback flat list
+                    invoice_data = {}
+                    items = data_obj
+                else:
+                    invoice_data = {}
+                    items = []
+            elif isinstance(extracted, dict) and ('invoice' in extracted or 'header' in extracted):
+                invoice_data = extracted.get('invoice', extracted.get('header', {}))
+                items = extracted.get('items', extracted.get('line_items', []))
+            elif isinstance(extracted, list) and extracted:
+                # Legacy: array of flat objects — treat first element as header, no line items
+                invoice_data = extracted[0] if extracted else {}
+                items = []
+            else:
+                invoice_data = extracted if isinstance(extracted, dict) else {}
+                items = []
+
+            # Ensure items is a list
+            if not items:
+                items = []
+            elif isinstance(items, dict):
+                items = [items]
+            elif not isinstance(items, list):
+                items = []
+
+            if not isinstance(invoice_data, dict):
+                invoice_data = {}
+
+            # ── Post-processing: normalise every line item and header ──────────
+            import re as _re
+
+            # Numeric-only fields — strip currency symbols, commas, stray units
+            NUMERIC_FIELDS = {
+                'Rate', 'Taxable Value', 'Integrated Tax (IGST)', 'Central Tax (CGST)',
+                'State Tax (SGST)', 'Cess', 'Item Amount', 'Disc %', 'Disc Amount', 'GST %',
+                'Total Taxable Value', 'Total IGST', 'Total CGST', 'Total SGST', 'Total Cess', 
+                'Total State Cess', 'Total Invoice Value', 'TDS Income Tax', 'TDS GST', 
+                'Advance Paid', 'To Pay', 'IGST Rate', 'CGST Rate', 'SGST/UTGST Rate', 
+                'Cess Rate', 'Cess Rate Per Unit', 'State Cess Rate',
+                'Advance Payment/Receipt/Refund Details - IGST Rate',
+                'Advance Payment/Receipt/Refund Details - IGST Amount',
+                'Advance Payment/Receipt/Refund Details - SGST Rate',
+                'Advance Payment/Receipt/Refund Details - SGST Amount',
+                'Advance Payment/Receipt/Refund Details - CGST Rate',
+                'Advance Payment/Receipt/Refund Details - CGST Amount',
+                'Tax Type Allocations - IGST Liability',
+                'Tax Type Allocations - CGST Liability',
+                'Tax Type Allocations - SGST/UTGST Liability',
+                'GST Advance Details - GST Rate',
+                'GST Advance Details - Cess Rate',
+                'GST Advance Details - Advance Amount',
+                'TDS - Assessable Value', 'TCS - Assessable Value',
+                'Amount'
+            }
+
+            def clean_numeric_fields(obj: dict):
+                for k, v in list(obj.items()):
+                    if v is None:
+                        obj[k] = ''
+                        continue
+                        
+                    if k in NUMERIC_FIELDS:
+                        val = str(v).strip()
+                        if val:
+                            cleaned = _re.sub(r'[^\d.\-]', '', val.replace(',', ''))
+                            obj[k] = cleaned if cleaned else ''
+                        else:
+                            obj[k] = ''
+
+            # Clean header data
+            clean_numeric_fields(invoice_data)
+
+            for idx, item in enumerate(items, start=1):
+                if not isinstance(item, dict):
+                    continue
+
+                # 1. Re-assign sequential S.No
+                item['S.No'] = str(idx)
+
+                # 2. Clean numeric and null fields
+                clean_numeric_fields(item)
+
+                # 3. Auto-split Quantity + UOM if still combined (e.g. "8 NOS", "2.5 KG")
+                qty_raw = str(item.get('Quantity', '')).strip()
+                uom_raw = str(item.get('UOM', '')).strip()
+                if qty_raw and not uom_raw:
+                    m = _re.match(r'^([\d.,]+)\s*([A-Za-z]+)$', qty_raw)
+                    if m:
+                        item['Quantity'] = m.group(1)
+                        item['UOM'] = m.group(2).upper()
+                
+                # 4. Item Name promote logic
+                if not item.get('Item Name') and item.get('Description'):
+                    item['Item Name'] = item['Description']
+                    item['Description'] = ''
+
+                # 5. GST Rate
+                gst_rate = str(item.get('GST Rate', '')).strip()
+                if gst_rate:
+                    gst_rate = gst_rate.replace('%', '').strip()
+                    try:
+                        gst_val = float(gst_rate.replace(',', ''))
+                        valid_slabs = {0, 0.1, 0.25, 1.5, 3, 5, 6, 7.5, 9, 12, 14, 18, 28}
+                        if gst_val > 28:
+                            item['GST Rate'] = ''
+                        else:
+                            item['GST Rate'] = str(gst_val) if gst_val not in valid_slabs else gst_rate
+                    except ValueError:
+                        item['GST Rate'] = ''
+
+                # 6. HSN/SAC
+                hsn = str(item.get('HSN/SAC', '')).strip()
+                if hsn:
+                    hsn_digits = _re.sub(r'[^\d]', '', hsn)
+                    item['HSN/SAC'] = hsn_digits if 4 <= len(hsn_digits) <= 8 else ''
+
+            # Store extraction performance
+            end_time = time.time()
+            from .models import ExtractionPerformance
+            ExtractionPerformance.objects.create(
+                file_count=1,
+                processing_time_seconds=end_time - start_time
+            )
+
+            return Response({
+                'success': True,
+                'data': {
+                    'invoice': invoice_data,
+                    'items': items,
+                }
+            })
+
+
+        elif action == 'extract-master':
+            # Handle file upload for Tally Master data extraction
+            if 'file' not in request.FILES:
+                return Response({'error': 'No file provided.'}, status=400)
+
+            # Check AI Usage Limit (same as extract-invoice)
+            from .usage_service import check_and_increment_usage
+
+            plan = getattr(request.user, 'selected_plan', 'FREE') or 'FREE'
+            plan = plan.upper()
+
+            LIMITS = {
+                'FREE': 5,
+                'STARTER': 100,
+                'PRO': 1000,
+                'ENTERPRISE': 10000
+            }
+            limit = LIMITS.get(plan, 5)
+
             if not check_and_increment_usage(tenant_id, limit):
                 raise UsageLimitExceeded(f"Monthly AI extraction limit of {limit} has been reached.")
 
             file_obj = request.FILES['file']
 
-            # Use updated invoice processing
-            from .ai_service import create_invoice_processing_request
-            result = create_invoice_processing_request(
+            from .ai_service import create_master_processing_request
+            result = create_master_processing_request(
                 file_obj,
                 mime_type=file_obj.content_type,
                 user_id=user_id,
                 tenant_id=tenant_id
             )
 
-            # Record the extraction event for usage tracking
-            if result and isinstance(result, dict) and 'reply' in result:
-                # User requested to skip database saving for extracted invoices.
-                # Data is returned to frontend for local storage handling.
-                pass
+            if 'error' in result:
+                raise ExternalServiceError(result.get('error', 'AI service is temporarily unavailable.'))
 
+            import json as _json
+            raw_text = result.get('reply', '').strip()
+
+            # Strip markdown code fences if present
+            if raw_text.startswith('```json'):
+                raw_text = raw_text[7:]
+            if raw_text.startswith('```'):
+                raw_text = raw_text[3:]
+            if raw_text.endswith('```'):
+                raw_text = raw_text[:-3]
+            raw_text = raw_text.strip()
+
+            try:
+                master_data = _json.loads(raw_text)
+            except Exception:
+                import re
+                match = re.search(r'\{[\s\S]*\}', raw_text)
+                if match:
+                    master_data = _json.loads(match.group(0))
+                else:
+                    return Response({'error': 'Failed to parse AI response as JSON.'}, status=500)
+
+            # Ensure it's a flat dict, not nested
+            if not isinstance(master_data, dict):
+                master_data = {}
+
+            # Convert any null values to empty string
+            for k, v in master_data.items():
+                if v is None:
+                    master_data[k] = ''
+
+            return Response({
+                'success': True,
+                'data': {
+                    'master': master_data,
+                }
+            })
 
         elif action == 'agent-message':
             # Handle agent messages
@@ -361,3 +612,20 @@ class AIProxyView(views.APIView):
                 return Response({'error': 'Unauthorized'}, status=403)
             return Response(ai_service.get_stats())
         return Response({'error': 'Unknown action'}, status=400)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def extraction_average_time(request):
+    from .models import ExtractionPerformance
+    from django.db.models import Avg
+    
+    avg_data = ExtractionPerformance.objects.aggregate(Avg('processing_time_seconds'))
+    avg_time = avg_data['processing_time_seconds__avg']
+    
+    if avg_time is None:
+        avg_time = 3.85  # Fallback to a default if absolutely no records exist
+        
+    return Response({
+        'average_time_per_invoice': round(avg_time, 2)
+    })
