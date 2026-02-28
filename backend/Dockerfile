@@ -29,5 +29,5 @@ RUN DJANGO_SECRET=build_key python manage.py collectstatic --noinput
 # Expose port
 EXPOSE 8000
 
-# Gunicorn entrypoint
-CMD ["gunicorn", "--config", "gunicorn_config.py", "backend.wsgi:application"]
+# Gunicorn entrypoint - Wait for DB first
+CMD ["sh", "-c", "python wait_for_db.py && gunicorn --config gunicorn_config.py backend.wsgi:application"]
