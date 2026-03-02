@@ -20,7 +20,7 @@ def create_vendor_tds(data: Dict) -> Dict:
         Dictionary with created TDS record details
     """
     query = """
-        INSERT INTO vendor_master_tds (
+        INSERT INTO vendor_master_vendorcreation_tds (
             tenant_id, vendor_basic_detail_id, pan_number, tan_number,
             tds_section, tds_rate, penalty_rate, tds_section_applicable, enable_automatic_tds_posting,
             msme_udyam_no, fssai_license_no, import_export_code, eou_status,
@@ -74,7 +74,7 @@ def update_vendor_tds(tds_id: int, data: Dict) -> Dict:
         Dictionary with updated TDS record details
     """
     query = """
-        UPDATE vendor_master_tds
+        UPDATE vendor_master_vendorcreation_tds
         SET pan_number = %s, tan_number = %s, tds_section = %s, tds_rate = %s,
             penalty_rate = %s, tds_section_applicable = %s, enable_automatic_tds_posting = %s,
             msme_udyam_no = %s, fssai_license_no = %s, import_export_code = %s,
@@ -127,7 +127,7 @@ def get_vendor_tds_by_id(tds_id: int) -> Optional[Dict]:
                tds_section, tds_rate, penalty_rate, tds_section_applicable, enable_automatic_tds_posting,
                msme_udyam_no, fssai_license_no, import_export_code, eou_status,
                cin_number, is_active, created_at, updated_at, created_by, updated_by
-        FROM vendor_master_tds
+        FROM vendor_master_vendorcreation_tds
         WHERE id = %s
     """
     
@@ -180,7 +180,7 @@ def get_vendor_tds_by_vendor(vendor_basic_detail_id: int) -> Optional[Dict]:
                tds_section, tds_rate, penalty_rate, tds_section_applicable, enable_automatic_tds_posting,
                msme_udyam_no, fssai_license_no, import_export_code, eou_status,
                cin_number, is_active, created_at, updated_at, created_by, updated_by
-        FROM vendor_master_tds
+        FROM vendor_master_vendorcreation_tds
         WHERE vendor_basic_detail_id = %s AND is_active = 1
         ORDER BY created_at DESC
         LIMIT 1
@@ -235,7 +235,7 @@ def list_vendor_tds_by_tenant(tenant_id: str) -> List[Dict]:
                tds_section, tds_rate, penalty_rate, tds_section_applicable, enable_automatic_tds_posting,
                msme_udyam_no, fssai_license_no, import_export_code, eou_status,
                cin_number, is_active, created_at, updated_at, created_by, updated_by
-        FROM vendor_master_tds
+        FROM vendor_master_vendorcreation_tds
         WHERE tenant_id = %s
         ORDER BY created_at DESC
     """
@@ -287,7 +287,7 @@ def delete_vendor_tds(tds_id: int) -> bool:
         True if successful
     """
     query = """
-        UPDATE vendor_master_tds
+        UPDATE vendor_master_vendorcreation_tds
         SET is_active = 0, updated_at = NOW()
         WHERE id = %s
     """

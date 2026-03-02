@@ -453,7 +453,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
     const fetchAvailableVendorItems = async (vendorId: number) => {
         try {
-            const response = await httpClient.get<any>(`/api/vendors/products-services/?vendor_basic_detail=${vendorId}`);
+            const response = await httpClient.get<any>(`/api/vendors/product-services/?vendor_basic_detail=${vendorId}`);
             // Assuming the response structure is similar to others
             const data = Array.isArray(response) ? response : (response.results || []);
             setAvailableVendorItems(data);
@@ -1238,7 +1238,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             };
 
             let newId = createdVendorId;
-            if (!newId) {
+            let isNewVendor = false;
+            if (!createdVendorId) {
+                isNewVendor = true;
                 console.log('Creating new vendor basic details...');
                 const basicRes: any = await httpClient.post('/api/vendors/basic-details/', basicPayload);
                 newId = basicRes.id;
@@ -1252,94 +1254,93 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 console.log('✅ Basic details updated.');
             }
 
-            // 2. GST Details - Check existing to avoid duplicates
+            // 2. GST Details
             console.log('Saving GST details...');
-            const existingGst: any = await httpClient.get(`/api/vendors/gst-details/?vendor_basic_detail=${newId}`);
-            const existingGstList = Array.isArray(existingGst) ? existingGst : (existingGst.results || []);
-
-            for (const gst of gstRecords) {
-                if (!gst.gstin) continue;
-
-                // Loop through all branches/places of business for this GSTIN
-                const branches = gst.placesOfBusiness && gst.placesOfBusiness.length > 0
-                    ? gst.placesOfBusiness
-                    : [{ referenceName: '', address: '', contactPerson: '', email: '', contactNumber: '' }];
-
-                for (const branch of branches) {
-                    // Map frontend registration type to backend keys
-                    const mapRegistrationType = (type: string) => {
-                        const mapping: Record<string, string> = {
-                            'Regular': 'regular',
-                            'Composition': 'composition',
-                            'SEZ': 'special_economic_zone',
-                            'Special Economic Zone (SEZ)': 'special_economic_zone',
-                            'Unregistered': 'unregistered',
-                            'Consumer': 'consumer',
-                            'Overseas': 'overseas',
-                            'Deemed Export': 'deemed_export'
-                        };
-                        return mapping[type] || type.toLowerCase();
-                    };
-
-                    const gstPayload = {
-                        vendor_basic_detail: newId,
-                        gstin: gst.gstin,
-                        gst_registration_type: mapRegistrationType(gst.registrationType),
-                        legal_name: gst.legalName || 'N/A',
-                        trade_name: gst.tradeName || gst.legalName || 'N/A',
-                        reference_name: branch.referenceName || '',
-                        branch_address: branch.address || '',
-                        branch_contact_person: branch.contactPerson || '',
-                        branch_email: branch.email || '',
-                        branch_contact_no: branch.contactNumber || ''
-                    };
-
-                    const existingRecord = existingGstList.find((g: any) =>
-                        g.gstin === gst.gstin && g.reference_name === (branch.referenceName || '')
-                    );
-
-                    if (existingRecord) {
-                        await httpClient.patch(`/api/vendors/gst-details/${existingRecord.id}/`, gstPayload);
-                        console.log(`✅ GST details updated for: ${gst.gstin} (${branch.referenceName || 'Default'})`);
-                    } else {
-                        await httpClient.post('/api/vendors/gst-details/', gstPayload);
-                        console.log(`✅ GST details created for: ${gst.gstin} (${branch.referenceName || 'Default'})`);
-                    }
-                }
-            }
-
-            // 3. Products/Services - Check existing
-            console.log('Saving products/services...');
             try {
-                const existingProducts: any = await httpClient.get(`/api/vendors/product-services/?vendor_basic_detail=${newId}`);
-                const existingProductList = Array.isArray(existingProducts) ? existingProducts : (existingProducts.results || []);
-                const existingItemCodes = existingProductList.map((p: any) => p.item_code);
+                const existingGst: any = await httpClient.get(`/api/vendors/gst-details/?vendor_basic_detail=${newId}`);
+                const existingGstList = Array.isArray(existingGst) ? existingGst : (existingGst.results || []);
 
-                const prodPayload = items.filter(i => i.itemName && i.itemName.trim() !== '').map(item => ({
-                    vendor_basic_detail: newId,
-                    hsn_sac_code: item.hsnSacCode || '',
-                    item_code: item.itemCode || '',
-                    item_name: item.itemName,
-                    supplier_item_code: item.supplierItemCode || '',
-                    supplier_item_name: item.supplierItemName || '',
-                    is_active: true
-                }));
+                for (const gst of gstRecords) {
+                    if (!gst.gstin) continue;
 
-                if (prodPayload.length > 0) {
-                    const newProducts = prodPayload.filter(p => !existingItemCodes.includes(p.item_code));
-                    if (newProducts.length > 0) {
-                        await httpClient.post('/api/vendors/product-services/', newProducts);
-                        console.log(`✅ ${newProducts.length} new product(s) added.`);
-                    } else {
-                        console.log('ℹ️  No new products to add (all already exist)');
+                    const branches = gst.placesOfBusiness && gst.placesOfBusiness.length > 0
+                        ? gst.placesOfBusiness
+                        : [{ referenceName: '', address: '', contactPerson: '', email: '', contactNumber: '' }];
+
+                    for (const branch of branches) {
+                        const mapRegistrationType = (type: string) => {
+                            const mapping: Record<string, string> = {
+                                'Regular': 'regular',
+                                'Composition': 'composition',
+                                'SEZ': 'special_economic_zone',
+                                'Special Economic Zone (SEZ)': 'special_economic_zone',
+                                'Unregistered': 'unregistered',
+                                'Consumer': 'consumer',
+                                'Overseas': 'overseas',
+                                'Deemed Export': 'deemed_export'
+                            };
+                            return mapping[type] || type.toLowerCase();
+                        };
+
+                        const gstPayload = {
+                            vendor_basic_detail: newId,
+                            gstin: gst.gstin,
+                            gst_registration_type: mapRegistrationType(gst.registrationType),
+                            legal_name: gst.legalName || 'N/A',
+                            trade_name: gst.tradeName || gst.legalName || 'N/A',
+                            reference_name: branch.referenceName || '',
+                            branch_address: branch.address || '',
+                            branch_contact_person: branch.contactPerson || '',
+                            branch_email: branch.email || '',
+                            branch_contact_no: branch.contactNumber || ''
+                        };
+
+                        const existingRecord = existingGstList.find((g: any) =>
+                            g.gstin === gst.gstin && g.reference_name === (branch.referenceName || '')
+                        );
+
+                        if (existingRecord) {
+                            await httpClient.patch(`/api/vendors/gst-details/${existingRecord.id}/`, gstPayload);
+                            console.log(`GST updated: ${gst.gstin}`);
+                        } else {
+                            await httpClient.post('/api/vendors/gst-details/', gstPayload);
+                            console.log(`GST created: ${gst.gstin}`);
+                        }
                     }
-                } else {
-                    console.log('ℹ️  No products/services data to save');
                 }
-            } catch (error) {
-                console.error('❌ Error saving products/services:', error);
-                // Don't throw - continue with other sections
+            } catch (gstError: any) {
+                // Log but DO NOT throw — let other sections still save
+                console.error('Error saving GST details (continuing):', gstError);
             }
+
+
+            // 3. Products/Services — always upsert (even if items array is empty)
+            console.log('Saving products/services... items state:', JSON.stringify(items));
+            try {
+                const cleanItems = items
+                    .filter(i => i.itemName && i.itemName.trim() !== '')
+                    .map(item => ({
+                        hsn_sac_code: item.hsnSacCode || '',
+                        item_code: item.itemCode || '',
+                        item_name: item.itemName.trim(),
+                        supplier_item_code: item.supplierItemCode || '',
+                        supplier_item_name: item.supplierItemName || '',
+                    }));
+
+                // Always save – even if no items filled yet (saves empty [] to DB)
+                const prodPayload = {
+                    vendor_basic_detail: newId,
+                    items: cleanItems,
+                    is_active: true,
+                };
+                console.log(`Upserting product-services for vendor ${newId} with ${cleanItems.length} item(s)`);
+                await httpClient.post('/api/vendors/product-services/', prodPayload);
+                console.log('Products/services saved successfully.');
+            } catch (prodError: any) {
+                console.error('Error saving products/services:', prodError);
+                showError(`Failed to save products/services: ${prodError.message || 'Unknown error'}`);
+            }
+
 
             // 4. TDS - Always save (even if empty)
             console.log('Saving TDS details...');
@@ -2848,20 +2849,30 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                 />
                                                             </td>
                                                             <td className="px-4 py-3 border-r border-gray-200 min-w-[200px]">
-                                                                <SearchableDropdown
-                                                                    options={inventoryItems.map(i => i.item_code)}
+                                                                <input
+                                                                    type="text"
+                                                                    list={`item-code-list-${item.id}`}
+                                                                    className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                                                    placeholder="Item Code"
                                                                     value={item.itemCode}
-                                                                    onChange={(val) => handleItemChange(item.id, 'itemCode', val)}
-                                                                    placeholder="Select Item Code"
+                                                                    onChange={(e) => handleItemChange(item.id, 'itemCode', e.target.value)}
                                                                 />
+                                                                <datalist id={`item-code-list-${item.id}`}>
+                                                                    {inventoryItems.map(i => <option key={i.id} value={i.item_code} />)}
+                                                                </datalist>
                                                             </td>
                                                             <td className="px-4 py-3 border-r border-gray-200 min-w-[250px]">
-                                                                <SearchableDropdown
-                                                                    options={inventoryItems.map(i => i.item_name)}
+                                                                <input
+                                                                    type="text"
+                                                                    list={`item-name-list-${item.id}`}
+                                                                    className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                                                    placeholder="Item Name *"
                                                                     value={item.itemName}
-                                                                    onChange={(val) => handleItemChange(item.id, 'itemName', val)}
-                                                                    placeholder="Select Item Name"
+                                                                    onChange={(e) => handleItemChange(item.id, 'itemName', e.target.value)}
                                                                 />
+                                                                <datalist id={`item-name-list-${item.id}`}>
+                                                                    {inventoryItems.map(i => <option key={i.id} value={i.item_name} />)}
+                                                                </datalist>
                                                             </td>
                                                             <td className="px-4 py-3 border-r border-gray-200">
                                                                 <input

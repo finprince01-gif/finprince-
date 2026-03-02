@@ -4,6 +4,7 @@ This module handles all API operations for vendors.
 """
 
 from rest_framework import viewsets, status
+from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -19,7 +20,14 @@ from .vendor_serializers import (
     VendorBalanceSerializer,
     VendorStatisticsSerializer
 )
-from .vendor_database import VendorDatabase
+from .vendorbasicdetail_database import VendorBasicDetailDatabase
+from .models import (
+    VendorMasterBasicDetail, 
+    VendorMasterGSTDetails,
+    VendorMasterTDS,
+    VendorMasterBanking,
+    VendorMasterTerms
+)
 
 
 class VendorViewSet(viewsets.ModelViewSet):
@@ -400,3 +408,271 @@ class VendorViewSet(viewsets.ModelViewSet):
                 {'error': 'Failed to deactivate vendor'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+    @action(detail=False, methods=['post'], url_path='validate-from-invoice')
+    def validate_from_invoice(self, request):
+        """
+        Validate whether the Vendor exists in Vendor Master based on invoice data.
+        """
+        tenant_id = self.get_tenant_id()
+        vendor_name = request.data.get('vendor_name', '').strip()
+        gstin = request.data.get('gstin', '')
+        if gstin:
+            gstin = gstin.strip()
+        state = request.data.get('state', '').strip()
+
+        # Step 1: Match by GSTIN (STRICT ORDER)
+        if gstin:
+            vendor = Vendor.objects.filter(tenant_id=tenant_id, gstin__iexact=gstin).first()
+            if vendor:
+                # GSTIN matches but name differs
+                if vendor.vendor_name.lower() != vendor_name.lower():
+                    return Response({
+                        "status": "GSTIN_CONFLICT",
+                        "message": "GSTIN exists but name differs. Manual verification required."
+                    })
+                return Response({
+                    "status": "FOUND",
+                    "matched_by": "GSTIN",
+                    "vendor_id": vendor.id,
+                    "vendor_name": vendor.vendor_name
+                })
+
+        # Step 2: Match by exact vendor name and state
+        if vendor_name and state:
+            vendor = Vendor.objects.filter(
+                tenant_id=tenant_id,
+                vendor_name__iexact=vendor_name,
+                billing_state__iexact=state
+            ).first()
+            if vendor:
+                return Response({
+                    "status": "FOUND",
+                    "matched_by": "NAME_STATE",
+                    "vendor_id": vendor.id,
+                    "vendor_name": vendor.vendor_name
+                })
+
+        # Step 3: No Match
+        return Response({"status": "NOT_FOUND"})
+
+    @action(detail=False, methods=['post'], url_path='create-from-invoice')
+    def create_from_invoice(self, request):
+        """
+        Create a new Vendor from invoice extraction.
+        """
+        tenant_id = self.get_tenant_id()
+        username = self.get_username()
+        
+        vendor_name = request.data.get('vendor_name', '').strip()
+        gstin = request.data.get('gstin', '')
+        if gstin:
+            gstin = gstin.strip()
+        address = request.data.get('address', '').strip()
+        state = request.data.get('state', '').strip()
+        
+        # Check uniqueness of GSTIN
+        if gstin:
+            exists = Vendor.objects.filter(tenant_id=tenant_id, gstin__iexact=gstin).exists()
+            if exists:
+                return Response({
+                    "error": "GSTIN already exists."
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        vendor_data = {
+            "vendor_name": vendor_name,
+            "gstin": gstin if gstin else None,
+            "billing_address_line1": address,
+            "billing_state": state,
+            "notes": "Created from Invoice Upload",
+            "vendor_type": "supplier",
+            "is_active": True
+        }
+        
+        try:
+            vendor = VendorDatabase.create_vendor(
+                tenant_id=tenant_id,
+                vendor_data=vendor_data,
+                created_by=username
+            )
+            return Response({
+                "status": "CREATED",
+                "vendor_id": vendor.id
+            }, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class PurchaseVendorCreateView(APIView):
+    """
+    Create a new Vendor specifically for Purchase invoices.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get_tenant_id(self):
+        user = self.request.user
+        if hasattr(user, 'tenant_id'):
+            return user.tenant_id
+        elif hasattr(user, 'tenant') and hasattr(user.tenant, 'tenant_id'):
+            return user.tenant.tenant_id
+        else:
+            return getattr(user, 'id', 'default_tenant')
+            
+    def get_username(self):
+        user = self.request.user
+        return getattr(user, 'username', 'system')
+
+    def post(self, request, *args, **kwargs):
+        tenant_id = self.get_tenant_id()
+        username = self.get_username()
+        
+        vendor_name = request.data.get('vendor_name', '').strip()
+        gstin = request.data.get('gstin', '')
+        if gstin:
+            gstin = gstin.strip()
+        address = request.data.get('address', '').strip()
+        state = request.data.get('state', '').strip()
+        
+        # Check uniqueness of GSTIN
+        if gstin:
+            exists = VendorMasterGSTDetails.objects.filter(tenant_id=tenant_id, gstin__iexact=gstin).exists()
+            if exists:
+                return Response({
+                    "error": "GSTIN already exists."
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        # Vendor Master Basic Detail requires some mandatory fields (email/phone)
+        # If not provided, we add placeholder values.
+        vendor_data = {
+            "vendor_name": vendor_name,
+            "pan_no": gstin[2:12] if gstin and len(gstin) >= 15 else None,
+            "email": f"pending_{tenant_id[:5]}@example.com",
+            "contact_no": "+910000000000",
+            "vendor_category": "Supplier",
+        }
+        
+        try:
+            vendor = VendorBasicDetailDatabase.create_vendor_basic_detail(
+                tenant_id=tenant_id,
+                vendor_data=vendor_data,
+                created_by=username
+            )
+            
+            # If a GSTIN was found, also create the GST Details record attached to it.
+            if gstin:
+                VendorMasterGSTDetails.objects.create(
+                    tenant_id=tenant_id,
+                    vendor_basic_detail=vendor,
+                    gstin=gstin,
+                    legal_name=vendor_name,
+                    gst_state=state
+                )
+
+            # Generate default workflow records to complete Vendor Portal table instantiation
+            # 1. TDS & Statutory
+            VendorMasterTDS.objects.create(
+                tenant_id=tenant_id,
+                vendor_basic_detail=vendor,
+                created_by=username
+            )
+            
+            # 2. Banking Info
+            VendorMasterBanking.objects.create(
+                tenant_id=tenant_id,
+                vendor_basic_detail=vendor,
+                bank_account_no="",
+                bank_name="",
+                ifsc_code="",
+                created_by=username
+            )
+            
+            # 3. Terms & Conditions
+            VendorMasterTerms.objects.create(
+                tenant_id=tenant_id,
+                vendor_basic_detail=vendor,
+                delivery_terms="",
+                warranty_guarantee_details="",
+                force_majeure="",
+                dispute_redressal_terms="",
+                created_by=username
+            )
+
+            return Response({
+                "status": "CREATED",
+                "vendor_id": vendor.id
+            }, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class PurchaseVendorValidateView(APIView):
+    """
+    Validates whether the Vendor exists in Vendor Master for Purchase.
+    Matches specifically against Sundry Creditors / Accounts Payable.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get_tenant_id(self):
+        user = self.request.user
+        if hasattr(user, 'tenant_id'):
+            return user.tenant_id
+        elif hasattr(user, 'tenant') and hasattr(user.tenant, 'tenant_id'):
+            return user.tenant.tenant_id
+        else:
+            return getattr(user, 'id', 'default_tenant')
+
+    def post(self, request, *args, **kwargs):
+        print("Purchase Vendor Validation API Hit") # As requested
+        tenant_id = self.get_tenant_id()
+        
+        vendor_name = request.data.get('vendor_name', '')
+        if vendor_name: vendor_name = vendor_name.strip()
+        
+        gstin = request.data.get('gstin', '')
+        if gstin: gstin = gstin.strip().upper()  # Upper and trim
+        
+        # State and address
+        state = request.data.get('state', '').strip()
+        address = request.data.get('address', '').strip()
+        
+        print(f"Received payload - Name: {vendor_name}, GSTIN: {gstin}")
+        
+        # Step 1: Match by GSTIN (STRICT ORDER)
+        if gstin:
+            gst_record = VendorMasterGSTDetails.objects.filter(
+                tenant_id=tenant_id, 
+                gstin__iexact=gstin
+            ).select_related('vendor_basic_detail').first()
+            
+            print(f"Query result count (GSTIN): {1 if gst_record else 0}")
+            if gst_record and gst_record.vendor_basic_detail:
+                vendor = gst_record.vendor_basic_detail
+                # GSTIN exists but name differs -> Conflict
+                if vendor.vendor_name.lower() != vendor_name.lower() and gst_record.legal_name.lower() != vendor_name.lower():
+                    return Response({
+                        "status": "GSTIN_CONFLICT",
+                        "message": "GSTIN exists but name differs. Manual verification required."
+                    })
+                return Response({
+                    "status": "FOUND",
+                    "matched_by": "GSTIN",
+                    "vendor_id": vendor.id,
+                    "vendor_name": vendor.vendor_name
+                })
+        
+        # Step 2: Match by exact vendor name
+        if vendor_name:
+            vendor = VendorMasterBasicDetail.objects.filter(
+                tenant_id=tenant_id,
+                vendor_name__iexact=vendor_name
+            ).first()
+            
+            print(f"Query result count (Name): {1 if vendor else 0}")
+            if vendor:
+                return Response({
+                    "status": "FOUND",
+                    "matched_by": "Name",
+                    "vendor_id": vendor.id,
+                    "vendor_name": vendor.vendor_name
+                })
+                
+        # NOT FOUND
+        return Response({"status": "NOT_FOUND"})

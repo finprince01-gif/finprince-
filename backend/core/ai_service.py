@@ -134,10 +134,15 @@ SEMANTIC MAPPING GUIDE (map document labels → column names):
 - To / Cr Account                            → To Account / Ledger (Credit)
 - Expense Type / Expense Head                → Expense Ledger
 - Paid From / Bank / Cash                    → Paid From
+- E Way Bill No / E-Way Bill No / EWB No / E-way Bill Number / E Way Bill / Eway Bill / EWB / e-way bill no. → E Way Bill No
 
 CRITICAL: "Total Invoice Value" is MANDATORY for Invoice/Purchase/Sales vouchers.
 It is always the largest amount printed at the bottom of the invoice (the final payable figure including all taxes).
 You MUST extract it even if it is labeled differently (Grand Total, Net Total, Invoice Amount, etc.).
+
+IMPORTANT: "E Way Bill No" must be extracted from any field labeled "E Way Bill", "E-Way Bill No", "EWB No", 
+"E Way Bill Number", "E-way Bill", or similar. It is typically a 12-digit numeric code. 
+Return it as a string under the exact key "E Way Bill No".
 """
 
         prompt = f"""\

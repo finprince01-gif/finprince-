@@ -43,6 +43,7 @@ interface InvoiceScannerModalProps {
     initialFiles?: FileList | null;
     voucherType: string;
     extractionMode?: 'finpixe' | 'tally';
+    onExtractionSuccess?: (extractedData: any) => void;
 }
 
 // ────────────────────────────────────────────────────────────────────────────────
@@ -292,7 +293,7 @@ const Icon: React.FC<{ name: string; className?: string }> = ({ name, className 
 // Component
 // ────────────────────────────────────────────────────────────────────────────────
 
-const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUpload, initialFiles, voucherType, extractionMode = 'finpixe' }) => {
+const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUpload, initialFiles, voucherType, extractionMode = 'finpixe', onExtractionSuccess }) => {
     // ── Columns definitions based on extractionMode & voucherType ──
     // ⚠️  extractionMode === 'tally' ONLY uses OFFICIAL_TALLY_VOUCHER_HEADERS
     //     These are strictly isolated official Tally Voucher export columns.
@@ -315,8 +316,28 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
     const [isExtracting, setIsExtracting] = useState(false);
     const [uploadedFileNames, setUploadedFileNames] = useState<string[]>([]);
     const [estimatedExtractionTime, setEstimatedExtractionTime] = useState<number | null>(null);
+    const [countdownSeconds, setCountdownSeconds] = useState<number | null>(null);
 
     const { incrementUsage, isLimitReached, subscriptionUsage } = useSubscriptionUsage();
+
+    // ── Live countdown timer ──────────────────────────────────────────────────
+    useEffect(() => {
+        if (isExtracting && estimatedExtractionTime !== null) {
+            setCountdownSeconds(Math.round(estimatedExtractionTime));
+            const interval = setInterval(() => {
+                setCountdownSeconds(prev => {
+                    if (prev === null || prev <= 1) {
+                        // Don't clear — keep at 0 until extraction finishes
+                        return 0;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+            return () => clearInterval(interval);
+        } else {
+            setCountdownSeconds(null);
+        }
+    }, [isExtracting, estimatedExtractionTime]);
 
     // Auto-process initial files if provided
     useEffect(() => {
@@ -485,6 +506,17 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             }
 
             setInvoiceResults(prev => [...prev, ...allResults]);
+
+            if (allResults.length > 0 && onExtractionSuccess) {
+                const firstRow = allResults[0].invoice;
+                const extractedData = {
+                    vendor_name: firstRow['Vendor Name'] || firstRow['Bill From'] || firstRow['Buyer/Supplier - Mailing Name'] || '',
+                    gstin: firstRow['GSTIN'] || '',
+                    bill_from: firstRow['Bill From'] || firstRow['Buyer/Supplier - Address'] || '',
+                    state: firstRow['State'] || firstRow['Billing State'] || ''
+                };
+                onExtractionSuccess(extractedData);
+            }
         } catch (error) {
             showError(`❌ Extraction Failed: ${(error as Error).message}. Please try again.`);
         } finally {
@@ -518,8 +550,8 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
         // ── Validation: Block if required columns are missing ──
         const mandatoryForType: Record<string, string[]> = {
-            'Sales': ["Voucher Date", "Buyer/Supplier - Mailing Name", "Total Invoice Value"],
-            'Purchase': ["Voucher Date", "Buyer/Supplier - Mailing Name", "Total Invoice Value"],
+            'Sales': ["Voucher Date", "Customer Name", "Total Invoice Value"],
+            'Purchase': ["Voucher Date", "Vendor Name", "Total Invoice Value"],
             'Payment': ["Voucher Date", "Account", "Amount"],
             'Receipt': ["Voucher Date", "Account", "Amount"],
             'Contra': ["Voucher Date", "From Account", "To Account", "Amount"],
@@ -781,11 +813,20 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                                         <Icon name="spinner" className="w-5 h-5 animate-spin" />
                                         <span>Processing invoices...</span>
                                     </div>
-                                    {estimatedExtractionTime !== null && (
-                                        <div className="text-xs text-gray-500 font-medium ml-7 mt-0.5">
-                                            Estimated time: {estimatedExtractionTime < 60
-                                                ? `~${Math.round(estimatedExtractionTime)} seconds`
-                                                : `~${(estimatedExtractionTime / 60).toFixed(1)} minutes`}
+                                    {countdownSeconds !== null && (
+                                        <div className="flex items-center gap-1.5 ml-7 mt-1">
+                                            <span style={{ fontSize: '15px', lineHeight: 1 }}>⏱</span>
+                                            <span className="text-xs font-semibold text-indigo-600 tabular-nums">
+                                                {countdownSeconds > 0
+                                                    ? (() => {
+                                                        const m = Math.floor(countdownSeconds / 60);
+                                                        const s = countdownSeconds % 60;
+                                                        return m > 0
+                                                            ? `${m}:${String(s).padStart(2, '0')} remaining`
+                                                            : `${s}s remaining`;
+                                                    })()
+                                                    : 'Almost done...'}
+                                            </span>
                                         </div>
                                     )}
                                 </div>
