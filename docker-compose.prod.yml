@@ -64,6 +64,14 @@ services:
     depends_on:
       - backend
 
+  landing-page:
+    build:
+      context: "./finpixe landing page"
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "8080:80"
+
 volumes:
   db_data:
   redis_data:
