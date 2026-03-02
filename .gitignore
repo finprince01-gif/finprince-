@@ -1,0 +1,44 @@
+# ── Python ────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+.eggs/
+dist/
+build/
+*.so
+
+# ── Django ────────────────────────────────────────────
+*.log
+logs/
+db.sqlite3
+media/
+staticfiles/
+local_settings.py
+
+# ── Environment / Secrets ─────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Frontend (Node / Vite / React) ────────────────────
+node_modules/
+dist/
+build/
+.vite/
+*.local
+
+# ── OS & Editor ───────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Backup files ──────────────────────────────────────
+*.bak
+*.tmp
+*~

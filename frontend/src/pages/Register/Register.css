@@ -1,0 +1,465 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
+.register-page-container {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background:
+        radial-gradient(circle at 50% 35%, rgba(99, 102, 241, 0.20), transparent 55%),
+        radial-gradient(circle at 30% 20%, rgba(99, 102, 241, 0.25), transparent 45%),
+        radial-gradient(circle at 70% 80%, rgba(79, 70, 229, 0.18), transparent 50%),
+        linear-gradient(180deg, #EEF2FF 0%, #E0E7FF 100%);
+    font-family: 'Outfit', sans-serif !important;
+    padding: 40px 20px;
+    transition: all 0.2s ease;
+}
+
+.brand-section {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.brand-heading {
+    font-size: 48px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    background: linear-gradient(to right, #6366F1, #4F46E5);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin: 0;
+    line-height: 1.2;
+    text-transform: uppercase;
+    display: inline-block;
+}
+
+.brand-tagline {
+    font-size: 16px;
+    color: #6B7280;
+    margin-top: 8px;
+}
+
+.step-indicator {
+    font-size: 14px;
+    font-weight: 600;
+    color: #6366F1;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 8px;
+    display: block;
+}
+
+.register-card {
+    width: 100%;
+    max-width: 480px;
+    background: #FFFFFF;
+    border-radius: 22px;
+    padding: 48px;
+    box-shadow:
+        0 25px 60px rgba(99, 102, 241, 0.20),
+        0 15px 35px rgba(0, 0, 0, 0.06);
+    display: flex;
+    flex-direction: column;
+    transition: all 0.2s ease;
+}
+
+.register-card.plan-step {
+    max-width: 1000px;
+}
+
+.register-form {
+    display: flex;
+    flex-direction: column;
+}
+
+.form-group {
+    margin-bottom: 24px;
+    display: flex;
+    flex-direction: column;
+}
+
+.form-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #6B7280;
+    margin-bottom: 6px;
+}
+
+.form-input {
+    height: 52px;
+    border-radius: 12px;
+    border: 1px solid #E5E7EB;
+    padding: 0 16px;
+    font-size: 15px;
+    background: white;
+    color: #111827;
+    transition: all 0.2s ease;
+    outline: none;
+    width: 100%;
+}
+
+.form-input:focus {
+    border-color: #6366F1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.form-input::placeholder {
+    color: #9CA3AF;
+}
+
+.input-with-icon {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.input-icon-button {
+    position: absolute;
+    right: 12px;
+    background: none;
+    border: none;
+    padding: 8px;
+    cursor: pointer;
+    color: #9CA3AF;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s;
+}
+
+.input-icon-button:hover {
+    color: #6366F1;
+}
+
+.logo-upload-container {
+    margin-top: 8px;
+    border: 2px dashed #E5E7EB;
+    border-radius: 12px;
+    padding: 24px;
+    text-align: center;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.logo-upload-container:hover {
+    border-color: #6366F1;
+    background: rgba(99, 102, 241, 0.02);
+}
+
+.upload-icon {
+    width: 40px;
+    height: 40px;
+    color: #9CA3AF;
+    margin-bottom: 12px;
+}
+
+.upload-text {
+    font-size: 14px;
+    color: #6B7280;
+}
+
+.upload-link {
+    color: #6366F1;
+    font-weight: 600;
+}
+
+.register-button {
+    width: 100%;
+    height: 54px;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 16px;
+    color: white;
+    background: linear-gradient(to right, #6366F1, #4F46E5);
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 10px 20px rgba(79, 70, 229, 0.25);
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 12px;
+}
+
+.register-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 24px rgba(79, 70, 229, 0.3);
+}
+
+.register-button:active {
+    transform: translateY(0);
+}
+
+.register-button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.error-message {
+    color: #EF4444;
+    font-size: 13px;
+    text-align: center;
+    margin-bottom: 16px;
+    background: #FEF2F2;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid #FEE2E2;
+}
+
+.success-message {
+    color: #10B981;
+    font-size: 14px;
+    text-align: center;
+    margin-bottom: 16px;
+    background: #ECFDF5;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #D1FAE5;
+}
+
+.register-footer {
+    margin-top: 32px;
+    text-align: center;
+}
+
+.footer-text {
+    font-size: 14px;
+    color: #6B7280;
+}
+
+.login-link {
+    color: #6366F1;
+    font-weight: 600;
+    text-decoration: none;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+}
+
+.login-link:hover {
+    text-decoration: underline;
+}
+
+/* Plan Cards */
+.plans-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    margin-bottom: 32px;
+}
+
+@media (max-width: 900px) {
+    .plans-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.plan-card {
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 18px;
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    position: relative;
+}
+
+.plan-card:hover {
+    border-color: #6366F1;
+    transform: translateY(-4px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+}
+
+.plan-card.selected {
+    border-color: #6366F1;
+    border-width: 2px;
+    background: rgba(99, 102, 241, 0.02);
+}
+
+.plan-badge {
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #6366F1;
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.plan-name {
+    font-size: 18px;
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 8px;
+    text-align: center;
+}
+
+.plan-price {
+    font-size: 32px;
+    font-weight: 800;
+    color: #111827;
+    text-align: center;
+    margin-bottom: 24px;
+}
+
+.plan-price span {
+    font-size: 14px;
+    font-weight: 500;
+    color: #6B7280;
+}
+
+.plan-features {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 32px 0;
+    flex-grow: 1;
+}
+
+.plan-feature {
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+    color: #4B5563;
+    margin-bottom: 12px;
+}
+
+.feature-icon {
+    color: #10B981;
+    margin-right: 12px;
+    flex-shrink: 0;
+}
+
+.plan-button {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 14px;
+    transition: all 0.2s;
+    border: none;
+    cursor: pointer;
+}
+
+.plan-card.selected .plan-button {
+    background: #6366F1;
+    color: white;
+}
+
+.plan-card:not(.selected) .plan-button {
+    background: #F3F4F6;
+    color: #4B5563;
+}
+
+.plan-card:not(.selected):hover .plan-button {
+    background: #E5E7EB;
+}
+
+.back-button {
+    position: fixed;
+    bottom: 24px;
+    left: 24px;
+    padding: 10px 20px;
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 10px;
+    font-weight: 600;
+    color: #4B5563;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    z-index: 100;
+}
+
+.back-button:hover {
+    background: #F9FAFB;
+    border-color: #D1D5DB;
+    transform: translateY(-1px);
+}
+
+/* Dark Mode Support */
+.dark .register-page-container {
+    background:
+        radial-gradient(circle at 50% 35%, rgba(99, 102, 241, 0.15), transparent 55%),
+        radial-gradient(circle at 30% 20%, rgba(99, 102, 241, 0.1), transparent 45%),
+        linear-gradient(135deg, #0F172A 0%, #111827 100%);
+}
+
+.dark .register-card,
+.dark .plan-card {
+    background: #1E293B;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow:
+        0 25px 60px rgba(0, 0, 0, 0.4),
+        0 10px 25px rgba(99, 102, 241, 0.1);
+}
+
+.dark .brand-tagline,
+.dark .form-label,
+.dark .upload-text,
+.dark .footer-text,
+.dark .plan-price span,
+.dark .plan-feature {
+    color: #94A3B8;
+}
+
+.dark .form-input {
+    background: rgba(15, 23, 42, 0.6);
+    border-color: #334155;
+    color: #F1F5F9;
+}
+
+.dark .form-input:focus {
+    border-color: #6366F1;
+}
+
+.dark .form-input::placeholder {
+    color: #64748B;
+}
+
+.dark .logo-upload-container {
+    border-color: #334155;
+}
+
+.dark .logo-upload-container:hover {
+    border-color: #6366F1;
+    background: rgba(99, 102, 241, 0.04);
+}
+
+.dark .plan-name,
+.dark .plan-price {
+    color: #F1F5F9;
+}
+
+.dark .plan-card:not(.selected) .plan-button {
+    background: #334155;
+    color: #CBD5E1;
+}
+
+.dark .plan-card:not(.selected):hover .plan-button {
+    background: #475569;
+}
+
+.dark .login-link,
+.dark .upload-link {
+    color: #818CF8;
+}
+
+.dark .back-button {
+    background: #1E293B;
+    border-color: #334155;
+    color: #CBD5E1;
+}

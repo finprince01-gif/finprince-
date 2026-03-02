@@ -1,0 +1,5 @@
+{
+  "name": "Admin Subscription Panel",
+  "description": "An admin panel to view and manage user subscription details. It features a secure login page and a detailed table view of user data including subscription plans, usage, and dates.",
+  "requestFramePermissions": []
+}

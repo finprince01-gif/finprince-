@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.pyright]
+pythonVersion = "3.12"
+reportMissingImports = "warning"
+reportMissingTypeStubs = false
+useLibraryCodeForTypes = true
+
+[tool.pyright.env]
+pythonPath = "."
+
+[project]
+name = "backend"
+version = "0.1.0"
+description = "Django backend with API"
+dependencies = [
+    "Django==5.0.14",
+    "djangorestframework",
+    "djangorestframework-simplejwt",
+    "django-cors-headers",
+    "python-dotenv",
+    "mysqlclient"
+]
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "isort",
+    "pytest-django"
+]

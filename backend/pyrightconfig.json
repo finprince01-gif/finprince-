@@ -1,0 +1,12 @@
+{
+    "include": ["."],
+    "exclude": ["__pycache__", "migrations"],
+    "reportMissingImports": false,
+    "reportMissingTypeStubs": false,
+    "pythonVersion": "3.12",
+    "typeCheckingMode": "basic",
+    "useLibraryCodeForTypes": true,
+    "venvPath": ".",
+    "venv": "env",
+    "stubPath": "./stubs"
+}

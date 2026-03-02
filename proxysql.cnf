@@ -1,0 +1,146 @@
+datadir="/var/lib/proxysql"
+
+admin_variables=
+{
+    admin_credentials="admin:CHANGE_THIS_PASSWORD;radmin:CHANGE_THIS_PASSWORD"
+    mysql_ifaces="0.0.0.0:6032"
+}
+
+mysql_variables=
+{
+    threads=16                      # Increased from 4 for high concurrency
+    max_connections=50000           # Increased from 2048 for 500K users
+    default_query_delay=0
+    default_query_timeout=60000     # 60 seconds
+    have_compress=true
+    poll_timeout=2000
+    interfaces="0.0.0.0:6033"
+    default_schema="ai_accounting"
+    stacksize=2097152               # 2MB stack (increased from 1MB)
+    server_version="8.0.30"
+    connect_timeout_server=10000
+    monitor_history=60000
+    monitor_connect_interval=200000
+    monitor_ping_interval=10000     # More frequent health checks
+    ping_interval_server_msec=10000
+    ping_timeout_server=500
+    commands_stats=true
+    sessions_sort=true
+    connect_retries_on_failure=10
+    
+    # Connection multiplexing for efficiency
+    multiplexing=true
+    connection_max_age_ms=3600000   # 1 hour
+    free_connections_pct=10
+}
+
+# Backend MySQL Servers
+mysql_servers =
+(
+    # Primary server (writes)
+    {
+        address="mysql-primary"     # Replace with your MySQL primary host
+        port=3306
+        hostgroup=0                 # Write hostgroup
+        max_connections=5000        # Increased from 1000
+        weight=1
+        status="ONLINE"
+        compression=0
+        max_replication_lag=10
+    },
+    # Read Replica 1
+    {
+        address="mysql-replica-1"   # Replace with your replica host
+        port=3306
+        hostgroup=1                 # Read hostgroup
+        max_connections=10000
+        weight=1
+        status="ONLINE"
+        compression=0
+    },
+    # Read Replica 2
+    {
+        address="mysql-replica-2"   # Replace with your replica host
+        port=3306
+        hostgroup=1                 # Read hostgroup
+        max_connections=10000
+        weight=1
+        status="ONLINE"
+        compression=0
+    },
+    # Read Replica 3
+    {
+        address="mysql-replica-3"   # Replace with your replica host
+        port=3306
+        hostgroup=1                 # Read hostgroup
+        max_connections=10000
+        weight=1
+        status="ONLINE"
+        compression=0
+    }
+)
+
+# ProxySQL Users
+mysql_users =
+(
+    {
+        username="finpixe_app"      # Replace with your app username
+        password="CHANGE_THIS_PASSWORD"  # Replace with strong password
+        default_hostgroup=0
+        active=1
+        max_connections=10000       # Per-user connection limit
+        transaction_persistent=1    # Keep transactions on same backend
+    }
+)
+
+# Query Routing Rules
+mysql_query_rules =
+(
+    # Rule 1: Route writes to primary (hostgroup 0)
+    {
+        rule_id=1
+        active=1
+        match_pattern="^(INSERT|UPDATE|DELETE|REPLACE|CREATE|ALTER|DROP|TRUNCATE)"
+        destination_hostgroup=0
+        apply=1
+        cache_ttl=0
+    },
+    # Rule 2: Route SELECT FOR UPDATE to primary
+    {
+        rule_id=2
+        active=1
+        match_pattern="^SELECT.*FOR UPDATE"
+        destination_hostgroup=0
+        apply=1
+        cache_ttl=0
+    },
+    # Rule 3: Route reads to replicas (hostgroup 1)
+    {
+        rule_id=3
+        active=1
+        match_pattern="^SELECT"
+        destination_hostgroup=1
+        apply=1
+        cache_ttl=5000              # Cache SELECT queries for 5 seconds
+    },
+    # Rule 4: Route everything else to primary
+    {
+        rule_id=4
+        active=1
+        match_pattern=".*"
+        destination_hostgroup=0
+        apply=1
+    }
+)
+
+# Query Cache (optional - for frequently accessed data)
+mysql_query_rules_fast_routing =
+(
+    {
+        username="finpixe_app"
+        schemaname="ai_accounting"
+        flagIN=0
+        destination_hostgroup=1     # Default to read replicas
+        comment="Default routing to read replicas"
+    }
+)

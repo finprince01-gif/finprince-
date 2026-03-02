@@ -1,0 +1,965 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   DESIGN TOKENS (CSS Variables)
+   ============================================================ */
+:root {
+  --color-primary: #4F46E5;
+  --color-primary-dark: #4338CA;
+  --color-sidebar-bg: #DDE3FF;
+  --color-main-bg: #EEF2FF;
+  /* Updated to soft neutral */
+  --color-card-bg: #FFFFFF;
+  --color-border: #E2E8F0;
+  --color-border-input: #CBD5E1;
+  --color-text-primary: #1F2937;
+  --color-text-secondary: #475569;
+  --color-text-muted: #64748B;
+  --color-table-header: #F8FAFC;
+  --color-row-hover: #F1F5F9;
+  --color-nav-active-bg: #FFFFFF;
+  --color-nav-text: #475569;
+  --color-nav-active-text: #4F46E5;
+  --color-nav-icon: #64748B;
+
+  /* Spacing scale */
+  --space-8: 8px;
+  --space-16: 16px;
+  --space-24: 24px;
+  --space-32: 32px;
+
+  /* Charts */
+  --chart-grid: #E2E8F0;
+  --chart-text: #64748B;
+  --tooltip-bg: #FFFFFF;
+  --tooltip-border: #E2E8F0;
+}
+
+/* ============================================================
+   BASE LAYER
+   ============================================================ */
+@layer base {
+
+  html {
+    font-family: 'Outfit', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+
+  body {
+    font-family: 'Outfit', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.5;
+    color: var(--color-text-primary);
+    background-color: var(--color-main-bg);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  #root {
+    font-family: 'Outfit', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+
+  /* Inherit font everywhere */
+  *,
+  *::before,
+  *::after {
+    font-family: inherit !important;
+  }
+
+  button,
+  input,
+  select,
+  textarea,
+  label,
+  a,
+  span,
+  div,
+  p,
+  table,
+  th,
+  td {
+    font-family: inherit;
+  }
+
+  /* Headings */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    color: var(--color-text-primary);
+    font-family: 'Outfit', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    font-weight: 700;
+  }
+
+  h1 {
+    font-size: 20px;
+    line-height: 1.3;
+    font-weight: 700;
+  }
+
+  h2 {
+    font-size: 16px;
+    line-height: 1.4;
+    font-weight: 600;
+  }
+
+  h3 {
+    font-size: 14px;
+    line-height: 1.4;
+    font-weight: 600;
+  }
+
+  small {
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  button {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 14px;
+    font-weight: 400;
+  }
+
+  label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  nav,
+  ul,
+  li {
+    font-family: inherit;
+  }
+
+  strong,
+  b,
+  em,
+  i,
+  small,
+  mark,
+  del,
+  ins,
+  sub,
+  sup {
+    font-family: inherit;
+  }
+}
+
+/* ============================================================
+   COMPONENTS
+   ============================================================ */
+@layer components {
+
+  /* ----------------------------------------------------------
+     CARDS — Standard Enterprise Card
+     ---------------------------------------------------------- */
+  .erp-card {
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 16px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  }
+
+  .erp-card:hover {
+    border-color: #CBD5E1;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+  }
+
+  /* ----------------------------------------------------------
+     MAIN CONTENT CONTAINERS — Structured Container
+     ---------------------------------------------------------- */
+  .erp-container {
+    border: 1px solid var(--color-border);
+    border-radius: 16px;
+    background: var(--color-card-bg);
+    padding: 24px;
+  }
+
+  /* ----------------------------------------------------------
+     INPUTS — Standard Form Input
+     ---------------------------------------------------------- */
+  .erp-input {
+    height: 40px;
+    padding: 10px 14px;
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-border-input);
+    border-radius: 10px;
+    font-size: 14px;
+    color: var(--color-text-primary);
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    width: 100%;
+  }
+
+  .erp-input::placeholder {
+    color: var(--color-text-muted);
+  }
+
+  .erp-input:focus {
+    border-color: #4F46E5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+  }
+
+  /* Select variant */
+  .erp-select {
+    height: 40px;
+    padding: 10px 14px;
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-border-input);
+    border-radius: 10px;
+    font-size: 14px;
+    color: var(--color-text-primary);
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    width: 100%;
+    cursor: pointer;
+  }
+
+  .erp-select:focus {
+    border-color: #4F46E5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+  }
+
+  /* Label */
+  .erp-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+  }
+
+  /* ----------------------------------------------------------
+     BUTTONS
+     ---------------------------------------------------------- */
+  .erp-button-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 18px;
+    background: #4F46E5;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+    box-shadow: 0 4px 10px rgba(79, 70, 229, 0.25);
+  }
+
+  .erp-button-primary:hover {
+    background: var(--color-primary-dark);
+    box-shadow: 0 6px 14px rgba(79, 70, 229, 0.35);
+  }
+
+  .erp-button-primary:active {
+    transform: scale(0.98);
+  }
+
+  .erp-button-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  .erp-button-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 18px;
+    background: var(--color-card-bg);
+    color: var(--color-text-secondary);
+    border: 1px solid var(--color-border-input);
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+  }
+
+  .erp-button-secondary:hover {
+    background: var(--color-row-hover);
+    border-color: var(--color-border);
+  }
+
+  .erp-button-secondary:active {
+    transform: scale(0.98);
+  }
+
+  /* ----------------------------------------------------------
+     TABLES
+     ---------------------------------------------------------- */
+  .erp-table-container {
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  }
+
+  .erp-table {
+    width: 100%;
+    font-size: 14px;
+    border-collapse: collapse;
+  }
+
+  .erp-table th {
+    padding: 12px 16px;
+    background: var(--color-table-header);
+    border-bottom: 1px solid var(--color-border);
+    text-align: left;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .erp-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--color-row-hover);
+    color: var(--color-text-primary);
+    font-weight: 500;
+  }
+
+  .erp-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  .erp-table tr:hover td {
+    background: var(--color-row-hover);
+  }
+
+  /* ----------------------------------------------------------
+     TABS
+     ---------------------------------------------------------- */
+  .erp-tab-container {
+    display: flex;
+    border-bottom: 1px solid var(--color-border);
+    gap: 0;
+    margin-bottom: 24px;
+  }
+
+  .erp-tab {
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text-muted);
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease;
+    margin-bottom: -1px;
+  }
+
+  .erp-tab:hover {
+    color: var(--color-text-secondary);
+  }
+
+  .erp-tab.active,
+  .erp-tab[data-active="true"] {
+    color: #4F46E5;
+    border-bottom: 2px solid #4F46E5;
+    font-weight: 600;
+  }
+
+  /* ----------------------------------------------------------
+     TYPOGRAPHY SYSTEM — Unified Hierarchy
+     ---------------------------------------------------------- */
+
+  /* Page Titles — top-level headings */
+  .page-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    line-height: 1.3;
+  }
+
+  /* Section Titles — card/section headings */
+  .section-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    line-height: 1.4;
+  }
+
+  /* Tab Text — navigation tabs */
+  .tab-text {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text-muted);
+  }
+
+  .tab-text.active,
+  .tab-text[data-active="true"] {
+    font-weight: 600;
+    color: #4F46E5;
+  }
+
+  /* Form Labels */
+  .label-text {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+  }
+
+  /* Helper / Secondary Text */
+  .helper-text {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--color-text-muted);
+    line-height: 1.5;
+  }
+
+  /* Table Headers */
+  .table-header {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  /* ----------------------------------------------------------
+     SECTION HEADERS (legacy — kept for backward compat)
+     ---------------------------------------------------------- */
+  .erp-section-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    letter-spacing: 0.02em;
+    margin-bottom: 8px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .erp-section-subtitle {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--color-text-secondary);
+    margin-bottom: 24px;
+  }
+
+  /* ----------------------------------------------------------
+     KPI CARDS
+     ---------------------------------------------------------- */
+  .erp-kpi-card {
+    padding: 24px;
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 16px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    position: relative;
+    overflow: hidden;
+    transition: box-shadow 0.2s ease;
+  }
+
+  .erp-kpi-card:hover {
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.07);
+  }
+
+  .erp-kpi-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+
+  .erp-kpi-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    letter-spacing: -0.02em;
+  }
+
+  /* ----------------------------------------------------------
+     SIDEBAR STRUCTURAL
+     ---------------------------------------------------------- */
+  .erp-sidebar {
+    background: var(--color-sidebar-bg);
+    border-right: none;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: none;
+  }
+
+  .erp-sidebar-divider {
+    border-top: 1px solid var(--color-border-input);
+    margin: 12px 0;
+    opacity: 0.6;
+  }
+
+  .erp-sidebar-profile-divider {
+    border-top: 1px solid var(--color-border-input);
+    margin-top: 16px;
+    margin-bottom: 8px;
+    opacity: 0.8;
+  }
+
+  .erp-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    height: 44px;
+    padding: 0 14px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-nav-text);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    letter-spacing: 0.01em;
+  }
+
+  .erp-nav-item:hover {
+    background: rgba(79, 70, 229, 0.05);
+    color: var(--color-nav-active-text);
+  }
+
+  .erp-nav-item.active {
+    background: var(--color-nav-active-bg);
+    color: var(--color-nav-active-text);
+    border-radius: 10px;
+  }
+
+  .erp-nav-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    color: var(--color-nav-icon);
+    transition: color 0.2s ease;
+  }
+
+  .erp-nav-item:hover .erp-nav-icon,
+  .erp-nav-item.active .erp-nav-icon {
+    color: var(--color-nav-active-text);
+  }
+
+  .erp-sidebar-storage-divider {
+    border-top: 1px solid var(--color-border-input);
+    margin: 20px 0;
+    opacity: 0.8;
+  }
+
+  /* Storage Card */
+  .erp-storage-card {
+    background: var(--color-card-bg);
+    border-radius: 14px;
+    padding: 16px;
+    box-shadow: none;
+  }
+
+  /* ----------------------------------------------------------
+     HEADER STRUCTURAL
+     ---------------------------------------------------------- */
+  .erp-header {
+    background: var(--color-card-bg);
+    border-bottom: 1px solid var(--color-border);
+    padding: 16px 24px;
+  }
+
+  /* ----------------------------------------------------------
+     MAIN CONTENT AREA
+     ---------------------------------------------------------- */
+  .erp-main-bg {
+    background: var(--color-main-bg);
+  }
+
+  /* ----------------------------------------------------------
+     FORM GROUP SPACING
+     ---------------------------------------------------------- */
+  .erp-form-group {
+    margin-bottom: 16px;
+  }
+
+  .erp-form-row {
+    display: grid;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  /* ----------------------------------------------------------
+     BADGE
+     ---------------------------------------------------------- */
+  .erp-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .erp-badge-primary {
+    background: #EEF2FF;
+    color: var(--color-primary);
+  }
+
+  .erp-badge-success {
+    background: #ECFDF5;
+    color: #059669;
+  }
+
+  .erp-badge-warning {
+    background: #FFFBEB;
+    color: #D97706;
+  }
+
+  .erp-badge-danger {
+    background: #FFF1F2;
+    color: #E11D48;
+  }
+}
+
+/* ============================================================
+   UTILITIES LAYER — font override
+   ============================================================ */
+@layer utilities {
+  * {
+    font-family: 'Outfit', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif !important;
+  }
+}
+
+/* ============================================================
+   CUSTOM SCROLLBAR
+   ============================================================ */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #C7D2FE;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #A5B4FC;
+}
+
+/* ============================================================
+   DASHBOARD GRID PATTERN
+   ============================================================ */
+.bg-grid-pattern {
+  background-image: radial-gradient(circle, #cbd5e1 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* ============================================================
+   TOAST ANIMATIONS
+   ============================================================ */
+@keyframes shrink {
+  from {
+    width: 100%;
+  }
+
+  to {
+    width: 0%;
+  }
+}
+
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(20px) scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+.animate-shrink {
+  animation: shrink linear forwards;
+}
+
+.animate-slide-in {
+  animation: slide-in 0.3s ease-out forwards;
+}
+
+/* ============================================================
+   DARK MODE OVERRIDES
+   Keep overrides at bottom so they win specificity.
+   ============================================================ */
+html.dark {
+  color-scheme: dark;
+  --color-main-bg: #000000;
+  --color-card-bg: #020617;
+  --color-sidebar-bg: #0f172a;
+  --color-border: #1e293b;
+  --color-border-input: #334155;
+  --color-text-primary: #FFFFFF;
+  --color-text-secondary: #F1F5F9;
+  --color-text-muted: #CBD5E1;
+  --color-table-header: #0f172a;
+  --color-row-hover: #1e293b;
+  --color-nav-active-bg: rgba(79, 70, 229, 0.2);
+  --color-nav-text: #CBD5E1;
+  --color-nav-active-text: #FFFFFF;
+  --color-nav-icon: #CBD5E1;
+
+  --chart-grid: #1e293b;
+  --chart-text: #CBD5E1;
+  --tooltip-bg: #0f172a;
+  --tooltip-border: #1e293b;
+}
+
+html.dark body {
+  background-color: #000000 !important;
+  color: #FFFFFF !important;
+}
+
+html.dark #root {
+  background-color: #000000 !important;
+  color: #FFFFFF !important;
+}
+
+/* Backgrounds */
+html.dark .bg-white,
+html.dark .bg-slate-50,
+html.dark .bg-slate-100,
+html.dark .bg-slate-200,
+html.dark .bg-slate-300,
+html.dark .bg-gray-50,
+html.dark .bg-gray-100,
+html.dark .bg-gray-200,
+html.dark .bg-gray-300 {
+  background-color: #0f172a !important;
+}
+
+html.dark .bg-indigo-50,
+html.dark .bg-green-50,
+html.dark .bg-emerald-50,
+html.dark .bg-yellow-50,
+html.dark .bg-red-50 {
+  background-color: #1e1b4b !important;
+  color: #818cf8 !important;
+}
+
+html.dark .bg-green-100,
+html.dark .bg-emerald-100,
+html.dark .bg-yellow-100,
+html.dark .bg-red-100 {
+  background-color: #1e293b !important;
+}
+
+html.dark .min-h-screen.bg-slate-50\/50 {
+  background-color: #000000 !important;
+}
+
+html.dark .erp-main-bg {
+  background-color: #000000 !important;
+}
+
+/* Text colors */
+html.dark .text-slate-900,
+html.dark .text-slate-800,
+html.dark .text-slate-700,
+html.dark .text-gray-900,
+html.dark .text-gray-800,
+html.dark .text-gray-700 {
+  color: #FFFFFF !important;
+}
+
+html.dark .text-slate-600,
+html.dark .text-slate-500,
+html.dark .text-slate-400,
+html.dark .text-gray-600,
+html.dark .text-gray-500,
+html.dark .text-gray-400,
+html.dark .text-zinc-600,
+html.dark .text-zinc-500,
+html.dark .text-zinc-400 {
+  color: #CBD5E1 !important;
+}
+
+/* Typography system dark mode */
+html.dark .page-title,
+html.dark .section-title {
+  color: #FFFFFF !important;
+}
+
+html.dark .tab-text {
+  color: #CBD5E1 !important;
+}
+
+html.dark .tab-text.active,
+html.dark .tab-text[data-active="true"] {
+  color: #818cf8 !important;
+}
+
+html.dark .label-text,
+html.dark .erp-label {
+  color: #F1F5F9 !important;
+}
+
+html.dark .helper-text,
+html.dark .erp-section-subtitle {
+  color: #CBD5E1 !important;
+}
+
+html.dark .table-header {
+  color: #F8FAFC !important;
+}
+
+html.dark .erp-section-title {
+  color: #FFFFFF !important;
+  border-bottom-color: #1e293b !important;
+}
+
+/* Common Borders */
+.dark .border-slate-200,
+.dark .border-gray-200,
+.dark .border-gray-300 {
+  border-color: #1e293b !important;
+}
+
+.dark .border-slate-100,
+.dark .border-gray-100 {
+  border-color: #0f172a !important;
+}
+
+.dark .divide-slate-200> :not([hidden])~ :not([hidden]),
+.dark .divide-gray-200> :not([hidden])~ :not([hidden]) {
+  border-color: #1e293b !important;
+}
+
+/* Global button disabled state for dark mode */
+html.dark button:disabled,
+html.dark .disabled,
+html.dark [disabled] {
+  background-color: #1e293b !important;
+  color: #64748b !important;
+  cursor: not-allowed !important;
+  opacity: 1 !important;
+  border-color: #334155 !important;
+}
+
+html.dark .erp-button-primary:disabled {
+  background-color: #1e293b !important;
+  color: #475569 !important;
+  box-shadow: none !important;
+}
+
+/* Shadow suppression in dark mode */
+html.dark .shadow-sm,
+html.dark .shadow,
+html.dark .shadow-md,
+html.dark .shadow-lg,
+html.dark .shadow-xl {
+  box-shadow: none !important;
+}
+
+/* Nav active states */
+.dark .text-indigo-600 {
+  color: #818cf8 !important;
+}
+
+.dark .bg-indigo-600 {
+  background-color: #6366f1 !important;
+}
+
+.dark .bg-indigo-50 {
+  background-color: #1e1b4b !important;
+}
+
+.dark .text-indigo-700 {
+  color: #a5b4fc !important;
+}
+
+.dark .hover\:bg-slate-50:hover {
+  background-color: #1e293b !important;
+}
+
+.dark .hover\:bg-white:hover {
+  background-color: #1e293b !important;
+}
+
+/* Inputs dark */
+.dark input,
+.dark select,
+.dark textarea {
+  @apply bg-slate-950 border-slate-700 text-slate-100;
+}
+
+.dark ::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
+/* Scrollbar dark */
+.dark ::-webkit-scrollbar-thumb {
+  @apply bg-slate-700 hover:bg-slate-600;
+}
+
+.dark ::-webkit-scrollbar-track {
+  @apply bg-slate-950;
+}
+
+/* Placeholder dark */
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #CBD5E1 !important;
+}
+
+/* Autofill dark */
+html.dark input:-webkit-autofill,
+html.dark input:-webkit-autofill:hover,
+html.dark input:-webkit-autofill:focus,
+html.dark input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 999px #0f172a inset !important;
+  -webkit-text-fill-color: #f1f5f9 !important;
+  caret-color: #f1f5f9 !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+/* Grid pattern dark */
+.dark .bg-grid-pattern {
+  background-image: radial-gradient(circle, #334155 1px, transparent 1px);
+}
