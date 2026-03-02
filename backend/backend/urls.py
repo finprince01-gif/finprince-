@@ -50,6 +50,10 @@ urlpatterns = [
     # Vendors - Vendor Portal
     path('api/vendors/', include('vendors.urls')),
     
+    # Custom Vendor Validation for Purchase
+    path('api/purchase/vendors/validate/', __import__('vendors.vendor_api').vendor_api.PurchaseVendorValidateView.as_view(), name='purchase-vendors-validate'),
+    path('api/purchase/vendors/create/', __import__('vendors.vendor_api').vendor_api.PurchaseVendorCreateView.as_view(), name='purchase-vendors-create'),
+    
     # Customer Portal
     path('api/customerportal/', include('customerportal.urls')),
     

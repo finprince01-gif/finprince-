@@ -8,9 +8,10 @@ interface SearchableSelectProps {
     options: string[];
     placeholder?: string;
     className?: string;
+    disabled?: boolean;
 }
 
-const SearchableSelect: React.FC<SearchableSelectProps> = ({ value, onChange, options, placeholder = "Select...", className = "" }) => {
+const SearchableSelect: React.FC<SearchableSelectProps> = ({ value, onChange, options, placeholder = "Select...", className = "", disabled = false }) => {
     const [isOpen, setIsOpen] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
     const portalRef = useRef<HTMLDivElement>(null);
@@ -67,12 +68,13 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({ value, onChange, op
         : options;
 
     return (
-        <div className={`relative ${className}`} ref={containerRef}>
+        <div className={`relative ${className} ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`} ref={containerRef}>
             <div className="relative">
                 <input
                     type="text"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:ring-indigo-500 focus:border-indigo-500 pr-10"
+                    className={`w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:ring-indigo-500 focus:border-indigo-500 pr-10 ${disabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     value={value}
+                    disabled={disabled}
                     onChange={(e) => {
                         onChange(e.target.value);
                         if (!isOpen) {
@@ -81,16 +83,20 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({ value, onChange, op
                         setIsTyping(true);
                     }}
                     onFocus={() => {
-                        setIsOpen(true);
-                        setIsTyping(false);
+                        if (!disabled) {
+                            setIsOpen(true);
+                            setIsTyping(false);
+                        }
                     }}
                     placeholder={placeholder}
                 />
                 <div
-                    className="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer"
+                    className={`absolute inset-y-0 right-0 flex items-center pr-3 ${disabled ? 'cursor-not-allowed text-gray-400' : 'cursor-pointer'}`}
                     onClick={() => {
-                        setIsOpen(!isOpen);
-                        setIsTyping(false);
+                        if (!disabled) {
+                            setIsOpen(!isOpen);
+                            setIsTyping(false);
+                        }
                     }}
                 >
                     <Icon name="chevron-down" className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
