@@ -82,7 +82,7 @@ DATABASES = {
         'USER': os.getenv('DB_USER'),
         'PASSWORD': os.getenv('DB_PASSWORD'),
         # For 50K users: Use ProxySQL endpoint instead of direct MySQL for better multiplexing
-        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'HOST': os.getenv('DB_HOST', 'db'),
         'PORT': os.getenv('DB_PORT', '3306'),
         # PRODUCTION: Persistent connections to reduce handshake overhead
         'CONN_MAX_AGE': int(os.getenv('DB_CONN_MAX_AGE', '1200')),  # 20 minutes
