@@ -11,6 +11,7 @@ class VoucherPurchaseSupplierDetails(BaseModel):
     """
     date = models.DateField()
     supplier_invoice_no = models.CharField(max_length=100)
+    purchase_voucher_series = models.CharField(max_length=100, null=True, blank=True)
     purchase_voucher_no = models.CharField(max_length=100, null=True, blank=True)
     vendor_name = models.CharField(max_length=255)
     vendor_basic_detail = models.ForeignKey(
@@ -20,6 +21,7 @@ class VoucherPurchaseSupplierDetails(BaseModel):
         related_name='purchase_vouchers'
     )
     gstin = models.CharField(max_length=50, null=True, blank=True)
+    branch = models.CharField(max_length=255, null=True, blank=True)
     
     # GRN
     grn_reference = models.CharField(max_length=100, null=True, blank=True)

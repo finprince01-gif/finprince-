@@ -143,13 +143,14 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
     // Populate from AI Extraction
     useEffect(() => {
         if (prefilledData) {
-
-            if (prefilledData.invoiceDate) {
-                setDate(prefilledData.invoiceDate);
-            }
-            if (prefilledData.sellerName) {
-                // Map to Receive From (Customer) - assuming mocked/select field. 
-                // We won't force set it unless we can match ID.
+            if (prefilledData.invoiceDate) setDate(prefilledData.invoiceDate);
+            if (prefilledData.sellerName) setReceiveFrom(prefilledData.sellerName);
+            if (prefilledData.totalAmount) {
+                setSingleAdvanceAmount(prefilledData.totalAmount);
+                setShowSingleAdvanceSection(true);
+                if (prefilledData.invoiceNumber) {
+                    setSingleAdvanceRefNo(prefilledData.invoiceNumber);
+                }
             }
             if (clearPrefilledData) clearPrefilledData();
         }

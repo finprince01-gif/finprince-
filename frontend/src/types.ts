@@ -233,6 +233,13 @@ export interface ExtractedLineItem {
   hsnCode: string;
   quantity: number;
   rate: number;
+  amount: number;
+  cgst?: number;
+  sgst?: number;
+  igst?: number;
+  cess?: number;
+  taxableValue?: number;
+  uom?: string;
 }
 
 export interface ExtractedInvoiceData {
@@ -243,8 +250,39 @@ export interface ExtractedInvoiceData {
   subtotal: number;
   cgstAmount: number;
   sgstAmount: number;
+  igstAmount: number;
+  cessAmount?: number;
   totalAmount: number;
   lineItems: ExtractedLineItem[];
+  // GST & Address Fields
+  gstin?: string;
+  placeOfSupply?: string;
+  stateType?: 'within' | 'other' | 'export';
+  invoiceType?: string;
+  currency?: string;
+  exchangeRate?: number;
+  billToAddress1?: string;
+  billToAddress2?: string;
+  billToCity?: string;
+  billToState?: string;
+  billToPincode?: string;
+  billToCountry?: string;
+  // Sales summary
+  stateCess?: string;
+  tdsIncomeTax?: string;
+  tdsGst?: string;
+  advanceAmount?: string;
+  payable?: string;
+  postingNote?: string;
+  // Sales dispatch
+  dispatchFrom?: string;
+  modeOfTransport?: string;
+  dispatchDate?: string;
+  dispatchTime?: string;
+  transporterId?: string;
+  transporterName?: string;
+  vehicleNo?: string;
+  lrGrConsignment?: string;
 }
 
 // For AI Agent

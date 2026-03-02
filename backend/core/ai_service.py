@@ -73,7 +73,12 @@ def create_dynamic_voucher_extraction_request(
 
         # Identify likely line-item columns to separate them into "items" array in output format
         # If any of these are in the requested columns, we expect multiple rows
-        LINE_ITEM_HINTS = {"Item Name", "HSN/SAC", "Quantity", "UOM", "Rate", "Taxable Value", "Item Amount", "Description", "IGST Rate", "CGST Rate", "SGST Rate", "Cess Rate", "GST Rate"}
+        LINE_ITEM_HINTS = {
+            "Item Name", "HSN/SAC", "Quantity", "Qty", "UOM", "Unit", "Rate", "Item Rate", 
+            "Taxable Value", "Item Amount", "Amount", "Description", 
+            "IGST Rate", "CGST Rate", "SGST Rate", "Cess Rate", "GST Rate", 
+            "IGST", "CGST", "SGST/UTGST", "Cess", "Invoice Value", "Disc%", "Disc Amount"
+        }
         
         has_items = any(col in LINE_ITEM_HINTS for col in columns)
         
@@ -81,6 +86,13 @@ def create_dynamic_voucher_extraction_request(
             header_cols = [c for c in columns if c not in LINE_ITEM_HINTS]
             item_cols = [c for c in columns if c in LINE_ITEM_HINTS]
             
+            # Special case: If Quantity or Rate are missing but Qty or Item Rate are present, 
+            # ensure they are included in item_cols
+            for c in columns:
+                if c in ("Qty", "Item Rate", "IGST", "CGST", "SGST/UTGST", "Invoice Value") and c not in item_cols:
+                    item_cols.append(c)
+                    if c in header_cols: header_cols.remove(c)
+
             header_json = ",\n      ".join([f'"{c}": null' for c in header_cols])
             item_json = ",\n        ".join([f'"{c}": null' for c in item_cols])
             
@@ -118,14 +130,21 @@ SEMANTIC MAPPING GUIDE (map document labels → column names):
 - Sub Total / Taxable Total / Total Before Tax / Assessable Value → Total Taxable Value
 - IGST Total / Integrated Tax Total          → Total IGST
 - CGST Total / Central Tax Total             → Total CGST
-- SGST Total / State Tax Total               → Total SGST
+- SGST/UTGST Total / State Tax Total         → Total SGST
 - Item / Description / Particulars           → Item Name
 - HSN Code / SAC Code                        → HSN/SAC
 - Qty / No. / Units                          → Quantity
+- Qty / No. / Units                          → Qty
 - Unit / UOM / Pcs                           → UOM
 - Unit Price / Price / Rate per unit         → Rate
+- Unit Price / Price / Rate per unit         → Item Rate
 - Taxable Amount / Line Total (pre-tax)      → Taxable Value
 - Line Total / Amount / Item Value           → Item Amount
+- Line Total / Amount / Item Value           → Invoice Value
+- IGST / Integrated Tax                      → IGST
+- CGST / Central Tax                         → CGST
+- SGST / State Tax / UTGST                   → SGST/UTGST
+- Cess                                       → Cess
 - Account / Ledger                           → Account
 - Party / Payee / Received from             → Party
 - Total / Net                                → Amount
@@ -146,39 +165,54 @@ Return it as a string under the exact key "E Way Bill No".
 """
 
         prompt = f"""\
-You are an ERP document extraction engine.
-
-The frontend has selected a **{voucher_type} Voucher** targeting the table **"{table_name}"**.
-You must extract data from the attached document and map values ONLY to the exact columns listed below.
+You are an Enterprise-Grade OCR Extraction Engine for ERP systems.
+Your task is to perform full structured extraction from the attached invoice image using table-based parsing logic.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-STRICT RULES
+1. NORMALIZE OCR TEXT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. The "columns" list is the SINGLE SOURCE OF TRUTH.
-2. Extract data ONLY for these columns — no others.
-3. Do NOT add extra columns not in the list.
-4. Do NOT remove columns from the list.
-5. If a column's value is not found in the document, return null (not "").
-6. Do NOT mix data from other voucher types.
-7. Do NOT assume or invent values.
-8. All values must be returned as strings (or null), e.g., "123.45", "Apple".
-9. Dates must be formatted as dd/mm/yyyy.
-10. Numeric values must be plain strings representing numbers only — no ₹, $, commas, or % symbols.
-11. HSN/SAC must be 4–8 digit numeric code only.
-12. Return ONLY valid JSON that precisely matches the OUTPUT format below.
+- Convert all text to UPPERCASE.
+- Remove extra spaces and noise.
+- Remove commas from numeric values (e.g., "1,234.50" -> "1234.50").
+- Standardize dates to DD/MM/YYYY and preserve decimal precision.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TARGET COLUMNS (map ONLY these):
+2. DETECT LINE ITEM TABLE REGION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-{json.dumps(columns, indent=2)}
+- START parsing items ONLY when you see headers like: ITEM, DESCRIPTION, QTY, RATE, AMOUNT, TAXABLE VALUE.
+- STOP parsing items immediately upon reaching summary labels like: SUB TOTAL, TOTAL, GRAND TOTAL, TOTAL IN WORDS.
+- DO NOT treat footers, GSTINs, or Bank details at the bottom as item data.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. EXTRACT LINE ROWS (COLUMN ALIGNMENT)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Use header-based alignment. Do NOT guess indices.
+- For each row, extract: Description, HSN/SAC, Quantity, Rate, Taxable Value, and Tax amounts.
+- VALIDATE EACH ROW: Ensure (Rate × Quantity) ≈ Taxable Value. If there is a huge mismatch, re-evaluate column alignment for that row.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. EXTRACT TAX BREAKDOWN & TOTALS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Isolate the summary section.
+- Explicitly map separately extracted values for: CGST, SGST, IGST, CESS, Total Taxable, and Grand Total.
+- VALIDATE TOTALS: Sum(Items Taxable) ≈ Subtotal. Subtotal + Taxes ≈ Invoice Value.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STRICT MAPPING RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Map extracted values ONLY to these columns:
+  {json.dumps(columns)}
+- NO positional guessing. NO silent overwriting.
+- If a value is missing, return null.
 
 {semantic_hints}
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-OUTPUT — return this JSON structure exactly:
+OUTPUT FORMAT (STRICT JSON ONLY)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {output_template}
 
-Return ONLY the raw JSON — no markdown, no code fences, no explanation.
+Return ONLY raw JSON. No markdown, no code fences, no preamble.
 """
 
         request_data = {

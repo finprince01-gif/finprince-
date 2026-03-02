@@ -1076,6 +1076,7 @@ CREATE TABLE `customer_master_customer_basicdetails` (
   `updated_by` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `customer_basic_tenant_code_uniq` (`tenant_id`,`customer_code`),
+  UNIQUE KEY `customer_basic_tenant_id_uniq` (`tenant_id`, `id`),
   KEY `customer_basic_tenant_id_idx` (`tenant_id`),
   KEY `customer_basic_category_idx` (`customer_category_id`),
   CONSTRAINT `customer_basic_category_fk` FOREIGN KEY (`customer_category_id`) REFERENCES `customer_master_category` (`id`) ON DELETE SET NULL
@@ -1596,6 +1597,7 @@ CREATE TABLE `voucher_sales_invoicedetails` (
   `voucher_name` VARCHAR(100),
   `outward_slip_no` VARCHAR(50),
   `customer_name` VARCHAR(255),
+  `customer_id` BIGINT NOT NULL COMMENT 'FK to customer_master_customer_basicdetails.id (tenant-scoped)',
 
   `bill_to` LONGTEXT,
   `ship_to` LONGTEXT,
@@ -1618,10 +1620,16 @@ CREATE TABLE `voucher_sales_invoicedetails` (
   `shipping_bill_number` VARCHAR(50) DEFAULT NULL COMMENT 'Shipping bill number for exports',
   `shipping_bill_date` DATE DEFAULT NULL COMMENT 'Shipping bill date for exports',
   `ecommerce_gstin` VARCHAR(15) DEFAULT NULL COMMENT 'E-commerce GSTIN',
-
+  
   PRIMARY KEY (`id`),
   KEY `idx_tenant_id` (`tenant_id`),
-  KEY `idx_sales_invoice_no` (`sales_invoice_no`)
+  KEY `idx_sales_invoice_no` (`sales_invoice_no`),
+  KEY `idx_sales_tenant_customer` (`tenant_id`, `customer_id`),
+  CONSTRAINT `fk_sales_invoice_customer` 
+    FOREIGN KEY (`tenant_id`, `customer_id`) 
+    REFERENCES `customer_master_customer_basicdetails` (`tenant_id`, `id`)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE
 ) ENGINE=InnoDB
 DEFAULT CHARSET=utf8mb4
 COLLATE=utf8mb4_unicode_ci;
@@ -2635,7 +2643,51 @@ ALTER TABLE `voucher_purchase_supply_foreign_details` ADD COLUMN `purchase_ledge
 -- Purchase Voucher - Adding missing Vendor Relationship and Creation Source
 -- These ALTER queries ensure the schema matches the current state of the database and models
 ALTER TABLE `voucher_purchase_supplier_details` ADD COLUMN `vendor_basic_detail_id` BIGINT NOT NULL, ADD COLUMN `creation_source` VARCHAR(50) DEFAULT 'manual';
+ALTER TABLE `voucher_purchase_supplier_details` ADD COLUMN `purchase_voucher_series` VARCHAR(100) NULL AFTER `supplier_invoice_no`;
+ALTER TABLE `voucher_purchase_supplier_details` ADD COLUMN `branch` VARCHAR(255) NULL AFTER `gstin`;
+ALTER TABLE `voucher_purchase_supplier_details` DROP COLUMN IF EXISTS `customer_id`;
 ALTER TABLE `voucher_purchase_supplier_details` ADD CONSTRAINT `fk_vpsd_vendor` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE;
-ALTER TABLE `voucher_purchase_supplier_details` RENAME INDEX idx_vpsd_tenant TO idx_vpsd_vendor_relation; 
+ALTER TABLE `voucher_purchase_supplier_details` RENAME INDEX idx_vpsd_tenant TO idx_vpsd_vendor_relation;
 
+
+-- ============================================================================
+-- Schema Update: One-to-Many Relationship — Customer → Sales (2026-03-02)
+-- ============================================================================
+
+-- STEP 1: Composite unique key on customer root table.
+--         Required so (tenant_id, id) can be referenced as a composite FK
+--         target by the sales header table.
+ALTER TABLE `customer_master_customer_basicdetails`
+  ADD UNIQUE KEY `customer_basic_tenant_id_uniq` (`tenant_id`, `id`);
+
+-- STEP 2: Add customer_id column to sales header (nullable during migration).
+--         Run migrations/customer_sales_fk_migration.sql to backfill data and
+--         enforce NOT NULL once all orphans are resolved.
+ALTER TABLE `voucher_sales_invoicedetails`
+  ADD COLUMN `customer_id` BIGINT NULL
+    COMMENT 'FK to customer_master_customer_basicdetails.id (tenant-scoped)'
+  AFTER `customer_name`;
+
+-- STEP 6 (execute after running the migration script and confirming no orphans):
+-- ALTER TABLE `voucher_sales_invoicedetails`
+--   MODIFY COLUMN `customer_id` BIGINT NOT NULL
+--     COMMENT 'FK to customer_master_customer_basicdetails.id (tenant-scoped)';
+
+-- STEP 7: Composite foreign key — enforces strict one-to-many with tenant isolation.
+--         ON DELETE RESTRICT : cannot delete a customer that has sales records.
+--         ON UPDATE CASCADE  : if customer id changes, sales rows follow safely.
+ALTER TABLE `voucher_sales_invoicedetails`
+  ADD CONSTRAINT `fk_sales_invoice_customer`
+    FOREIGN KEY (`tenant_id`, `customer_id`)
+    REFERENCES `customer_master_customer_basicdetails` (`tenant_id`, `id`)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE;
+
+-- STEP 8: Composite index on sales header for fast tenant-scoped customer lookups.
+ALTER TABLE `voucher_sales_invoicedetails`
+  ADD INDEX `idx_sales_tenant_customer` (`tenant_id`, `customer_id`);
+
+-- NOTE: Child/detail tables (voucher_sales_items, voucher_sales_dispatchdetails,
+--       voucher_sales_ewaybill, voucher_sales_paymentdetails, voucher_sales_items_foreign)
+--       are intentionally NOT modified — they link to the header via invoice_id.
 

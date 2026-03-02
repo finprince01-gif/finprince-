@@ -102,6 +102,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [vendorGstDetails, setVendorGstDetails] = useState<any[]>([]);
   const [pendingGRNs, setPendingGRNs] = useState<any[]>([]);
   const [vendorAddresses, setVendorAddresses] = useState<string[]>([]);
+  const [selectedBranch, setSelectedBranch] = useState('');
   const [inventoryLocations, setInventoryLocations] = useState<any[]>([]);
 
   const fetchRichData = useCallback(async () => {
@@ -1948,9 +1949,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       const purchaseData: any = {
         date: date,
         supplier_invoice_no: invoiceNo,
+        purchase_voucher_series: selectedPurchaseConfig,
         purchase_voucher_no: voucherNumber,
         vendor_id: currentVendorId,
         vendor_name: party,
+        branch: selectedBranch,
         gstin: gstin,
         grn_reference: grnRefNo,
         bill_from: JSON.stringify({
@@ -2438,6 +2441,18 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     </div>
                   )}
                   {/* datalist removed in favor of SearchableSelect */}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Branch
+                  </label>
+                  <SearchableSelect
+                    value={selectedBranch}
+                    onChange={(val) => setSelectedBranch(val)}
+                    options={inventoryLocations.map((loc: any) => loc.name || loc.location_name || loc).filter(Boolean)}
+                    placeholder="Select Branch"
+                    className="w-full"
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -3239,7 +3254,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           {(purchaseItems.reduce((sum, item) => sum + (Number(item.cgst) || 0), 0)).toFixed(2)}
                         </td>
                         <td className="px-4 py-3 border-r border-gray-200 text-center text-sm font-medium">
-                          {(purchaseItems.reduce((sum, item) => sum + (Number(item.cgst) || 0), 0)).toFixed(2)}
+                          {(purchaseItems.reduce((sum, item) => sum + (Number(item.sgst) || 0), 0)).toFixed(2)}
                         </td>
                         <td className="px-4 py-3 border-r border-gray-200 text-center text-sm font-medium">
                           {(purchaseItems.reduce((sum, item) => sum + (Number(item.cess) || 0), 0)).toFixed(2)}
@@ -6388,67 +6403,185 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
               if (voucherType === 'Purchase' || voucherType === 'Debit Note') {
                 // Map flat "Finpixe schema" columns to Purchase form internal state
-                // Strict mapping using deterministic keys from HEADER_FIELDS
-                if (firstRow['Supplier Invoice No']) setInvoiceNo(firstRow['Supplier Invoice No']);
+                // Column names exactly match VOUCHER_COLUMN_SCHEMAS['Purchase']
+
+                // "Supplier Invoice No." (with dot) — also tolerate legacy name without dot
+                const supplierInvNo = firstRow['Supplier Invoice No.'] || firstRow['Supplier Invoice No'] || '';
+                if (supplierInvNo) setInvoiceNo(supplierInvNo);
 
                 // Flexible mapping for Party/Vendor
-                const partyVal = firstRow['Vendor Name'] || firstRow['Bill From'] || firstRow['Buyer/Supplier - Mailing Name'];
-                if (partyVal) {
-                  // Use handlePartyChange to auto-populate terms, etc. if it matches a rich vendor
-                  handlePartyChange(partyVal);
-                }
+                const partyVal = firstRow['Vendor Name'] || firstRow['Buyer/Supplier - Mailing Name'] || '';
+                if (partyVal) handlePartyChange(partyVal);
 
                 if (firstRow['GSTIN']) setGstin(firstRow['GSTIN']);
-                // Normalise to YYYY-MM-DD before setting so <input type="date"> renders correctly
-                if (firstRow['Voucher Date']) setDate(formatDateForInput(firstRow['Voucher Date']) || getTodayDate());
 
-                if (firstRow['Bill From']) setBillFromAddress1(firstRow['Bill From']);
-                else if (firstRow['Buyer/Supplier - Address']) setBillFromAddress1(firstRow['Buyer/Supplier - Address']);
+                // Date — new schema: "Date"; legacy Tally: "Voucher Date"
+                if (firstRow['Date'] || firstRow['Voucher Date'])
+                  setDate(formatDateForInput(firstRow['Date'] || firstRow['Voucher Date']) || getTodayDate());
 
-                if (firstRow['Ship From']) setShipFromAddress1(firstRow['Ship From']);
-                else if (firstRow['Consignee - Address']) setShipFromAddress1(firstRow['Consignee - Address']);
+                // Bill From address — new schema uses granular sub-fields
+                if (firstRow['Bill From - Address Line 1']) setBillFromAddress1(firstRow['Bill From - Address Line 1']);
+                if (firstRow['Bill From - Address Line 2']) setBillFromAddress2(firstRow['Bill From - Address Line 2']);
+                if (firstRow['Bill From - City']) setBillFromCity(firstRow['Bill From - City']);
+                if (firstRow['Bill From - State']) setBillFromState(firstRow['Bill From - State']);
+                if (firstRow['Bill From - Pincode']) setBillFromPincode(firstRow['Bill From - Pincode']);
+                if (firstRow['Bill From - Country']) setBillFromCountry(firstRow['Bill From - Country']);
 
-                const mappedItems = data.map((row, idx) => ({
-                  id: (Date.now() + idx).toString(),
-                  itemCode: row['Item Code'] || '',
-                  itemName: row['Item Name'] || '',
-                  hsnSac: row['HSN/SAC'] || '',
-                  qty: parseFloat(row['Quantity'] || '0') || 0,
-                  uom: row['UOM'] || '',
-                  rate: parseFloat(row['Rate'] || '0') || 0,
-                  taxableValue: parseFloat(row['Taxable Value'] || '0') || 0,
-                  foreignRate: 0,
-                  foreignAmount: 0,
-                  igst: parseFloat(row['Integrated Tax (IGST)'] || '0') || 0,
-                  cgst: parseFloat(row['Central Tax (CGST)'] || '0') || 0,
-                  sgst: parseFloat(row['State Tax (SGST)'] || '0') || 0,
-                  cess: parseFloat(row['Cess'] || '0') || 0,
-                  invoiceValue: parseFloat(row['Item Amount'] || '0') || 0,
-                  description: row['Description'] || ''
-                }));
+                // Ship From address
+                if (firstRow['Ship From - Address Line 1']) setShipFromAddress1(firstRow['Ship From - Address Line 1']);
+                if (firstRow['Ship From - Address Line 2']) setShipFromAddress2(firstRow['Ship From - Address Line 2']);
+                if (firstRow['Ship From - City']) setShipFromCity(firstRow['Ship From - City']);
+                if (firstRow['Ship From - State']) setShipFromState(firstRow['Ship From - State']);
+                if (firstRow['Ship From - Pincode']) setShipFromPincode(firstRow['Ship From - Pincode']);
+                if (firstRow['Ship From - Country']) setShipFromCountry(firstRow['Ship From - Country']);
+
+                // Additional Purchase Header Fields
+                const purchaseOrderNoVal = firstRow['Purchase Order No.'] || '';
+                if (purchaseOrderNoVal) setPurchaseOrderNo(purchaseOrderNoVal);
+
+                const voucherSeriesVal = firstRow['Purchase Voucher Series'] || '';
+                if (voucherSeriesVal) setSelectedPurchaseConfig(voucherSeriesVal);
+
+                const inputType = firstRow['Input Type'] || '';
+                if (inputType) {
+                  if (inputType.toLowerCase().includes('interstate')) setPurchaseInputTypes(['Interstate']);
+                  else if (inputType.toLowerCase().includes('import')) setPurchaseInputTypes(['Import']);
+                  else setPurchaseInputTypes(['Intrastate']);
+                }
+
+                const foreignCurrVal = firstRow['Foreign Currency'] || '';
+                if (foreignCurrVal) {
+                  setInvoiceInForeignCurrency(foreignCurrVal.toLowerCase() === 'yes' ? 'Yes' : 'No');
+                }
+
+                const conversionRateVal = firstRow['Conversion Rate'] || '';
+                if (conversionRateVal) setExchangeRate(conversionRateVal);
+
+                const currencyVal = firstRow['Currency'] || '';
+                if (currencyVal) setVendorBillingCurrency(currencyVal);
+
+                const posVal = firstRow['Place of Supply'] || '';
+                if (posVal) setBillFromState(posVal);
+
+                // Summary / Due Details
+                if (firstRow['TDS/TCS under GST']) setPurchaseTdsGst(firstRow['TDS/TCS under GST']);
+                if (firstRow['TDS/TCS under Income Tax']) setPurchaseTdsIt(firstRow['TDS/TCS under Income Tax']);
+                if (firstRow['Advance Paid']) setPurchaseAdvancePaid(firstRow['Advance Paid']);
+                if (firstRow['Amount Due']) setPurchaseToPay(firstRow['Amount Due']);
+                if (firstRow['Posting Note']) setPurchasePostingNote(firstRow['Posting Note']);
+
+                // Transit Details
+                if (firstRow['Received In']) setPurchaseTransitReceivedIn(firstRow['Received In']);
+                if (firstRow['Mode of Transport']) setPurchaseTransitMode(firstRow['Mode of Transport']);
+                if (firstRow['Received Date']) setPurchaseTransitReceiptDate(formatDateForInput(firstRow['Received Date']) || getTodayDate());
+                if (firstRow['Received Time']) setPurchaseTransitReceiptTime(firstRow['Received Time']);
+                if (firstRow['Received Quantity']) setPurchaseTransitReceivedQty(firstRow['Received Quantity']);
+                if (firstRow['Delivery Type']) setPurchaseTransitDeliveryType(firstRow['Delivery Type']);
+                if (firstRow['Transporter ID/GSTIN']) setPurchaseTransitTransporterId(firstRow['Transporter ID/GSTIN']);
+                if (firstRow['Transporter Name']) setPurchaseTransitTransporterName(firstRow['Transporter Name']);
+                if (firstRow['Vehicle No.']) setPurchaseTransitVehicleNo(firstRow['Vehicle No.']);
+                if (firstRow['LR/GR/Consignment No']) setPurchaseTransitLrGrConsignment(firstRow['LR/GR/Consignment No']);
+
+                const mappedItems = data.map((row, idx) => {
+                  const igst = parseFloat(row['IGST'] || row['Integrated Tax (IGST)'] || '0') || 0;
+                  const cgst = parseFloat(row['CGST'] || row['Central Tax (CGST)'] || '0') || 0;
+                  const sgst = parseFloat(row['SGST/UTGST'] || row['SGST'] || row['State Tax (SGST)'] || '0') || 0;
+                  const cess = parseFloat(row['Cess'] || '0') || 0;
+                  const taxable = parseFloat(row['Taxable Value'] || '0') || 0;
+                  // If Invoice Value not extracted directly, derive it
+                  const rawInv = parseFloat(row['Invoice Value'] || row['Item Amount'] || '0') || 0;
+                  const invoiceValue = rawInv > 0 ? rawInv : (taxable + igst + cgst + sgst + cess) || taxable;
+
+                  return {
+                    id: (Date.now() + idx).toString(),
+                    itemCode: row['Item Code'] || '',
+                    itemName: row['Item Name'] || '',
+                    hsnSac: row['HSN/SAC'] || '',
+                    qty: parseFloat(row['Qty'] || row['Quantity'] || '0') || 0,
+                    uom: row['UOM'] || '',
+                    rate: parseFloat(row['Item Rate'] || row['Rate'] || '0') || 0,
+                    taxableValue: taxable,
+                    foreignRate: parseFloat(row['Rate (FC)'] || '0') || 0,
+                    foreignAmount: parseFloat(row['Amount (FC)'] || '0') || 0,
+                    igst,
+                    cgst,
+                    sgst,
+                    cess,
+                    invoiceValue,
+                    description: row['Description'] || ''
+                  };
+                });
                 console.log('[VouchersPage] Mapped Purchase Items:', mappedItems);
                 setPurchaseItems(mappedItems);
               } else {
                 // For Sales, Payment, Receipt: use reconstructed ExtractedInvoiceData for sub-components
-                // Strict mapping for sub-component consumption
                 const lineItems = data.map(row => ({
                   itemDescription: row['Item Name'] || '',
                   hsnCode: row['HSN/SAC'] || '',
-                  quantity: parseFloat(row['Quantity'] || '0') || 0,
-                  rate: parseFloat(row['Rate'] || '0') || 0,
-                  amount: parseFloat(row['Item Amount'] || '0') || 0
+                  // New schema: "Qty" — also tolerate legacy "Quantity"
+                  quantity: parseFloat(row['Qty'] || row['Quantity'] || '0') || 0,
+                  // New schema: "Item Rate" — also tolerate legacy "Rate"
+                  rate: parseFloat(row['Item Rate'] || row['Rate'] || '0') || 0,
+                  // New schema: "Invoice Value" per row — also tolerate legacy "Item Amount"
+                  amount: parseFloat(row['Invoice Value'] || row['Item Amount'] || '0') || 0,
+                  cgst: parseFloat(row['CGST'] || '0') || 0,
+                  sgst: parseFloat(row['SGST/UTGST'] || row['SGST'] || '0') || 0,
+                  igst: parseFloat(row['IGST'] || '0') || 0,
+                  cess: parseFloat(row['Cess'] || '0') || 0,
+                  taxableValue: parseFloat(row['Taxable Value'] || '0') || 0
                 }));
 
+                // Compute totals by summing per-row values
+                const computedTaxableValue = data.reduce((s, r) => s + (parseFloat(r['Taxable Value'] || '0') || 0), 0);
+                const computedCgst = data.reduce((s, r) => s + (parseFloat(r['CGST'] || '0') || 0), 0);
+                // Schema uses "SGST/UTGST" as the unified key
+                const computedSgst = data.reduce((s, r) => s + (parseFloat(r['SGST/UTGST'] || r['SGST'] || '0') || 0), 0);
+                const computedIgst = data.reduce((s, r) => s + (parseFloat(r['IGST'] || '0') || 0), 0);
+                const computedCess = data.reduce((s, r) => s + (parseFloat(r['Cess'] || '0') || 0), 0);
+                const computedInvoiceValue = data.reduce((s, r) => s + (parseFloat(r['Invoice Value'] || r['Item Amount'] || '0') || 0), 0);
+
                 const reconstructed: any = {
-                  sellerName: firstRow['Customer Name'] || firstRow['Vendor Name'] || firstRow['Bill From'] || firstRow['Buyer/Supplier - Mailing Name'] || '',
-                  invoiceNumber: firstRow['Sales Invoice No'] || firstRow['Supplier Invoice No'] || '',
-                  invoiceDate: formatDateForInput(firstRow['Voucher Date'] || firstRow['Date'] || '') || getTodayDate(),
-                  subtotal: parseFloat(firstRow['Total Taxable Value'] || '0') || 0,
-                  cgstAmount: parseFloat(firstRow['Total CGST'] || '0') || 0,
-                  sgstAmount: parseFloat(firstRow['Total SGST'] || '0') || 0,
-                  igstAmount: parseFloat(firstRow['Total IGST'] || '0') || 0,
-                  totalAmount: parseFloat(firstRow['Total Invoice Value'] || '0') || 0,
-                  lineItems
+                  sellerName: firstRow['Customer Name'] || firstRow['Vendor Name'] || firstRow['Buyer/Supplier - Mailing Name'] || '',
+                  // New schema: "Sales Invoice No." (with dot)
+                  invoiceNumber: firstRow['Sales Invoice No.'] || firstRow['Sales Invoice No'] || firstRow['Supplier Invoice No.'] || firstRow['Supplier Invoice No'] || '',
+                  // New schema: "Date" (was "Voucher Date")
+                  invoiceDate: formatDateForInput(firstRow['Date'] || firstRow['Voucher Date'] || '') || getTodayDate(),
+                  subtotal: computedTaxableValue,
+                  cgstAmount: computedCgst,
+                  sgstAmount: computedSgst,
+                  igstAmount: computedIgst,
+                  cessAmount: computedCess,
+                  totalAmount: computedInvoiceValue,
+                  lineItems,
+                  // Additional Sales Fields for direct sync
+                  gstin: firstRow['GSTIN'] || '',
+                  placeOfSupply: firstRow['Place of Supply'] || '',
+                  stateType: (firstRow['State Type'] || 'within').toLowerCase(),
+                  invoiceType: firstRow['Invoice Type'] || 'Regular',
+                  currency: firstRow['Currency'] || '',
+                  exchangeRate: parseFloat(firstRow['Conversion Rate'] || '0') || 0,
+                  billToAddress1: firstRow['Bill To - Address Line 1'] || '',
+                  billToAddress2: firstRow['Bill To - Address Line 2'] || '',
+                  billToCity: firstRow['Bill To - City'] || '',
+                  billToState: firstRow['Bill To - State'] || '',
+                  billToPincode: firstRow['Bill To - Pincode'] || '',
+                  billToCountry: firstRow['Bill To - Country'] || '',
+                  // Summary Fields
+                  stateCess: firstRow['State Cess'] || '',
+                  tdsIncomeTax: firstRow['TDS/TCS under Income Tax'] || '',
+                  tdsGst: firstRow['TDS/TCS under GST'] || '',
+                  advanceAmount: firstRow['Advance'] || '',
+                  payable: firstRow['Payable'] || '',
+                  postingNote: firstRow['Posting Note:'] || '',
+                  // Dispatch Fields
+                  dispatchFrom: firstRow['Dispatch From'] || '',
+                  modeOfTransport: firstRow['Mode of Transport'] || '',
+                  dispatchDate: firstRow['Dispatch Date'] || '',
+                  dispatchTime: firstRow['Dispatch Time'] || '',
+                  transporterId: firstRow['Transporter ID/GSTIN'] || '',
+                  transporterName: firstRow['Transporter Name'] || '',
+                  vehicleNo: firstRow['Vehicle No.'] || '',
+                  lrGrConsignment: firstRow['LR/GR/Consignment No'] || ''
                 };
                 console.log('[VouchersPage] Reconstructed PrefilledData:', reconstructed);
                 setLocalPrefilledData(reconstructed);

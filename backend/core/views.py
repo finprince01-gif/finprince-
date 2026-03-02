@@ -450,12 +450,16 @@ class AIProxyView(views.APIView):
 
             # Numeric-only fields — strip currency symbols, commas, stray units
             NUMERIC_FIELDS = {
-                'Rate', 'Taxable Value', 'Integrated Tax (IGST)', 'Central Tax (CGST)',
-                'State Tax (SGST)', 'Cess', 'Item Amount', 'Disc %', 'Disc Amount', 'GST %',
+                'Rate', 'Item Rate', 'Taxable Value', 'Taxable Amount',
+                'Integrated Tax (IGST)', 'Central Tax (CGST)', 'State Tax (SGST)', 
+                'IGST', 'CGST', 'SGST/UTGST', 'Cess', 'Item Amount', 'Amount', 
+                'Disc %', 'Disc%', 'Disc Amount', 'GST %', 'GST Rate',
                 'Total Taxable Value', 'Total IGST', 'Total CGST', 'Total SGST', 'Total Cess', 
-                'Total State Cess', 'Total Invoice Value', 'TDS Income Tax', 'TDS GST', 
+                'Total State Cess', 'Total Invoice Value', 'Invoice Value',
+                'TDS Income Tax', 'TDS GST', 'TDS/TCS under GST', 'TDS/TCS under Income Tax',
                 'Advance Paid', 'To Pay', 'IGST Rate', 'CGST Rate', 'SGST/UTGST Rate', 
                 'Cess Rate', 'Cess Rate Per Unit', 'State Cess Rate',
+                'Quantity', 'Qty', 'Billed Quantity', 'Actual Quantity',
                 'Advance Payment/Receipt/Refund Details - IGST Rate',
                 'Advance Payment/Receipt/Refund Details - IGST Amount',
                 'Advance Payment/Receipt/Refund Details - SGST Rate',
@@ -478,60 +482,91 @@ class AIProxyView(views.APIView):
                         obj[k] = ''
                         continue
                         
+                    # 1. Normalize strings to UPPERCASE and clean noise
+                    if isinstance(v, str):
+                        v = ' '.join(v.split()).upper()
+                        obj[k] = v
+
+                    # 2. Extract numeric values rigorously
                     if k in NUMERIC_FIELDS:
                         val = str(v).strip()
                         if val:
+                            # Remove commas and non-numeric except dot and minus
                             cleaned = _re.sub(r'[^\d.\-]', '', val.replace(',', ''))
-                            obj[k] = cleaned if cleaned else ''
+                            obj[k] = cleaned if cleaned else '0'
                         else:
-                            obj[k] = ''
+                            obj[k] = '0'
 
             # Clean header data
             clean_numeric_fields(invoice_data)
 
+            # --- Financial Consistency Validation ---
+            total_taxable_items = 0.0
+            total_tax_items = 0.0
+            
             for idx, item in enumerate(items, start=1):
-                if not isinstance(item, dict):
-                    continue
-
-                # 1. Re-assign sequential S.No
+                if not isinstance(item, dict): continue
+                
                 item['S.No'] = str(idx)
-
-                # 2. Clean numeric and null fields
                 clean_numeric_fields(item)
 
-                # 3. Auto-split Quantity + UOM if still combined (e.g. "8 NOS", "2.5 KG")
-                qty_raw = str(item.get('Quantity', '')).strip()
-                uom_raw = str(item.get('UOM', '')).strip()
+                # 1. Qty + UOM split
+                qty_raw = str(item.get('Quantity') or item.get('Qty') or item.get('Billed Quantity') or '').strip()
+                uom_raw = str(item.get('UOM') or item.get('Quantity UOM') or '').strip()
                 if qty_raw and not uom_raw:
-                    m = _re.match(r'^([\d.,]+)\s*([A-Za-z]+)$', qty_raw)
+                    m = _re.match(r'^([\d.]+)\s*([A-Z]+)$', qty_raw)
                     if m:
-                        item['Quantity'] = m.group(1)
-                        item['UOM'] = m.group(2).upper()
+                        # Attempt to assign back to whichever field was present
+                        if 'Quantity' in item: item['Quantity'] = m.group(1)
+                        if 'Qty' in item: item['Qty'] = m.group(1)
+                        if 'UOM' in item: item['UOM'] = m.group(2)
+                        if 'Quantity UOM' in item: item['Quantity UOM'] = m.group(2)
+
+                # 2. Per-Row Validation: Rate * Qty ≈ Taxable Value
+                try:
+                    q = float(item.get('Quantity') or item.get('Qty') or item.get('Billed Quantity') or 0)
+                    r = float(item.get('Item Rate') or item.get('Rate') or item.get('Ledger Rate') or 0)
+                    t = float(item.get('Taxable Value') or item.get('Taxable Amount') or 0)
+                    if q > 0 and r > 0 and t > 0:
+                        expected_t = q * r
+                        if abs(expected_t - t) > 2.0: # allow tolerance
+                            logger.warning(f"Row {idx} calculation mismatch: {q} * {r} = {expected_t} but found {t}")
+                except (ValueError, TypeError): pass
+
+                # 3. Aggregate for validation
+                try:
+                    total_taxable_items += float(item.get('Taxable Value') or item.get('Taxable Amount') or 0)
+                    total_tax_items += float(item.get('IGST') or item.get('Integrated Tax (IGST)') or 0) + \
+                                       float(item.get('CGST') or item.get('Central Tax (CGST)') or 0) + \
+                                       float(item.get('SGST/UTGST') or item.get('State Tax (SGST)') or 0) + \
+                                       float(item.get('Cess') or 0)
+                except (ValueError, TypeError): pass
+
+                # 4. HSN normalization
+                hsn = _re.sub(r'[^\d]', '', str(item.get('HSN/SAC', '')))
+                item['HSN/SAC'] = hsn if 4 <= len(hsn) <= 8 else ''
+            
+            # --- Cross-check Totals & Prevent Numeric Drift ---
+            try:
+                header_taxable = float(invoice_data.get('Total Taxable Value') or 0)
+                header_total = float(invoice_data.get('Total Invoice Value') or 0)
+                total_tax_header = float(invoice_data.get('Total IGST') or 0) + \
+                                  float(invoice_data.get('Total CGST') or 0) + \
+                                  float(invoice_data.get('Total SGST') or 0)
+
+                # If item-level aggregation is strong but header is zero/missing, promote items
+                if total_taxable_items > 0 and header_taxable == 0:
+                    invoice_data['Total Taxable Value'] = str(total_taxable_items)
                 
-                # 4. Item Name promote logic
-                if not item.get('Item Name') and item.get('Description'):
-                    item['Item Name'] = item['Description']
-                    item['Description'] = ''
-
-                # 5. GST Rate
-                gst_rate = str(item.get('GST Rate', '')).strip()
-                if gst_rate:
-                    gst_rate = gst_rate.replace('%', '').strip()
-                    try:
-                        gst_val = float(gst_rate.replace(',', ''))
-                        valid_slabs = {0, 0.1, 0.25, 1.5, 3, 5, 6, 7.5, 9, 12, 14, 18, 28}
-                        if gst_val > 28:
-                            item['GST Rate'] = ''
-                        else:
-                            item['GST Rate'] = str(gst_val) if gst_val not in valid_slabs else gst_rate
-                    except ValueError:
-                        item['GST Rate'] = ''
-
-                # 6. HSN/SAC
-                hsn = str(item.get('HSN/SAC', '')).strip()
-                if hsn:
-                    hsn_digits = _re.sub(r'[^\d]', '', hsn)
-                    item['HSN/SAC'] = hsn_digits if 4 <= len(hsn_digits) <= 8 else ''
+                # Verify taxable subtotal
+                if abs(total_taxable_items - header_taxable) > 2.0 and total_taxable_items > 0:
+                    logger.warning(f"Consistency Check Failed: Items Sum ({total_taxable_items}) != Header Subtotal ({header_taxable})")
+                
+                # Verify Grand Total Integrity: Subtotal + Taxes ≈ Total
+                computed_total = total_taxable_items + (total_tax_header if total_tax_header > 0 else total_tax_items)
+                if abs(computed_total - header_total) > 5.0 and header_total > 0:
+                     logger.warning(f"Grand Total Integrity Mismatch: Found {header_total}, expected approx {computed_total}")
+            except Exception: pass
 
             # Store extraction performance
             end_time = time.time()

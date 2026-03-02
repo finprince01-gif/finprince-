@@ -115,8 +115,8 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):
     class Meta:
         model = VoucherPurchaseSupplierDetails
         fields = [
-            'id', 'date', 'supplier_invoice_no', 'purchase_voucher_no', 
-            'vendor_id', 'vendor_name', 'gstin', 'grn_reference', 'bill_from', 'ship_from', 
+            'id', 'date', 'supplier_invoice_no', 'purchase_voucher_series', 'purchase_voucher_no', 
+            'vendor_id', 'vendor_name', 'branch', 'gstin', 'grn_reference', 'bill_from', 'ship_from', 
             'input_type', 'invoice_in_foreign_currency', 'supporting_document',
             'supply_foreign_details', 'supply_inr_details',
             'due_details', 'transit_details', 'created_at'

@@ -300,13 +300,27 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
     //     They do NOT include Finpixe fields, DB columns, or calculated totals.
     const ALL_COLUMNS = extractionMode === 'tally'
         ? [...OFFICIAL_TALLY_VOUCHER_HEADERS]          // ✔ Official Tally Voucher headers only
-        : (VOUCHER_COLUMN_SCHEMAS[voucherType] || [...OFFICIAL_TALLY_VOUCHER_HEADERS].slice(0, 27));
+        // De-duplicate: schema may list same label in multiple sections (e.g. IGST in items + summary)
+        : [...new Set(VOUCHER_COLUMN_SCHEMAS[voucherType] || [...OFFICIAL_TALLY_VOUCHER_HEADERS].slice(0, 27))];
 
 
     const LINE_ITEM_FIELDS = [
-        "Item Name", "HSN/SAC", "HSN Description", "Quantity", "UOM", "Rate", "Taxable Value",
-        "Item Amount", "Description", "IGST Rate", "CGST Rate", "SGST/UTGST Rate",
-        "Cess Rate", "Cess Rate Per Unit", "State Cess Rate", "GST Rate Details", "GST Taxability Type"
+        // ── Core item identification ──────────────────────────────────────────
+        "Item Code", "Item Name", "HSN/SAC", "HSN Description", "Description", "Sales Ledger",
+        // ── Quantity / Unit ───────────────────────────────────────────────────
+        "Qty", "Quantity", "UOM", "UQC", "Alternate Unit",
+        // ── Foreign currency ──────────────────────────────────────────────────
+        "Rate (FC)", "Amount (FC)",
+        // ── INR pricing ───────────────────────────────────────────────────────
+        "Item Rate", "Rate", "Taxable Value",
+        // ── Tax columns ───────────────────────────────────────────────────────
+        "CGST", "SGST", "SGST/UTGST", "IGST", "CESS", "Cess",
+        "IGST Rate", "CGST Rate", "SGST/UTGST Rate",
+        "Cess Rate", "Cess Rate Per Unit", "State Cess Rate",
+        // ── Row total ─────────────────────────────────────────────────────────
+        "Invoice Value", "Item Amount",
+        // ── Tally-specific per-row fields ────────────────────────────────────
+        "GST Rate Details", "GST Taxability Type"
     ].filter(f => ALL_COLUMNS.includes(f));
 
     const HEADER_FIELDS = ALL_COLUMNS.filter(col => !LINE_ITEM_FIELDS.includes(col));
@@ -530,8 +544,34 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         if (!onUpload) return;
         if (invoiceResults.length === 0) { showError('No data extracted.'); return; }
 
-        // ── Auto-compute Total Invoice Value if missing (sum of Item Amount across all items) ──
+        // ── Auto-compute Invoice Value if missing (sum of Item Amount across all items) ──
+        // Sales & Purchase use "Invoice Value"; Credit/Debit Notes use "Total Invoice Value"
+        // ── Auto-compute "Invoice Value" per item if missing ──────────────────
+        // "Invoice Value" is a LINE_ITEM field in Sales/Purchase schema.
+        // If the AI did not extract it directly, derive it from Taxable Value + taxes.
+        // For Credit/Debit Notes, the legacy "Total Invoice Value" header field is used.
         const autoComputedResults = invoiceResults.map(res => {
+            if (voucherType === 'Sales' || voucherType === 'Purchase') {
+                // Fix each item row: fill "Invoice Value" if empty
+                const fixedItems = res.items.map(item => {
+                    const existing = String(item['Invoice Value'] ?? '').trim();
+                    if (existing !== '' && existing !== '0') return item;
+                    // Derive from taxable + tax columns
+                    const taxable = parseFloat(item['Taxable Value'] || '0') || 0;
+                    const igst = parseFloat(item['IGST'] || item['Integrated Tax (IGST)'] || '0') || 0;
+                    const cgst = parseFloat(item['CGST'] || item['Central Tax (CGST)'] || '0') || 0;
+                    const sgst = parseFloat(item['SGST/UTGST'] || item['SGST'] || item['State Tax (SGST)'] || '0') || 0;
+                    const cess = parseFloat(item['Cess'] || item['CESS'] || '0') || 0;
+                    const derived = taxable + igst + cgst + sgst + cess;
+                    // Also try legacy "Item Amount" fallback
+                    const legacyAmt = parseFloat(item['Item Amount'] || '0') || 0;
+                    const computed = derived > 0 ? derived : (legacyAmt > 0 ? legacyAmt : taxable);
+                    return computed > 0 ? { ...item, 'Invoice Value': String(computed) } : item;
+                });
+                return { ...res, items: fixedItems };
+            }
+
+            // Credit/Debit Notes: auto-fill "Total Invoice Value" in the header if missing
             const totalInvField = 'Total Invoice Value';
             if (HEADER_FIELDS.includes(totalInvField) && (!res.invoice[totalInvField] || res.invoice[totalInvField].trim() === '')) {
                 const sumItemAmount = res.items.reduce((sum, item) => {
@@ -539,19 +579,18 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                     return sum + (isNaN(amt) ? 0 : amt);
                 }, 0);
                 if (sumItemAmount > 0) {
-                    return {
-                        ...res,
-                        invoice: { ...res.invoice, [totalInvField]: String(sumItemAmount) }
-                    };
+                    return { ...res, invoice: { ...res.invoice, [totalInvField]: String(sumItemAmount) } };
                 }
             }
             return res;
         });
 
-        // ── Validation: Block if required columns are missing ──
+        // ── Validation: Block if truly non-derivable required fields are missing ──
+        // "Invoice Value" is intentionally NOT in the mandatory list for Sales/Purchase
+        // because it is always auto-computed above from Taxable Value + tax columns.
         const mandatoryForType: Record<string, string[]> = {
-            'Sales': ["Voucher Date", "Customer Name", "Total Invoice Value"],
-            'Purchase': ["Voucher Date", "Vendor Name", "Total Invoice Value"],
+            'Sales': ["Date", "Customer Name"],
+            'Purchase': ["Date", "Vendor Name"],
             'Payment': ["Voucher Date", "Account", "Amount"],
             'Receipt': ["Voucher Date", "Account", "Amount"],
             'Contra': ["Voucher Date", "From Account", "To Account", "Amount"],
@@ -561,7 +600,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             'Debit Note': ["Voucher Date", "Buyer/Supplier - Mailing Name", "Total Invoice Value"]
         };
 
-        const requiredCols = mandatoryForType[voucherType] || ["Voucher Date"];
+        const requiredCols = mandatoryForType[voucherType] || ["Date"];
         const missing = requiredCols.filter(col => {
             return autoComputedResults.some(res => {
                 const val = LINE_ITEM_FIELDS.includes(col)
