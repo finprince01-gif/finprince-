@@ -48,14 +48,14 @@ export const TALLY_WHITELIST: ReadonlySet<string> = OFFICIAL_TALLY_VOUCHER_SET;
 
 export const VOUCHER_COLUMN_SCHEMAS: Record<string, string[]> = {
     'Sales': [
-        "Voucher Date", "Supplier Invoice No", "Buyer/Supplier - Mailing Name", "Buyer/Supplier - GSTIN/UIN",
-        "Buyer/Supplier - Address", "Buyer/Supplier - State", "Total Taxable Value", "Total IGST", "Total CGST",
-        "Total SGST", "Total Cess", "Total State Cess", "Total Invoice Value", "Item Name", "HSN/SAC", "Quantity", "UOM", "Rate", "Taxable Value", "Item Amount"
+        "Voucher Date", "Sales Invoice No", "Customer Name", "GSTIN", "Bill To Address", "Ship To Address", "Sales Order No", "Outward Slip No", "Place Of Supply", "Reverse Charge", "Invoice Type",
+        "Total Taxable Value", "Total IGST", "Total CGST", "Total SGST", "Total Cess", "Total Invoice Value", "E Way Bill No",
+        "Item Code", "Item Name", "HSN/SAC", "Quantity", "UOM", "Alternate UOM", "Rate", "Taxable Value", "IGST", "CGST", "SGST", "Cess", "Item Amount", "Sales Ledger", "Description"
     ],
     'Purchase': [
-        "Voucher Date", "Supplier Invoice No", "Buyer/Supplier - Mailing Name", "Buyer/Supplier - GSTIN/UIN",
-        "Buyer/Supplier - Address", "Buyer/Supplier - State", "Total Taxable Value", "Total IGST", "Total CGST",
-        "Total SGST", "Total Cess", "Total State Cess", "Total Invoice Value", "Item Name", "HSN/SAC", "Quantity", "UOM", "Rate", "Taxable Value", "Item Amount"
+        "Voucher Date", "Supplier Invoice No", "Purchase Voucher No", "Vendor Name", "GSTIN", "Pending GRN", "Bill From", "Ship From",
+        "Total Taxable Value", "Total IGST", "Total CGST", "Total SGST", "Total Cess", "Total Invoice Value", "E Way Bill No",
+        "Item Code", "Item Name", "HSN/SAC", "Quantity", "UOM", "Rate", "Taxable Value", "Integrated Tax (IGST)", "Central Tax (CGST)", "State Tax (SGST)", "Cess", "Item Amount", "Description"
     ],
     'Payment': ["Voucher Date", "Account", "Party", "Amount", "Narration"],
     'Receipt': ["Voucher Date", "Account", "Party", "Amount", "Narration"],
@@ -669,10 +669,13 @@ export const KEYWORD_RULES: Record<string, string[]> = EXACT_TALLY_COLUMNS.reduc
     return acc;
 }, {} as Record<string, string[]>);
 
+KEYWORD_RULES['Customer Name'] = ['customer', 'buyer', 'party', 'name', 'client'];
+KEYWORD_RULES['Vendor Name'] = ['vendor', 'supplier', 'party', 'seller', 'name', 'merchant'];
+
 // ─── Critical fields ─────────────────────────────────────────────────────────────
 
 const CRITICAL_LINE_ITEM_FIELDS: string[] = [];
-const CRITICAL_HEADER_FIELDS = ['Buyer/Supplier - Mailing Name'];
+const CRITICAL_HEADER_FIELDS = ['Buyer/Supplier - Mailing Name', 'Customer Name', 'Vendor Name'];
 
 const POSITIVE_NUMERIC_FIELDS = [
     'Taxable Value',

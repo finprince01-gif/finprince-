@@ -299,7 +299,7 @@ class VendorMasterBasicDetail(models.Model):
 
     class Meta:
         managed = False
-        db_table = 'vendor_master_basicdetail'
+        db_table = 'vendor_master_vendorcreation_basicdetail'
         verbose_name = 'Vendor Master Basic Detail'
         verbose_name_plural = 'Vendor Master Basic Details'
         indexes = [
@@ -393,7 +393,7 @@ class VendorMasterGSTDetails(models.Model):
 
     class Meta:
         managed = False
-        db_table = 'vendor_master_gstdetails'
+        db_table = 'vendor_master_vendorcreation_gstdetails'
         verbose_name = 'Vendor Master GST Detail'
         verbose_name_plural = 'Vendor Master GST Details'
         indexes = [
@@ -422,11 +422,13 @@ class VendorMasterGSTDetails(models.Model):
 class VendorMasterProductService(models.Model):
     """
     Model for storing Vendor Products and Services.
-    This table stores the list of items supplied by the vendor.
+    Stores all items as a JSON array in a single row per vendor.
+    JSON structure: [{"hsn_sac_code": "", "item_code": "", "item_name": "",
+                       "supplier_item_code": "", "supplier_item_name": ""}]
     """
     
     tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
-    vendor_basic_detail = models.ForeignKey(
+    vendor_basic_detail = models.OneToOneField(
         VendorMasterBasicDetail,
         on_delete=models.CASCADE,
         related_name='product_services',
@@ -434,12 +436,11 @@ class VendorMasterProductService(models.Model):
         blank=True,
         help_text="Link to vendor basic details"
     )
-    
-    hsn_sac_code = models.CharField(max_length=20, blank=True, null=True, help_text="HSN or SAC Code")
-    item_code = models.CharField(max_length=50, blank=True, null=True, help_text="Internal Item Code")
-    item_name = models.CharField(max_length=200, help_text="Internal Item Name")
-    supplier_item_code = models.CharField(max_length=50, blank=True, null=True, help_text="Supplier's Item Code")
-    supplier_item_name = models.CharField(max_length=200, blank=True, null=True, help_text="Supplier's Item Name")
+    # All items stored as a JSON array
+    items = models.JSONField(
+        default=list,
+        help_text="JSON array of product/service items"
+    )
     
     # Metadata
     is_active = models.BooleanField(default=True)
@@ -450,17 +451,15 @@ class VendorMasterProductService(models.Model):
 
     class Meta:
         managed = False
-        db_table = 'vendor_master_productservices'
+        db_table = 'vendor_master_vendorcreation_productservices'
         verbose_name = 'Vendor Master Product/Service'
         verbose_name_plural = 'Vendor Master Products/Services'
-        indexes = [
-            models.Index(fields=['tenant_id']),
-            models.Index(fields=['vendor_basic_detail']),
-            models.Index(fields=['item_code']),
-        ]
 
     def __str__(self):
-        return f"{self.item_name} ({self.supplier_item_name or 'No Supplier Name'})"
+        count = len(self.items) if self.items else 0
+        return f"Products for vendor {self.vendor_basic_detail_id} ({count} items)"
+
+
 
 
 class VendorMasterTDS(models.Model):
@@ -514,7 +513,7 @@ class VendorMasterTDS(models.Model):
 
     class Meta:
         managed = False
-        db_table = 'vendor_master_tds'
+        db_table = 'vendor_master_vendorcreation_tds'
         verbose_name = 'Vendor Master TDS Detail'
         verbose_name_plural = 'Vendor Master TDS Details'
         indexes = [
@@ -575,7 +574,7 @@ class VendorMasterBanking(models.Model):
 
     class Meta:
         managed = False
-        db_table = 'vendor_master_banking'
+        db_table = 'vendor_master_vendorcreation_banking'
         verbose_name = 'Vendor Master Banking Detail'
         verbose_name_plural = 'Vendor Master Banking Details'
         indexes = [
@@ -623,7 +622,7 @@ class VendorMasterTerms(models.Model):
 
     class Meta:
         managed = False
-        db_table = 'vendor_master_terms'
+        db_table = 'vendor_master_vendorcreation_terms'
         verbose_name = 'Vendor Master Terms & Conditions'
         verbose_name_plural = 'Vendor Master Terms & Conditions'
         indexes = [

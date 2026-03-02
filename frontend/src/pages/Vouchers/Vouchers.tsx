@@ -17,6 +17,7 @@ import PaymentVoucherBulk from './PaymentVoucherBulk';
 import ReceiptVoucher from './ReceiptVoucher';
 import CreateGRNModal from '../../components/CreateGRNModal';
 import SearchableSelect from '../../components/SearchableSelect';
+import CreateVendorModal from '../../components/CreateVendorModal';
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5003';
 
@@ -96,7 +97,73 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const imageInputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
   const excelInputRef = useRef<HTMLInputElement>(null);
-  const [isMassUploadOpen, setIsMassUploadOpen] = useState(false);
+  const [richVendors, setRichVendors] = useState<any[]>([]);
+  const [richCustomers, setRichCustomers] = useState<any[]>([]);
+  const [vendorGstDetails, setVendorGstDetails] = useState<any[]>([]);
+  const [pendingGRNs, setPendingGRNs] = useState<any[]>([]);
+  const [vendorAddresses, setVendorAddresses] = useState<string[]>([]);
+  const [inventoryLocations, setInventoryLocations] = useState<any[]>([]);
+
+  const fetchRichData = useCallback(async () => {
+    // 1. Rich Vendors & Customers
+    try {
+      const [rv, rc] = await Promise.all([
+        apiService.getRichVendors(),
+        apiService.getRichCustomers()
+      ]);
+      setRichVendors(Array.isArray(rv) ? rv : ((rv as any).results || []));
+      setRichCustomers(Array.isArray(rc) ? rc : ((rc as any).results || []));
+    } catch (err) {
+      console.warn('Failed to fetch Rich Vendors/Customers', err);
+    }
+
+    // 2. Vendor GST Details
+    try {
+      const gst = await httpClient.get<any[]>('/api/vendors/gst-details/');
+      setVendorGstDetails(Array.isArray(gst) ? gst : ((gst as any).results || []));
+    } catch (err) {
+      console.warn('Failed to fetch Vendor GST Details', err);
+    }
+
+    // 3. Inventory Locations (Critical for Dropdown)
+    try {
+      const locs = await apiService.getInventoryLocations();
+      const locsAny = locs as any;
+
+      if (Array.isArray(locsAny)) {
+        setInventoryLocations(locsAny);
+      } else if (locsAny && locsAny.results && Array.isArray(locsAny.results)) {
+        // Handle pagination if backend returns { results: [...] }
+        setInventoryLocations(locsAny.results);
+      } else {
+        setInventoryLocations([]);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch Inventory Locations', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchRichData();
+  }, [fetchRichData]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (scannerMenuRef.current && !scannerMenuRef.current.contains(event.target as Node)) {
+        setIsScannerMenuOpen(false);
+        setIsOthersSubmenuOpen(false);
+        setIsTallySubmenuOpen(false);
+      }
+      if (importMenuRef.current && !importMenuRef.current.contains(event.target as Node)) {
+        setIsImportMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   const [isCreateGRNModalOpen, setIsCreateGRNModalOpen] = useState(false);
 
   // Invoice Scanner Modal state
@@ -110,8 +177,16 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [masterScannerFiles, setMasterScannerFiles] = useState<FileList | null>(null);
   const masterScannerInputRef = useRef<HTMLInputElement>(null);
   const [uploadedInvoiceFiles, setUploadedInvoiceFiles] = useState<File[]>([]);
-  const [extractedInvoiceData, setExtractedInvoiceData] = useState<any[]>([]);
   const [isExtracting, setIsExtracting] = useState(false);
+
+  // Vendor Validation and Creation State
+  const [vendorValidationStatus, setVendorValidationStatus] = useState<string | null>(null);
+  const [vendorMatchedBy, setVendorMatchedBy] = useState<string>('');
+  const [isVendorDisabled, setIsVendorDisabled] = useState<boolean>(false);
+  const [vendorConflictMsg, setVendorConflictMsg] = useState<string>('');
+  const [extractedVendorData, setExtractedVendorData] = useState<any>(null);
+  const [isCreateVendorModalOpen, setIsCreateVendorModalOpen] = useState(false);
+
 
   // Subscription Usage
   const { subscriptionUsage, isLimitReached, refetch } = useSubscriptionUsage();
@@ -160,6 +235,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   // Common state
   const [date, setDate] = useState(getTodayDate());
   const [party, setParty] = useState('');
+  const [vendorId, setVendorId] = useState<number | null>(null);
   const [narration, setNarration] = useState('');
   const [isNarrationLoading, setIsNarrationLoading] = useState(false);
 
@@ -213,72 +289,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     }
   }, [sameAsBillFrom, billFromAddress1, billFromAddress2, billFromAddress3, billFromCity, billFromPincode, billFromState, billFromCountry]);
 
-  // Rich Vendor Data
-  const [richVendors, setRichVendors] = useState<any[]>([]);
-  const [richCustomers, setRichCustomers] = useState<any[]>([]);
-  const [vendorGstDetails, setVendorGstDetails] = useState<any[]>([]);
-  const [pendingGRNs, setPendingGRNs] = useState<any[]>([]);
-  const [vendorAddresses, setVendorAddresses] = useState<string[]>([]);
-  const [inventoryLocations, setInventoryLocations] = useState<any[]>([]);
-
-  // Fetch rich vendor data on mount
-  useEffect(() => {
-    const fetchData = async () => {
-      // 1. Rich Vendors & Customers
-      try {
-        const [rv, rc] = await Promise.all([
-          apiService.getRichVendors(),
-          apiService.getRichCustomers()
-        ]);
-        setRichVendors(Array.isArray(rv) ? rv : ((rv as any).results || []));
-        setRichCustomers(Array.isArray(rc) ? rc : ((rc as any).results || []));
-      } catch (err) {
-        console.warn('Failed to fetch Rich Vendors/Customers', err);
-      }
-
-      // 2. Vendor GST Details
-      try {
-        const gst = await httpClient.get<any[]>('/api/vendors/gst-details/');
-        setVendorGstDetails(Array.isArray(gst) ? gst : ((gst as any).results || []));
-      } catch (err) {
-        console.warn('Failed to fetch Vendor GST Details', err);
-      }
-
-      // 3. Inventory Locations (Critical for Dropdown)
-      try {
-        const locs = await apiService.getInventoryLocations();
-        console.log('Fetched Locations:', locs);
-        const locsAny = locs as any;
-
-        if (Array.isArray(locsAny)) {
-          setInventoryLocations(locsAny);
-        } else if (locsAny && locsAny.results && Array.isArray(locsAny.results)) {
-          // Handle pagination if backend returns { results: [...] }
-          setInventoryLocations(locsAny.results);
-        } else {
-          console.warn('Unexpected locations format:', locs);
-          setInventoryLocations([]);
-        }
-      } catch (err) {
-        console.warn('Failed to fetch Inventory Locations', err);
-      }
-    };
-    fetchData();
-  }, []);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (scannerMenuRef.current && !scannerMenuRef.current.contains(event.target as Node)) {
-        setIsScannerMenuOpen(false);
-        setIsOthersSubmenuOpen(false);
-        setIsTallySubmenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
 
   const [purchaseInputTypes, setPurchaseInputTypes] = useState<string[]>(['Intrastate']); // Default to Same State
   const [invoiceInForeignCurrency, setInvoiceInForeignCurrency] = useState<'Yes' | 'No'>('No');
@@ -1320,6 +1330,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     setDate(getTodayDate());
     setInvoiceNo('');
     setParty('');
+    setVendorId(null);
     setItems([{ name: '', qty: 1, rate: 0, taxableAmount: 0, cgstAmount: 0, sgstAmount: 0, igstAmount: 0, totalAmount: 0 }]);
     setAccount('');
     setSimpleAmount(0);
@@ -1330,7 +1341,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     setToAccountBalance(0);
     setPurchaseSupportingDocument(null);
     setEntries([{ ledger: '', note: '', refNo: '', debit: 0, credit: 0 }, { ledger: '', note: '', refNo: '', debit: 0, credit: 0 }]);
-    // Removed image clearing
+    setVendorValidationStatus(null);
+    setIsVendorDisabled(false);
   }, []);
 
   // Auto-set Inter-State flag based on party ledger's state
@@ -1583,40 +1595,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     return { partyLedgers, accountLedgers, allLedgers, partyOptions };
   }, [ledgers, cashBankLedgers, richVendors, vendorGstDetails, richCustomers]);
 
-  const openTermsModal = () => {
-    // Pre-fill draft fields from current vendor/customer's T&C data
-    setDraftCreditPeriod(masterTermsData?.credit_period || '');
-    setDraftCreditTerms(masterTermsData?.credit_terms || '');
-    setDraftPenaltyTerms(masterTermsData?.penalty_terms || '');
-    setDraftDeliveryTerms(masterTermsData?.delivery_terms || '');
-    // Support both vendor and customer field names for warranty/dispute
-    setDraftWarrantyDetails(masterTermsData?.warranty_details || masterTermsData?.warranty_guarantee_details || '');
-    setDraftForceMajeure(masterTermsData?.force_majeure || '');
-    setDraftDisputeTerms(masterTermsData?.dispute_terms || masterTermsData?.dispute_redressal_terms || '');
-    setIsTermsModalOpen(true);
-  };
-
-  const saveTermsModal = () => {
-    // Build formatted display string from individual fields
-    const parts: string[] = [];
-    if (draftCreditPeriod) parts.push(`Credit Period: ${draftCreditPeriod}`);
-    if (draftCreditTerms) parts.push(`Credit Terms: ${draftCreditTerms}`);
-    if (draftPenaltyTerms) parts.push(`Penalty Terms: ${draftPenaltyTerms}`);
-    if (draftDeliveryTerms) parts.push(`Delivery Terms: ${draftDeliveryTerms}`);
-    if (draftWarrantyDetails) parts.push(`Warranty / Guarantee: ${draftWarrantyDetails}`);
-    if (draftForceMajeure) parts.push(`Force Majeure: ${draftForceMajeure}`);
-    if (draftDisputeTerms) parts.push(`Dispute & Redressal: ${draftDisputeTerms}`);
-
-    if (parts.length > 0) {
-      setPurchaseTerms(parts.join('\n\n'));
-    } else {
-      setPurchaseTerms('');
-    }
-    setIsTermsModalOpen(false);
-  };
-
-  const handlePartyChange = (value: string) => {
+  const handlePartyChange = useCallback((value: string, forcedId?: number | null) => {
     setParty(value);
+
+    if (forcedId !== undefined) {
+      setVendorId(forcedId);
+    } else {
+      setVendorId(null); // Reset until matched
+    }
 
     // Auto-population logic for Vouchers
     if (voucherType === 'Purchase' || voucherType === 'Sales') {
@@ -1625,8 +1611,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       const refName = match ? match[2] : null;
 
       // 1. Try to match Vendor from Rich Data
-      const vendor = richVendors.find(v => v.vendor_name === entityName);
+      const lowerEntityName = (entityName || '').toLowerCase();
+      const vendor = richVendors.find(v => (v.vendor_name || '').toLowerCase() === lowerEntityName);
       if (vendor) {
+        setVendorId(vendor.id);
         let matchedGst = vendorGstDetails.find(g =>
           g.vendor_basic_detail === vendor.id && (refName ? g.reference_name === refName : true)
         );
@@ -1671,7 +1659,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       }
 
       // 2. Try to match Customer from Rich Data
-      const customer = richCustomers.find(c => c.customer_name === entityName);
+      const customer = richCustomers.find(c => (c.customer_name || '').toLowerCase() === lowerEntityName);
       if (customer) {
         const branches = customer.gst_details?.branches || [];
         let matchedBranch = branches.find((b: any) => refName ? b.defaultRef === refName : true);
@@ -1705,7 +1693,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       }
 
       // 3. Fallback to Ledgers
-      const ledger = ledgers.find(l => l.name === value);
+      const ledger = ledgers.find(l => (l.name || '').toLowerCase() === (value || '').toLowerCase());
       if (ledger) {
         if (ledger.gstin) setGstin(ledger.gstin);
         if (ledger.additional_data?.address) {
@@ -1714,7 +1702,89 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         setVendorAddresses([]);
       }
     }
+  }, [richVendors, richCustomers, vendorGstDetails, voucherType, setAddressFields, setGstin, setVendorBillingCurrency, setVendorAddresses, setPurchaseTerms, setMasterTermsData, ledgers]);
+
+  const validateVendorFromInvoice = async (vendorName: string, gstin: string, state: string, address: string) => {
+    try {
+      setExtractedVendorData({ vendor_name: vendorName, gstin, state, address });
+      const response = await httpClient.post<any>('/api/purchase/vendors/validate/', {
+        vendor_name: vendorName,
+        gstin: gstin,
+        state: state,
+        address: address
+      });
+
+      if (response && response.status === 'FOUND') {
+        setVendorValidationStatus('FOUND');
+        setVendorMatchedBy(response.matched_by);
+        setVendorId(response.vendor_id); // Match correctly
+        setIsVendorDisabled(true);
+      } else if (response && response.status === 'NOT_FOUND') {
+        setVendorValidationStatus('NOT_FOUND');
+        setIsVendorDisabled(false);
+      } else if (response && response.status === 'GSTIN_CONFLICT') {
+        setVendorValidationStatus('GSTIN_CONFLICT');
+        setVendorConflictMsg(response.message);
+        setIsVendorDisabled(false);
+      }
+    } catch (err) {
+      console.error('Vendor validation error:', err);
+    }
   };
+
+  const handleCreateVendorFromInvoice = async (data: any) => {
+    try {
+      const response = await httpClient.post<any>('/api/purchase/vendors/create/', data);
+      if (response && response.status === 'CREATED') {
+        showSuccess('Vendor Created Successfully!');
+        setIsCreateVendorModalOpen(false);
+        setVendorValidationStatus('FOUND');
+        setVendorMatchedBy('Newly Created');
+        setIsVendorDisabled(true);
+        setParty(data.vendor_name);
+        setVendorId(response.vendor_id); // Set the newly created vendor ID
+        handlePartyChange(data.vendor_name, response.vendor_id);
+
+        // Refresh master data to include the new vendor
+        fetchRichData();
+      }
+    } catch (err: any) {
+      showError(`Failed to create vendor: ${err.message || 'Error'}`);
+    }
+  };
+
+  const openTermsModal = () => {
+    // Pre-fill draft fields from current vendor/customer's T&C data
+    setDraftCreditPeriod(masterTermsData?.credit_period || '');
+    setDraftCreditTerms(masterTermsData?.credit_terms || '');
+    setDraftPenaltyTerms(masterTermsData?.penalty_terms || '');
+    setDraftDeliveryTerms(masterTermsData?.delivery_terms || '');
+    // Support both vendor and customer field names for warranty/dispute
+    setDraftWarrantyDetails(masterTermsData?.warranty_details || masterTermsData?.warranty_guarantee_details || '');
+    setDraftForceMajeure(masterTermsData?.force_majeure || '');
+    setDraftDisputeTerms(masterTermsData?.dispute_terms || masterTermsData?.dispute_redressal_terms || '');
+    setIsTermsModalOpen(true);
+  };
+
+  const saveTermsModal = () => {
+    // Build formatted display string from individual fields
+    const parts: string[] = [];
+    if (draftCreditPeriod) parts.push(`Credit Period: ${draftCreditPeriod}`);
+    if (draftCreditTerms) parts.push(`Credit Terms: ${draftCreditTerms}`);
+    if (draftPenaltyTerms) parts.push(`Penalty Terms: ${draftPenaltyTerms}`);
+    if (draftDeliveryTerms) parts.push(`Delivery Terms: ${draftDeliveryTerms}`);
+    if (draftWarrantyDetails) parts.push(`Warranty / Guarantee: ${draftWarrantyDetails}`);
+    if (draftForceMajeure) parts.push(`Force Majeure: ${draftForceMajeure}`);
+    if (draftDisputeTerms) parts.push(`Dispute & Redressal: ${draftDisputeTerms}`);
+
+    if (parts.length > 0) {
+      setPurchaseTerms(parts.join('\n\n'));
+    } else {
+      setPurchaseTerms('');
+    }
+    setIsTermsModalOpen(false);
+  };
+
 
   const { totalTaxableAmount, totalCgst, totalSgst, totalIgst, grandTotal } = useMemo(() => {
     return items.reduce((acc, item) => {
@@ -1781,11 +1851,27 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     let voucher: Voucher | null = null;
 
     if (voucherType === 'Purchase') {
+      let currentVendorId = vendorId;
+      if (!currentVendorId && party) {
+        // Try auto-match from richVendors
+        const lowerParty = party.toLowerCase();
+        const match = richVendors.find(v => v.vendor_name.toLowerCase() === lowerParty);
+        if (match) {
+          currentVendorId = match.id;
+          setVendorId(match.id);
+        }
+      }
+
+      if (!currentVendorId) {
+        showError("Please select a valid Vendor from the Master list.");
+        return;
+      }
       // Construct Payload for Purchase Voucher
       const purchaseData: any = {
         date: date,
         supplier_invoice_no: invoiceNo,
         purchase_voucher_no: voucherNumber,
+        vendor_id: currentVendorId,
         vendor_name: party,
         gstin: gstin,
         grn_reference: grnRefNo,
@@ -2225,7 +2311,36 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     options={partyOptions}
                     placeholder="Select Vendor"
                     className="w-full"
+                    disabled={isVendorDisabled}
                   />
+                  {vendorValidationStatus === 'FOUND' && (
+                    <div className="mt-2 text-xs text-emerald-600 font-semibold flex items-center justify-between gap-1 bg-emerald-50 px-2 py-1 rounded">
+                      <div className="flex items-center gap-1">
+                        <Icon name="check-circle" className="w-4 h-4" />
+                        Supplier Matched ({vendorMatchedBy})
+                      </div>
+                      <button type="button" onClick={() => { setIsVendorDisabled(false); setVendorValidationStatus(null); }} className="text-indigo-600 hover:text-indigo-800 underline">
+                        Reset
+                      </button>
+                    </div>
+                  )}
+                  {vendorValidationStatus === 'NOT_FOUND' && (
+                    <div className="mt-2 text-xs text-red-600 font-semibold flex items-center justify-between gap-2 p-2 bg-red-50 border border-red-200 rounded">
+                      <div className="flex items-center gap-1">
+                        <Icon name="x" className="w-4 h-4" />
+                        Vendor Not Found in Vendor Master
+                      </div>
+                      <button type="button" onClick={() => setIsCreateVendorModalOpen(true)} className="px-2 py-1 bg-white border border-red-200 text-red-600 rounded hover:bg-red-50 shadow-sm flex items-center gap-1">
+                        <Icon name="plus" className="w-3 h-3" /> Create Vendor
+                      </button>
+                    </div>
+                  )}
+                  {vendorValidationStatus === 'GSTIN_CONFLICT' && (
+                    <div className="mt-2 text-xs text-amber-600 font-semibold flex items-center gap-1 bg-amber-50 px-2 py-1 rounded">
+                      <Icon name="x" className="w-4 h-4" />
+                      {vendorConflictMsg}
+                    </div>
+                  )}
                   {/* datalist removed in favor of SearchableSelect */}
                 </div>
                 <div>
@@ -6159,6 +6274,16 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               setScannerFiles(null);
               refetch(); // Refresh usage after scan
             }}
+            onExtractionSuccess={(extractedData) => {
+              if (voucherType !== 'Purchase') return;
+
+              validateVendorFromInvoice(
+                extractedData.vendor_name,
+                extractedData.gstin,
+                extractedData.state,
+                extractedData.bill_from
+              );
+            }}
             onUpload={(data) => {
               console.log('[VouchersPage] Data received from InvoiceScannerModal:', data);
               if (!data || data.length === 0) return;
@@ -6172,7 +6297,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
                 // Flexible mapping for Party/Vendor
                 const partyVal = firstRow['Vendor Name'] || firstRow['Bill From'] || firstRow['Buyer/Supplier - Mailing Name'];
-                if (partyVal) setParty(partyVal);
+                if (partyVal) {
+                  // Use handlePartyChange to auto-populate terms, etc. if it matches a rich vendor
+                  handlePartyChange(partyVal);
+                }
 
                 if (firstRow['GSTIN']) setGstin(firstRow['GSTIN']);
                 // Normalise to YYYY-MM-DD before setting so <input type="date"> renders correctly
@@ -6216,9 +6344,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 }));
 
                 const reconstructed: any = {
-                  sellerName: firstRow['Vendor Name'] || firstRow['Bill From'] || firstRow['Buyer/Supplier - Mailing Name'] || '',
-                  invoiceNumber: firstRow['Supplier Invoice No'] || '',
-                  invoiceDate: formatDateForInput(firstRow['Voucher Date'] || '') || getTodayDate(),
+                  sellerName: firstRow['Customer Name'] || firstRow['Vendor Name'] || firstRow['Bill From'] || firstRow['Buyer/Supplier - Mailing Name'] || '',
+                  invoiceNumber: firstRow['Sales Invoice No'] || firstRow['Supplier Invoice No'] || '',
+                  invoiceDate: formatDateForInput(firstRow['Voucher Date'] || firstRow['Date'] || '') || getTodayDate(),
                   subtotal: parseFloat(firstRow['Total Taxable Value'] || '0') || 0,
                   cgstAmount: parseFloat(firstRow['Total CGST'] || '0') || 0,
                   sgstAmount: parseFloat(firstRow['Total SGST'] || '0') || 0,
@@ -6233,6 +6361,15 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           />
         )
       }
+
+      {/* Create Vendor Modal */}
+      {isCreateVendorModalOpen && extractedVendorData && (
+        <CreateVendorModal
+          onClose={() => setIsCreateVendorModalOpen(false)}
+          onSave={handleCreateVendorFromInvoice}
+          initialData={extractedVendorData}
+        />
+      )}
 
       {/* Create GRN Modal */}
       {

@@ -26,7 +26,7 @@ def create_vendor_terms(
         int: The ID of the created terms record
     """
     query = """
-        INSERT INTO vendor_master_terms (
+        INSERT INTO vendor_master_vendorcreation_terms (
             tenant_id,
             vendor_basic_detail_id,
             credit_limit,
@@ -87,7 +87,7 @@ def get_vendor_terms_by_id(terms_id: int) -> Optional[Dict[str, Any]]:
             updated_at,
             created_by,
             updated_by
-        FROM vendor_master_terms
+        FROM vendor_master_vendorcreation_terms
         WHERE id = %s
     """
     
@@ -127,7 +127,7 @@ def get_vendor_terms_by_vendor(vendor_basic_detail_id: int) -> List[Dict[str, An
             updated_at,
             created_by,
             updated_by
-        FROM vendor_master_terms
+        FROM vendor_master_vendorcreation_terms
         WHERE vendor_basic_detail_id = %s
         ORDER BY created_at DESC
     """
@@ -157,7 +157,7 @@ def update_vendor_terms(
         bool: True if updated successfully
     """
     query = """
-        UPDATE vendor_master_terms
+        UPDATE vendor_master_vendorcreation_terms
         SET
             credit_limit = %s,
             credit_period = %s,
@@ -196,7 +196,7 @@ def delete_vendor_terms(terms_id: int) -> bool:
         bool: True if deleted successfully
     """
     query = """
-        UPDATE vendor_master_terms
+        UPDATE vendor_master_vendorcreation_terms
         SET is_active = 0, updated_at = NOW()
         WHERE id = %s
     """
@@ -231,8 +231,8 @@ def get_all_vendor_terms(tenant_id: str) -> List[Dict[str, Any]]:
             vt.is_active,
             vt.created_at,
             vt.updated_at
-        FROM vendor_master_terms vt
-        LEFT JOIN vendor_master_basicdetail vbd ON vt.vendor_basic_detail_id = vbd.id
+        FROM vendor_master_vendorcreation_terms vt
+        LEFT JOIN vendor_master_vendorcreation_basicdetail vbd ON vt.vendor_basic_detail_id = vbd.id
         WHERE vt.tenant_id = %s AND vt.is_active = 1
         ORDER BY vt.created_at DESC
     """

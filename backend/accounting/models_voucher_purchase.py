@@ -13,6 +13,12 @@ class VoucherPurchaseSupplierDetails(BaseModel):
     supplier_invoice_no = models.CharField(max_length=100)
     purchase_voucher_no = models.CharField(max_length=100, null=True, blank=True)
     vendor_name = models.CharField(max_length=255)
+    vendor_basic_detail = models.ForeignKey(
+        'vendors.VendorMasterBasicDetail',
+        on_delete=models.RESTRICT,
+        db_column='vendor_basic_detail_id',
+        related_name='purchase_vouchers'
+    )
     gstin = models.CharField(max_length=50, null=True, blank=True)
     
     # GRN

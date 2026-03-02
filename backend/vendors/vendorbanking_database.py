@@ -32,7 +32,7 @@ def create_vendor_banking(data: Dict) -> Dict:
     updated_by = data.get('updated_by', 'system')
 
     query = """
-        INSERT INTO vendor_master_banking (
+        INSERT INTO vendor_master_vendorcreation_banking (
             tenant_id, vendor_basic_detail_id, bank_account_no, bank_name,
             ifsc_code, branch_name, swift_code, vendor_branch, account_type,
             is_active, created_at, updated_at, created_by, updated_by
@@ -79,7 +79,7 @@ def update_vendor_banking(banking_id: int, data: Dict) -> Dict:
         vendor_id = vendor_id.id
 
     query = """
-        UPDATE vendor_master_banking
+        UPDATE vendor_master_vendorcreation_banking
         SET bank_account_no = COALESCE(%s, bank_account_no),
             bank_name = COALESCE(%s, bank_name),
             ifsc_code = COALESCE(%s, ifsc_code),
@@ -133,7 +133,7 @@ def get_vendor_banking_by_id(banking_id: int) -> Optional[Dict]:
         SELECT id, tenant_id, vendor_basic_detail_id, bank_account_no, bank_name,
                ifsc_code, branch_name, swift_code, vendor_branch, account_type,
                is_active, created_at, updated_at, created_by, updated_by
-        FROM vendor_master_banking
+        FROM vendor_master_vendorcreation_banking
         WHERE id = %s
     """
     
@@ -180,7 +180,7 @@ def get_vendor_banking_by_vendor(vendor_basic_detail_id: int) -> List[Dict]:
         SELECT id, tenant_id, vendor_basic_detail_id, bank_account_no, bank_name,
                ifsc_code, branch_name, swift_code, vendor_branch, account_type,
                is_active, created_at, updated_at, created_by, updated_by
-        FROM vendor_master_banking
+        FROM vendor_master_vendorcreation_banking
         WHERE vendor_basic_detail_id = %s AND is_active = 1
         ORDER BY created_at DESC
     """
@@ -230,7 +230,7 @@ def list_vendor_banking_by_tenant(tenant_id: str) -> List[Dict]:
         SELECT id, tenant_id, vendor_basic_detail_id, bank_account_no, bank_name,
                ifsc_code, branch_name, swift_code, vendor_branch, account_type,
                is_active, created_at, updated_at, created_by, updated_by
-        FROM vendor_master_banking
+        FROM vendor_master_vendorcreation_banking
         WHERE tenant_id = %s
         ORDER BY created_at DESC
     """
@@ -277,7 +277,7 @@ def delete_vendor_banking(banking_id: int) -> bool:
         True if successful
     """
     query = """
-        UPDATE vendor_master_banking
+        UPDATE vendor_master_vendorcreation_banking
         SET is_active = 0, updated_at = NOW()
         WHERE id = %s
     """
