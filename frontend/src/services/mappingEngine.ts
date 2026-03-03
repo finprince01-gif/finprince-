@@ -48,14 +48,70 @@ export const TALLY_WHITELIST: ReadonlySet<string> = OFFICIAL_TALLY_VOUCHER_SET;
 
 export const VOUCHER_COLUMN_SCHEMAS: Record<string, string[]> = {
     'Sales': [
-        "Voucher Date", "Sales Invoice No", "Customer Name", "GSTIN", "Bill To Address", "Ship To Address", "Sales Order No", "Outward Slip No", "Place Of Supply", "Reverse Charge", "Invoice Type",
-        "Total Taxable Value", "Total IGST", "Total CGST", "Total SGST", "Total Cess", "Total Invoice Value", "E Way Bill No",
-        "Item Code", "Item Name", "HSN/SAC", "Quantity", "UOM", "Alternate UOM", "Rate", "Taxable Value", "IGST", "CGST", "SGST", "Cess", "Item Amount", "Sales Ledger", "Description"
+        // ── INVOICE DETAILS ──────────────────────────────────────────────────────
+        "Date", "Sales Invoice No.", "Sales Voucher Series", "Sales Voucher No.",
+        "Customer Name", "GSTIN", "Upload Supporting Document",
+        "Sales Order No.", "Outward Slip No.", "Place of Supply", "Reverse Charge",
+        "Invoice Type", "State Type", "Currency", "Conversion Rate",
+        // Bill To / Ship To address (deduplicated — one set)
+        "Bill To - Address Line 1", "Bill To - Address Line 2", "Bill To - City", "Bill To - State", "Bill To - Pincode", "Bill To - Country",
+        "Ship To - Address Line 1", "Ship To - Address Line 2", "Ship To - City", "Ship To - State", "Ship To - Pincode", "Ship To - Country",
+
+        // ── ITEM & TAX DETAILS (FOREIGN CURRENCY) ─────────────────────────────────
+        "Item Code", "Item Name", "HSN/SAC", "Quantity", "UQC", "Rate (FC)", "Amount (FC)",
+
+        // ── ITEM & TAX DETAILS (INR) ───────────────────────────────────────────────
+        // Note: Item Code / Item Name / HSN/SAC already listed above (deduplicated)
+        "Qty", "UOM", "Alternate Unit", "Item Rate",
+        "Taxable Value", "CGST", "SGST/UTGST", "IGST", "Cess",
+        "Invoice Value", "Sales Ledger", "Description",
+
+        // ── PAYMENT DETAILS (summary fields — not duplicated from item section) ─────
+        "State Cess", "Round Off",
+        "TDS/TCS under Income Tax", "TDS/TCS under GST", "Advance", "Payable", "Posting Note:",
+        "Advance Ref. No.", "Applied Now",
+
+        // ── DISPATCH DETAILS ──────────────────────────────────────────────────────
+        "Dispatch From", "Mode of Transport", "Dispatch Date", "Dispatch Time",
+        "Delivery Type", "Transporter ID/GSTIN", "Transporter Name", "Vehicle No.", "LR/GR/Consignment",
+        "Shipping Bill No.", "Shipping Bill Date", "Ship/Port Code", "Origin",
+        "Vessel/Flight No.", "Port of Loading", "Port of Discharge", "Final Destination",
+        "Railway Receipt No.", "Railway Receipt Date", "FNR No.", "Station of Loading", "Station of Discharge",
+
+        // ── E-INVOICE & E-WAY BILL DETAILS ───────────────────────────────────────
+        "Eway Bill - Available", "Eway Bill No.", "Eway Bill Date", "Validity Period", "Distance (KM)",
+        "Extension Date", "Extended EWB No.", "Extension Reason", "From Place",
+        "Remaining Distance", "New Validity", "Updated Vehicle No.",
+        "IRN", "Ack. No."
     ],
     'Purchase': [
-        "Voucher Date", "Supplier Invoice No", "Purchase Voucher No", "Vendor Name", "GSTIN", "Pending GRN", "Bill From", "Ship From",
-        "Total Taxable Value", "Total IGST", "Total CGST", "Total SGST", "Total Cess", "Total Invoice Value", "E Way Bill No",
-        "Item Code", "Item Name", "HSN/SAC", "Quantity", "UOM", "Rate", "Taxable Value", "Integrated Tax (IGST)", "Central Tax (CGST)", "State Tax (SGST)", "Cess", "Item Amount", "Description"
+        // ── SUPPLIER DETAILS ──────────────────────────────────────────────────────
+        "Date", "Supplier Invoice No.", "Purchase Voucher Series", "Purchase Voucher No.",
+        "Vendor Name", "GSTIN", "Upload Supporting Document",
+        "Bill From - Address Line 1", "Bill From - Address Line 2", "Bill From - City", "Bill From - State", "Bill From - Pincode", "Bill From - Country",
+        "Ship From - Address Line 1", "Ship From - Address Line 2", "Ship From - City", "Ship From - State", "Ship From - Pincode", "Ship From - Country",
+        "Bill To - Name", "Bill To - GSTIN", "Bill To - Address Line 1", "Bill To - Address Line 2", "Bill To - City", "Bill To - State", "Bill To - Pincode", "Bill To - Country",
+        "Ship To - Name", "Ship To - GSTIN", "Ship To - Address Line 1", "Ship To - Address Line 2", "Ship To - City", "Ship To - State", "Ship To - Pincode", "Ship To - Country",
+        "Input Type", "Foreign Currency", "Currency", "Conversion Rate", "Place of Supply",
+
+        // ── SUPPLY DETAILS (FOREIGN CURRENCY) ────────────────────────────────────
+        "Purchase Order No.", "Quantity", "UQC", "Rate (FC)", "Amount (FC)",
+
+        // ── SUPPLY DETAILS (INR) — per-line-item extractable fields ────────────────
+        // Note: Purchase Order No. / Quantity / UQC already above (deduplicated)
+        "Item Code", "Item Name", "HSN/SAC", "Qty", "UOM",
+        "Item Rate", "Taxable Value", "IGST", "CGST", "SGST/UTGST", "Cess",
+        "Invoice Value",
+
+        // ── DUE DETAILS (summary / header-level only — no duplicates of item cols) ──
+        "TDS/TCS under GST", "TDS/TCS under Income Tax", "Advance Paid", "Round Off", "Amount Due", "Posting Note",
+
+        // ── TRANSIT DETAILS ───────────────────────────────────────────────────────
+        "Received In", "Mode of Transport", "Received Date", "Received Time", "Received Quantity",
+        "Delivery Type", "Transporter ID/GSTIN", "Transporter Name", "Vehicle No.", "LR/GR/Consignment No",
+        "Bill of Lading No.", "Shipping Bill No.", "Shipping Bill Date", "Ship/Port Code", "Origin",
+        "Bill of Lading Date", "Vessel/Flight No.", "Port of Loading", "Port of Discharge", "Final Destination",
+        "Railway Receipt No.", "Railway Receipt Date", "FNR No.", "Station of Loading", "Station of Discharge"
     ],
     'Payment': ["Voucher Date", "Account", "Party", "Amount", "Narration"],
     'Receipt': ["Voucher Date", "Account", "Party", "Amount", "Narration"],
@@ -669,13 +725,14 @@ export const KEYWORD_RULES: Record<string, string[]> = EXACT_TALLY_COLUMNS.reduc
     return acc;
 }, {} as Record<string, string[]>);
 
-KEYWORD_RULES['Customer Name'] = ['customer', 'buyer', 'party', 'name', 'client'];
-KEYWORD_RULES['Vendor Name'] = ['vendor', 'supplier', 'party', 'seller', 'name', 'merchant'];
-
-// ─── Critical fields ─────────────────────────────────────────────────────────────
-
+const CRITICAL_HEADER_FIELDS = ['Buyer/Supplier - Mailing Name', 'Customer Name', 'Vendor Name', 'Supplier Invoice No', 'Date'];
 const CRITICAL_LINE_ITEM_FIELDS: string[] = [];
-const CRITICAL_HEADER_FIELDS = ['Buyer/Supplier - Mailing Name', 'Customer Name', 'Vendor Name'];
+
+KEYWORD_RULES['Buyer/Supplier - Mailing Name']?.push('seller', 'vendor name', 'bill from', 'merchant');
+KEYWORD_RULES['Buyer/Supplier - GSTIN/UIN']?.push('seller gstin', 'vendor gstin', 'supplier gstin');
+KEYWORD_RULES['Buyer/Supplier - State'] = ['state', 'place of supply', 'pos', 'billing state', 'supply state'];
+KEYWORD_RULES['Supplier Invoice No.'] = ['invoice no', 'bill no', 'inv no', 'reference', 'ref no'];
+KEYWORD_RULES['Date'] = ['invoice date', 'bill date', 'dated', 'voucher date'];
 
 const POSITIVE_NUMERIC_FIELDS = [
     'Taxable Value',

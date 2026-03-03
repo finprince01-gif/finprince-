@@ -319,6 +319,12 @@ export interface ExtractedLineItem {
   quantity: number;
   rate: number;
   amount: number;
+  cgst?: number;
+  sgst?: number;
+  igst?: number;
+  cess?: number;
+  taxableValue?: number;
+  uom?: string;
 }
 
 export interface ExtractedInvoiceData {

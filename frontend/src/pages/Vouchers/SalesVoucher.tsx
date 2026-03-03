@@ -91,6 +91,24 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
         return Array.from(new Set([...userLedgers, ...Array.from(hierarchyLedgers)]));
     }, [ledgers, hierarchy]);
 
+    const formatDateForInput = (dateString: string): string => {
+        if (!dateString) return '';
+        const parts = dateString.split(/[-\/]/);
+        if (parts.length === 3) {
+            if (parts[0].length === 4) {
+                return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+            }
+            if (parts[2].length === 4) {
+                return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+            }
+        }
+        try {
+            const d = new Date(dateString);
+            if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+        } catch { /* ignore */ }
+        return '';
+    };
+
     // Populate from AI Extraction
     React.useEffect(() => {
         if (prefilledData) {
@@ -98,33 +116,74 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
             setDate(prefilledData.invoiceDate || new Date().toISOString().split('T')[0]);
             setSalesInvoiceNo(prefilledData.invoiceNumber || '');
             setCustomerName(prefilledData.sellerName || ''); // Maps Seller/Party -> Customer Name
+            if (prefilledData.gstin) setGstin(prefilledData.gstin);
+            if (prefilledData.placeOfSupply) setPlaceOfSupply(prefilledData.placeOfSupply);
+            if (prefilledData.stateType) setStateType(prefilledData.stateType);
+            if (prefilledData.invoiceType) setInvoiceType(prefilledData.invoiceType);
+            if (prefilledData.currency) setCustomerBillingCurrency(prefilledData.currency);
+
+            if (prefilledData.billToAddress1) setBillToAddress1(prefilledData.billToAddress1);
+            if (prefilledData.billToAddress2) setBillToAddress2(prefilledData.billToAddress2);
+            if (prefilledData.billToCity) setBillToCity(prefilledData.billToCity);
+            if (prefilledData.billToState) setBillToState(prefilledData.billToState);
+            if (prefilledData.billToPincode) setBillToPincode(prefilledData.billToPincode);
+            if (prefilledData.billToCountry) setBillToCountry(prefilledData.billToCountry);
+
+            // Summary mapping
+            if (prefilledData.stateCess) setPaymentStateCess(prefilledData.stateCess);
+            if (prefilledData.tdsIncomeTax) setPaymentTdsIncomeTax(prefilledData.tdsIncomeTax);
+            if (prefilledData.tdsGst) setPaymentTdsGst(prefilledData.tdsGst);
+            if (prefilledData.advanceAmount) setPaymentAdvance(prefilledData.advanceAmount);
+            if (prefilledData.payable) setPaymentPayable(prefilledData.payable);
+            if (prefilledData.postingNote) setPaymentPostingNote(prefilledData.postingNote);
+
+            // Dispatch mapping
+            if (prefilledData.dispatchFrom) setDispatchFrom(prefilledData.dispatchFrom);
+            if (prefilledData.modeOfTransport) setModeOfTransport(prefilledData.modeOfTransport);
+            if (prefilledData.dispatchDate) setDispatchDate(formatDateForInput(prefilledData.dispatchDate) || '');
+            if (prefilledData.dispatchTime) setDispatchTime(prefilledData.dispatchTime);
+            if (prefilledData.transporterId) setTransporterId(prefilledData.transporterId);
+            if (prefilledData.transporterName) setTransporterName(prefilledData.transporterName);
+            if (prefilledData.vehicleNo) setVehicleNo(prefilledData.vehicleNo);
+            if (prefilledData.lrGrConsignment) setLrGrConsignment(prefilledData.lrGrConsignment);
 
             // Map items
             if (prefilledData.lineItems && prefilledData.lineItems.length > 0) {
                 const newRows = prefilledData.lineItems.map((item, index) => {
                     const qty = item.quantity || 1;
                     const rate = item.rate || 0;
-                    const taxable = qty * rate;
-                    // Default GST to 18% if not extracted (mostly not extracted in simple prompt)
-                    const gstRate = 18;
-                    const tax = taxable * (gstRate / 100);
+                    const taxable = item.taxableValue || (qty * rate);
+
+                    // Check if we have extracted taxes (even if 0)
+                    const hasExtractedTax = (
+                        item.cgst !== undefined ||
+                        item.sgst !== undefined ||
+                        item.igst !== undefined ||
+                        item.cess !== undefined
+                    );
+
+                    const cgst = hasExtractedTax ? (item.cgst || 0) : (taxable * 0.09);
+                    const sgst = hasExtractedTax ? (item.sgst || 0) : (taxable * 0.09);
+                    const igst = hasExtractedTax ? (item.igst || 0) : 0;
+                    const cess = item.cess || 0;
+                    const invVal = item.amount || (taxable + cgst + sgst + igst + cess);
 
                     return {
                         id: index + 1,
                         itemCode: '',
-                        itemName: item.itemDescription || '', // AI extracted "description" usually goes to itemName in our simple setup
+                        itemName: item.itemDescription || '',
                         salesLedger: '',
                         description: item.itemDescription || '',
                         hsnSac: item.hsnCode || '',
                         qty: qty.toString(),
-                        uom: '',
+                        uom: item.uom || '',
                         itemRate: rate.toString(),
                         taxableValue: taxable.toFixed(2),
-                        igst: '0',
-                        cgst: (tax / 2).toFixed(2),
-                        sgst: (tax / 2).toFixed(2),
-                        cess: '0',
-                        invoiceValue: (taxable + tax).toFixed(2),
+                        igst: igst.toFixed(2),
+                        cgst: cgst.toFixed(2),
+                        sgst: sgst.toFixed(2),
+                        cess: cess.toFixed(2),
+                        invoiceValue: invVal.toFixed(2),
                         alternateUnit: ''
                     };
                 });
@@ -578,8 +637,9 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                     const taxable = qty * rate;
                     const igst = parseFloat(item.igst || item.igst_amount) || 0;
                     const cgst = parseFloat(item.cgst || item.cgst_amount) || (taxable * 0.09);
+                    const sgst = parseFloat(item.sgst || item.sgst_amount) || (taxable * 0.09);
                     const cess = parseFloat(item.cess || item.cess_amount) || 0;
-                    const invVal = taxable + igst + (cgst * 2) + cess;
+                    const invVal = taxable + igst + cgst + sgst + cess;
 
                     return {
                         id: Date.now() + idx,
@@ -590,10 +650,10 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                         uom: item.uom || '',
                         itemRate: rate.toString(),
                         taxableValue: taxable.toFixed(2),
-                        igst: igst.toString(),
+                        igst: igst.toFixed(2),
                         cgst: cgst.toFixed(2),
-                        sgst: cgst.toFixed(2),
-                        cess: cess.toString(),
+                        sgst: sgst.toFixed(2),
+                        cess: cess.toFixed(2),
                         invoiceValue: invVal.toFixed(2),
                         salesLedger: '',
                         description: item.description || '',

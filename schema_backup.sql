@@ -329,7 +329,7 @@
 
   -- Table: vendor_master_basicdetail
 
-  CREATE TABLE `vendor_master_basicdetail` (
+  CREATE TABLE `vendor_master_vendorcreation_basicdetail` (
     `id` bigint NOT NULL AUTO_INCREMENT,
     `tenant_id` varchar(36) NOT NULL COMMENT 'Tenant ID for multi-tenancy',
     `vendor_code` varchar(50) DEFAULT NULL COMMENT 'Vendor code (auto-generated or manual)',
@@ -358,10 +358,10 @@
 
   -- Table: vendor_master_gstdetails
 
-  CREATE TABLE `vendor_master_gstdetails` (
+  CREATE TABLE `vendor_master_vendorcreation_gstdetails` (
     `id` bigint NOT NULL AUTO_INCREMENT,
     `tenant_id` varchar(36) NOT NULL COMMENT 'Tenant ID for multi-tenancy',
-    `vendor_basic_detail_id` bigint DEFAULT NULL COMMENT 'Foreign key to vendor_master_basicdetail',
+    `vendor_basic_detail_id` bigint DEFAULT NULL COMMENT 'Foreign key to vendor_master_vendorcreation_basicdetail',
     `gstin` varchar(15) NOT NULL COMMENT 'GSTIN number (15 characters)',
     `gst_registration_type` varchar(50) NOT NULL DEFAULT 'regular' COMMENT 'GST registration type',
     `legal_name` varchar(200) NOT NULL COMMENT 'Legal name as per GST',
@@ -385,40 +385,38 @@
     KEY `vendor_gstdetails_tenant_id_idx` (`tenant_id`),
     KEY `vendor_gstdetails_gstin_idx` (`gstin`),
     KEY `vendor_gstdetails_vendor_basic_detail_id_idx` (`vendor_basic_detail_id`),
-    CONSTRAINT `vendor_gstdetails_vendor_fk` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_basicdetail` (`id`) ON DELETE CASCADE
+    CONSTRAINT `vendor_gstdetails_vendor_fk` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Vendor Master GST Details';
 
 
-  -- Table: vendor_master_productservices
+  -- Table: vendor_master_vendorcreation_productservices
+  -- Stores all product/service items as a JSON array per vendor (one row per vendor)
 
-  CREATE TABLE `vendor_master_productservices` (
+  CREATE TABLE `vendor_master_vendorcreation_productservices` (
     `id` bigint NOT NULL AUTO_INCREMENT,
     `tenant_id` varchar(36) NOT NULL COMMENT 'Tenant ID for multi-tenancy',
-    `vendor_basic_detail_id` bigint DEFAULT NULL COMMENT 'Foreign key to vendor_master_basicdetail',
-    `hsn_sac_code` varchar(20) DEFAULT NULL COMMENT 'HSN or SAC Code',
-    `item_code` varchar(50) DEFAULT NULL COMMENT 'Internal Item Code',
-    `item_name` varchar(200) NOT NULL COMMENT 'Internal Item Name',
-    `supplier_item_code` varchar(50) DEFAULT NULL COMMENT 'Supplier Item Code',
-    `supplier_item_name` varchar(200) DEFAULT NULL COMMENT 'Supplier Item Name',
-    `is_active` tinyint(1) NOT NULL DEFAULT '1' COMMENT 'Whether this item is active',
+    `vendor_basic_detail_id` bigint DEFAULT NULL COMMENT 'Foreign key to vendor_master_vendorcreation_basicdetail',
+    `items` JSON NOT NULL DEFAULT (JSON_ARRAY()) COMMENT 'JSON array of product/service items; empty array [] when none added',
+    `is_active` tinyint(1) NOT NULL DEFAULT '1' COMMENT 'Whether this record is active',
     `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
     `created_by` varchar(100) DEFAULT NULL COMMENT 'Created by user',
     `updated_by` varchar(100) DEFAULT NULL COMMENT 'Updated by user',
     PRIMARY KEY (`id`),
+    UNIQUE KEY `vendor_prodserv_vendor_unique` (`vendor_basic_detail_id`),
     KEY `vendor_prodserv_tenant_id_idx` (`tenant_id`),
-    KEY `vendor_prodserv_vendor_id_idx` (`vendor_basic_detail_id`),
-    KEY `vendor_prodserv_item_code_idx` (`item_code`),
-    CONSTRAINT `vendor_prodserv_vendor_fk` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_basicdetail` (`id`) ON DELETE CASCADE
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Vendor Master Products/Services';
+    CONSTRAINT `vendor_prodserv_vendor_fk` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Vendor Master Products/Services (JSON array per vendor)';
+
+
 
 
   -- Table: vendor_master_tds
 
-  CREATE TABLE `vendor_master_tds` (
+  CREATE TABLE `vendor_master_vendorcreation_tds` (
     `id` bigint NOT NULL AUTO_INCREMENT,
     `tenant_id` varchar(36) NOT NULL COMMENT 'Tenant ID for multi-tenancy',
-    `vendor_basic_detail_id` bigint DEFAULT NULL COMMENT 'Foreign key to vendor_master_basicdetail',
+    `vendor_basic_detail_id` bigint DEFAULT NULL COMMENT 'Foreign key to vendor_master_vendorcreation_basicdetail',
     `pan_number` varchar(10) DEFAULT NULL COMMENT 'PAN Number',
     `tan_number` varchar(10) DEFAULT NULL COMMENT 'TAN Number',
     `tds_section` varchar(100) DEFAULT NULL COMMENT 'TDS Section',
@@ -443,7 +441,7 @@
     PRIMARY KEY (`id`),
     KEY `vendor_tds_tenant_id_idx` (`tenant_id`),
     KEY `vendor_tds_vendor_basic_detail_id_idx` (`vendor_basic_detail_id`),
-    CONSTRAINT `vendor_tds_vendor_fk` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_basicdetail` (`id`) ON DELETE CASCADE
+    CONSTRAINT `vendor_tds_vendor_fk` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Vendor Master TDS & Other Statutory Details';
 
 
@@ -577,10 +575,10 @@
   -- Table structure for table `vendor_master_banking`
   --
 
-  CREATE TABLE IF NOT EXISTS `vendor_master_banking` (
+  CREATE TABLE IF NOT EXISTS `vendor_master_vendorcreation_banking` (
     `id` bigint NOT NULL AUTO_INCREMENT,
     `tenant_id` varchar(36) NOT NULL COMMENT 'Tenant ID for multi-tenancy',
-    `vendor_basic_detail_id` bigint DEFAULT NULL COMMENT 'Foreign key to vendor_master_basicdetail',
+    `vendor_basic_detail_id` bigint DEFAULT NULL COMMENT 'Foreign key to vendor_master_vendorcreation_basicdetail',
     `bank_account_no` varchar(50) NOT NULL COMMENT 'Bank Account Number',
     `bank_name` varchar(200) NOT NULL COMMENT 'Bank Name',
     `ifsc_code` varchar(11) NOT NULL COMMENT 'IFSC Code',
@@ -599,7 +597,7 @@
     KEY `vendor_banking_bank_account_no_idx` (`bank_account_no`),
     CONSTRAINT `vendor_banking_vendor_fk`
       FOREIGN KEY (`vendor_basic_detail_id`)
-      REFERENCES `vendor_master_basicdetail` (`id`)
+      REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`)
       ON DELETE CASCADE
   ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
@@ -611,10 +609,10 @@
   -- Table structure for table `vendor_master_terms`
   --
 
-  CREATE TABLE IF NOT EXISTS `vendor_master_terms` (
+  CREATE TABLE IF NOT EXISTS `vendor_master_vendorcreation_terms` (
     `id` bigint NOT NULL AUTO_INCREMENT,
     `tenant_id` varchar(36) NOT NULL COMMENT 'Tenant ID for multi-tenancy',
-    `vendor_basic_detail_id` bigint DEFAULT NULL COMMENT 'Foreign key to vendor_master_basicdetail',
+    `vendor_basic_detail_id` bigint DEFAULT NULL COMMENT 'Foreign key to vendor_master_vendorcreation_basicdetail',
     `credit_limit` decimal(15,2) DEFAULT NULL COMMENT 'Credit limit amount',
     `credit_period` varchar(100) DEFAULT NULL COMMENT 'Credit period (e.g., 30 days, 60 days)',
     `credit_terms` text COMMENT 'Credit terms and conditions',
@@ -631,7 +629,7 @@
     PRIMARY KEY (`id`),
     KEY `vendor_terms_tenant_id_idx` (`tenant_id`),
     KEY `vendor_terms_vendor_basic_detail_id_idx` (`vendor_basic_detail_id`),
-    CONSTRAINT `vendor_terms_vendor_fk` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_basicdetail` (`id`) ON DELETE CASCADE
+    CONSTRAINT `vendor_terms_vendor_fk` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Vendor Master Terms and Conditions';
   --
   -- Table structure for table `vendor_transaction_po`
@@ -2598,3 +2596,90 @@ DELETE FROM `service_group`             WHERE `group` = '' AND `subgroup` = '';
 ALTER TABLE vendor_master_basicdetail 
 ADD COLUMN billing_currency VARCHAR(10) DEFAULT NULL COMMENT 'Billing currency' 
 AFTER vendor_category;
+
+CREATE TABLE IF NOT EXISTS `gst_apiusagelog` (
+  `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+  `tenant_id` VARCHAR(36) NOT NULL,
+  `api_name` VARCHAR(255) NOT NULL,
+  `request_data` JSON,
+  `response_status` INT,
+  `response_data` JSON,
+  `error_message` TEXT,
+  `created_at` DATETIME(6),
+  KEY `gst_apiusagelog_tenant_id` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+CREATE TABLE IF NOT EXISTS `password_reset_otps` (
+  `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+  `user_id` BIGINT NOT NULL,
+  `otp_hash` VARCHAR(255) NOT NULL,
+  `expires_at` DATETIME(6) NOT NULL,
+  `attempts` INT NOT NULL DEFAULT 0,
+  `used` TINYINT(1) NOT NULL DEFAULT 0,
+  `created_at` DATETIME(6) NOT NULL,
+  CONSTRAINT `password_reset_otps_user_id_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `extraction_performance` (
+  `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+  `file_count` INT NOT NULL DEFAULT 1,
+  `processing_time_seconds` DOUBLE NOT NULL,
+  `timestamp` DATETIME(6) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+ALTER TABLE `voucher_purchase_supply_inr_details` ADD COLUMN `description` LONGTEXT NULL;
+
+ALTER TABLE `voucher_purchase_supply_foreign_details` ADD COLUMN `purchase_ledger` VARCHAR(255) NULL;
+
+-- Purchase Voucher - Adding missing Vendor Relationship and Creation Source
+-- These ALTER queries ensure the schema matches the current state of the database and models
+ALTER TABLE `voucher_purchase_supplier_details` ADD COLUMN `vendor_basic_detail_id` BIGINT NOT NULL, ADD COLUMN `creation_source` VARCHAR(50) DEFAULT 'manual';
+ALTER TABLE `voucher_purchase_supplier_details` ADD COLUMN `purchase_voucher_series` VARCHAR(100) NULL AFTER `supplier_invoice_no`;
+ALTER TABLE `voucher_purchase_supplier_details` ADD COLUMN `branch` VARCHAR(255) NULL AFTER `gstin`;
+ALTER TABLE `voucher_purchase_supplier_details` DROP COLUMN IF EXISTS `customer_id`;
+ALTER TABLE `voucher_purchase_supplier_details` ADD CONSTRAINT `fk_vpsd_vendor` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE;
+ALTER TABLE `voucher_purchase_supplier_details` RENAME INDEX idx_vpsd_tenant TO idx_vpsd_vendor_relation;
+
+
+-- ============================================================================
+-- Schema Update: One-to-Many Relationship — Customer → Sales (2026-03-02)
+-- ============================================================================
+
+-- STEP 1: Composite unique key on customer root table.
+--         Required so (tenant_id, id) can be referenced as a composite FK
+--         target by the sales header table.
+ALTER TABLE `customer_master_customer_basicdetails`
+  ADD UNIQUE KEY `customer_basic_tenant_id_uniq` (`tenant_id`, `id`);
+
+-- STEP 2: Add customer_id column to sales header (nullable during migration).
+--         Run migrations/customer_sales_fk_migration.sql to backfill data and
+--         enforce NOT NULL once all orphans are resolved.
+ALTER TABLE `voucher_sales_invoicedetails`
+  ADD COLUMN `customer_id` BIGINT NULL
+    COMMENT 'FK to customer_master_customer_basicdetails.id (tenant-scoped)'
+  AFTER `customer_name`;
+
+-- STEP 6 (execute after running the migration script and confirming no orphans):
+-- ALTER TABLE `voucher_sales_invoicedetails`
+--   MODIFY COLUMN `customer_id` BIGINT NOT NULL
+--     COMMENT 'FK to customer_master_customer_basicdetails.id (tenant-scoped)';
+
+-- STEP 7: Composite foreign key — enforces strict one-to-many with tenant isolation.
+--         ON DELETE RESTRICT : cannot delete a customer that has sales records.
+--         ON UPDATE CASCADE  : if customer id changes, sales rows follow safely.
+ALTER TABLE `voucher_sales_invoicedetails`
+  ADD CONSTRAINT `fk_sales_invoice_customer`
+    FOREIGN KEY (`tenant_id`, `customer_id`)
+    REFERENCES `customer_master_customer_basicdetails` (`tenant_id`, `id`)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE;
+
+-- STEP 8: Composite index on sales header for fast tenant-scoped customer lookups.
+ALTER TABLE `voucher_sales_invoicedetails`
+  ADD INDEX `idx_sales_tenant_customer` (`tenant_id`, `customer_id`);
+
+-- NOTE: Child/detail tables (voucher_sales_items, voucher_sales_dispatchdetails,
+--       voucher_sales_ewaybill, voucher_sales_paymentdetails, voucher_sales_items_foreign)
+--       are intentionally NOT modified — they link to the header via invoice_id.
+
