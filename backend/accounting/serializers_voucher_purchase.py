@@ -76,6 +76,8 @@ class VoucherPurchaseTransitDetailsSerializer(serializers.ModelSerializer):
     received_in = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     receipt_date = serializers.DateField(required=False, allow_null=True)
     receipt_time = serializers.TimeField(required=False, allow_null=True)
+    received_quantity = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    uqc = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     delivery_type = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     self_third_party = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     transporter_id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
@@ -88,8 +90,8 @@ class VoucherPurchaseTransitDetailsSerializer(serializers.ModelSerializer):
         model = VoucherPurchaseTransitDetails
         fields = [
             'mode', 'received_in', 'receipt_date', 'receipt_time', 
-            'delivery_type', 'self_third_party', 'transporter_id', 
-            'transporter_name', 'vehicle_no', 'lr_gr_consignment', 
+            'received_quantity', 'uqc', 'delivery_type', 'self_third_party', 
+            'transporter_id', 'transporter_name', 'vehicle_no', 'lr_gr_consignment', 
             'document', 'extra_details'
         ]
 
@@ -165,7 +167,7 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):
             )
             
         if transit_data is not None:
-            valid_fields = {'mode', 'received_in', 'receipt_date', 'receipt_time', 'delivery_type', 'self_third_party', 'transporter_id', 'transporter_name', 'vehicle_no', 'lr_gr_consignment', 'extra_details'}
+            valid_fields = {'mode', 'received_in', 'receipt_date', 'receipt_time', 'received_quantity', 'uqc', 'delivery_type', 'self_third_party', 'transporter_id', 'transporter_name', 'vehicle_no', 'lr_gr_consignment', 'extra_details'}
             filtered_data = {k: v for k, v in transit_data.items() if k in valid_fields}
             VoucherPurchaseTransitDetails.objects.create(
                 supplier_details=supplier_instance, 
@@ -219,7 +221,7 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):
             )
             
         if transit_data is not None:
-            valid_fields = {'mode', 'received_in', 'receipt_date', 'receipt_time', 'delivery_type', 'self_third_party', 'transporter_id', 'transporter_name', 'vehicle_no', 'lr_gr_consignment', 'extra_details'}
+            valid_fields = {'mode', 'received_in', 'receipt_date', 'receipt_time', 'received_quantity', 'uqc', 'delivery_type', 'self_third_party', 'transporter_id', 'transporter_name', 'vehicle_no', 'lr_gr_consignment', 'extra_details'}
             filtered_data = {k: v for k, v in transit_data.items() if k in valid_fields}
             VoucherPurchaseTransitDetails.objects.update_or_create(
                 supplier_details=instance,

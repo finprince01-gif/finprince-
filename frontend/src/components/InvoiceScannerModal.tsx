@@ -418,8 +418,20 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                     const normalizeResult = (res: any): InvoiceResult => {
                         console.log('[InvoiceScanner] Raw AI Result:', res);
 
-                        const rawHeader = res.invoice || res.header || {};
-                        const rawItems = res.items || res.line_items || res.lineItems || [];
+                        const resData = res.data || res;
+                        const summaryTotals = resData.summary_totals || resData.summaryTotals || {};
+
+                        // Merge summary totals into the header object for mapping
+                        const rawHeader = {
+                            ...(res.invoice || res.header || res.header_fields || {}),
+                            ...resData,
+                            ...summaryTotals
+                        };
+                        // Remove items from rawHeader if it was just resData
+                        delete (rawHeader as any).items;
+                        delete (rawHeader as any).line_items;
+
+                        const rawItems = resData.items || resData.line_items || resData.lineItems || res.items || res.line_items || res.lineItems || [];
                         const vendorId = rawHeader['Vendor Name'] || rawHeader.sellerName || res.sellerName || '';
                         const audit: AuditEvent[] = [];
 
@@ -465,7 +477,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                                 let val = sourceKey ? item[sourceKey] : undefined;
                                 const numericFields = ['Quantity', 'Rate', 'Item Rate', 'Disc %', 'Disc Amount',
                                     'Taxable Value', 'Taxable Amount', 'GST %', 'GST Rate', 'Item Amount',
-                                    'IGST Amount', 'CGST Amount', 'SGST Amount', 'Cess'];
+                                    'IGST', 'CGST', 'SGST/UTGST', 'Invoice Value', 'Cess'];
                                 if (numericFields.some(nf => field.startsWith(nf))) {
                                     val = coerceNumber(val);
                                 }
@@ -526,8 +538,9 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                 const extractedData = {
                     vendor_name: firstRow['Vendor Name'] || firstRow['Bill From'] || firstRow['Buyer/Supplier - Mailing Name'] || '',
                     gstin: firstRow['GSTIN'] || '',
-                    bill_from: firstRow['Bill From'] || firstRow['Buyer/Supplier - Address'] || '',
-                    state: firstRow['State'] || firstRow['Billing State'] || ''
+                    branch: firstRow['Branch'] || '',
+                    bill_from: firstRow['Bill From'] || firstRow['Buyer/Supplier - Address'] || firstRow['Bill From - Address Line 1'] || '',
+                    state: firstRow['State'] || firstRow['Billing State'] || firstRow['Bill From - State'] || ''
                 };
                 onExtractionSuccess(extractedData);
             }

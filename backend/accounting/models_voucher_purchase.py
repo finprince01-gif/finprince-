@@ -135,6 +135,8 @@ class VoucherPurchaseTransitDetails(BaseModel):
     received_in = models.CharField(max_length=255, null=True, blank=True) # Dispatch From / Received In
     receipt_date = models.DateField(null=True, blank=True)
     receipt_time = models.TimeField(null=True, blank=True)
+    received_quantity = models.CharField(max_length=50, null=True, blank=True)
+    uqc = models.CharField(max_length=50, null=True, blank=True)
     
     delivery_type = models.CharField(max_length=100, null=True, blank=True)
     self_third_party = models.CharField(max_length=100, null=True, blank=True)

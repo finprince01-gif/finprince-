@@ -89,6 +89,7 @@ export const VOUCHER_COLUMN_SCHEMAS: Record<string, string[]> = {
         "Date", "Supplier Invoice No.", "Purchase Voucher Series", "Purchase Voucher No.",
         "Vendor Name", "GSTIN", "Upload Supporting Document",
         "Bill From - Address Line 1", "Bill From - Address Line 2", "Bill From - City", "Bill From - State", "Bill From - Pincode", "Bill From - Country",
+        "Branch",
         "Ship From - Address Line 1", "Ship From - Address Line 2", "Ship From - City", "Ship From - State", "Ship From - Pincode", "Ship From - Country",
         "Bill To - Name", "Bill To - GSTIN", "Bill To - Address Line 1", "Bill To - Address Line 2", "Bill To - City", "Bill To - State", "Bill To - Pincode", "Bill To - Country",
         "Ship To - Name", "Ship To - GSTIN", "Ship To - Address Line 1", "Ship To - Address Line 2", "Ship To - City", "Ship To - State", "Ship To - Pincode", "Ship To - Country",
@@ -732,6 +733,8 @@ KEYWORD_RULES['Buyer/Supplier - Mailing Name']?.push('seller', 'vendor name', 'b
 KEYWORD_RULES['Buyer/Supplier - GSTIN/UIN']?.push('seller gstin', 'vendor gstin', 'supplier gstin');
 KEYWORD_RULES['Buyer/Supplier - State'] = ['state', 'place of supply', 'pos', 'billing state', 'supply state'];
 KEYWORD_RULES['Supplier Invoice No.'] = ['invoice no', 'bill no', 'inv no', 'reference', 'ref no'];
+KEYWORD_RULES['Amount Due'] = ['grand total', 'invoice total', 'total payable', 'net amount', 'invoice value', 'bill amount', 'balance due', 'payable amount', 'total', 'grandtotal'];
+KEYWORD_RULES['Round Off'] = ['round off', 'round-off', 'rounding', 'adjustment', 'roundoff'];
 KEYWORD_RULES['Date'] = ['invoice date', 'bill date', 'dated', 'voucher date'];
 
 const POSITIVE_NUMERIC_FIELDS = [
@@ -869,9 +872,8 @@ export const runMappingEngine = (
     templateVersion?: number;
     templateHashMatch?: boolean;
 } => {
-    // STRICT TALLY CONTRACT: Filter target fields to whitelist
-    const filteredTargetFields = targetFields.filter(f => TALLY_WHITELIST.has(f));
-    targetFields = filteredTargetFields;
+    // STRICT TALLY CONTRACT: Removed whitelist filtering for AI-to-Schema mapping compatibility.
+    // The targetFields now correctly reflect the schemas defined for each voucher type.
 
 
     const headerHash = hashHeaders(availableKeys);
