@@ -56,20 +56,10 @@ const DEFAULT_SYSTEM_CATEGORIES = [
   'Maintenance'
 ];
 
-const DEFAULT_GROUPS_DATA = [
-  {
-    name: 'Standard',
-    subgroups: ['Basic', 'Advanced', 'Premium']
-  },
-  {
-    name: 'Custom',
-    subgroups: ['Tailored', 'Specialized', 'Enterprise']
-  }
-];
+const DEFAULT_GROUPS = ['Direct', 'Indirect'];
 
 // UOM Master Data
 const UOM_LIST = [
-  { code: 'UQC', description: 'Description' },
   { code: 'HRS', description: 'Hours' },
   { code: 'DAY', description: 'Day' },
   { code: 'MDY', description: 'Man Day' },
@@ -210,7 +200,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
   const [selectedNode, setSelectedNode] = useState<TreeNode | null>(null);
   const [loading, setLoading] = useState(false);
   const [apiData, setApiData] = useState<ServiceGroup[]>([]);
-  const [restoredNodes, setRestoredNodes] = useState<Set<string>>(new Set());
+
   const [formData, setFormData] = useState({
     category: '',
     group: '',
@@ -224,10 +214,10 @@ const ServicePage: React.FC<ServicePageProps> = () => {
     fetchServices();
   }, []);
 
-  // Rebuild tree when apiData or restoredNodes change
+  // Rebuild tree when apiData changes
   useEffect(() => {
     buildTree(apiData);
-  }, [apiData, restoredNodes]);
+  }, [apiData]);
 
   const fetchServiceGroups = async () => {
     setLoading(true);
@@ -409,10 +399,9 @@ const ServicePage: React.FC<ServicePageProps> = () => {
   };
 
   const buildTree = (data: ServiceGroup[]) => {
-
     const rootMap = new Map<string, TreeNode>();
 
-    // Initialize System Categories
+    // Initialize System Categories with Direct/Indirect groups
     DEFAULT_SYSTEM_CATEGORIES.forEach(catName => {
       const categoryNode: TreeNode = {
         id: `root-${catName}`,
@@ -423,52 +412,29 @@ const ServicePage: React.FC<ServicePageProps> = () => {
         data: { category: catName, group: null, subgroup: null }
       };
 
-      // Add default groups and subgroups
-      DEFAULT_GROUPS_DATA.forEach(groupData => {
+      // Add Direct and Indirect as default groups
+      DEFAULT_GROUPS.forEach(groupName => {
         const groupNode: TreeNode = {
-          id: `group-${catName}-${groupData.name}`,
-          name: groupData.name,
+          id: `group-${catName}-${groupName}`,
+          name: groupName,
           children: [],
           level: 1,
           isSystem: true,
-          data: { category: catName, group: groupData.name, subgroup: null }
+          data: { category: catName, group: groupName, subgroup: null }
         };
-
-        // Add subgroups
-        groupData.subgroups.forEach(subgroupName => {
-          const subgroupNode: TreeNode = {
-            id: `sub-${catName}-${groupData.name}-${subgroupName}`,
-            name: subgroupName,
-            children: [],
-            level: 2,
-            isSystem: true,
-            data: { category: catName, group: groupData.name, subgroup: subgroupName }
-          };
-          groupNode.children.push(subgroupNode);
-        });
-
         categoryNode.children.push(groupNode);
       });
 
       rootMap.set(`root-${catName}`, categoryNode);
     });
 
-    // Add API data
-
+    // Add API data categories (no extra groups beyond Direct/Indirect)
     data.forEach(item => {
-
-      // Basic validation: skip empty categories
-      if (!item.category || !item.category.trim()) {
-
-        return;
-      }
+      if (!item.category || !item.category.trim()) return;
 
       const categoryKey = `root-${item.category}`;
-      let categoryNode = rootMap.get(categoryKey);
-
-      if (!categoryNode) {
-
-        categoryNode = {
+      if (!rootMap.has(categoryKey)) {
+        const categoryNode: TreeNode = {
           id: categoryKey,
           name: item.category,
           children: [],
@@ -476,48 +442,21 @@ const ServicePage: React.FC<ServicePageProps> = () => {
           isSystem: false,
           data: { category: item.category, group: null, subgroup: null }
         };
-        rootMap.set(categoryKey, categoryNode);
-      }
-
-      if (item.group && item.group.trim()) {
-        const groupKey = `group-${item.category}-${item.group}`;
-        let groupNode = categoryNode.children.find(
-          child => child.data.group === item.group
-        );
-
-        if (!groupNode) {
-
-          groupNode = {
-            id: groupKey,
-            name: item.group,
+        DEFAULT_GROUPS.forEach(groupName => {
+          categoryNode.children.push({
+            id: `group-${item.category}-${groupName}`,
+            name: groupName,
             children: [],
             level: 1,
             isSystem: false,
-            data: { category: item.category, group: item.group, subgroup: null }
-          };
-          categoryNode.children.push(groupNode);
-        }
-
-        if (item.subgroup && item.subgroup.trim()) {
-          const subgroupNode: TreeNode = {
-            id: `sub-${item.category}-${item.group}-${item.subgroup}`,
-            name: item.subgroup,
-            children: [],
-            level: 2,
-            isSystem: false,
-            data: { category: item.category, group: item.group, subgroup: item.subgroup }
-          };
-          if (!groupNode.children.find(child => child.name === item.subgroup)) {
-
-            groupNode.children.push(subgroupNode);
-          }
-        }
+            data: { category: item.category, group: groupName, subgroup: null }
+          });
+        });
+        rootMap.set(categoryKey, categoryNode);
       }
     });
 
-    const treeArray = Array.from(rootMap.values());
-
-    setTreeData(treeArray);
+    setTreeData(Array.from(rootMap.values()));
   };
 
   const toggleNode = (nodeId: string) => {
@@ -537,8 +476,12 @@ const ServicePage: React.FC<ServicePageProps> = () => {
     setFormData({
       category: node.data.category,
       group: node.data.group || '',
-      subgroup: node.data.subgroup || ''
+      subgroup: ''
     });
+  };
+
+  const handleSubgroupChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData(prev => ({ ...prev, subgroup: e.target.value }));
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -550,16 +493,18 @@ const ServicePage: React.FC<ServicePageProps> = () => {
     e.preventDefault();
 
     if (!selectedNode) {
-      showWarning('Please select a category');
+      showWarning('Please select a category from the left');
       return;
     }
 
+    // Level 0 = category selected → must pick Direct or Indirect
     if (selectedNode.level === 0 && !formData.group) {
-      showWarning('Please enter a Group Name');
+      showWarning('Please select Direct or Indirect');
       return;
     }
 
-    if (selectedNode.level === 1 && !formData.subgroup) {
+    // Level 1 = Direct/Indirect selected → must enter subgroup name
+    if (selectedNode.level === 1 && !formData.subgroup.trim()) {
       showWarning('Please enter a Subgroup Name');
       return;
     }
@@ -567,39 +512,34 @@ const ServicePage: React.FC<ServicePageProps> = () => {
     try {
       let payload;
       if (selectedNode.level === 0) {
+        // Creating a group (Direct/Indirect) under a category
         payload = {
-          category: selectedNode.data.category,
-          group: formData.group.trim() || '',
+          category: formData.category,
+          group: formData.group,
           subgroup: ''
         };
-      } else if (selectedNode.level === 1) {
+      } else {
+        // Creating a subgroup under Direct/Indirect
         payload = {
-          category: selectedNode.data.category,
-          group: selectedNode.data.group || '',
-          subgroup: formData.subgroup.trim() || ''
+          category: formData.category,
+          group: formData.group,
+          subgroup: formData.subgroup.trim()
         };
       }
 
-
-      const response = await httpClient.post('/api/services/groups/', payload);
-
-
-      setFormData(prev => ({ ...prev, group: '', subgroup: '' }));
-
+      await httpClient.post('/api/services/groups/', payload);
+      setFormData(prev => ({ ...prev, group: selectedNode.level === 0 ? '' : prev.group, subgroup: '' }));
       await fetchServiceGroups();
       showSuccess('Service Group created successfully!');
     } catch (error: any) {
-      console.error('❌ Error creating service group:');
       const errorMsg = error.toString();
       if (
         errorMsg.includes('Duplicate') ||
         errorMsg.includes('IntegrityError') ||
         errorMsg.includes('already exists')
       ) {
-        const restoreKey = `${selectedNode.data.category}-${formData.group.trim() || 'null'}-${formData.subgroup.trim() || 'null'}`;
-        setRestoredNodes(prev => new Set(prev).add(restoreKey));
-        showSuccess('Service Group already exists! It has been restored to the view.');
-        setFormData(prev => ({ ...prev, group: '', subgroup: '' }));
+        showSuccess('Service Group already exists!');
+        setFormData(prev => ({ ...prev, subgroup: '' }));
         fetchServiceGroups();
       } else {
         handleApiError(error, 'Create Service Group');
@@ -709,7 +649,7 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                       </label>
                       {selectedNode ? (
                         <div className="text-gray-900 font-semibold text-base">
-                          {selectedNode.level === 0 ? selectedNode.name : selectedNode.data.category}
+                          {formData.category}
                         </div>
                       ) : (
                         <div className="text-gray-400 font-normal text-sm italic">
@@ -718,71 +658,67 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                       )}
                     </div>
 
-                    {/* Group Input/Display */}
+                    {/* GROUP: show buttons if level 0, show text if level 1 */}
                     <div>
                       <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
                         GROUP
                       </label>
+                      {selectedNode && selectedNode.level === 1 ? (
+                        // Level 1 selected: show which group (Direct/Indirect) as read-only text
+                        <div className="text-gray-900 font-semibold text-base">{formData.group}</div>
+                      ) : (
+                        // Level 0 selected or nothing: show Direct/Indirect toggle buttons
+                        <div className="flex gap-3">
+                          {DEFAULT_GROUPS.map(grp => (
+                            <button
+                              key={grp}
+                              type="button"
+                              onClick={() => setFormData(prev => ({ ...prev, group: grp }))}
+                              className={`flex-1 py-2 px-4 rounded border text-sm font-medium transition-colors ${formData.group === grp
+                                ? 'bg-indigo-600 text-white border-indigo-600'
+                                : 'bg-white text-gray-700 border-slate-300 hover:border-indigo-400'
+                                }`}
+                            >
+                              {grp}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
 
-                      {selectedNode && selectedNode.level === 0 ? (
+                    {/* SUBGROUP: only show when level 1 (Direct/Indirect) is selected */}
+                    {selectedNode && selectedNode.level === 1 && (
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                          SUBGROUP
+                        </label>
                         <input
                           type="text"
-                          name="group"
-                          value={formData.group}
-                          onChange={handleInputChange}
+                          value={formData.subgroup}
+                          onChange={handleSubgroupChange}
                           className="w-full px-3 py-2 border border-slate-200 rounded focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all placeholder-gray-400 bg-white text-gray-800 text-sm"
-                          placeholder="Enter Group Name"
+                          placeholder="Enter Subgroup Name"
                           autoFocus
                         />
-                      ) : selectedNode && selectedNode.level === 1 && selectedNode.data.group && !selectedNode.data.subgroup ? (
-                        <div className="text-gray-900 font-semibold text-base">{selectedNode.name}</div>
-                      ) : (
-                        <input
-                          type="text"
-                          value={formData.group}
-                          disabled
-                          className="w-full px-3 py-2 border border-slate-200 rounded bg-gray-50 text-gray-400 text-sm cursor-not-allowed"
-                          placeholder="Enter Group Name"
-                          readOnly
-                        />
-                      )}
-                    </div>
-
-                    {/* Subgroup Input */}
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                        UNDER
-                      </label>
-                      {selectedNode && selectedNode.level === 1 && !selectedNode.data.group && selectedNode.data.subgroup ? (
-                        <div className="text-gray-900 font-semibold text-base">{selectedNode.name}</div>
-                      ) : selectedNode && selectedNode.level === 2 ? (
-                        <div className="text-gray-900 font-semibold text-base">{selectedNode.name}</div>
-                      ) : (
-                        <input
-                          type="text"
-                          name="subgroup"
-                          value={formData.subgroup}
-                          onChange={handleInputChange}
-                          disabled={!selectedNode || selectedNode.level > 1}
-                          className={`w-full px-3 py-2 border border-slate-200 rounded focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all placeholder-gray-400 text-sm ${!selectedNode || selectedNode.level > 1
-                            ? 'bg-gray-50 text-gray-400 cursor-not-allowed'
-                            : 'bg-white text-gray-800'
-                            }`}
-                          placeholder="Enter Subgroup Name (Optional - Create Group First)"
-                        />
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
 
                   <button
                     type="submit"
-                    disabled={!selectedNode}
-                    className={`w-full py-2.5 px-4 rounded-[4px] font-medium transition-colors ${!selectedNode
+                    disabled={
+                      !selectedNode ||
+                      (selectedNode.level === 0 && !formData.group) ||
+                      (selectedNode.level === 1 && !formData.subgroup.trim())
+                    }
+                    className={`w-full py-2.5 px-4 rounded-[4px] font-medium transition-colors ${!selectedNode ||
+                      (selectedNode.level === 0 && !formData.group) ||
+                      (selectedNode.level === 1 && !formData.subgroup.trim())
                       ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                       : 'bg-indigo-600 text-white hover:bg-indigo-700'
                       }`}
                   >
-                    Create Service Group
+                    CREATE SERVICE GROUP
                   </button>
                 </form>
               </div>
