@@ -1953,6 +1953,8 @@ CREATE TABLE voucher_purchase_transit_details (
   received_in VARCHAR(255),
   receipt_date DATE,
   receipt_time TIME(6),
+  received_quantity VARCHAR(50),
+  uqc VARCHAR(50),
   delivery_type VARCHAR(100),
   self_third_party VARCHAR(100),
   transporter_id VARCHAR(100),

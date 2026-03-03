@@ -1783,14 +1783,15 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     }
   }, [richVendors, richCustomers, vendorGstDetails, voucherType, setAddressFields, setGstin, setVendorBillingCurrency, setVendorAddresses, setPurchaseTerms, setMasterTermsData, ledgers]);
 
-  const validateVendorFromInvoice = async (vendorName: string, gstin: string, state: string, address: string) => {
+  const validateVendorFromInvoice = async (vendorName: string, gstin: string, state: string, address: string, branch: string = '') => {
     try {
-      setExtractedVendorData({ vendor_name: vendorName, gstin, state, address });
+      setExtractedVendorData({ vendor_name: vendorName, gstin, state, address, branch });
       const response = await httpClient.post<any>('/api/purchase/vendors/validate/', {
         vendor_name: vendorName,
         gstin: gstin,
         state: state,
-        address: address
+        address: address,
+        branch: branch
       });
 
       if (response && response.status === 'FOUND') {
@@ -1798,6 +1799,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         setVendorMatchedBy(response.matched_by);
         setVendorId(response.vendor_id); // Match correctly
         setIsVendorDisabled(true);
+        if (response.vendor_name) setParty(response.vendor_name);
+        if (response.branch) setSelectedBranch(response.branch);
+        if (gstin) setGstin(gstin); // Keep the gstin from invoice or use from response if backend returns it
       } else if (response && response.status === 'NOT_FOUND') {
         setVendorValidationStatus('NOT_FOUND');
         setIsVendorDisabled(false);
@@ -1991,6 +1995,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           received_in: purchaseTransitReceivedIn,
           receipt_date: purchaseTransitReceiptDate || null,
           receipt_time: purchaseTransitReceiptTime || null,
+          received_quantity: purchaseTransitReceivedQty,
+          uqc: purchaseTransitReceivedUqc,
           delivery_type: purchaseTransitDeliveryType,
           self_third_party: purchaseTransitSelfThirdParty,
           transporter_id: purchaseTransitTransporterId,
@@ -2412,24 +2418,28 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     className="w-full"
                     disabled={isVendorDisabled}
                   />
-                  {vendorValidationStatus === 'FOUND' && (
-                    <div className="mt-2 text-xs text-emerald-600 font-semibold flex items-center justify-between gap-1 bg-emerald-50 px-2 py-1 rounded">
-                      <div className="flex items-center gap-1">
-                        <Icon name="check-circle" className="w-4 h-4" />
-                        Supplier Matched ({vendorMatchedBy})
-                      </div>
-                      <button type="button" onClick={() => { setIsVendorDisabled(false); setVendorValidationStatus(null); }} className="text-indigo-600 hover:text-indigo-800 underline">
-                        Reset
-                      </button>
-                    </div>
-                  )}
+
                   {vendorValidationStatus === 'NOT_FOUND' && (
                     <div className="mt-2 text-xs text-red-600 font-semibold flex items-center justify-between gap-2 p-2 bg-red-50 border border-red-200 rounded">
                       <div className="flex items-center gap-1">
                         <Icon name="x" className="w-4 h-4" />
                         Vendor Not Found in Vendor Master
                       </div>
-                      <button type="button" onClick={() => setIsCreateVendorModalOpen(true)} className="px-2 py-1 bg-white border border-red-200 text-red-600 rounded hover:bg-red-50 shadow-sm flex items-center gap-1">
+                      <button type="button" onClick={() => {
+                        // Inject current purchase items so the modal pre-fills Supplier Items
+                        const itemsFromVoucher = purchaseItems
+                          .filter(pi => pi.itemName || pi.itemCode)
+                          .map(pi => ({
+                            supplierItemCode: pi.itemCode || '',
+                            supplierItemName: pi.itemName || '',
+                            hsnSac: pi.hsnSac || '',
+                          }));
+                        setExtractedVendorData((prev: any) => ({
+                          ...(prev || {}),
+                          supplier_items: itemsFromVoucher.length > 0 ? itemsFromVoucher : undefined,
+                        }));
+                        setIsCreateVendorModalOpen(true);
+                      }} className="px-2 py-1 bg-white border border-red-200 text-red-600 rounded hover:bg-red-50 shadow-sm flex items-center gap-1">
                         <Icon name="plus" className="w-3 h-3" /> Create Vendor
                       </button>
                     </div>
@@ -6392,7 +6402,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 extractedData.vendor_name,
                 extractedData.gstin,
                 extractedData.state,
-                extractedData.bill_from
+                extractedData.bill_from,
+                extractedData.branch
               );
             }}
             onUpload={(data) => {

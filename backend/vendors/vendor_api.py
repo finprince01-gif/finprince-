@@ -528,7 +528,8 @@ class PurchaseVendorCreateView(APIView):
         vendor_name = request.data.get('vendor_name', '').strip()
         gstin = request.data.get('gstin', '')
         if gstin:
-            gstin = gstin.strip()
+            gstin = gstin.strip().upper()
+        branch = request.data.get('branch', '').strip()
         address = request.data.get('address', '').strip()
         state = request.data.get('state', '').strip()
         
@@ -564,7 +565,9 @@ class PurchaseVendorCreateView(APIView):
                     vendor_basic_detail=vendor,
                     gstin=gstin,
                     legal_name=vendor_name,
-                    gst_state=state
+                    gst_state=state,
+                    reference_name=branch if branch else "Main Branch",
+                    branch_address=address
                 )
 
             # Generate default workflow records to complete Vendor Portal table instantiation
@@ -629,44 +632,102 @@ class PurchaseVendorValidateView(APIView):
         gstin = request.data.get('gstin', '')
         if gstin: gstin = gstin.strip().upper()  # Upper and trim
         
-        # State and address
+        # Branch, state and address
+        branch = request.data.get('branch', '').strip()
         state = request.data.get('state', '').strip()
         address = request.data.get('address', '').strip()
         
-        print(f"Received payload - Name: {vendor_name}, GSTIN: {gstin}")
+        print(f"Received payload - Name: {vendor_name}, GSTIN: {gstin}, Branch: {branch}, Address: {address}")
         
         # Step 1: Match by GSTIN (STRICT ORDER)
         if gstin:
-            gst_record = VendorMasterGSTDetails.objects.filter(
-                tenant_id=tenant_id, 
-                gstin__iexact=gstin
-            ).select_related('vendor_basic_detail').first()
+            # Try GSTIN + Branch first if branch provided
+            gst_record = None
+            if branch:
+                gst_record = VendorMasterGSTDetails.objects.filter(
+                    tenant_id=tenant_id,
+                    gstin__iexact=gstin,
+                    reference_name__iexact=branch
+                ).select_related('vendor_basic_detail').first()
             
-            print(f"Query result count (GSTIN): {1 if gst_record else 0}")
+            # Then try GSTIN + Address if address provided
+            if not gst_record and address:
+                gst_record = VendorMasterGSTDetails.objects.filter(
+                    tenant_id=tenant_id,
+                    gstin__iexact=gstin,
+                    branch_address__icontains=address
+                ).select_related('vendor_basic_detail').first()
+            
+            # Fallback to GSTIN only
+            if not gst_record:
+                gst_record = VendorMasterGSTDetails.objects.filter(
+                    tenant_id=tenant_id, 
+                    gstin__iexact=gstin
+                ).select_related('vendor_basic_detail').first()
+            
             if gst_record and gst_record.vendor_basic_detail:
                 vendor = gst_record.vendor_basic_detail
                 # GSTIN exists but name differs -> Conflict
                 if vendor.vendor_name.lower() != vendor_name.lower() and gst_record.legal_name.lower() != vendor_name.lower():
+                    print(f"GSTIN {gstin} found but name mismatch: Master={vendor.vendor_name}, Invoice={vendor_name}")
                     return Response({
                         "status": "GSTIN_CONFLICT",
                         "message": "GSTIN exists but name differs. Manual verification required."
                     })
+                
+                print(f"Found vendor by GSTIN match: {vendor.vendor_name}")
                 return Response({
                     "status": "FOUND",
                     "matched_by": "GSTIN",
                     "vendor_id": vendor.id,
-                    "vendor_name": vendor.vendor_name
+                    "vendor_name": vendor.vendor_name,
+                    "branch": gst_record.reference_name
                 })
         
-        # Step 2: Match by exact vendor name
+        # Step 2: Match by exact vendor name + Branch/Address
         if vendor_name:
+            # Try Name + Branch
+            if branch:
+                gst_record = VendorMasterGSTDetails.objects.filter(
+                    tenant_id=tenant_id,
+                    vendor_basic_detail__vendor_name__iexact=vendor_name,
+                    reference_name__iexact=branch
+                ).select_related('vendor_basic_detail').first()
+                if gst_record:
+                    print(f"Found vendor by Name + Branch: {vendor_name} ({branch})")
+                    return Response({
+                        "status": "FOUND",
+                        "matched_by": "Name_Branch",
+                        "vendor_id": gst_record.vendor_basic_detail.id,
+                        "vendor_name": gst_record.vendor_basic_detail.vendor_name,
+                        "branch": gst_record.reference_name
+                    })
+
+            # Try Name + Address
+            if address:
+                gst_record = VendorMasterGSTDetails.objects.filter(
+                    tenant_id=tenant_id,
+                    vendor_basic_detail__vendor_name__iexact=vendor_name,
+                    branch_address__icontains=address
+                ).select_related('vendor_basic_detail').first()
+                if gst_record:
+                    print(f"Found vendor by Name + Address: {vendor_name}")
+                    return Response({
+                        "status": "FOUND",
+                        "matched_by": "Name_Address",
+                        "vendor_id": gst_record.vendor_basic_detail.id,
+                        "vendor_name": gst_record.vendor_basic_detail.vendor_name,
+                        "branch": gst_record.reference_name
+                    })
+
+            # Last fallback: Name match only
             vendor = VendorMasterBasicDetail.objects.filter(
                 tenant_id=tenant_id,
                 vendor_name__iexact=vendor_name
             ).first()
             
-            print(f"Query result count (Name): {1 if vendor else 0}")
             if vendor:
+                print(f"Found vendor by Name only: {vendor_name}")
                 return Response({
                     "status": "FOUND",
                     "matched_by": "Name",
@@ -675,4 +736,5 @@ class PurchaseVendorValidateView(APIView):
                 })
                 
         # NOT FOUND
+        print(f"No match found for Vendor: {vendor_name}, GSTIN: {gstin}")
         return Response({"status": "NOT_FOUND"})
