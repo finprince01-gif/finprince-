@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { httpClient } from '../services/httpClient';
 import { apiService } from '../services';
-import { showError, showSuccess } from '../utils/toast';
+import { showError, showSuccess, showInfo } from '../utils/toast';
 import { useSubscriptionUsage } from '../hooks/useSubscriptionUsage';
 import {
     runMappingEngine,
@@ -35,6 +35,8 @@ interface InvoiceResult {
     headerMapping: Record<string, string>;
     itemMapping: Record<string, string>;
     report?: IngestionReport;
+    /** id column from invoice_ocr_temp — present when result was served from cache or freshly saved */
+    cacheRecordId?: number | null;
 }
 
 interface InvoiceScannerModalProps {
@@ -43,6 +45,7 @@ interface InvoiceScannerModalProps {
     initialFiles?: FileList | null;
     voucherType: string;
     extractionMode?: 'finpixe' | 'tally';
+    scanType?: 'single' | 'bulk';
     onExtractionSuccess?: (extractedData: any) => void;
 }
 
@@ -293,7 +296,7 @@ const Icon: React.FC<{ name: string; className?: string }> = ({ name, className 
 // Component
 // ────────────────────────────────────────────────────────────────────────────────
 
-const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUpload, initialFiles, voucherType, extractionMode = 'finpixe', onExtractionSuccess }) => {
+const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUpload, initialFiles, voucherType, extractionMode = 'finpixe', scanType = 'single', onExtractionSuccess }) => {
     // ── Columns definitions based on extractionMode & voucherType ──
     // ⚠️  extractionMode === 'tally' ONLY uses OFFICIAL_TALLY_VOUCHER_HEADERS
     //     These are strictly isolated official Tally Voucher export columns.
@@ -325,7 +328,9 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
     const HEADER_FIELDS = ALL_COLUMNS.filter(col => !LINE_ITEM_FIELDS.includes(col));
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const processedFilesRef = useRef<FileList | null>(null);
+    const folderInputRef = useRef<HTMLInputElement>(null);
+    const processedFilesRef = useRef<FileList | File[] | null>(null);
+    const uploadedFilesSetRef = useRef<Set<string>>(new Set());
     const [invoiceResults, setInvoiceResults] = useState<InvoiceResult[]>([]);
     const [isExtracting, setIsExtracting] = useState(false);
     const [uploadedFileNames, setUploadedFileNames] = useState<string[]>([]);
@@ -357,20 +362,48 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
     useEffect(() => {
         if (initialFiles && initialFiles.length > 0 && processedFilesRef.current !== initialFiles) {
             processedFilesRef.current = initialFiles;
-            const names = Array.from(initialFiles).map((f) => f.name);
-            setUploadedFileNames((prev) => [...prev, ...names]);
             processFiles(initialFiles);
         }
     }, [initialFiles]);
 
-    const processFiles = async (files: FileList) => {
+    const processFiles = async (files: FileList | File[]) => {
         if (isLimitReached) {
             showError('❌ AI Extraction limit reached for your plan. Please upgrade to continue.');
             return;
         }
 
+        const newFiles: File[] = [];
+        const newNames: string[] = [];
+        let duplicateFound = false;
+
+        // Enforce single file for Finpixe Single Scan
+        if (scanType === 'single' && files.length > 1) {
+            showError('FINPIXE SINGLE SCAN allows only one invoice. Use FINPIXE BULK SCAN for multiple invoices.');
+            return;
+        }
+
+        for (let i = 0; i < files.length; i++) {
+            const f = files[i];
+            const fileKey = `${f.name}*${f.size}*${f.lastModified}`;
+            if (uploadedFilesSetRef.current.has(fileKey)) {
+                duplicateFound = true;
+            } else {
+                uploadedFilesSetRef.current.add(fileKey);
+                newFiles.push(f);
+                newNames.push(f.name);
+            }
+        }
+
+        if (duplicateFound) {
+            showError('Duplicate invoice detected. This file has already been processed.');
+        }
+
+        if (newFiles.length === 0) return;
+
+        setUploadedFileNames(prev => [...prev, ...newNames]);
+
         setIsExtracting(true);
-        const fileCount = files.length;
+        const fileCount = newFiles.length;
         try {
             if (fileCount > 0) {
                 const avgRes = await apiService.getExtractionAverageTime();
@@ -388,7 +421,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             const allResults: InvoiceResult[] = [];
             let batchProcessedCount = 0;
 
-            for (let i = 0; i < files.length; i++) {
+            for (let i = 0; i < newFiles.length; i++) {
                 // Check subscription limit
                 if (subscriptionUsage && subscriptionUsage.limit !== 'Unlimited') {
                     const limit =
@@ -402,7 +435,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                     }
                 }
 
-                const file = files[i];
+                const file = newFiles[i];
                 const formData = new FormData();
                 formData.append('file', file);
                 formData.append('voucher_type', voucherType);
@@ -414,29 +447,47 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
                     if (result.error) throw new Error(result.error);
 
+                    if (result.duplicate) {
+                        showInfo(`✨ ${file.name} already scanned — results loaded instantly.`);
+                    }
+
                     // Normalize and Push — using enterprise engine v3
                     const normalizeResult = (res: any): InvoiceResult => {
-                        console.log('[InvoiceScanner] Raw AI Result:', res);
-
+                        // res = result.data = { invoice: { Date, Vendor Name, ... }, items: [...] }
+                        // OR from multi-invoice: res = { Date, Vendor Name, items: [...] }
                         const resData = res.data || res;
-                        const summaryTotals = resData.summary_totals || resData.summaryTotals || {};
 
-                        // Merge summary totals into the header object for mapping
-                        const rawHeader = {
-                            ...(res.invoice || res.header || res.header_fields || {}),
-                            ...resData,
-                            ...summaryTotals
-                        };
-                        // Remove items from rawHeader if it was just resData
-                        delete (rawHeader as any).items;
-                        delete (rawHeader as any).line_items;
+                        // Extract the flat invoice-level fields
+                        const invoicePart: Record<string, any> =
+                            resData.invoice || resData.header || resData.header_fields ||
+                            res.invoice || res.header || {};
 
-                        const rawItems = resData.items || resData.line_items || resData.lineItems || res.items || res.line_items || res.lineItems || [];
-                        const vendorId = rawHeader['Vendor Name'] || rawHeader.sellerName || res.sellerName || '';
+                        // Merge summary_totals into the flat header
+                        const summaryTotals: Record<string, any> =
+                            resData.summary_totals || resData.summaryTotals ||
+                            invoicePart.summary_totals || {};
+
+                        // Build a CLEAN flat rawHeader: invoice fields + summary totals only
+                        // Do NOT spread resData (which contains container keys like "invoice", "items")
+                        const rawHeader: Record<string, any> = { ...invoicePart, ...summaryTotals };
+
+                        // Strip any nested objects or arrays (keep only scalar values)
+                        Object.keys(rawHeader).forEach(k => {
+                            const v = rawHeader[k];
+                            if (v !== null && typeof v === 'object' && !Array.isArray(v)) {
+                                delete rawHeader[k];
+                            }
+                        });
+
+                        // Items come from resData, not from invoicePart
+                        const rawItems: any[] = resData.items || resData.line_items || resData.lineItems ||
+                            res.items || res.line_items || res.lineItems || [];
+
+                        const vendorId = rawHeader['Vendor Name'] || rawHeader['vendor_name'] || rawHeader.sellerName || '';
                         const audit: AuditEvent[] = [];
 
-                        // ── Header Mapping ──
-                        const headerKeys = Array.from(new Set([...Object.keys(res), ...Object.keys(rawHeader)])) as string[];
+                        // ── Header Mapping ── (pass actual field keys, not container keys)
+                        const headerKeys = Object.keys(rawHeader) as string[];
                         const hResult = runMappingEngine(headerKeys, HEADER_FIELDS, vendorId, audit);
 
                         // ── Item Mapping ──
@@ -453,13 +504,18 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                         );
 
                         // ── Build normalized header ──
+                        // Use EXACT MATCH first (field name = key in rawHeader), then mapping engine
                         const normalizedHeader: Record<string, string> = {};
                         HEADER_FIELDS.forEach(field => {
-                            const sourceKey = hResult.mapping[field];
-                            let val = sourceKey ? (res[sourceKey] ?? rawHeader[sourceKey]) : undefined;
-                            // ── Direct exact-match fallback: if mapping engine missed it but AI returned it ──
-                            if ((val === undefined || val === null || val === '') && rawHeader[field] !== undefined) {
+                            let val: any;
+                            // 1. Exact match — backend already uses correct column names
+                            if (rawHeader[field] !== undefined && rawHeader[field] !== null) {
                                 val = rawHeader[field];
+                            }
+                            // 2. Mapping engine resolved a source key
+                            else {
+                                const sourceKey = hResult.mapping[field];
+                                if (sourceKey) val = rawHeader[sourceKey];
                             }
                             if (typeof val === 'number') val = String(val);
                             if (field.includes('Total') || field.includes('Value') || field.includes('Amount')) {
@@ -473,8 +529,16 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                             const normalizedItem: any = {};
                             LINE_ITEM_FIELDS.forEach(field => {
                                 if (field === 'S.No') { normalizedItem[field] = String(idx + 1); return; }
-                                const sourceKey = iResult.mapping[field];
-                                let val = sourceKey ? item[sourceKey] : undefined;
+                                let val: any;
+                                // 1. Exact match
+                                if (item[field] !== undefined && item[field] !== null) {
+                                    val = item[field];
+                                }
+                                // 2. Mapping engine
+                                else {
+                                    const sourceKey = iResult.mapping[field];
+                                    if (sourceKey) val = item[sourceKey];
+                                }
                                 const numericFields = ['Quantity', 'Rate', 'Item Rate', 'Disc %', 'Disc Amount',
                                     'Taxable Value', 'Taxable Amount', 'GST %', 'GST Rate', 'Item Amount',
                                     'IGST', 'CGST', 'SGST/UTGST', 'Invoice Value', 'Cess'];
@@ -502,12 +566,28 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                         };
                     };
 
-                    if (result.success && result.data) {
-                        incrementUsage(1);
+                    // ── Multi-invoice PDF: backend split the PDF into N invoices ──────
+                    if (result.success && result.multi_invoice && Array.isArray(result.results)) {
+                        console.log(`[InvoiceScanner] Multi-invoice PDF: ${result.invoice_count} invoices detected`);
+                        for (const invResult of result.results) {
+                            if (invResult.error) {
+                                console.warn('[InvoiceScanner] Error in split invoice:', invResult.error);
+                                continue;
+                            }
+                            if (invResult.success && invResult.data) {
+                                batchProcessedCount++;
+                                const normalised = normalizeResult(invResult.data);
+                                normalised.cacheRecordId = invResult.cache_record_id ?? null;
+                                allResults.push(normalised);
+                            }
+                        }
+                    } else if (result.success && result.data) {
                         batchProcessedCount++;
-                        allResults.push(normalizeResult(result.data));
+                        const normalised = normalizeResult(result.data);
+                        // Persist the cache record id so edits can be synced back
+                        normalised.cacheRecordId = result.cache_record_id ?? null;
+                        allResults.push(normalised);
                     } else if (result.reply) {
-                        incrementUsage(1);
                         batchProcessedCount++;
                         let parsedData: any;
                         try {
@@ -521,7 +601,10 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                                 throw new Error('No JSON found in response');
                             }
                         }
-                        allResults.push(normalizeResult(parsedData));
+                        const normalised = normalizeResult(parsedData);
+                        // cache_record_id may also be present on reply responses
+                        normalised.cacheRecordId = result.cache_record_id ?? null;
+                        allResults.push(normalised);
                     } else {
                         throw new Error('No data received from backend');
                     }
@@ -530,6 +613,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                     throw err;
                 }
             }
+
 
             setInvoiceResults(prev => [...prev, ...allResults]);
 
@@ -744,12 +828,30 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         const files = event.target.files;
         if (!files || files.length === 0) return;
 
-        const names = Array.from(files).map((f) => f.name);
-        setUploadedFileNames((prev) => [...prev, ...names]);
-
         // Reset processed ref for manual file changes
         processedFilesRef.current = null;
         processFiles(files);
+    };
+
+    const handleFolderChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const allFiles = Array.from(event.target.files || []);
+        const supported = allFiles.filter(f =>
+            f.type === 'application/pdf' ||
+            f.type.startsWith('image/') ||
+            /\.(pdf|jpg|jpeg|png|webp)$/i.test(f.name)
+        );
+        if (supported.length === 0) {
+            showError('No supported PDF or image files found in the selected folder.');
+            return;
+        }
+
+        // Build a synthetic FileList-like object
+        const dataTransfer = new DataTransfer();
+        supported.forEach(file => dataTransfer.items.add(file));
+        const newFiles = dataTransfer.files;
+
+        processedFilesRef.current = null;
+        processFiles(newFiles);
     };
 
     // ── Handle cell change ──────────────────────────────────────────────────────
@@ -772,6 +874,17 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             }
 
             next[invoiceIdx] = res;
+
+            // ── Persist edit to OCR cache (fire-and-forget, non-blocking) ─────
+            if (res.cacheRecordId) {
+                apiService.updateOcrCache(res.cacheRecordId, {
+                    invoice: res.invoice,
+                    items: res.items,
+                }).catch((err: any) => {
+                    console.warn('[OCR Cache] Failed to persist edit for record', res.cacheRecordId, err);
+                });
+            }
+
             return next;
         });
     };
@@ -810,6 +923,14 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
 
     // ────────────────────────────────────────────────────────────────────────────
+    const isSingleScan = scanType === 'single';
+    const modalTitle = isSingleScan
+        ? 'Finpixe Single Scan – Invoice Scanner'
+        : 'Finpixe Bulk Scan – Invoice Scanner';
+    const modalHint = isSingleScan
+        ? 'Upload a single invoice for fast AI extraction.'
+        : 'Upload multiple invoices for batch AI processing.';
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
 
@@ -818,7 +939,8 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                 {/* Header */}
                 <div className="flex justify-between items-center p-6 border-b">
                     <div className="flex flex-col overflow-hidden mr-4 max-w-[80%]">
-                        <h2 className="text-2xl font-bold text-gray-800 shrink-0">Invoice Scanner</h2>
+                        <h2 className="text-2xl font-bold text-gray-800 shrink-0">{modalTitle}</h2>
+                        <p className="text-xs text-indigo-500 font-medium mt-0.5">{modalHint}</p>
                         {uploadedFileNames.length > 0 && (
                             <span
                                 className="text-sm text-gray-500 truncate mt-1"
@@ -846,20 +968,27 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                             onChange={handleFileChange}
                             className="hidden"
                         />
+                        <input
+                            ref={folderInputRef}
+                            type="file"
+                            // @ts-ignore
+                            webkitdirectory=""
+                            multiple
+                            onChange={handleFolderChange}
+                            className="hidden"
+                        />
                         <div className="flex items-center gap-4">
-                            {!isExtracting || invoiceResults.length > 0 ? (
+                            {!isExtracting && invoiceResults.length === 0 && (
                                 <button
                                     onClick={() => fileInputRef.current?.click()}
-                                    disabled={isExtracting}
-                                    className={`inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-[4px] border border-slate-200 text-white ${isExtracting ? 'bg-gray-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+                                    className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-[4px] border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700"
                                 >
-                                    <Icon
-                                        name={isExtracting ? 'spinner' : 'upload'}
-                                        className={`w-5 h-5 mr-2 ${isExtracting ? 'animate-spin' : ''}`}
-                                    />
-                                    {isExtracting ? 'Extracting...' : 'Add More Invoices'}
+                                    <Icon name="upload" className="w-5 h-5 mr-2" />
+                                    Select Files
                                 </button>
-                            ) : (
+                            )}
+
+                            {isExtracting && (
                                 <div className="flex flex-col justify-center px-6 py-2">
                                     <div className="flex items-center gap-2 text-sm font-medium text-indigo-600">
                                         <Icon name="spinner" className="w-5 h-5 animate-spin" />
@@ -884,18 +1013,18 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                                 </div>
                             )}
 
-                            {invoiceResults.length > 0 && (
+                            {invoiceResults.length > 0 && !isExtracting && (
                                 <div className="flex gap-2">
                                     <button
                                         onClick={handleDownloadExcel}
-                                        className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-[4px] border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700"
+                                        className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-[4px] border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700"
                                     >
                                         <Icon name="download" className="w-5 h-5 mr-2" />
                                         Download Excel
                                     </button>
                                     <button
                                         onClick={handleDownloadCSV}
-                                        className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-[4px] border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700"
+                                        className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-[4px] border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700"
                                     >
                                         <Icon name="download" className="w-5 h-5 mr-2" />
                                         Download CSV
@@ -904,7 +1033,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                                         <button
                                             onClick={handleUploadToFinpixe}
                                             disabled={displayRows.length === 0}
-                                            className={`inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-[4px] border border-slate-200 text-white ${displayRows.length === 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'
+                                            className={`inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-[4px] border-slate-200 text-white ${displayRows.length === 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'
                                                 }`}
                                         >
                                             <Icon name="check-circle" className="w-5 h-5 mr-2" />
@@ -915,7 +1044,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                             )}
 
                             {isExtracting && (
-                                <span className="text-sm text-gray-600">Processing… Please wait</span>
+                                <span className="text-sm text-gray-600 ml-4 border-l pl-4 border-gray-300">Processing… Please wait</span>
                             )}
                         </div>
                     </div>
@@ -991,7 +1120,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                     )}
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 

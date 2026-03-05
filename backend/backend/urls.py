@@ -4,6 +4,8 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from vouchers.bulk_scan_api import BulkScanAPIView, BulkScanUpdateVendorAPIView, BulkScanFinalizeAPIView
+from vouchers.staging_api import OCRStagingView, OCRStagingFinalizeView
 from core.auth_views import CookieTokenObtainPairView, CookieTokenRefreshView, LogoutView
 from core.token import MyTokenObtainPairSerializer
 from core.views import AdminSubscriptionsView, AdminPaymentsView
@@ -53,6 +55,7 @@ urlpatterns = [
     # Custom Vendor Validation for Purchase
     path('api/purchase/vendors/validate/', __import__('vendors.vendor_api').vendor_api.PurchaseVendorValidateView.as_view(), name='purchase-vendors-validate'),
     path('api/purchase/vendors/create/', __import__('vendors.vendor_api').vendor_api.PurchaseVendorCreateView.as_view(), name='purchase-vendors-create'),
+    path('api/purchase/vendors/resolve-conflict/', __import__('vendors.vendor_api').vendor_api.PurchaseVendorResolveConflictView.as_view(), name='purchase-vendors-resolve-conflict'),
     
     # Customer Portal
     path('api/customerportal/', include('customerportal.urls')),
@@ -79,4 +82,14 @@ urlpatterns = [
     
     # Questions API (from accounting module)
     path('api/', include('accounting.urls')),
+
+    # Bulk Invoice Upload
+    path('api/bulk-invoice/scan/', BulkScanAPIView.as_view(), name='bulk-invoice-scan'),
+    path('api/bulk-invoice/update-vendor/', BulkScanUpdateVendorAPIView.as_view(), name='bulk-invoice-update-vendor'),
+    path('api/bulk-invoice/finalize/', BulkScanFinalizeAPIView.as_view(), name='bulk-invoice-finalize'),
+
+    # OCR Staging Workflow (Consolidated)
+    path('api/ocr-staging/', OCRStagingView.as_view(), name='ocr-staging-list-upload'),
+    path('api/ocr-staging/<str:file_hash>/', OCRStagingView.as_view(), name='ocr-staging-remove'),
+    path('api/ocr-staging-finalize/', OCRStagingFinalizeView.as_view(), name='ocr-staging-finalize'),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

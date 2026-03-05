@@ -33,3 +33,4 @@ drf-spectacular
 pytest
 pytest-django
 json-repair
+PyMuPDF

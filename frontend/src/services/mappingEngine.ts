@@ -683,7 +683,12 @@ const FINANCIAL_TOLERANCE = 0.02;
 
 export const SEMANTIC_GROUPS: Record<string, string[]> = {
     // ── Contract-Mandated Whitelist (Flat Mapping for Strict Mode) ──────────────────
-    tally_contract: [...EXACT_TALLY_COLUMNS]
+    tally_contract: [...EXACT_TALLY_COLUMNS],
+    // ── Finpixe Standard Schemas (Common fields across Sales/Purchase) ──────────────
+    finpixe_standard: Array.from(new Set([
+        ...VOUCHER_COLUMN_SCHEMAS['Sales'],
+        ...VOUCHER_COLUMN_SCHEMAS['Purchase']
+    ]))
 };
 
 /** Build reverse lookup: field → group */
@@ -730,12 +735,21 @@ const CRITICAL_HEADER_FIELDS = ['Buyer/Supplier - Mailing Name', 'Customer Name'
 const CRITICAL_LINE_ITEM_FIELDS: string[] = [];
 
 KEYWORD_RULES['Buyer/Supplier - Mailing Name']?.push('seller', 'vendor name', 'bill from', 'merchant');
-KEYWORD_RULES['Buyer/Supplier - GSTIN/UIN']?.push('seller gstin', 'vendor gstin', 'supplier gstin');
+KEYWORD_RULES['Buyer/Supplier - GSTIN/UIN']?.push('seller gstin', 'vendor gstin', 'supplier gstin', 'gstin');
+KEYWORD_RULES['GSTIN'] = ['gstin', 'gst number', 'gst registration', 'gst no', 'gstin/uin'];
 KEYWORD_RULES['Buyer/Supplier - State'] = ['state', 'place of supply', 'pos', 'billing state', 'supply state'];
 KEYWORD_RULES['Supplier Invoice No.'] = ['invoice no', 'bill no', 'inv no', 'reference', 'ref no'];
+KEYWORD_RULES['Sales Invoice No.'] = ['invoice no', 'bill no', 'inv no', 'reference', 'ref no'];
+KEYWORD_RULES['Sales Voucher No.'] = ['voucher no', 'voucher number', 'vch no'];
+KEYWORD_RULES['Sales Voucher Series'] = ['series', 'prefix', 'category'];
+KEYWORD_RULES['Purchase Voucher No.'] = ['voucher no', 'voucher number', 'vch no'];
+KEYWORD_RULES['Purchase Voucher Series'] = ['series', 'prefix', 'category'];
 KEYWORD_RULES['Amount Due'] = ['grand total', 'invoice total', 'total payable', 'net amount', 'invoice value', 'bill amount', 'balance due', 'payable amount', 'total', 'grandtotal'];
 KEYWORD_RULES['Round Off'] = ['round off', 'round-off', 'rounding', 'adjustment', 'roundoff'];
-KEYWORD_RULES['Date'] = ['invoice date', 'bill date', 'dated', 'voucher date'];
+KEYWORD_RULES['Date'] = ['invoice date', 'bill date', 'dated', 'voucher date', 'bill date'];
+KEYWORD_RULES['Voucher Date'] = ['date', 'invoice date', 'bill date', 'dated'];
+KEYWORD_RULES['Customer Name'] = ['customer', 'party', 'client', 'buyer', 'name', 'bill to', 'bill_to', 'buyer name', 'buyer_name', 'consignee', 'recipient'];
+KEYWORD_RULES['Vendor Name'] = ['vendor', 'supplier', 'party', 'seller', 'merchant', 'name', 'bill from', 'bill_from', 'seller name', 'seller_name', 'merchant name'];
 
 const POSITIVE_NUMERIC_FIELDS = [
     'Taxable Value',

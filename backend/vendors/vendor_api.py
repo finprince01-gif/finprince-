@@ -532,14 +532,25 @@ class PurchaseVendorCreateView(APIView):
         branch = request.data.get('branch', '').strip()
         address = request.data.get('address', '').strip()
         state = request.data.get('state', '').strip()
+        supplier_items = request.data.get('supplier_items', [])
         
         # Check uniqueness of GSTIN
         if gstin:
-            exists = VendorMasterGSTDetails.objects.filter(tenant_id=tenant_id, gstin__iexact=gstin).exists()
-            if exists:
-                return Response({
-                    "error": "GSTIN already exists."
-                }, status=status.HTTP_400_BAD_REQUEST)
+            # Check if this GSTIN already exists for the tenant
+            existing_gst = VendorMasterGSTDetails.objects.filter(tenant_id=tenant_id, gstin__iexact=gstin).first()
+            if existing_gst:
+                if existing_gst.vendor_basic_detail:
+                    # 1. If it exists and is linked to a vendor, just return that vendor.
+                    # This makes the operation idempotent and solves the "already exists" error for the user.
+                    return Response({
+                        "status": "CREATED",
+                        "vendor_id": existing_gst.vendor_basic_detail.id,
+                        "message": "Vendor already exists with this GSTIN."
+                    }, status=status.HTTP_200_OK)
+                else:
+                    # 2. If it's an "orphaned" record (exists but has no master vendor detail), 
+                    # delete it so we can create a fresh, clean link.
+                    existing_gst.delete()
                 
         # Vendor Master Basic Detail requires some mandatory fields (email/phone)
         # If not provided, we add placeholder values.
@@ -599,6 +610,35 @@ class PurchaseVendorCreateView(APIView):
                 created_by=username
             )
 
+            # 4. Product Services (Supplier Items)
+            if supplier_items:
+                # Map frontend field names to backend JSON structure
+                # Frontend: [{supplierItemCode, supplierItemName, hsnSac}]
+                # Backend: [{"hsn_sac_code": "", "item_code": "", "item_name": "", "supplier_item_code": "", "supplier_item_name": ""}]
+                mapped_items = []
+                for item in supplier_items:
+                    mapped_items.append({
+                        "hsn_sac_code": item.get("hsnSac", ""),
+                        "item_code": "", # Internal item code mapping can happen later
+                        "item_name": "", 
+                        "supplier_item_code": item.get("supplierItemCode", ""),
+                        "supplier_item_name": item.get("supplierItemName", "")
+                    })
+                
+                VendorMasterProductService.objects.create(
+                    tenant_id=tenant_id,
+                    vendor_basic_detail=vendor,
+                    items=mapped_items,
+                    created_by=username
+                )
+            else:
+                VendorMasterProductService.objects.create(
+                    tenant_id=tenant_id,
+                    vendor_basic_detail=vendor,
+                    items=[],
+                    created_by=username
+                )
+
             return Response({
                 "status": "CREATED",
                 "vendor_id": vendor.id
@@ -623,118 +663,107 @@ class PurchaseVendorValidateView(APIView):
             return getattr(user, 'id', 'default_tenant')
 
     def post(self, request, *args, **kwargs):
+        from .vendor_validation_logic import validate_vendor
         print("Purchase Vendor Validation API Hit") # As requested
         tenant_id = self.get_tenant_id()
         
         vendor_name = request.data.get('vendor_name', '')
-        if vendor_name: vendor_name = vendor_name.strip()
-        
         gstin = request.data.get('gstin', '')
-        if gstin: gstin = gstin.strip().upper()  # Upper and trim
-        
-        # Branch, state and address
-        branch = request.data.get('branch', '').strip()
-        state = request.data.get('state', '').strip()
-        address = request.data.get('address', '').strip()
+        branch = request.data.get('branch', '')
+        state = request.data.get('state', '')
+        address = request.data.get('address', '')
         
         print(f"Received payload - Name: {vendor_name}, GSTIN: {gstin}, Branch: {branch}, Address: {address}")
         
-        # Step 1: Match by GSTIN (STRICT ORDER)
-        if gstin:
-            # Try GSTIN + Branch first if branch provided
-            gst_record = None
-            if branch:
-                gst_record = VendorMasterGSTDetails.objects.filter(
-                    tenant_id=tenant_id,
-                    gstin__iexact=gstin,
-                    reference_name__iexact=branch
-                ).select_related('vendor_basic_detail').first()
-            
-            # Then try GSTIN + Address if address provided
-            if not gst_record and address:
-                gst_record = VendorMasterGSTDetails.objects.filter(
-                    tenant_id=tenant_id,
-                    gstin__iexact=gstin,
-                    branch_address__icontains=address
-                ).select_related('vendor_basic_detail').first()
-            
-            # Fallback to GSTIN only
-            if not gst_record:
-                gst_record = VendorMasterGSTDetails.objects.filter(
-                    tenant_id=tenant_id, 
-                    gstin__iexact=gstin
-                ).select_related('vendor_basic_detail').first()
-            
-            if gst_record and gst_record.vendor_basic_detail:
-                vendor = gst_record.vendor_basic_detail
-                # GSTIN exists but name differs -> Conflict
-                if vendor.vendor_name.lower() != vendor_name.lower() and gst_record.legal_name.lower() != vendor_name.lower():
-                    print(f"GSTIN {gstin} found but name mismatch: Master={vendor.vendor_name}, Invoice={vendor_name}")
-                    return Response({
-                        "status": "GSTIN_CONFLICT",
-                        "message": "GSTIN exists but name differs. Manual verification required."
-                    })
-                
-                print(f"Found vendor by GSTIN match: {vendor.vendor_name}")
-                return Response({
-                    "status": "FOUND",
-                    "matched_by": "GSTIN",
-                    "vendor_id": vendor.id,
-                    "vendor_name": vendor.vendor_name,
-                    "branch": gst_record.reference_name
-                })
+        result = validate_vendor(
+            tenant_id=tenant_id,
+            vendor_name=vendor_name,
+            gstin=gstin,
+            branch=branch,
+            address=address,
+            state=state
+        )
         
-        # Step 2: Match by exact vendor name + Branch/Address
-        if vendor_name:
-            # Try Name + Branch
-            if branch:
-                gst_record = VendorMasterGSTDetails.objects.filter(
-                    tenant_id=tenant_id,
-                    vendor_basic_detail__vendor_name__iexact=vendor_name,
-                    reference_name__iexact=branch
-                ).select_related('vendor_basic_detail').first()
-                if gst_record:
-                    print(f"Found vendor by Name + Branch: {vendor_name} ({branch})")
-                    return Response({
-                        "status": "FOUND",
-                        "matched_by": "Name_Branch",
-                        "vendor_id": gst_record.vendor_basic_detail.id,
-                        "vendor_name": gst_record.vendor_basic_detail.vendor_name,
-                        "branch": gst_record.reference_name
-                    })
-
-            # Try Name + Address
-            if address:
-                gst_record = VendorMasterGSTDetails.objects.filter(
-                    tenant_id=tenant_id,
-                    vendor_basic_detail__vendor_name__iexact=vendor_name,
-                    branch_address__icontains=address
-                ).select_related('vendor_basic_detail').first()
-                if gst_record:
-                    print(f"Found vendor by Name + Address: {vendor_name}")
-                    return Response({
-                        "status": "FOUND",
-                        "matched_by": "Name_Address",
-                        "vendor_id": gst_record.vendor_basic_detail.id,
-                        "vendor_name": gst_record.vendor_basic_detail.vendor_name,
-                        "branch": gst_record.reference_name
-                    })
-
-            # Last fallback: Name match only
-            vendor = VendorMasterBasicDetail.objects.filter(
-                tenant_id=tenant_id,
-                vendor_name__iexact=vendor_name
-            ).first()
+        if result['status'] == 'FOUND':
+            print(f"Found vendor by {result['matched_by']} match: {result['vendor_name']}")
+        elif result['status'] == 'GSTIN_CONFLICT':
+            print(f"GSTIN {gstin} found but name mismatch: {result['message']}")
+        else:
+            print(f"No match found for Vendor: {vendor_name}, GSTIN: {gstin}")
             
-            if vendor:
-                print(f"Found vendor by Name only: {vendor_name}")
-                return Response({
-                    "status": "FOUND",
-                    "matched_by": "Name",
-                    "vendor_id": vendor.id,
-                    "vendor_name": vendor.vendor_name
-                })
-                
-        # NOT FOUND
-        print(f"No match found for Vendor: {vendor_name}, GSTIN: {gstin}")
-        return Response({"status": "NOT_FOUND"})
+        return Response(result)
+
+
+class PurchaseVendorResolveConflictView(APIView):
+    """
+    Handles resolution of GSTIN_CONFLICT in Bulk Scan.
+    Options: 
+      - use_existing: Confirm the extraction is correct and use master info.
+      - update_name: Update the Vendor Master Basic Detail name to match the invoice extraction.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get_tenant_id(self):
+        user = self.request.user
+        if hasattr(user, 'tenant_id'):
+            return user.tenant_id
+        elif hasattr(user, 'tenant') and hasattr(user.tenant, 'tenant_id'):
+            return user.tenant.tenant_id
+        return getattr(user, 'id', 'default_tenant')
+
+    def post(self, request, *args, **kwargs):
+        from .models import VendorMasterBasicDetail, VendorMasterGSTDetails
+        tenant_id = self.get_tenant_id()
+        file_hash = request.data.get('file_hash')
+        resolution = request.data.get('resolution') # 'use_existing' or 'update_name'
+        
+        if not file_hash or resolution not in ['use_existing', 'update_name']:
+            return Response({'error': 'Invalid request data'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 1. Get the staged invoice to know what name we have there
+        from core.ocr_cache import get_cached_ocr, update_ocr_cache_validation_status
+        staged = get_cached_ocr(file_hash, tenant_id)
+        if not staged:
+            return Response({'error': 'Staged invoice not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        extracted = staged.get('extracted_data', {})
+        invoice_header = extracted.get('invoice', extracted.get('header', extracted))
+        if isinstance(invoice_header, list) and invoice_header:
+            invoice_header = invoice_header[0]
+
+        invoice_name = invoice_header.get('Vendor Name') or invoice_header.get('vendor_name') or ''
+        gstin = invoice_header.get('GSTIN') or invoice_header.get('vendor_gstin') or ''
+
+        if not gstin:
+            return Response({'error': 'No GSTIN found for resolution'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 2. Find the master vendor causing conflict
+        gst_record = VendorMasterGSTDetails.objects.filter(
+            tenant_id=tenant_id, 
+            gstin__iexact=gstin
+        ).select_related('vendor_basic_detail').first()
+
+        if not gst_record or not gst_record.vendor_basic_detail:
+            return Response({'error': 'Conflict record not found in master'}, status=status.HTTP_404_NOT_FOUND)
+
+        vendor = gst_record.vendor_basic_detail
+
+        if resolution == 'update_name':
+            # Update master name to match invoice
+            vendor.vendor_name = invoice_name
+            vendor.save()
+            print(f"Vendor Resolve: Updated master vendor {vendor.id} name to {invoice_name}")
+        else:
+            # use_existing: Keep master as-is.
+            print(f"Vendor Resolve: Using existing master vendor {vendor.id} ({vendor.vendor_name}) for {gstin}")
+
+        # 3. Mark the staging record as FOUND now that it's resolved
+        update_ocr_cache_validation_status(file_hash, tenant_id, 'FOUND')
+
+        return Response({
+            'success': True,
+            'status': 'FOUND',
+            'vendor_id': vendor.id,
+            'vendor_name': vendor.vendor_name,
+            'message': f"Resolved using vendor {vendor.vendor_name}"
+        })
