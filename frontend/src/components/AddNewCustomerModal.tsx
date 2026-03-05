@@ -1,0 +1,933 @@
+/**
+ * AddNewCustomerModal.tsx
+ * 
+ * A full-featured modal that replicates the Customer Portal > Master > Customer > Create New Customer form.
+ * Opens from the Sales Voucher Invoice Details section.
+ * Saves to the same /api/customerportal/customer-master/ endpoint.
+ */
+
+import React, { useState, useEffect } from 'react';
+import { httpClient } from '../services/httpClient';
+import { showSuccess, showError } from '../utils/toast';
+import { Country, State, City } from 'country-state-city';
+import { BILLING_CURRENCIES } from '../constants/customerPortalConstants';
+import { X, ChevronLeft, ChevronRight } from 'lucide-react';
+
+interface AddNewCustomerModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onCustomerCreated: (customerName: string) => void;
+}
+
+const TABS = [
+    { name: 'Basic Details', description: 'Name, code, contact info' },
+    { name: 'GST Details', description: 'GSTIN & branch addresses' },
+    { name: 'Products/Services', description: 'Associated products' },
+    { name: 'TDS & Statutory', description: 'TDS/TCS & compliance info' },
+    { name: 'Banking Info', description: 'Bank accounts' },
+    { name: 'Terms & Conditions', description: 'Credit & payment terms' },
+];
+
+const getAvailableStates = (countryCode: string) => {
+    return State.getStatesOfCountry(countryCode) || [];
+};
+
+const AddNewCustomerModal: React.FC<AddNewCustomerModalProps> = ({ isOpen, onClose, onCustomerCreated }) => {
+    const [activeTab, setActiveTab] = useState('Basic Details');
+    const [isSaving, setIsSaving] = useState(false);
+    const [categories, setCategories] = useState<any[]>([]);
+    const [stockItems, setStockItems] = useState<any[]>([]);
+
+    // Basic Details
+    const [formData, setFormData] = useState({
+        customer_name: '',
+        customer_code: `CUST-${Date.now().toString().slice(-6)}`,
+        customer_category: '',
+        pan_number: '',
+        contact_person: '',
+        email_address: '',
+        contact_number: '',
+        billing_currency: '',
+        is_also_vendor: false,
+        gst_tds_applicable: false,
+    });
+
+    // GST Details
+    const [isUnregistered, setIsUnregistered] = useState(false);
+    const [addMultipleBranches, setAddMultipleBranches] = useState(false);
+    const [gstInput, setGstInput] = useState('');
+    const [selectedGSTINs, setSelectedGSTINs] = useState<string[]>([]);
+    const [showGstDropdown, setShowGstDropdown] = useState(false);
+    const [showBranchDetails, setShowBranchDetails] = useState(false);
+    const [expandedBranches, setExpandedBranches] = useState<number[]>([1]);
+    const [registeredBranches, setRegisteredBranches] = useState<any[]>([]);
+
+    const emptyUnregBranch = (id: number) => ({
+        id,
+        referenceName: '',
+        addressLine1: '',
+        addressLine2: '',
+        addressLine3: '',
+        city: '',
+        pincode: '',
+        state: '',
+        country: 'India',
+        contactPerson: '',
+        email: '',
+        contactNumber: '',
+        gstin: null as null,
+    });
+
+    const [unregisteredBranches, setUnregisteredBranches] = useState([emptyUnregBranch(1)]);
+
+
+    // Products/Services
+    const [productRows, setProductRows] = useState([
+        { id: 1, itemCode: '', itemName: '', uom: '', custItemCode: '', custItemName: '' }
+    ]);
+
+    // TDS & Statutory
+    const [statutory, setStatutory] = useState({
+        msme_no: '', fssai_no: '', iec_code: '', eou_status: '',
+        tcs_section: '', tcs_enabled: false, tds_section: '', tds_enabled: false,
+    });
+
+    // Banking Info
+    const [bankAccounts, setBankAccounts] = useState<{
+        id: number; accountNumber: string; bankName: string; ifscCode: string; branchName: string; swiftCode: string;
+    }[]>([]);
+
+    // Terms & Conditions
+    const [terms, setTerms] = useState({
+        credit_period: '', credit_terms: '', penalty_terms: '',
+        delivery_terms: '', warranty_details: '', force_majeure: '', dispute_terms: '',
+    });
+
+    useEffect(() => {
+        if (!isOpen) return;
+        // Fetch categories and stock items
+        httpClient.get<any[]>('/api/customerportal/categories/').then(res => {
+            setCategories(Array.isArray(res) ? res : (res as any).results || []);
+        }).catch(() => { });
+        httpClient.get<any[]>('/api/inventory/items/').then(res => {
+            const items = Array.isArray(res) ? res : (res as any).results || [];
+            setStockItems(items.map((i: any) => ({ code: i.item_code, name: i.item_name, uom: i.uom || '' })));
+        }).catch(() => { });
+    }, [isOpen]);
+
+    const resetForm = () => {
+        setActiveTab('Basic Details');
+        setFormData({
+            customer_name: '', customer_code: `CUST-${Date.now().toString().slice(-6)}`,
+            customer_category: '', pan_number: '', contact_person: '', email_address: '',
+            contact_number: '', billing_currency: '', is_also_vendor: false, gst_tds_applicable: false,
+        });
+        setIsUnregistered(false);
+        setAddMultipleBranches(false);
+        setGstInput(''); setSelectedGSTINs([]); setShowGstDropdown(false);
+        setShowBranchDetails(false);
+        setExpandedBranches([1]);
+        setRegisteredBranches([]);
+        setUnregisteredBranches([emptyUnregBranch(1)]);
+        setProductRows([{ id: 1, itemCode: '', itemName: '', uom: '', custItemCode: '', custItemName: '' }]);
+        setStatutory({ msme_no: '', fssai_no: '', iec_code: '', eou_status: '', tcs_section: '', tcs_enabled: false, tds_section: '', tds_enabled: false });
+        setBankAccounts([]);
+        setTerms({ credit_period: '', credit_terms: '', penalty_terms: '', delivery_terms: '', warranty_details: '', force_majeure: '', dispute_terms: '' });
+    };
+
+    const handleClose = () => { resetForm(); onClose(); };
+
+    const handleSave = async () => {
+        if (!formData.customer_name.trim()) {
+            showError('Customer Name is required');
+            setActiveTab('Basic Details');
+            return;
+        }
+        setIsSaving(true);
+        try {
+            const payload = {
+                ...formData,
+                customer_category: formData.customer_category || null,
+                gst_details: {
+                    gstins: isUnregistered ? [] : selectedGSTINs,
+                    branches: isUnregistered
+                        ? unregisteredBranches.map(b => ({
+                            defaultRef: b.referenceName,
+                            gstin: null,
+                            addressLine1: b.addressLine1,
+                            addressLine2: b.addressLine2,
+                            addressLine3: b.addressLine3,
+                            city: b.city,
+                            pincode: b.pincode,
+                            state: b.state,
+                            country: b.country,
+                            contactPerson: b.contactPerson,
+                            email: b.email,
+                            contactNumber: b.contactNumber,
+                        }))
+                        : registeredBranches.map(b => ({
+                            defaultRef: b.defaultRef || '',
+                            gstin: b.gstin || null,
+                            addressLine1: b.addressLine1 || '',
+                            addressLine2: b.addressLine2 || '',
+                            addressLine3: b.addressLine3 || '',
+                            city: b.city || '',
+                            pincode: b.pincode || '',
+                            state: b.state || '',
+                            country: b.country || 'India',
+                            contactPerson: b.contactPerson || '',
+                            email: b.email || '',
+                            contactNumber: b.contactNumber || '',
+                        })),
+                },
+                products_services: { items: productRows.filter(r => r.itemCode || r.itemName) },
+                ...statutory,
+                banking_info: bankAccounts.length > 0 ? { accounts: bankAccounts } : null,
+                ...terms,
+            };
+            await httpClient.post('/api/customerportal/customer-master/', payload);
+            showSuccess(`Customer "${formData.customer_name}" created successfully!`);
+            onCustomerCreated(formData.customer_name);
+            resetForm();
+        } catch (err: any) {
+            showError(err?.message || 'Failed to create customer');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const tabIndex = TABS.findIndex(t => t.name === activeTab);
+    const isFirst = tabIndex === 0;
+    const isLast = tabIndex === TABS.length - 1;
+    const goNext = () => !isLast && setActiveTab(TABS[tabIndex + 1].name);
+    const goPrev = () => !isFirst && setActiveTab(TABS[tabIndex - 1].name);
+
+    if (!isOpen) return null;
+
+    // ── GST helpers ──
+    const toggleBranchExpand = (id: number) =>
+        setExpandedBranches(prev => prev.includes(id) ? prev.filter(b => b !== id) : [...prev, id]);
+
+    const handleManualBranchChange = (id: number, field: string, value: string) =>
+        setUnregisteredBranches(prev => prev.map(b => b.id === id ? { ...b, [field]: value } : b));
+
+    const handleAddManualBranch = () => {
+        const newId = (unregisteredBranches[unregisteredBranches.length - 1]?.id || 0) + 1;
+        setUnregisteredBranches(prev => [...prev, emptyUnregBranch(newId)]);
+        setExpandedBranches(prev => [...prev, newId]);
+    };
+
+    const handleRegisteredBranchChange = (gstin: string, field: string, value: string) =>
+        setRegisteredBranches(prev => prev.map(b => b.gstin === gstin ? { ...b, [field]: value } : b));
+
+    const handleFetchBranchDetails = () => {
+        if (selectedGSTINs.length > 0) {
+            // Initialize any new GSTINs
+            setRegisteredBranches(prev => {
+                const existing = prev.map(b => b.gstin);
+                const newOnes = selectedGSTINs
+                    .filter(g => !existing.includes(g))
+                    .map(g => ({ gstin: g, defaultRef: '', addressLine1: '', addressLine2: '', addressLine3: '', city: '', pincode: '', state: '', country: 'India', contactPerson: '', contactNumber: '', email: '' }));
+                return [...prev.filter(b => selectedGSTINs.includes(b.gstin)), ...newOnes];
+            });
+            setShowBranchDetails(true);
+            setExpandedBranches(selectedGSTINs.map((_, i) => i + 1));
+        }
+    };
+
+    // Geo helper for a branch object that has country/state
+    const getBranchGeo = (branch: { country: string; state: string }) => {
+        const countryCode = Country.getAllCountries().find(c => c.name === branch.country)?.isoCode || '';
+        const states = getAvailableStates(countryCode);
+        const stateCode = states.find(s => s.name === branch.state)?.isoCode || '';
+        const cities = (countryCode && stateCode) ? City.getCitiesOfState(countryCode, stateCode) : [];
+        return { countryCode, states, stateCode, cities };
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}>
+            <div className="bg-white rounded-lg shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col">
+                {/* Header */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-indigo-600 to-indigo-700 rounded-t-lg">
+                    <div>
+                        <h2 className="text-lg font-bold text-white">Add New Customer</h2>
+                        <p className="text-xs text-indigo-200 mt-0.5">Fill in the details to create a new customer</p>
+                    </div>
+                    <button onClick={handleClose} className="text-white/80 hover:text-white transition-colors p-1 rounded hover:bg-white/10">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                {/* Tab Navigation */}
+                <div className="flex border-b border-gray-200 bg-gray-50 px-6 overflow-x-auto">
+                    {TABS.map((tab, i) => (
+                        <button
+                            key={tab.name}
+                            onClick={() => setActiveTab(tab.name)}
+                            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === tab.name
+                                ? 'border-indigo-600 text-indigo-600'
+                                : 'border-transparent text-gray-500 hover:text-gray-700'
+                                }`}
+                        >
+                            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${activeTab === tab.name ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-600'}`}>{i + 1}</span>
+                            {tab.name}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 overflow-y-auto p-6">
+                    {/* ── BASIC DETAILS ── */}
+                    {activeTab === 'Basic Details' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">Customer Name <span className="text-red-500">*</span></label>
+                                <input type="text" value={formData.customer_name} onChange={e => setFormData(p => ({ ...p, customer_name: e.target.value }))}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="Enter customer name" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">Customer Code</label>
+                                <input type="text" value={formData.customer_code} readOnly
+                                    className="w-full px-3 py-2 border border-gray-200 rounded text-sm bg-gray-50 text-gray-500" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">Customer Category</label>
+                                <select value={formData.customer_category} onChange={e => setFormData(p => ({ ...p, customer_category: e.target.value }))}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white">
+                                    <option value="">Select Category</option>
+                                    {categories.map(cat => (
+                                        <option key={cat.id} value={cat.id}>
+                                            {cat.full_path || [cat.category, cat.group, cat.subgroup].filter(Boolean).join(' > ')}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">PAN Number</label>
+                                <input type="text" value={formData.pan_number} onChange={e => setFormData(p => ({ ...p, pan_number: e.target.value }))}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="ABCDE1234F" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">Contact Person</label>
+                                <input type="text" value={formData.contact_person} onChange={e => setFormData(p => ({ ...p, contact_person: e.target.value }))}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="Name" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">Email Address</label>
+                                <input type="email" value={formData.email_address} onChange={e => setFormData(p => ({ ...p, email_address: e.target.value }))}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="email@example.com" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">Contact Number</label>
+                                <input type="tel" value={formData.contact_number} onChange={e => setFormData(p => ({ ...p, contact_number: e.target.value }))}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="+91 9876543210" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">Billing Currency</label>
+                                <select value={formData.billing_currency} onChange={e => setFormData(p => ({ ...p, billing_currency: e.target.value }))}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white">
+                                    <option value="">Select Currency</option>
+                                    {BILLING_CURRENCIES.map(cur => (
+                                        <option key={cur.code} value={cur.code}>{cur.code} - {cur.name} ({cur.symbol})</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="md:col-span-2 p-4 border border-gray-200 rounded bg-gray-50/50">
+                                <p className="text-sm font-semibold text-gray-700 mb-2">Is this customer also a vendor?</p>
+                                <div className="flex gap-6">
+                                    {[true, false].map(v => (
+                                        <label key={String(v)} className="flex items-center gap-2 cursor-pointer">
+                                            <input type="radio" checked={formData.is_also_vendor === v} onChange={() => setFormData(p => ({ ...p, is_also_vendor: v }))} className="text-indigo-600 w-4 h-4" />
+                                            <span className="text-sm text-gray-700">{v ? 'Yes' : 'No'}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="md:col-span-2">
+                                <p className="text-sm font-semibold text-gray-700 mb-2">TDS Applicable under GST?</p>
+                                <div className="flex gap-6">
+                                    {[true, false].map(v => (
+                                        <label key={String(v)} className="flex items-center gap-2 cursor-pointer">
+                                            <input type="radio" checked={formData.gst_tds_applicable === v} onChange={() => setFormData(p => ({ ...p, gst_tds_applicable: v }))} className="text-indigo-600 w-4 h-4" />
+                                            <span className="text-sm text-gray-700">{v ? 'Yes' : 'No'}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── GST DETAILS ── */}
+                    {activeTab === 'GST Details' && (
+                        <div className="max-w-3xl mx-auto space-y-6 pt-2">
+                            {/* Unregistered checkbox – centred like Customer Portal */}
+                            <div className="flex justify-center">
+                                <label className="flex items-center gap-3 cursor-pointer p-2 px-4 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-colors">
+                                    <input type="checkbox" checked={isUnregistered}
+                                        onChange={e => { setIsUnregistered(e.target.checked); setShowBranchDetails(false); setSelectedGSTINs([]); setRegisteredBranches([]); setUnregisteredBranches([emptyUnregBranch(1)]); setExpandedBranches([1]); setAddMultipleBranches(false); }}
+                                        className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500" />
+                                    <span className="text-sm font-semibold text-gray-700">Customer is Unregistered</span>
+                                </label>
+                            </div>
+
+                            {/* ─── UNREGISTERED PATH ─── */}
+                            {isUnregistered ? (
+                                <div className="space-y-6">
+                                    {/* GSTIN NA + Taxpayer Type */}
+                                    <div className="grid grid-cols-2 gap-6">
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">GSTIN No.</label>
+                                            <input type="text" value="NA" disabled
+                                                className="w-full px-4 py-2 border border-gray-200 rounded-[4px] bg-gray-100 text-gray-500 cursor-not-allowed" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">Taxpayer Type</label>
+                                            <div className="relative">
+                                                <input type="text" value="Unregistered" readOnly
+                                                    className="w-full px-4 py-2 border border-green-200 rounded-[4px] bg-green-50 text-slate-700 font-medium ring-1 ring-green-200" />
+                                                <span className="absolute right-3 top-2.5 text-xs text-indigo-600">Auto-set</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Add Multiple Branches */}
+                                    <div className="flex items-center gap-6">
+                                        <label className="text-sm font-semibold text-gray-700">Add Multiple Branches</label>
+                                        <div className="flex bg-gray-100 p-1 rounded-[4px]">
+                                            <button type="button" onClick={() => setAddMultipleBranches(true)}
+                                                className={`px-4 py-1 text-xs font-medium rounded transition-colors ${addMultipleBranches ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:text-gray-700'}`}>
+                                                Yes
+                                            </button>
+                                            <button type="button" onClick={() => setAddMultipleBranches(false)}
+                                                className={`px-4 py-1 text-xs font-medium rounded transition-colors ${!addMultipleBranches ? 'bg-white text-gray-800 ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700'}`}>
+                                                No
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Single branch (NO) */}
+                                    {!addMultipleBranches ? (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            {([
+                                                { field: 'addressLine1', label: 'Address Line 1', required: true, span2: true },
+                                                { field: 'addressLine2', label: 'Address Line 2', span2: true },
+                                                { field: 'addressLine3', label: 'Address Line 3', span2: true },
+                                            ] as { field: string; label: string; required?: boolean; span2: boolean }[]).map(({ field, label, required, span2 }) => (
+                                                <div key={field} className={span2 ? 'md:col-span-2' : ''}>
+                                                    <label className="block text-sm font-semibold text-gray-700 mb-2">{label} {required && <span className="text-red-500">*</span>}</label>
+                                                    <input type="text"
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                        value={(unregisteredBranches[0] as any)[field]}
+                                                        onChange={e => handleManualBranchChange(1, field, e.target.value)}
+                                                        placeholder={`Enter ${label.toLowerCase()}`} />
+                                                </div>
+                                            ))}
+                                            {/* Country */}
+                                            <div>
+                                                <label className="block text-sm font-semibold text-gray-700 mb-2">Country</label>
+                                                <select className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm bg-white"
+                                                    value={Country.getAllCountries().find(c => c.name === unregisteredBranches[0].country)?.isoCode || ''}
+                                                    onChange={e => { const ci = Country.getCountryByCode(e.target.value); handleManualBranchChange(1, 'country', ci?.name || ''); handleManualBranchChange(1, 'state', ''); handleManualBranchChange(1, 'city', ''); }}>
+                                                    <option value="">Select Country</option>
+                                                    {Country.getAllCountries().map(c => <option key={c.isoCode} value={c.isoCode}>{c.name}</option>)}
+                                                </select>
+                                            </div>
+                                            {/* State */}
+                                            <div>
+                                                <label className="block text-sm font-semibold text-gray-700 mb-2">State</label>
+                                                {(() => {
+                                                    const cc = Country.getAllCountries().find(c => c.name === unregisteredBranches[0].country)?.isoCode || '';
+                                                    const allStates = getAvailableStates(cc);
+                                                    return (
+                                                        <select className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm bg-white"
+                                                            value={allStates.find(s => s.name === unregisteredBranches[0].state)?.isoCode || ''}
+                                                            disabled={!unregisteredBranches[0].country}
+                                                            onChange={e => { const si = allStates.find(s => s.isoCode === e.target.value); handleManualBranchChange(1, 'state', si?.name || ''); handleManualBranchChange(1, 'city', ''); }}>
+                                                            <option value="">Select State</option>
+                                                            {allStates.map(s => <option key={s.isoCode} value={s.isoCode}>{s.name}</option>)}
+                                                        </select>
+                                                    );
+                                                })()}
+                                            </div>
+                                            {/* City */}
+                                            <div>
+                                                <label className="block text-sm font-semibold text-gray-700 mb-2">City</label>
+                                                {(() => {
+                                                    const { countryCode, stateCode, cities } = getBranchGeo(unregisteredBranches[0]);
+                                                    return cities.length > 0 ? (
+                                                        <select className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm bg-white"
+                                                            value={unregisteredBranches[0].city}
+                                                            disabled={!unregisteredBranches[0].state}
+                                                            onChange={e => handleManualBranchChange(1, 'city', e.target.value)}>
+                                                            <option value="">Select City</option>
+                                                            {cities.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                                                        </select>
+                                                    ) : (
+                                                        <input type="text" className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm"
+                                                            value={unregisteredBranches[0].city}
+                                                            disabled={!unregisteredBranches[0].state}
+                                                            onChange={e => handleManualBranchChange(1, 'city', e.target.value)}
+                                                            placeholder="Enter city" />
+                                                    );
+                                                })()}
+                                            </div>
+                                            {/* Pincode */}
+                                            <div>
+                                                <label className="block text-sm font-semibold text-gray-700 mb-2">Pincode</label>
+                                                <input type="text" className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm"
+                                                    value={unregisteredBranches[0].pincode}
+                                                    onChange={e => handleManualBranchChange(1, 'pincode', e.target.value)}
+                                                    placeholder="Enter pincode" />
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        // Multiple branches – accordion cards
+                                        <div className="space-y-4">
+                                            {unregisteredBranches.map((branch, index) => {
+                                                const isExpanded = expandedBranches.includes(branch.id);
+                                                const { countryCode, states, stateCode, cities } = getBranchGeo(branch);
+                                                return (
+                                                    <div key={branch.id} className="border border-gray-200 rounded-[4px] overflow-hidden bg-white">
+                                                        <div className="flex items-center justify-between px-6 py-4 bg-gray-50 cursor-pointer hover:bg-gray-100"
+                                                            onClick={() => toggleBranchExpand(branch.id)}>
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="w-6 h-6 flex items-center justify-center bg-white border border-gray-200 rounded text-xs font-semibold text-gray-600">{index + 1}</span>
+                                                                <span className="font-semibold text-gray-800">{branch.referenceName || `Branch ${index + 1}`}</span>
+                                                            </div>
+                                                            <div className="flex items-center gap-3">
+                                                                {unregisteredBranches.length > 1 && (
+                                                                    <button type="button" onClick={e => { e.stopPropagation(); setUnregisteredBranches(p => p.filter(b => b.id !== branch.id)); }}
+                                                                        className="text-xs text-red-500 hover:text-red-700">Remove</button>
+                                                                )}
+                                                                <span className="text-gray-400">{isExpanded ? '▲' : '▼'}</span>
+                                                            </div>
+                                                        </div>
+                                                        {isExpanded && (
+                                                            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                                <div className="md:col-span-2">
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Reference Name</label>
+                                                                    <input type="text" className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm"
+                                                                        value={branch.referenceName}
+                                                                        onChange={e => handleManualBranchChange(branch.id, 'referenceName', e.target.value)}
+                                                                        placeholder="e.g. Warehouse, Main Office" />
+                                                                </div>
+                                                                {(['addressLine1', 'addressLine2', 'addressLine3'] as const).map(f => (
+                                                                    <div key={f} className="md:col-span-2">
+                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">Address Line {f.slice(-1)}</label>
+                                                                        <input type="text" className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm"
+                                                                            value={(branch as any)[f]}
+                                                                            onChange={e => handleManualBranchChange(branch.id, f, e.target.value)}
+                                                                            placeholder={`Enter address line ${f.slice(-1)}`} />
+                                                                    </div>
+                                                                ))}
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Country</label>
+                                                                    <select className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm bg-white"
+                                                                        value={countryCode}
+                                                                        onChange={e => { const ci = Country.getCountryByCode(e.target.value); handleManualBranchChange(branch.id, 'country', ci?.name || ''); handleManualBranchChange(branch.id, 'state', ''); handleManualBranchChange(branch.id, 'city', ''); }}>
+                                                                        <option value="">Select Country</option>
+                                                                        {Country.getAllCountries().map(c => <option key={c.isoCode} value={c.isoCode}>{c.name}</option>)}
+                                                                    </select>
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">State</label>
+                                                                    <select className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm bg-white"
+                                                                        value={stateCode} disabled={!countryCode}
+                                                                        onChange={e => { const si = states.find(s => s.isoCode === e.target.value); handleManualBranchChange(branch.id, 'state', si?.name || ''); handleManualBranchChange(branch.id, 'city', ''); }}>
+                                                                        <option value="">Select State</option>
+                                                                        {states.map(s => <option key={s.isoCode} value={s.isoCode}>{s.name}</option>)}
+                                                                    </select>
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">City</label>
+                                                                    {cities.length > 0 ? (
+                                                                        <select className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm bg-white"
+                                                                            value={branch.city || ''} disabled={!branch.state}
+                                                                            onChange={e => handleManualBranchChange(branch.id, 'city', e.target.value)}>
+                                                                            <option value="">Select City</option>
+                                                                            {cities.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                                                                        </select>
+                                                                    ) : (
+                                                                        <input type="text" className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm"
+                                                                            value={branch.city || ''} disabled={!branch.state}
+                                                                            onChange={e => handleManualBranchChange(branch.id, 'city', e.target.value)}
+                                                                            placeholder="Enter city" />
+                                                                    )}
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Pincode</label>
+                                                                    <input type="text" className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm"
+                                                                        value={branch.pincode}
+                                                                        onChange={e => handleManualBranchChange(branch.id, 'pincode', e.target.value)}
+                                                                        placeholder="Enter pincode" />
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Contact Person</label>
+                                                                    <input type="text" className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm"
+                                                                        value={branch.contactPerson}
+                                                                        onChange={e => handleManualBranchChange(branch.id, 'contactPerson', e.target.value)} />
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Contact Number</label>
+                                                                    <input type="text" className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm"
+                                                                        value={branch.contactNumber}
+                                                                        onChange={e => handleManualBranchChange(branch.id, 'contactNumber', e.target.value)} />
+                                                                </div>
+                                                                <div className="md:col-span-2">
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Email Address</label>
+                                                                    <input type="email" className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm"
+                                                                        value={branch.email}
+                                                                        onChange={e => handleManualBranchChange(branch.id, 'email', e.target.value)} />
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                            <button type="button" onClick={handleAddManualBranch}
+                                                className="w-full py-2 border-2 border-dashed border-gray-300 rounded-[4px] text-gray-500 font-medium hover:border-indigo-500 hover:text-indigo-600 transition-colors flex items-center justify-center gap-2">
+                                                <span>+</span> Add Another Branch
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                // ─── REGISTERED PATH ───
+                                <div className="space-y-6">
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">GSTIN No. <span className="text-red-500">*</span></label>
+                                        <div className="flex gap-4 items-start">
+                                            <div className="relative flex-1">
+                                                <input type="text"
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                    placeholder={selectedGSTINs.length > 0 ? `${selectedGSTINs.length} selected — type to add more` : 'Enter or Select GSTIN'}
+                                                    value={gstInput}
+                                                    onChange={e => setGstInput(e.target.value)}
+                                                    onFocus={() => setShowGstDropdown(true)}
+                                                    onBlur={() => setTimeout(() => setShowGstDropdown(false), 200)}
+                                                    onKeyDown={e => { if (e.key === 'Enter' && gstInput.trim() && !selectedGSTINs.includes(gstInput.trim())) { setSelectedGSTINs(p => [...p, gstInput.trim()]); setGstInput(''); } }}
+                                                />
+                                            </div>
+                                            <button type="button" onClick={handleFetchBranchDetails}
+                                                className="px-5 py-2 border border-gray-300 rounded-[4px] text-sm font-medium text-gray-600 hover:bg-gray-50 whitespace-nowrap">
+                                                Fetch Branch Details
+                                            </button>
+                                        </div>
+                                        {/* Manual add GSTIN */}
+                                        {gstInput.trim() && (
+                                            <div className="mt-2">
+                                                <button type="button" onClick={() => { if (!selectedGSTINs.includes(gstInput.trim())) { setSelectedGSTINs(p => [...p, gstInput.trim()]); setGstInput(''); } }}
+                                                    className="text-xs text-indigo-600 hover:underline">+ Add "{gstInput.trim()}"</button>
+                                            </div>
+                                        )}
+                                        {/* Selected GSTINs chips */}
+                                        {selectedGSTINs.length > 0 && (
+                                            <div className="mt-3 flex flex-wrap gap-2">
+                                                {selectedGSTINs.map(g => (
+                                                    <span key={g} className="flex items-center gap-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded px-3 py-1 text-xs font-medium">
+                                                        {g}
+                                                        <button type="button" onClick={() => { setSelectedGSTINs(p => p.filter(x => x !== g)); setRegisteredBranches(p => p.filter(b => b.gstin !== g)); if (selectedGSTINs.length === 1) setShowBranchDetails(false); }}
+                                                            className="ml-1 text-indigo-400 hover:text-red-500">×</button>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Branch accordion cards – shown after Fetch */}
+                                    {showBranchDetails && (
+                                        <div className="space-y-4">
+                                            {selectedGSTINs.map((gstin, index) => {
+                                                const branch = registeredBranches.find(b => b.gstin === gstin) || { defaultRef: '', addressLine1: '', addressLine2: '', addressLine3: '', city: '', pincode: '', state: '', country: 'India', contactPerson: '', contactNumber: '', email: '' };
+                                                const isExpanded = expandedBranches.includes(index + 1);
+                                                const { countryCode, states, stateCode, cities } = getBranchGeo(branch);
+                                                return (
+                                                    <div key={gstin} className="border border-indigo-100 rounded-[4px] overflow-hidden bg-white">
+                                                        <div className="flex items-center justify-between px-6 py-4 bg-indigo-50/50 cursor-pointer hover:bg-indigo-50"
+                                                            onClick={() => toggleBranchExpand(index + 1)}>
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="w-6 h-6 flex items-center justify-center bg-white border border-gray-200 rounded text-xs font-semibold text-gray-600">{index + 1}</span>
+                                                                <span className="font-semibold text-gray-800">{branch.defaultRef || gstin}</span>
+                                                            </div>
+                                                            <span className="text-gray-400">{isExpanded ? '▲' : '▼'}</span>
+                                                        </div>
+                                                        {isExpanded && (
+                                                            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                                <div className="md:col-span-2">
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Reference Name</label>
+                                                                    <input type="text" className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm"
+                                                                        value={branch.defaultRef || ''}
+                                                                        onChange={e => handleRegisteredBranchChange(gstin, 'defaultRef', e.target.value)}
+                                                                        placeholder="e.g. Warehouse, Main Office" />
+                                                                </div>
+                                                                {(['addressLine1', 'addressLine2', 'addressLine3'] as const).map(f => (
+                                                                    <div key={f} className="md:col-span-2">
+                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">Address Line {f.slice(-1)}</label>
+                                                                        <input type="text" className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm"
+                                                                            value={(branch as any)[f] || ''}
+                                                                            onChange={e => handleRegisteredBranchChange(gstin, f, e.target.value)}
+                                                                            placeholder={`Enter address line ${f.slice(-1)}`} />
+                                                                    </div>
+                                                                ))}
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Country</label>
+                                                                    <select className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm bg-white"
+                                                                        value={countryCode}
+                                                                        onChange={e => { const ci = Country.getCountryByCode(e.target.value); handleRegisteredBranchChange(gstin, 'country', ci?.name || ''); handleRegisteredBranchChange(gstin, 'state', ''); handleRegisteredBranchChange(gstin, 'city', ''); }}>
+                                                                        <option value="">Select Country</option>
+                                                                        {Country.getAllCountries().map(c => <option key={c.isoCode} value={c.isoCode}>{c.name}</option>)}
+                                                                    </select>
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">State</label>
+                                                                    <select className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm bg-white"
+                                                                        value={stateCode} disabled={!countryCode}
+                                                                        onChange={e => { const si = states.find(s => s.isoCode === e.target.value); handleRegisteredBranchChange(gstin, 'state', si?.name || ''); handleRegisteredBranchChange(gstin, 'city', ''); }}>
+                                                                        <option value="">Select State</option>
+                                                                        {states.map(s => <option key={s.isoCode} value={s.isoCode}>{s.name}</option>)}
+                                                                    </select>
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">City</label>
+                                                                    {cities.length > 0 ? (
+                                                                        <select className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm bg-white"
+                                                                            value={branch.city || ''} disabled={!branch.state}
+                                                                            onChange={e => handleRegisteredBranchChange(gstin, 'city', e.target.value)}>
+                                                                            <option value="">Select City</option>
+                                                                            {cities.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                                                                        </select>
+                                                                    ) : (
+                                                                        <input type="text" className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm"
+                                                                            value={branch.city || ''} disabled={!branch.state}
+                                                                            onChange={e => handleRegisteredBranchChange(gstin, 'city', e.target.value)}
+                                                                            placeholder="Enter city" />
+                                                                    )}
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Pincode</label>
+                                                                    <input type="text" className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm"
+                                                                        value={branch.pincode || ''}
+                                                                        onChange={e => handleRegisteredBranchChange(gstin, 'pincode', e.target.value)}
+                                                                        placeholder="Enter pincode" />
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Contact Person</label>
+                                                                    <input type="text" className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm"
+                                                                        value={branch.contactPerson || ''}
+                                                                        onChange={e => handleRegisteredBranchChange(gstin, 'contactPerson', e.target.value)} />
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Contact Number</label>
+                                                                    <input type="text" className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm"
+                                                                        value={branch.contactNumber || ''}
+                                                                        onChange={e => handleRegisteredBranchChange(gstin, 'contactNumber', e.target.value)} />
+                                                                </div>
+                                                                <div className="md:col-span-2">
+                                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Email Address</label>
+                                                                    <input type="email" className="w-full px-4 py-2 border border-gray-300 rounded-[4px] text-sm"
+                                                                        value={branch.email || ''}
+                                                                        onChange={e => handleRegisteredBranchChange(gstin, 'email', e.target.value)} />
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ── PRODUCTS / SERVICES ── */}
+
+
+                    {/* ── PRODUCTS / SERVICES ── */}
+                    {activeTab === 'Products/Services' && (
+                        <div>
+                            <table className="w-full text-sm border-collapse">
+                                <thead>
+                                    <tr className="bg-gray-50">
+                                        <th className="border border-gray-200 px-3 py-2 text-left font-semibold text-gray-600">Item Code</th>
+                                        <th className="border border-gray-200 px-3 py-2 text-left font-semibold text-gray-600">Item Name</th>
+                                        <th className="border border-gray-200 px-3 py-2 text-left font-semibold text-gray-600">UOM</th>
+                                        <th className="border border-gray-200 px-3 py-2 text-left font-semibold text-gray-600">Cust. Item Code</th>
+                                        <th className="border border-gray-200 px-3 py-2 text-left font-semibold text-gray-600">Cust. Item Name</th>
+                                        <th className="border border-gray-200 px-2 py-2"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {productRows.map(row => (
+                                        <tr key={row.id}>
+                                            <td className="border border-gray-200 p-1">
+                                                <select value={row.itemCode} onChange={e => {
+                                                    const item = stockItems.find(i => i.code === e.target.value);
+                                                    setProductRows(p => p.map(r => r.id === row.id ? { ...r, itemCode: e.target.value, itemName: item?.name || r.itemName, uom: item?.uom || r.uom } : r));
+                                                }} className="w-full px-2 py-1.5 border-0 text-sm bg-transparent focus:ring-1 focus:ring-indigo-400 rounded">
+                                                    <option value="">Select</option>
+                                                    {stockItems.map(i => <option key={i.code} value={i.code}>{i.code}</option>)}
+                                                </select>
+                                            </td>
+                                            <td className="border border-gray-200 p-1">
+                                                <select value={row.itemName} onChange={e => {
+                                                    const item = stockItems.find(i => i.name === e.target.value);
+                                                    setProductRows(p => p.map(r => r.id === row.id ? { ...r, itemName: e.target.value, itemCode: item?.code || r.itemCode, uom: item?.uom || r.uom } : r));
+                                                }} className="w-full px-2 py-1.5 border-0 text-sm bg-transparent focus:ring-1 focus:ring-indigo-400 rounded">
+                                                    <option value="">Select</option>
+                                                    {stockItems.map(i => <option key={i.name} value={i.name}>{i.name}</option>)}
+                                                </select>
+                                            </td>
+                                            <td className="border border-gray-200 p-1">
+                                                <input type="text" value={row.uom} readOnly className="w-full px-2 py-1.5 text-sm bg-gray-50 text-gray-500" />
+                                            </td>
+                                            <td className="border border-gray-200 p-1">
+                                                <input type="text" value={row.custItemCode} onChange={e => setProductRows(p => p.map(r => r.id === row.id ? { ...r, custItemCode: e.target.value } : r))}
+                                                    className="w-full px-2 py-1.5 text-sm border-0" />
+                                            </td>
+                                            <td className="border border-gray-200 p-1">
+                                                <input type="text" value={row.custItemName} onChange={e => setProductRows(p => p.map(r => r.id === row.id ? { ...r, custItemName: e.target.value } : r))}
+                                                    className="w-full px-2 py-1.5 text-sm border-0" />
+                                            </td>
+                                            <td className="border border-gray-200 p-1 text-center">
+                                                <button type="button" onClick={() => productRows.length > 1 && setProductRows(p => p.filter(r => r.id !== row.id))}
+                                                    className="text-red-400 hover:text-red-600 text-lg leading-none">×</button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            <button type="button" onClick={() => setProductRows(p => [...p, { id: Date.now(), itemCode: '', itemName: '', uom: '', custItemCode: '', custItemName: '' }])}
+                                className="mt-3 flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium">
+                                + Add Product Row
+                            </button>
+                        </div>
+                    )}
+
+                    {/* ── TDS & STATUTORY ── */}
+                    {activeTab === 'TDS & Statutory' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {[
+                                { key: 'msme_no', label: 'MSME No.', placeholder: 'Enter MSME number' },
+                                { key: 'fssai_no', label: 'FSSAI No.', placeholder: 'Enter FSSAI number' },
+                                { key: 'iec_code', label: 'IEC Code', placeholder: 'Enter IEC code' },
+                                { key: 'eou_status', label: 'EOU Status', placeholder: 'e.g. Export Oriented Unit' },
+                                { key: 'tcs_section', label: 'TCS Section', placeholder: 'e.g. Section 206C' },
+                                { key: 'tds_section', label: 'TDS Section', placeholder: 'e.g. Section 194C' },
+                            ].map(field => (
+                                <div key={field.key}>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1">{field.label}</label>
+                                    <input type="text" value={(statutory as any)[field.key]} onChange={e => setStatutory(p => ({ ...p, [field.key]: e.target.value }))}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded text-sm" placeholder={field.placeholder} />
+                                </div>
+                            ))}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">TCS Enabled?</label>
+                                <div className="flex gap-4">
+                                    {[true, false].map(v => (
+                                        <label key={String(v)} className="flex items-center gap-2 cursor-pointer">
+                                            <input type="radio" checked={statutory.tcs_enabled === v} onChange={() => setStatutory(p => ({ ...p, tcs_enabled: v }))} className="w-4 h-4 text-indigo-600" />
+                                            <span className="text-sm">{v ? 'Yes' : 'No'}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">TDS Enabled?</label>
+                                <div className="flex gap-4">
+                                    {[true, false].map(v => (
+                                        <label key={String(v)} className="flex items-center gap-2 cursor-pointer">
+                                            <input type="radio" checked={statutory.tds_enabled === v} onChange={() => setStatutory(p => ({ ...p, tds_enabled: v }))} className="w-4 h-4 text-indigo-600" />
+                                            <span className="text-sm">{v ? 'Yes' : 'No'}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── BANKING INFO ── */}
+                    {activeTab === 'Banking Info' && (
+                        <div>
+                            {bankAccounts.map((acc, i) => (
+                                <div key={acc.id} className="border border-gray-200 rounded-lg p-4 mb-4 relative">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h4 className="text-sm font-semibold text-gray-700">Bank Account {i + 1}</h4>
+                                        <button type="button" onClick={() => setBankAccounts(p => p.filter(a => a.id !== acc.id))} className="text-red-400 hover:text-red-600 text-sm">Remove</button>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {[
+                                            { key: 'accountNumber', label: 'Account Number', placeholder: '' },
+                                            { key: 'bankName', label: 'Bank Name', placeholder: '' },
+                                            { key: 'ifscCode', label: 'IFSC Code', placeholder: '' },
+                                            { key: 'branchName', label: 'Branch Name', placeholder: '' },
+                                            { key: 'swiftCode', label: 'SWIFT Code', placeholder: '' },
+                                        ].map(f => (
+                                            <div key={f.key}>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">{f.label}</label>
+                                                <input type="text" value={(acc as any)[f.key]} onChange={e => setBankAccounts(p => p.map(a => a.id === acc.id ? { ...a, [f.key]: e.target.value } : a))}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm" />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                            <button type="button" onClick={() => setBankAccounts(p => [...p, { id: Date.now(), accountNumber: '', bankName: '', ifscCode: '', branchName: '', swiftCode: '' }])}
+                                className="w-full py-2 border-2 border-dashed border-gray-300 rounded text-gray-500 hover:border-indigo-400 hover:text-indigo-600 text-sm font-medium transition-colors">
+                                + Add Bank Account
+                            </button>
+                        </div>
+                    )}
+
+                    {/* ── TERMS & CONDITIONS ── */}
+                    {activeTab === 'Terms & Conditions' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {[
+                                { key: 'credit_period', label: 'Credit Period', placeholder: 'e.g. 30 days' },
+                                { key: 'credit_terms', label: 'Credit Terms', placeholder: 'Enter terms' },
+                                { key: 'penalty_terms', label: 'Penalty Terms', placeholder: 'Enter penalty terms' },
+                                { key: 'delivery_terms', label: 'Delivery Terms', placeholder: 'Enter delivery terms' },
+                                { key: 'warranty_details', label: 'Warranty Details', placeholder: 'Enter warranty info' },
+                                { key: 'force_majeure', label: 'Force Majeure', placeholder: 'Enter force majeure clause' },
+                                { key: 'dispute_terms', label: 'Dispute Terms', placeholder: 'Enter dispute resolution terms' },
+                            ].map(field => (
+                                <div key={field.key} className={field.key === 'dispute_terms' ? 'md:col-span-2' : ''}>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1">{field.label}</label>
+                                    <input type="text" value={(terms as any)[field.key]} onChange={e => setTerms(p => ({ ...p, [field.key]: e.target.value }))}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded text-sm" placeholder={field.placeholder} />
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer */}
+                <div className="flex items-center justify-between border-t border-gray-200 px-6 py-4 bg-gray-50 rounded-b-lg">
+                    <button type="button" onClick={goPrev} disabled={isFirst}
+                        className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                        <ChevronLeft className="w-4 h-4" /> Previous
+                    </button>
+                    <div className="flex items-center gap-3">
+                        <button type="button" onClick={handleClose}
+                            className="px-4 py-2 border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors">
+                            Cancel
+                        </button>
+                        {!isLast ? (
+                            <button type="button" onClick={goNext}
+                                className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded text-sm font-medium hover:bg-indigo-700 transition-colors">
+                                Next <ChevronRight className="w-4 h-4" />
+                            </button>
+                        ) : (
+                            <button type="button" onClick={handleSave} disabled={isSaving}
+                                className="px-6 py-2 bg-green-600 text-white rounded text-sm font-semibold hover:bg-green-700 disabled:opacity-60 transition-colors">
+                                {isSaving ? 'Saving...' : '✓ Save Customer'}
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </div >
+        </div >
+    );
+};
+
+export default AddNewCustomerModal;

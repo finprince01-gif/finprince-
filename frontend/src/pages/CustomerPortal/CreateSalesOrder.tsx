@@ -15,6 +15,7 @@ interface ItemRow {
     gst: number;
     gstRate?: number; // Hidden field for calculation
     netValue: number;
+    packingNotes: string;
 }
 
 interface CreateSalesOrderProps {
@@ -57,6 +58,12 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
         city?: string;
         state?: string;
         pincode?: string;
+        products_services?: {
+            items: {
+                itemCode: string;
+                packingNotes: string;
+            }[];
+        };
     }
 
     const [customers, setCustomers] = useState<Customer[]>([]);
@@ -73,7 +80,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
             if (!editId) return;
             try {
                 const order = await httpClient.get<any>(`/api/customerportal/sales-orders/${editId}/`);
-                
+
 
                 // Set Basic Details
                 setSOSeries(order.so_series_name);
@@ -105,7 +112,8 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
                         taxableValue: parseFloat(item.taxable_value) || 0,
                         gst: parseFloat(item.gst) || 0,
                         gstRate: parseFloat(item.gst_rate) || 0,
-                        netValue: parseFloat(item.net_value) || 0
+                        netValue: parseFloat(item.net_value) || 0,
+                        packingNotes: item.packing_notes || ''
                     })));
                 }
 
@@ -219,7 +227,8 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
             taxableValue: 0,
             gst: 0,
             gstRate: 0,
-            netValue: 0
+            netValue: 0,
+            packingNotes: ''
         }
     ]);
 
@@ -294,7 +303,8 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
             taxableValue: 0,
             gst: 0,
             gstRate: 0,
-            netValue: 0
+            netValue: 0,
+            packingNotes: ''
         };
         setItems([...items, newItem]);
     };
@@ -321,6 +331,15 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
                             price: selectedItem.rate ? selectedItem.rate.toString() : '0',
                             gstRate: parseFloat(selectedItem.gst_rate) || 0,
                         };
+
+                        // Auto-fill packing notes from customer master
+                        const currentCustomer = customers.find(c => c.customer_name === customerName);
+                        if (currentCustomer && currentCustomer.products_services) {
+                            const customerProduct = currentCustomer.products_services.items.find(i => i.itemCode === value);
+                            if (customerProduct) {
+                                updatedItem.packingNotes = customerProduct.packingNotes || '';
+                            }
+                        }
                     }
                 } else if (field === 'itemName') {
                     const selectedItem = inventoryItems.find(i => i.item_name === value);
@@ -332,6 +351,15 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
                             price: selectedItem.rate ? selectedItem.rate.toString() : '0',
                             gstRate: parseFloat(selectedItem.gst_rate) || 0,
                         };
+
+                        // Auto-fill packing notes from customer master
+                        const currentCustomer = customers.find(c => c.customer_name === customerName);
+                        if (currentCustomer && currentCustomer.products_services) {
+                            const customerProduct = currentCustomer.products_services.items.find(i => i.itemCode === selectedItem.item_code);
+                            if (customerProduct) {
+                                updatedItem.packingNotes = customerProduct.packingNotes || '';
+                            }
+                        }
                     }
                 }
 
@@ -397,7 +425,8 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
                     taxable_value: item.taxableValue,
                     gst_rate: item.gstRate, // Include GST Rate from hidden field
                     gst: item.gst,
-                    net_value: item.netValue
+                    net_value: item.netValue,
+                    packing_notes: item.packingNotes
                 })),
 
                 // Delivery Terms
@@ -431,16 +460,16 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
                 }
             };
 
-            
+
 
             let result;
             if (editId) {
                 result = await httpClient.patch(`/api/customerportal/sales-orders/${editId}/`, salesOrderData);
-                
+
                 showSuccess('Sales Order updated successfully!');
             } else {
                 result = await httpClient.post('/api/customerportal/sales-orders/', salesOrderData);
-                
+
                 showSuccess('Sales Order saved successfully!');
             }
 
@@ -736,84 +765,102 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
                                     {items.map((item, index) => (
-                                        <tr key={item.id} className="hover:bg-gray-50">
-                                            <td className="px-4 py-3 text-sm text-gray-900">{index + 1}</td>
-                                            <td className="px-4 py-3">
-                                                <select
-                                                    value={item.itemCode}
-                                                    onChange={(e) => handleItemChange(item.id, 'itemCode', e.target.value)}
-                                                    className="w-32 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                                                >
-                                                    <option value="">Select Code</option>
-                                                    {inventoryItems.map(invItem => (
-                                                        <option key={invItem.id} value={invItem.item_code}>
-                                                            {invItem.item_code}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <select
-                                                    value={item.itemName}
-                                                    onChange={(e) => handleItemChange(item.id, 'itemName', e.target.value)}
-                                                    className="w-48 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                                                >
-                                                    <option value="">Select Name</option>
-                                                    {inventoryItems.map(invItem => (
-                                                        <option key={invItem.id} value={invItem.item_name}>
-                                                            {invItem.item_name}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <input
-                                                    type="number"
-                                                    value={item.quantity}
-                                                    onChange={(e) => handleItemChange(item.id, 'quantity', e.target.value)}
-                                                    className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                                    placeholder="Qty"
-                                                />
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <input
-                                                    type="text"
-                                                    value={item.uom}
-                                                    readOnly // Set to readOnly as per requirement
-                                                    className="w-20 px-2 py-1 border border-gray-300 rounded text-sm bg-gray-50 text-gray-600"
-                                                    placeholder="UOM"
-                                                />
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <input
-                                                    type="number"
-                                                    value={item.price}
-                                                    readOnly // Set to readOnly as per requirement
-                                                    className="w-24 px-2 py-1 border border-gray-300 rounded text-sm bg-gray-50 text-gray-600"
-                                                    placeholder="Price"
-                                                />
-                                            </td>
-                                            <td className="px-4 py-3 text-sm text-gray-900 font-medium">
-                                                ₹{item.taxableValue.toFixed(2)}
-                                            </td>
-                                            <td className="px-4 py-3 text-sm text-gray-900 font-medium">
-                                                ₹{item.gst.toFixed(2)}
-                                            </td>
-                                            <td className="px-4 py-3 text-sm text-gray-900 font-medium">
-                                                ₹{item.netValue.toFixed(2)}
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <button
-                                                    onClick={() => handleRemoveItem(item.id)}
-                                                    className="text-red-600 hover:text-red-800 disabled:text-gray-400 disabled:cursor-not-allowed"
-                                                    disabled={items.length === 1}
-                                                >
-                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                    </svg>
-                                                </button>
-                                            </td>
-                                        </tr>
+                                        <React.Fragment key={item.id}>
+                                            <tr className="hover:bg-gray-50">
+                                                <td className="px-4 py-3 text-sm text-gray-900">{index + 1}</td>
+                                                <td className="px-4 py-3">
+                                                    <select
+                                                        value={item.itemCode}
+                                                        onChange={(e) => handleItemChange(item.id, 'itemCode', e.target.value)}
+                                                        className="w-32 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                                    >
+                                                        <option value="">Select Code</option>
+                                                        {inventoryItems.map(invItem => (
+                                                            <option key={invItem.id} value={invItem.item_code}>
+                                                                {invItem.item_code}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <select
+                                                        value={item.itemName}
+                                                        onChange={(e) => handleItemChange(item.id, 'itemName', e.target.value)}
+                                                        className="w-48 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                                    >
+                                                        <option value="">Select Name</option>
+                                                        {inventoryItems.map(invItem => (
+                                                            <option key={invItem.id} value={invItem.item_name}>
+                                                                {invItem.item_name}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <input
+                                                        type="number"
+                                                        value={item.quantity}
+                                                        onChange={(e) => handleItemChange(item.id, 'quantity', e.target.value)}
+                                                        className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                                        placeholder="Qty"
+                                                    />
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <input
+                                                        type="text"
+                                                        value={item.uom}
+                                                        readOnly // Set to readOnly as per requirement
+                                                        className="w-20 px-2 py-1 border border-gray-300 rounded text-sm bg-gray-50 text-gray-600"
+                                                        placeholder="UOM"
+                                                    />
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <input
+                                                        type="number"
+                                                        value={item.price}
+                                                        readOnly // Set to readOnly as per requirement
+                                                        className="w-24 px-2 py-1 border border-gray-300 rounded text-sm bg-gray-50 text-gray-600"
+                                                        placeholder="Price"
+                                                    />
+                                                </td>
+                                                <td className="px-4 py-3 text-sm text-gray-900 font-medium">
+                                                    ₹{item.taxableValue.toFixed(2)}
+                                                </td>
+                                                <td className="px-4 py-3 text-sm text-gray-900 font-medium">
+                                                    ₹{item.gst.toFixed(2)}
+                                                </td>
+                                                <td className="px-4 py-3 text-sm text-gray-900 font-medium">
+                                                    ₹{item.netValue.toFixed(2)}
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <button
+                                                        onClick={() => handleRemoveItem(item.id)}
+                                                        className="text-red-600 hover:text-red-800 disabled:text-gray-400 disabled:cursor-not-allowed"
+                                                        disabled={items.length === 1}
+                                                    >
+                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                        </svg>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            <tr className="bg-gray-50/50">
+                                                <td colSpan={10} className="px-4 py-2 border-b border-gray-200">
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                                                            Packing Notes:
+                                                        </span>
+                                                        <input
+                                                            type="text"
+                                                            value={item.packingNotes}
+                                                            onChange={(e) => handleItemChange(item.id, 'packingNotes', e.target.value)}
+                                                            className="flex-1 px-3 py-1.5 text-sm border-0 border-b border-transparent focus:border-indigo-500 focus:ring-0 bg-transparent placeholder-gray-400 italic"
+                                                            placeholder="Enter any special packing instructions for this item..."
+                                                        />
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </React.Fragment>
                                     ))}
                                 </tbody>
                             </table>

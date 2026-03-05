@@ -46,6 +46,8 @@ export const GST_INVOICE_TYPES = [
     { value: 'Regular', label: 'Regular' },
     { value: 'SEZ with payment', label: 'SEZ with Payment of Tax' },
     { value: 'SEZ without payment', label: 'SEZ without Payment of Tax' },
+    { value: 'Export with payment', label: 'Export with Payment of Tax' },
+    { value: 'Export without payment', label: 'Export without Payment of Tax' },
     { value: 'Deemed Export', label: 'Deemed Export' }
 ];
 

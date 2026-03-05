@@ -449,7 +449,7 @@ const CustomerContent: React.FC = () => {
     const [registeredBranches, setRegisteredBranches] = useState<any[]>([]); // Track registered branch inputs
 
     const [productRows, setProductRows] = useState([
-        { id: 1, itemCode: '', itemName: 'Auto-fetched', uom: '', custItemCode: '', custItemName: '', custUom: '' }
+        { id: 1, itemCode: '', itemName: 'Auto-fetched', uom: '', custItemCode: '', custItemName: '', custUom: '', packingNotes: '' }
     ]);
 
     // ... (rest of state)
@@ -496,41 +496,42 @@ const CustomerContent: React.FC = () => {
 
     // TDS Sections Data
     const tdsSections = [
-        { section: 'Section 194C', name: 'Contracts- Individual/HUF', description: 'Payment to Contractors who are Individuals or Hindu Undivided Family (HUF)' },
-        { section: 'Section 194C', name: 'Contracts- Others', description: 'Payment to Contractors other than Individuals & HUF' },
-        { section: 'Section 194H', name: 'Commission/Brokerage', description: 'Commission and Brokerage to agents' },
-        { section: 'Section 194-I', name: 'Rent- Land, Building, Furniture & fitting', description: 'Rent on Land, Building, or Furniture & fitting' },
-        { section: 'Section 194-I', name: 'Rent- Plant & Machinery, Equipment', description: 'Rent on Plant & Machinery, or Equipment' },
-        { section: 'Section 194J', name: 'Technical Services', description: 'Fees for Technical Services, Call Center Operations, Royalty on sale & distribution of films' },
-        { section: 'Section 194J', name: 'Professional Services', description: 'Professional Services, Royalty from other than films, Non-Compete Fees, etc.' },
-        { section: 'Section 194J', name: 'Director\'s Remuneration', description: 'Director\'s Remuneration' },
-        { section: 'Section 194Q', name: 'Purchase of Goods', description: 'Purchase of Goods of aggregate value exceeding Rs. 50 Lakhs' },
-        { section: 'Section 194A', name: 'Interest other than interest on securities', description: 'Interest payments made on loans, FDs, advances, etc., other than interest on securities' },
-        { section: 'Section 194R', name: 'Benefit or Perquisite', description: 'Benefit or Perquisite given by a business or professional exceeding Rs 20,000' },
-        { section: 'Section 194-IA', name: 'Immovable Property Transfer', description: 'Transfer of immovable property valuing Rs 50 lakhs or more' },
-        { section: 'Section 194-IB', name: 'Rent by Individual or HUF', description: 'Rent exceeding Rs 50,000 per month paid by Individual & HUFs who are not subject to tax audit' },
-        { section: 'Section 194M', name: 'Contractors & Professionals', description: 'Payment exceeding Rs 50 lakh to contractors and professionals by Individuals & HUFs who are not subject to tax audit' },
-        { section: 'Section 194O', name: 'E-Commerce', description: 'Facilitating sales or services by an E-commerce operator for an E-commerce participant' },
-        { section: 'Section 195', name: 'Payment to Non-Residents', description: 'Any payment made to a Non-Resident or Foreign Company' }
+        { section: 'Section 194C', name: 'Contracts- Individual/HUF', rate: '1%', description: 'Payment to Contractors who are Individuals or Hindu Undivided Family (HUF)' },
+        { section: 'Section 194C', name: 'Contracts- Others', rate: '2%', description: 'Payment to Contractors other than Individuals & HUF' },
+        { section: 'Section 194H', name: 'Commission/Brokerage', rate: '2%', description: 'Commission and Brokerage to agents' },
+        { section: 'Section 194-I', name: 'Rent- Land, Building, Furniture & fitting', rate: '2%', description: 'Rent on Land, Building, or Furniture & fitting' },
+        { section: 'Section 194-I', name: 'Rent- Plant & Machinery, Equipment', rate: '10%', description: 'Rent on Plant & Machinery, or Equipment' },
+        { section: 'Section 194J', name: 'Technical Services', rate: '2%', description: 'Fees for Technical Services, Call Center Operations, Royalty on sale & distribution of films' },
+        { section: 'Section 194J', name: 'Professional Services', rate: '10%', description: 'Professional Services, Royalty from other than films, Non-Compete Fees, etc.' },
+        { section: 'Section 194J', name: 'Director\'s Remuneration', rate: '10%', description: 'Director\'s Remuneration' },
+        { section: 'Section 194Q', name: 'Purchase of Goods', rate: '0.10%', description: 'Purchase of Goods of aggregate value exceeding Rs. 50 Lakhs' },
+        { section: 'Section 194A', name: 'Interest other than interest on securities', rate: '10%', description: 'Interest payments made on loans, FDs, advances, etc., other than interest on securities' },
+        { section: 'Section 194R', name: 'Benefit or Perquisite', rate: '10%', description: 'Benefit or Perquisite given by a business or professional exceeding Rs 20,000' },
+        { section: 'Section 194-IA', name: 'Immovable Property Transfer', rate: '1%', description: 'Transfer of immovable property valuing Rs 50 lakhs or more' },
+        { section: 'Section 194-IB', name: 'Rent by Individual or HUF', rate: '2%', description: 'Rent exceeding Rs 50,000 per month paid by Individual & HUFs who are not subject to tax audit' },
+        { section: 'Section 194IC', name: 'Joint Development Agreements', rate: '10%', description: 'Payment under Joint Development Agreements' },
+        { section: 'Section 194M', name: 'Contractors & Professionals', rate: '2%', description: 'Payment exceeding Rs 50 lakh to contractors and professionals by Individuals & HUFs who are not subject to tax audit' },
+        { section: 'Section 194O', name: 'E-Commerce', rate: '1%', description: 'Facilitating sales or services by an E-commerce operator for an E-commerce participant' },
+        { section: 'Section 195', name: 'Payment to Non-Residents', rate: 'Variable', description: 'Any payment made to a Non-Resident or Foreign Company' }
     ];
 
     // State for TDS info modal
     const [showTdsInfo, setShowTdsInfo] = useState(false);
-    const [selectedTdsInfo, setSelectedTdsInfo] = useState<{ section: string; name: string; description: string } | null>(null);
+    const [selectedTdsInfo, setSelectedTdsInfo] = useState<{ section: string; name: string; rate: string; description: string } | null>(null);
 
     // TCS Sections Data
     const tcsSections = [
-        { section: 'Section 206C(1)', name: 'Sale of Scrap, Alcoholic Liquor, Minerals', description: 'Sale of Scrap, Alcoholic Liquor for human consumption, and Minerals being coal or lignite or iron ore' },
-        { section: 'Section 206C(1)', name: 'Sale of Tendu Leaves', description: 'Sale of Tendu Leaves' },
-        { section: 'Section 206C(1)', name: 'Sale of Forest Produce', description: 'Sale of Timber and Forest produce under a forest lease' },
-        { section: 'Section 206C(1)', name: 'Sale of Timber', description: 'Sale of Timber from modes other than forest lease' },
-        { section: 'Section 206C(1F)', name: 'Sale of Motor Vehicles', description: 'Sale of Motor Vehicle for value of more than Rs.10 Lakhs' },
-        { section: 'Section 206C(1F)', name: 'Sale of Specified Luxury Goods', description: 'Sale of Luxury Goods like yachts, helicopters, aircraft, jewellery, home theatre systems, etc. for value of more than Rs 10 Lakhs' }
+        { section: 'Section 206C(1)', name: 'Sale of Scrap, Alcoholic Liquor, Minerals', rate: '1%', description: 'Sale of Scrap, Alcoholic Liquor for human consumption, and Minerals being coal or lignite or iron ore' },
+        { section: 'Section 206C(1)', name: 'Sale of Tendu Leaves', rate: '5%', description: 'Sale of Tendu Leaves' },
+        { section: 'Section 206C(1)', name: 'Sale of Forest Produce', rate: '2%', description: 'Sale of Timber and Forest produce under a forest lease' },
+        { section: 'Section 206C(1)', name: 'Sale of Timber', rate: '2%', description: 'Sale of Timber from modes other than forest lease' },
+        { section: 'Section 206C(1F)', name: 'Sale of Motor Vehicles', rate: '1%', description: 'Sale of Motor Vehicle for value of more than Rs.10 Lakhs' },
+        { section: 'Section 206C(1F)', name: 'Sale of Specified Luxury Goods', rate: '1%', description: 'Sale of Luxury Goods like yachts, helicopters, aircraft, jewellery, home theatre systems, etc. for value of more than Rs 10 Lakhs' }
     ];
 
     // State for TCS info display
     const [showTcsInfo, setShowTcsInfo] = useState(false);
-    const [selectedTcsInfo, setSelectedTcsInfo] = useState<{ section: string; name: string; description: string } | null>(null);
+    const [selectedTcsInfo, setSelectedTcsInfo] = useState<{ section: string; name: string; rate: string; description: string } | null>(null);
 
     const [bankAccounts, setBankAccounts] = useState<{
         id: number;
@@ -795,7 +796,7 @@ const CustomerContent: React.FC = () => {
     const handleAddProductRow = () => {
         setProductRows(prev => [
             ...prev,
-            { id: prev.length + 1, itemCode: '', itemName: '', uom: '', custItemCode: '', custItemName: '', custUom: '' }
+            { id: prev.length + 1, itemCode: '', itemName: '', uom: '', custItemCode: '', custItemName: '', custUom: '', packingNotes: '' }
         ]);
     };
 
@@ -1039,10 +1040,11 @@ const CustomerContent: React.FC = () => {
                 uom: item.uom || '',
                 custItemCode: item.custItemCode || '',
                 custItemName: item.custItemName || '',
-                custUom: item.custUom || ''
+                custUom: item.custUom || '',
+                packingNotes: item.packingNotes || ''
             })));
         } else {
-            setProductRows([{ id: 1, itemCode: '', itemName: 'Auto-fetched', uom: '', custItemCode: '', custItemName: '', custUom: '' }]);
+            setProductRows([{ id: 1, itemCode: '', itemName: 'Auto-fetched', uom: '', custItemCode: '', custItemName: '', custUom: '', packingNotes: '' }]);
         }
 
         // 5. Statutory (TDS)
@@ -2182,6 +2184,18 @@ const CustomerContent: React.FC = () => {
                                                     </svg>
                                                 </button>
                                             </div>
+                                            {/* Packing Notes Field */}
+                                            <div className="col-span-1"></div>
+                                            <div className="col-span-10 mt-2">
+                                                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Packing Notes</label>
+                                                <input
+                                                    type="text"
+                                                    className="w-full px-3 py-1.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                    placeholder="Enter packing notes for this item..."
+                                                    value={row.packingNotes || ''}
+                                                    onChange={(e) => handleProductRowChange(row.id, 'packingNotes', e.target.value)}
+                                                />
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -2358,7 +2372,7 @@ const CustomerContent: React.FC = () => {
                                                         <option value="">Select TCS Section</option>
                                                         {tcsSections.map((tcs, index) => (
                                                             <option key={index} value={`${tcs.section}|${tcs.name}`}>
-                                                                {tcs.section} - {tcs.name}
+                                                                {tcs.section} - {tcs.name} @ {tcs.rate}
                                                             </option>
                                                         ))}
                                                     </select>
@@ -2388,7 +2402,14 @@ const CustomerContent: React.FC = () => {
                                                                 <line x1="12" y1="8" x2="12.01" y2="8"></line>
                                                             </svg>
                                                             <div className="flex-1">
-                                                                <p className="text-xs font-medium text-indigo-900 mb-1">Description</p>
+                                                                <div className="flex items-center justify-between mb-1">
+                                                                    <p className="text-xs font-medium text-indigo-900">Description</p>
+                                                                    {selectedTcsInfo.rate && (
+                                                                        <span className="text-xs font-semibold text-indigo-700 bg-indigo-100 border border-indigo-300 rounded px-2 py-0.5">
+                                                                            TCS Rate: {selectedTcsInfo.rate}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
                                                                 <p className="text-sm text-indigo-800 leading-relaxed">{selectedTcsInfo.description}</p>
                                                             </div>
                                                         </div>
@@ -2441,7 +2462,7 @@ const CustomerContent: React.FC = () => {
                                                         <option value="">Select TDS Section</option>
                                                         {tdsSections.map((tds, index) => (
                                                             <option key={index} value={`${tds.section}|${tds.name}`}>
-                                                                {tds.section} - {tds.name}
+                                                                {tds.section} - {tds.name} @ {tds.rate}
                                                             </option>
                                                         ))}
                                                     </select>
@@ -2471,7 +2492,12 @@ const CustomerContent: React.FC = () => {
                                                                 <line x1="12" y1="8" x2="12.01" y2="8"></line>
                                                             </svg>
                                                             <div className="flex-1">
-                                                                <p className="text-xs font-medium text-indigo-900 mb-1">Description</p>
+                                                                <div className="flex items-center justify-between mb-2">
+                                                                    <p className="text-xs font-medium text-indigo-900">Description</p>
+                                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800 border border-indigo-200">
+                                                                        TDS Rate: {selectedTdsInfo.rate}
+                                                                    </span>
+                                                                </div>
                                                                 <p className="text-sm text-indigo-800 leading-relaxed">{selectedTdsInfo.description}</p>
                                                             </div>
                                                         </div>
