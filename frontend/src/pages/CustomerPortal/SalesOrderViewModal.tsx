@@ -149,16 +149,28 @@ const SalesOrderViewModal: React.FC<ViewModalProps> = ({ isOpen, onClose, orderI
                                             </thead>
                                             <tbody className="divide-y divide-gray-100 bg-white">
                                                 {details.items?.map((item: any, idx: number) => (
-                                                    <tr key={idx} className="hover:bg-indigo-50/30 transition-colors">
-                                                        <td className="px-6 py-3 text-xs font-medium text-gray-500">{idx + 1}</td>
-                                                        <td className="px-6 py-3 text-xs font-bold text-gray-900">{item.item_code}</td>
-                                                        <td className="px-6 py-3 text-xs text-gray-600">{item.item_name}</td>
-                                                        <td className="px-6 py-3 text-xs text-gray-900 text-right">{item.quantity}</td>
-                                                        <td className="px-6 py-3 text-xs text-gray-900 text-right">₹{parseFloat(item.price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                                        <td className="px-6 py-3 text-xs text-gray-900 text-right">₹{parseFloat(item.taxable_value).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                                        <td className="px-6 py-3 text-xs text-gray-900 text-right">₹{parseFloat(item.gst).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                                        <td className="px-6 py-3 text-xs text-indigo-600 text-right font-bold">₹{parseFloat(item.net_value).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                                    </tr>
+                                                    <React.Fragment key={idx}>
+                                                        <tr className="hover:bg-indigo-50/30 transition-colors">
+                                                            <td className="px-6 py-3 text-xs font-medium text-gray-500">{idx + 1}</td>
+                                                            <td className="px-6 py-3 text-xs font-bold text-gray-900">{item.item_code}</td>
+                                                            <td className="px-6 py-3 text-xs text-gray-600">{item.item_name}</td>
+                                                            <td className="px-6 py-3 text-xs text-gray-900 text-right">{item.quantity}</td>
+                                                            <td className="px-6 py-3 text-xs text-gray-900 text-right">₹{parseFloat(item.price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                            <td className="px-6 py-3 text-xs text-gray-900 text-right">₹{parseFloat(item.taxable_value).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                            <td className="px-6 py-3 text-xs text-gray-900 text-right">₹{parseFloat(item.gst).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                            <td className="px-6 py-3 text-xs text-indigo-600 text-right font-bold">₹{parseFloat(item.net_value).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                        </tr>
+                                                        {item.packing_notes && (
+                                                            <tr className="bg-indigo-50/10">
+                                                                <td colSpan={8} className="px-6 py-2">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest whitespace-nowrap">Packing Notes:</span>
+                                                                        <span className="text-xs text-indigo-800 italic">{item.packing_notes}</span>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        )}
+                                                    </React.Fragment>
                                                 ))}
                                             </tbody>
                                             <tfoot className="bg-gray-50">

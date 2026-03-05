@@ -234,6 +234,60 @@ class InventoryMasterIssueSlipViewSet(viewsets.ModelViewSet):
         instance.save()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+    @action(detail=True, methods=['get'], url_path='next-number')
+    def next_number(self, request, pk=None):
+        """
+        Returns the next auto-generated Issue Slip number for this series.
+        """
+        series = self.get_object()
+        tenant_id = get_tenant_from_request(request)
+
+        prefix = series.prefix or ''
+        suffix = series.suffix or ''
+        year = series.year or ''
+        required_digits = series.required_digits or 4
+
+        # Build the pattern prefix used in number
+        if prefix and year:
+            number_prefix = f"{prefix}{year}"
+        elif prefix:
+            number_prefix = prefix
+        elif year:
+            number_prefix = year
+        else:
+            number_prefix = ''
+
+        # Count existing outward slips for this tenant that match this series pattern
+        existing_count = InventoryOperationOutward.objects.filter(
+            tenant_id=tenant_id,
+            outward_slip_no__startswith=number_prefix
+        ).count()
+
+        next_seq = existing_count + 1
+        seq_str = str(next_seq).zfill(required_digits)
+
+        # Compose the number
+        parts = []
+        if prefix:
+            parts.append(prefix)
+        if year:
+            parts.append(year)
+        parts.append(seq_str)
+        if suffix:
+            parts.append(suffix)
+
+        # Use the separator from preview if available, otherwise default to '-'
+        preview = series.preview or ''
+        sep = '-'
+        for s in ['/', '_', '-', ' ']:
+            if s in preview:
+                sep = s
+                break
+
+        slip_no = sep.join(parts)
+
+        return Response({'outward_slip_no': slip_no, 'series_name': series.name})
+
 # -------------------------------------------------------------------------
 # OPERATION VIEWS
 # -------------------------------------------------------------------------

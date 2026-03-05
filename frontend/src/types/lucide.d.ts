@@ -51,4 +51,10 @@ declare module 'lucide-react' {
     export const DollarSign: LucideIcon;
     export const PieChart: LucideIcon;
     export const BarChart: LucideIcon;
+    export const MapPin: LucideIcon;
+    export const Phone: LucideIcon;
+    export const CheckCircle: LucideIcon;
+    export const CreditCard: LucideIcon;
+    export const ShoppingBag: LucideIcon;
+    export const Truck: LucideIcon;
 }
