@@ -408,6 +408,7 @@ class CustomerMasterCustomerProductService(models.Model):
     uom = models.CharField(max_length=50, null=True, blank=True, help_text='Unit of Measure')
     customer_item_code = models.CharField(max_length=50, null=True, blank=True)
     customer_item_name = models.CharField(max_length=200, null=True, blank=True)
+    packing_notes = models.TextField(null=True, blank=True, help_text='Packing notes for this product/service')
     
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
@@ -903,6 +904,7 @@ class CustomerTransactionSalesOrderItemDetails(models.Model):
     gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text='GST Rate (%)')
     net_value = models.DecimalField(max_digits=15, decimal_places=2, default=0, help_text='Net Value (Taxable + GST)')
     uom = models.CharField(max_length=50, null=True, blank=True, help_text='Unit of Measure')
+    packing_notes = models.TextField(null=True, blank=True, help_text='Packing notes for this item')
     
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)

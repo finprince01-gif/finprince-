@@ -1,6 +1,6 @@
 // Vendor Portal - Master Configuration
 import React, { useState, useEffect } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Eye, Pencil, Trash2, Plus, Search, Filter } from 'lucide-react';
 import { usePermissions } from '../../hooks/usePermissions';
 import { httpClient } from '../../services/httpClient';
 import CategoryHierarchicalDropdown from '../../components/CategoryHierarchicalDropdown';
@@ -412,6 +412,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     // Vendor List State for Dropdowns
     const [vendorList, setVendorList] = useState<VendorBasicDetail[]>([]);
     const [loadingVendors, setLoadingVendors] = useState(false);
+    const [vendorSearchTerm, setVendorSearchTerm] = useState('');
+    const [vendorStatusFilter, setVendorStatusFilter] = useState('All Status');
+    const [vendorCategoryFilter, setVendorCategoryFilter] = useState('All Categories');
+    const [isCreatingVendor, setIsCreatingVendor] = useState(false);
 
     // Fetch Vendors
     const fetchVendors = async () => {
@@ -431,6 +435,141 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     useEffect(() => {
         fetchVendors();
     }, []);
+
+    // Filtered Vendors for Management List
+    const filteredVendors = vendorList.filter(vendor => {
+        const matchesSearch =
+            (vendor.vendor_name || '').toLowerCase().includes(vendorSearchTerm.toLowerCase()) ||
+            (vendor.vendor_code || '').toLowerCase().includes(vendorSearchTerm.toLowerCase());
+        const matchesStatus =
+            vendorStatusFilter === 'All Status' ||
+            (vendor.is_active ? 'Live' : 'Dormant') === vendorStatusFilter;
+        // Vendor category filter (handle object or string if needed)
+        const matchesCategory =
+            vendorCategoryFilter === 'All Categories' ||
+            (vendor as any).vendor_category === vendorCategoryFilter;
+
+        return matchesSearch && matchesStatus && matchesCategory;
+    });
+
+    const handleCreateNewVendor = () => {
+        resetVendorCreationFlow();
+        // Set a new generated code
+        setVendorCode(`VEN-${Date.now().toString().slice(-6)}`);
+        setIsCreatingVendor(true);
+        setActiveMasterSubTab('Vendor Creation');
+    };
+
+    const handleEditVendor = async (vendor: VendorBasicDetail) => {
+        try {
+            // Reset state first to be clean
+            resetVendorCreationFlow();
+            setIsCreatingVendor(true);
+
+            // Populate Basic Details
+            setCreatedVendorId(vendor.id);
+            setVendorCode(vendor.vendor_code || '');
+            setVendorName(vendor.vendor_name || '');
+            setPanNo(vendor.pan_no || '');
+            setContactPerson(vendor.contact_person || '');
+            setVendorEmail(vendor.email || '');
+            setContactNo(vendor.contact_no || '');
+            setVendorCategory((vendor as any).vendor_category || '');
+            setBillingCurrency((vendor as any).billing_currency || '');
+            setIsAlsoCustomer(vendor.is_also_customer || false);
+            // setTcsApplicable((vendor as any).tcs_applicable || false);
+
+            showInfo('Loading vendor details...');
+
+            // 1. GST Details
+            try {
+                const gstRes: any = await httpClient.get(`/api/vendors/gst-details/?vendor_basic_detail=${vendor.id}`);
+                const gstList = Array.isArray(gstRes) ? gstRes : (gstRes.results || []);
+                if (gstList.length > 0) {
+                    const mappedGst = gstList.map((g: any) => ({
+                        id: g.id.toString(),
+                        gstin: g.gstin || '',
+                        registrationType: g.registration_type || 'Regular',
+                        tradeName: g.trade_name || '',
+                        legalName: g.legal_name || '',
+                        placesOfBusiness: Array.isArray(g.places_of_business) ? g.places_of_business : [],
+                        isExpanded: false
+                    }));
+                    setGstRecords(mappedGst);
+                }
+            } catch (e) {
+                console.error('Error fetching existing GST details:', e);
+            }
+
+            // 2. TDS Details
+            try {
+                const tdsRes: any = await httpClient.get(`/api/vendors/tds-details/by-vendor/${vendor.id}/`);
+                const tdsArray = tdsRes.data || (Array.isArray(tdsRes) ? tdsRes : []);
+                if (tdsArray.length > 0) {
+                    const tds = tdsArray[0];
+                    setMsmeUdyamNo(tds.msme_udyam_no || '');
+                    setFssaiLicenseNo(tds.fssai_license_no || '');
+                    setImportExportCode(tds.import_export_code || '');
+                    setEouStatus(tds.eou_status || '');
+                    setTdsSectionApplicable(tds.tds_section_applicable || '');
+                    setEnableAutomaticTdsPosting(tds.enable_automatic_tds_posting || false);
+                }
+            } catch (e) {
+                console.error('Error fetching existing TDS details:', e);
+            }
+
+            // 3. Banking Details
+            try {
+                const bankingRes: any = await httpClient.get(`/api/vendors/banking-details/by-vendor/${vendor.id}/`);
+                const bankingList = bankingRes.data || (Array.isArray(bankingRes) ? bankingRes : []);
+                if (bankingList.length > 0) {
+                    const mappedBanks = bankingList.map((b: any, idx: number) => ({
+                        id: b.id,
+                        accountNumber: b.bank_account_no || '',
+                        bankName: b.bank_name || '',
+                        ifscCode: b.ifsc_code || '',
+                        branchName: b.branch_name || '',
+                        swiftCode: b.swift_code || '',
+                        vendorBranch: b.vendor_branch ? b.vendor_branch.split(',') : [],
+                        accountType: b.account_type ? (b.account_type.charAt(0).toUpperCase() + b.account_type.slice(1).replace('_', ' ')) : 'Savings'
+                    }));
+                    setBankAccounts(mappedBanks);
+                }
+            } catch (e) {
+                console.error('Error fetching existing banking details:', e);
+            }
+
+            // 4. Terms & Conditions
+            try {
+                const termsRes: any = await httpClient.get(`/api/vendors/terms/by_vendor/${vendor.id}/`);
+                const termsArray = termsRes.data || (Array.isArray(termsRes) ? termsRes : []);
+                if (termsArray.length > 0) {
+                    const t = termsArray[0];
+                    setCreditLimit(t.credit_limit || '');
+                    setCreditPeriod(t.credit_period || '');
+                    setCreditTerms(t.credit_terms || '');
+                    setPenaltyTerms(t.penalty_terms || '');
+                }
+            } catch (e) {
+                console.error('Error fetching existing terms:', e);
+            }
+
+            setActiveMasterSubTab('Vendor Creation');
+        } catch (error) {
+            handleApiError(error, 'Edit Vendor');
+        }
+    };
+
+    const handleDeleteVendor = async (vendorId: number) => {
+        if (!await confirm('Are you sure you want to delete this vendor?')) return;
+        try {
+            await httpClient.delete(`/api/vendors/basic-details/${vendorId}/`);
+            showSuccess('Vendor deleted successfully!');
+            fetchVendors();
+        } catch (error) {
+            handleApiError(error, 'Delete Vendor');
+        }
+    };
 
 
 
@@ -1745,7 +1884,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
     // Load on tab switch
     useEffect(() => {
-        if (activeTab === 'Master' && activeMasterSubTab === 'Category') {
+        if (activeTab === 'Master' && (activeMasterSubTab === 'Category' || activeMasterSubTab === 'Vendor Creation')) {
             fetchCategories();
         } else if (activeTab === 'Master' && activeMasterSubTab === 'PO Settings') {
             fetchPOSeries();
@@ -2076,35 +2215,198 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                         )}
 
                         {activeMasterSubTab === 'Vendor Creation' && (
-                            <div className="p-6">
-                                <h3 className="section-title mb-2">Vendor Creation</h3>
-                                <p className="helper-text mb-6">Select a tab below to configure vendor details:</p>
-                                <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-4">
-                                    {['Basic Details', 'GST Details', 'Products/Services', 'TDS & Other Statutory', 'Banking Info', 'Terms & Conditions'].map((tab) => (
-                                        <button
-                                            key={tab}
-                                            onClick={() => setActiveMasterSubTab(tab as MasterSubTab)}
-                                            className="p-4 border-2 border-gray-200 rounded-[4px] hover:border-indigo-500 hover:bg-indigo-50/50 transition-all text-left"
-                                        >
-                                            <div className="font-medium text-gray-900">{tab}</div>
-                                            <div className="text-xs text-gray-500 mt-1">Configure {tab.toLowerCase()}</div>
-                                        </button>
-                                    ))}
-                                </div>
+                            <div className="p-8">
+                                {!isCreatingVendor ? (
+                                    <>
+                                        <div className="flex justify-between items-center mb-6">
+                                            <h3 className="text-xl font-bold text-gray-900">Vendor Management</h3>
+                                            <button
+                                                onClick={handleCreateNewVendor}
+                                                className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-[4px] hover:bg-indigo-700 transition-colors flex items-center gap-2"
+                                            >
+                                                <Plus className="w-4 h-4" /> Create New Vendor
+                                            </button>
+                                        </div>
+
+                                        {/* Filters */}
+                                        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-4">
+                                            <div className="md:col-span-8 relative">
+                                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                    <Search className="h-4 w-4 text-gray-400" />
+                                                </div>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Search by vendor name or code..."
+                                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                    value={vendorSearchTerm}
+                                                    onChange={(e) => setVendorSearchTerm(e.target.value)}
+                                                />
+                                            </div>
+                                            <div className="md:col-span-2">
+                                                <div className="relative">
+                                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                        <Filter className="h-3 w-3 text-gray-400" />
+                                                    </div>
+                                                    <select
+                                                        className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm text-gray-700 appearance-none bg-white"
+                                                        value={vendorStatusFilter}
+                                                        onChange={(e) => setVendorStatusFilter(e.target.value)}
+                                                    >
+                                                        <option>All Status</option>
+                                                        <option>Live</option>
+                                                        <option>Dormant</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div className="md:col-span-2">
+                                                <select
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm text-gray-700 bg-white"
+                                                    value={vendorCategoryFilter}
+                                                    onChange={(e) => setVendorCategoryFilter(e.target.value)}
+                                                >
+                                                    <option>All Categories</option>
+                                                    {categories.map((cat) => (
+                                                        <option key={cat.id} value={cat.full_path || cat.category}>
+                                                            {cat.full_path || [cat.category, cat.group, cat.subgroup].filter(Boolean).join(' > ')}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <p className="text-sm text-gray-500 mb-4">Showing {filteredVendors.length} of {vendorList.length} vendors</p>
+
+                                        {/* Table */}
+                                        <div className="bg-white border border-gray-200 rounded-[4px] overflow-hidden">
+                                            <table className="min-w-full divide-y divide-gray-200">
+                                                <thead className="bg-gray-50">
+                                                    <tr>
+                                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CATEGORY</th>
+                                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">VENDOR CODE</th>
+                                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">VENDOR NAME</th>
+                                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">STATUS</th>
+                                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">ACTIONS</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="bg-white divide-y divide-gray-200">
+                                                    {loadingVendors ? (
+                                                        <tr>
+                                                            <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                                                                <div className="flex flex-col items-center gap-2">
+                                                                    <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                                                                    <span>Loading vendors...</span>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ) : filteredVendors.length === 0 ? (
+                                                        <tr>
+                                                            <td colSpan={5} className="px-6 py-12 text-center text-gray-500 italic">
+                                                                No vendors found matching your criteria.
+                                                            </td>
+                                                        </tr>
+                                                    ) : (
+                                                        filteredVendors.map((vendor) => (
+                                                            <tr key={vendor.id} className="hover:bg-gray-50 transition-colors">
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                                    {(vendor as any).vendor_category || '-'}
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                                                    {vendor.vendor_code}
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                                                    {vendor.vendor_name}
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-center">
+                                                                    <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${vendor.is_active
+                                                                        ? 'bg-green-100 text-green-800'
+                                                                        : 'bg-gray-100 text-gray-600'
+                                                                        }`}>
+                                                                        {vendor.is_active ? 'Live' : 'Dormant'}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                                                                    <div className="flex items-center justify-end gap-3">
+                                                                        <button
+                                                                            className="text-indigo-600 hover:text-indigo-900 transition-colors"
+                                                                            title="View"
+                                                                            onClick={() => handleEditVendor(vendor)}
+                                                                        >
+                                                                            <Eye className="w-5 h-5" />
+                                                                        </button>
+                                                                        <button
+                                                                            className="text-blue-600 hover:text-blue-900 transition-colors"
+                                                                            title="Edit"
+                                                                            onClick={() => handleEditVendor(vendor)}
+                                                                        >
+                                                                            <Pencil className="w-5 h-5" />
+                                                                        </button>
+                                                                        <button
+                                                                            className="text-red-600 hover:text-red-900 transition-colors"
+                                                                            title="Delete"
+                                                                            onClick={() => handleDeleteVendor(vendor.id)}
+                                                                        >
+                                                                            <Trash2 className="w-5 h-5" />
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        ))
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="mb-6">
+                                            <button
+                                                onClick={() => setIsCreatingVendor(false)}
+                                                className="text-indigo-600 hover:text-indigo-800 text-xs font-semibold flex items-center gap-1 uppercase tracking-wider mb-4"
+                                            >
+                                                <ChevronDown className="w-4 h-4 rotate-90" /> BACK TO VENDOR LIST
+                                            </button>
+                                            <h3 className="text-xl font-bold text-gray-900">Create New Vendor</h3>
+                                            <p className="text-sm text-gray-500 mt-1">Select a tab below to configure vendor details:</p>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                            {[
+                                                { id: 'Basic Details', title: 'BASIC DETAILS', desc: 'CONFIGURE BASIC DETAILS' },
+                                                { id: 'GST Details', title: 'GST DETAILS', desc: 'CONFIGURE GST DETAILS' },
+                                                { id: 'Products/Services', title: 'PRODUCTS/SERVICES', desc: 'CONFIGURE PRODUCTS/SERVICES' },
+                                                { id: 'TDS & Other Statutory', title: 'TDS & OTHER STATUTORY DETAILS', desc: 'CONFIGURE TDS & OTHER STATUTORY' },
+                                                { id: 'Banking Info', title: 'BANKING INFO', desc: 'CONFIGURE BANKING INFO' },
+                                                { id: 'Terms & Conditions', title: 'TERMS & CONDITIONS', desc: 'CONFIGURE TERMS & CONDITIONS' },
+                                            ].map((card) => (
+                                                <button
+                                                    key={card.id}
+                                                    onClick={() => setActiveMasterSubTab(card.id as MasterSubTab)}
+                                                    className="p-8 border border-gray-200 rounded-[4px] hover:border-indigo-500 hover:bg-indigo-50/30 transition-all text-left group"
+                                                >
+                                                    <div className="font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">{card.title}</div>
+                                                    <div className="text-xs text-gray-400 mt-1 uppercase tracking-tight">{card.desc}</div>
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        <div className="mt-12 text-center text-gray-400 italic text-sm">
+                                            content coming soon.
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         )}
 
                         {activeMasterSubTab === 'Basic Details' && (
                             <div className="p-6">
-                                <div className="flex items-center mb-6">
+                                <div className="mb-6">
                                     <button
                                         onClick={() => setActiveMasterSubTab('Vendor Creation')}
-                                        className="mr-4 p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
-                                        title="Back to Vendor Creation"
+                                        className="text-indigo-600 hover:text-indigo-800 text-xs font-semibold flex items-center gap-1 uppercase tracking-wider mb-4"
                                     >
-                                        <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                                        <ChevronDown className="w-4 h-4 rotate-90" /> BACK TO VENDOR CREATION HUB
                                     </button>
-                                    <h3 className="section-title">Basic Details</h3>
+                                    <h3 className="text-xl font-bold text-gray-900">Basic Details</h3>
                                 </div>
 
                                 <form className="space-y-6" onSubmit={handleBasicDetailsSubmit}>
@@ -2312,9 +2614,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         <button
                                             type="button"
                                             onClick={() => setActiveMasterSubTab('Vendor Creation')}
-                                            className="px-6 py-2 border border-slate-200 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
+                                            className="px-6 py-2 border border-slate-200 text-sm font-semibold rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none uppercase tracking-wider"
                                         >
-                                            Back
+                                            BACK TO VENDOR CREATION HUB
                                         </button>
                                         <button
                                             type="submit"
@@ -2331,26 +2633,24 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
                         {activeMasterSubTab === 'GST Details' && (
                             <div className="p-6">
-                                <div className="flex justify-between items-center mb-6">
-                                    <div className="flex items-center">
-                                        <button
-                                            onClick={() => setActiveMasterSubTab('Vendor Creation')}
-                                            className="mr-4 p-2 hover:bg-gray-100 rounded-full transition-colors"
-                                            title="Back to Vendor Creation"
-                                        >
-                                            <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                                        </button>
-                                        <h3 className="section-title">GST Details</h3>
-                                    </div>
+                                <div className="mb-6">
                                     <button
-                                        type="button"
-                                        onClick={handleAddGstRecord}
-                                        className="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-teal-600 hover:bg-teal-700 focus:outline-none"
+                                        onClick={() => setActiveMasterSubTab('Vendor Creation')}
+                                        className="text-indigo-600 hover:text-indigo-800 text-xs font-semibold flex items-center gap-1 uppercase tracking-wider mb-4"
                                     >
-                                        + Add Another GSTIN
+                                        <ChevronDown className="w-4 h-4 rotate-90" /> BACK TO VENDOR CREATION HUB
                                     </button>
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="text-xl font-bold text-gray-900">GST Details</h3>
+                                        <button
+                                            type="button"
+                                            onClick={handleAddGstRecord}
+                                            className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-[4px] hover:bg-indigo-700 transition-colors flex items-center gap-2 shadow-none border border-slate-200"
+                                        >
+                                            <Plus className="w-4 h-4" /> Add GST Record
+                                        </button>
+                                    </div>
                                 </div>
-
                                 <form className="space-y-8" onSubmit={handleGSTDetailsSubmit}>
                                     {gstRecords.map((record, index) => (
                                         <div key={record.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
@@ -2526,10 +2826,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                     <div className="flex justify-between pt-4">
                                         <button
                                             type="button"
-                                            onClick={() => setActiveMasterSubTab('Basic Details')}
-                                            className="px-6 py-2 border border-slate-200 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
+                                            onClick={() => setActiveMasterSubTab('Vendor Creation')}
+                                            className="px-6 py-2 border border-slate-200 text-sm font-semibold rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none uppercase tracking-wider"
                                         >
-                                            Back
+                                            BACK TO VENDOR CREATION HUB
                                         </button>
                                         <button
                                             type="submit"
@@ -2540,21 +2840,20 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                     </div>
 
                                 </form>
-                            </div>
+                            </div >
                         )}
 
                         {
                             activeMasterSubTab === 'TDS & Other Statutory' && (
                                 <div className="p-6">
-                                    <div className="flex items-center mb-6">
+                                    <div className="mb-6">
                                         <button
                                             onClick={() => setActiveMasterSubTab('Vendor Creation')}
-                                            className="mr-4 p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
-                                            title="Back to Vendor Creation"
+                                            className="text-indigo-600 hover:text-indigo-800 text-xs font-semibold flex items-center gap-1 uppercase tracking-wider mb-4"
                                         >
-                                            <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                                            <ChevronDown className="w-4 h-4 rotate-90" /> BACK TO VENDOR CREATION HUB
                                         </button>
-                                        <h3 className="section-title">TDS & Other Statutory</h3>
+                                        <h3 className="text-xl font-bold text-gray-900">TDS & Other Statutory</h3>
                                     </div>
                                     <form onSubmit={handleTDSDetailsSubmit} className="space-y-6">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -2775,9 +3074,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             <button
                                                 type="button"
                                                 onClick={() => setActiveMasterSubTab('Vendor Creation')}
-                                                className="px-6 py-2 border border-slate-200 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
+                                                className="px-6 py-2 border border-slate-200 text-sm font-semibold rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none uppercase tracking-wider"
                                             >
-                                                Back
+                                                BACK TO VENDOR CREATION HUB
                                             </button>
                                             <button
                                                 type="submit"
@@ -2794,15 +3093,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                         {
                             activeMasterSubTab === 'Products/Services' && (
                                 <div className="p-6">
-                                    <div className="flex items-center mb-6">
+                                    <div className="mb-6">
                                         <button
                                             onClick={() => setActiveMasterSubTab('Vendor Creation')}
-                                            className="mr-4 p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
-                                            title="Back to Vendor Creation"
+                                            className="text-indigo-600 hover:text-indigo-800 text-xs font-semibold flex items-center gap-1 uppercase tracking-wider mb-4"
                                         >
-                                            <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                                            <ChevronDown className="w-4 h-4 rotate-90" /> BACK TO VENDOR CREATION HUB
                                         </button>
-                                        <h3 className="section-title">Products/Services</h3>
+                                        <h3 className="text-xl font-bold text-gray-900">Products/Services</h3>
                                     </div>
                                     <div className="space-y-6">
                                         {/* Table for Items */}
@@ -2931,10 +3229,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         <div className="flex justify-between pt-4">
                                             <button
                                                 type="button"
-                                                onClick={() => setActiveMasterSubTab('GST Details')}
-                                                className="px-6 py-2 border border-slate-200 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
+                                                onClick={() => setActiveMasterSubTab('Vendor Creation')}
+                                                className="px-6 py-2 border border-slate-200 text-sm font-semibold rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none uppercase tracking-wider"
                                             >
-                                                Back
+                                                BACK TO VENDOR CREATION HUB
                                             </button>
                                             <button
                                                 type="button"
@@ -2952,15 +3250,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                         {
                             activeMasterSubTab === 'Banking Info' && (
                                 <div className="p-6">
-                                    <div className="flex items-center mb-6">
+                                    <div className="mb-6">
                                         <button
                                             onClick={() => setActiveMasterSubTab('Vendor Creation')}
-                                            className="mr-4 p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
-                                            title="Back to Vendor Creation"
+                                            className="text-indigo-600 hover:text-indigo-800 text-xs font-semibold flex items-center gap-1 uppercase tracking-wider mb-4"
                                         >
-                                            <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                                            <ChevronDown className="w-4 h-4 rotate-90" /> BACK TO VENDOR CREATION HUB
                                         </button>
-                                        <h3 className="section-title">Banking Information</h3>
+                                        <h3 className="text-xl font-bold text-gray-900">Banking Information</h3>
                                     </div>
                                     <form onSubmit={handleBankingDetailsSubmit} className="space-y-6">
                                         <div className="space-y-8">
@@ -3155,15 +3452,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                         {
                             activeMasterSubTab === 'Terms & Conditions' && (
                                 <div className="p-6">
-                                    <div className="flex items-center mb-6">
+                                    <div className="mb-6">
                                         <button
                                             onClick={() => setActiveMasterSubTab('Vendor Creation')}
-                                            className="mr-4 p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
-                                            title="Back to Vendor Creation"
+                                            className="text-indigo-600 hover:text-indigo-800 text-xs font-semibold flex items-center gap-1 uppercase tracking-wider mb-4"
                                         >
-                                            <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                                            <ChevronDown className="w-4 h-4 rotate-90" /> BACK TO VENDOR CREATION HUB
                                         </button>
-                                        <h3 className="section-title">Terms & Conditions</h3>
+                                        <h3 className="text-xl font-bold text-gray-900">Terms & Conditions</h3>
                                     </div>
                                     <form onSubmit={handleFinish} className="space-y-6">
                                         <div>
@@ -3274,10 +3570,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         <div className="flex justify-between pt-4">
                                             <button
                                                 type="button"
-                                                onClick={() => setActiveMasterSubTab('Banking Info')}
-                                                className="px-6 py-2 border border-slate-200 text-sm font-medium rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
+                                                onClick={() => setActiveMasterSubTab('Vendor Creation')}
+                                                className="px-6 py-2 border border-slate-200 text-sm font-semibold rounded-[4px] shadow-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none uppercase tracking-wider"
                                             >
-                                                Back
+                                                BACK TO VENDOR CREATION HUB
                                             </button>
                                             <button
                                                 type="button"
@@ -3293,7 +3589,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                 </div>
                             )
                         }
-                    </div>
+                    </div >
                 </>
             )}
 

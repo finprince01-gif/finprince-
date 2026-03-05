@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { apiService } from '../services/api';
 import { httpClient } from '../services/httpClient';
 import { showWarning } from '../utils/toast';
+import MultiSelectDropdown from './MultiSelectDropdown';
+import SearchableDropdown from './SearchableDropdown';
 
 interface IssueSlipItem {
     id: number;
@@ -12,7 +14,28 @@ interface IssueSlipItem {
     alternateUnit: string;
     quantity: string;
     boxes: string;
+    packingNotes: string;
+    soNo?: string;
 }
+
+// Helper to generate consistent vibrant colors for SO tags
+const getSOColor = (value: string) => {
+    const colors = [
+        'bg-indigo-50 text-indigo-700 border-indigo-100 shadow-sm',
+        'bg-emerald-50 text-emerald-700 border-emerald-100 shadow-sm',
+        'bg-amber-50 text-amber-700 border-amber-100 shadow-sm',
+        'bg-rose-50 text-rose-700 border-rose-100 shadow-sm',
+        'bg-sky-50 text-sky-700 border-sky-100 shadow-sm',
+        'bg-violet-50 text-violet-700 border-violet-100 shadow-sm',
+        'bg-orange-50 text-orange-700 border-orange-100 shadow-sm',
+        'bg-teal-50 text-teal-700 border-teal-100 shadow-sm',
+    ];
+    let hash = 0;
+    for (let i = 0; i < value.length; i++) {
+        hash = value.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+};
 
 interface Location {
     id: number;
@@ -26,14 +49,20 @@ interface CreateIssueSlipModalProps {
 }
 
 const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, onSave }) => {
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
     // Form State
     const [outwardSlipNo, setOutwardSlipNo] = useState('');
-    const [date, setDate] = useState('');
+    const [outwardSlipSeries, setOutwardSlipSeries] = useState('');
+    const [outwardSeriesList, setOutwardSeriesList] = useState<any[]>([]);
+    const [date, setDate] = useState(todayStr);
     const [time, setTime] = useState('');
     const [location, setLocation] = useState('');
 
     // Reference Details
     const [salesOrderNo, setSalesOrderNo] = useState('');
+    const [selectedSalesOrders, setSelectedSalesOrders] = useState<string[]>([]);
     const [customerName, setCustomerName] = useState('');
     const [branch, setBranch] = useState('');
     const [address, setAddress] = useState('');
@@ -90,18 +119,20 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
 
     // Items State
     const [items, setItems] = useState<IssueSlipItem[]>([
-        { id: 1, itemCode: '', itemName: '', hsnCode: '', uom: '', alternateUnit: '', quantity: '', boxes: '' }
+        { id: 1, itemCode: '', itemName: '', hsnCode: '', uom: '', alternateUnit: '', quantity: '', boxes: '', packingNotes: '' }
     ]);
 
     // Fetch data on mount
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [locResponse, soResponse, custResponse, invResponse] = await Promise.all([
+                const [locResponse, soResponse, custResponse, invResponse, servResponse, issueSlipResponse] = await Promise.all([
                     httpClient.get<any>('/api/inventory/locations/').catch(() => []),
-                    apiService.getSalesVouchers({ status: 'Pending' }).catch(() => []),
-                    apiService.getPortalCustomers().catch(() => []),
-                    apiService.getStockItems().catch(() => [])
+                    apiService.getSalesOrders({ status: 'Pending' }).catch(() => []),
+                    apiService.getRichCustomers().catch(() => []),
+                    apiService.getStockItems().catch(() => []),
+                    apiService.getServices().catch(() => []),
+                    httpClient.get<any>('/api/inventory/master-voucher-issue-slip/').catch(() => [])
                 ]);
 
                 const getList = (response: any) => {
@@ -113,11 +144,30 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                 };
 
                 const allLocations = getList(locResponse);
-                setLocations(allLocations.filter((l: any) => l.location_type === 'company_premises'));
-
+                setLocations(allLocations);
                 setSalesOrdersList(getList(soResponse));
                 setCustomersList(getList(custResponse));
-                setInventoryItems(getList(invResponse));
+
+                const invList = getList(invResponse);
+                const servList = getList(servResponse).map((s: any) => ({
+                    ...s,
+                    item_code: s.service_code,
+                    item_name: s.service_name,
+                    is_service: true
+                }));
+
+                setInventoryItems([...invList, ...servList]);
+
+                // Filter Issue Slip series to Outward type only
+                const allSlips = getList(issueSlipResponse);
+                const outwardSlips = allSlips.filter((s: any) =>
+                    (s.issue_slip_type || '').toLowerCase() === 'outward'
+                );
+                setOutwardSeriesList(outwardSlips);
+                // Auto-select if only one exists
+                if (outwardSlips.length === 1) {
+                    setOutwardSlipSeries(outwardSlips[0].name);
+                }
 
             } catch (error) {
                 console.error('Failed to fetch initial data:', error);
@@ -142,65 +192,147 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
         }
     }, [customerName, customersList]);
 
+    // Filter Sales Orders by selected Customer and Branch
+    const filteredSalesOrders = React.useMemo(() => {
+        if (!customerName || !branch) return [];
+        return salesOrdersList.filter(so =>
+            (so.customer_name === customerName) &&
+            (so.branch === branch)
+        );
+    }, [customerName, branch, salesOrdersList]);
+
     // Update Address & GSTIN when Branch changes
+
+    // Fetch next Issue Slip Number when series changes
     useEffect(() => {
-        if (!customerName || !branch) {
+        if (!outwardSlipSeries || outwardSeriesList.length === 0) {
+            setOutwardSlipNo('');
+            return;
+        }
+
+        const selectedSeriesObj = outwardSeriesList.find(s => s.name === outwardSlipSeries);
+        if (selectedSeriesObj) {
+            httpClient.get<any>(`/api/inventory/master-voucher-issue-slip/${selectedSeriesObj.id}/next-number/`)
+                .then(res => {
+                    if (res && res.outward_slip_no) {
+                        setOutwardSlipNo(res.outward_slip_no);
+                    }
+                })
+                .catch(err => {
+                    console.error("Failed to fetch next issue slip number:", err);
+                });
+        }
+    }, [outwardSlipSeries, outwardSeriesList]);
+
+    useEffect(() => {
+        if (!customerName) {
             setAddress('');
             setGstin('');
             return;
         }
 
-        // Customer Portal returns customer_name and branches with branch_reference_name
+        // Customer Portal returns customer_name and branches.
+        // Deep address data is inside customer.gst_details.branches
         const customer = customersList.find(c => c.customer_name === customerName);
-        if (customer && customer.branches) {
-            const selectedBranch = customer.branches.find(
-                (b: any) => (b.branch_reference_name || b.reference_name) === branch
-            );
+        if (customer && customer.gst_details && customer.gst_details.branches) {
+            const allBranches = customer.gst_details.branches;
+
+            // Use selected branch if available, otherwise default to first branch for the customer
+            const selectedBranch = branch
+                ? (allBranches.find((b: any) => (b.branch_reference_name || b.defaultRef || b.reference_name) === branch) || allBranches[0])
+                : allBranches[0];
+
             if (selectedBranch) {
                 // Portal serializer returns camelCase fields (addressLine1, city, etc.)
-                const addr1 = selectedBranch.addressLine1 || selectedBranch.address_line_1 || '';
-                const addr2 = selectedBranch.addressLine2 || selectedBranch.address_line_2 || '';
+                const addr1 = selectedBranch.addressLine1 || '';
+                const addr2 = selectedBranch.addressLine2 || '';
+                const addr3 = selectedBranch.addressLine3 || '';
                 const city = selectedBranch.city ? `, ${selectedBranch.city}` : '';
                 const state = selectedBranch.state ? `, ${selectedBranch.state}` : '';
                 const pin = selectedBranch.pincode ? ` - ${selectedBranch.pincode}` : '';
-                const fullAddr = `${addr1}${addr2 ? ', ' + addr2 : ''}${city}${state}${pin}`;
+                const fullAddr = `${addr1}${addr2 ? ', ' + addr2 : ''}${addr3 ? ', ' + addr3 : ''}${city}${state}${pin}`;
 
                 setAddress(fullAddr.trim().replace(/^,\s*/, ''));
                 setGstin(selectedBranch.gstin || '');
+            } else {
+                setAddress('');
+                setGstin('');
             }
         }
     }, [customerName, branch, customersList]);
 
-    const handleSalesOrderChange = (soVoucherNumber: string) => {
-        setSalesOrderNo(soVoucherNumber);
+    const handleSalesOrdersChange = (selectedVoucherNumbers: string[]) => {
+        setSelectedSalesOrders(selectedVoucherNumbers);
+        setSalesOrderNo(selectedVoucherNumbers.join(', '));
 
-        const order = salesOrdersList.find(so => (so.voucher_number || so.so_number || so.id.toString()) === soVoucherNumber);
+        if (selectedVoucherNumbers.length > 0) {
+            // Get all selected orders
+            const selectedOrders = salesOrdersList.filter(so =>
+                selectedVoucherNumbers.includes(so.voucher_number || so.so_number || so.id.toString())
+            );
 
-        if (order) {
-            setCustomerName(order.customer_name || '');
-            setBranch(order.branch || '');
+            // Aggregate items from all selected orders, grouped by SO + Item Code to support color coding
+            const aggregatedItems: Record<string, any> = {};
 
-            if (order.items && Array.isArray(order.items)) {
-                const newItems = order.items.map((soItem: any, idx: number) => {
-                    const masterItem = inventoryItems.find(i => i.item_code === soItem.item_code);
-                    return {
-                        id: Date.now() + idx,
-                        itemCode: soItem.item_code || '',
-                        itemName: soItem.item_name || '',
-                        hsnCode: soItem.hsn_code || masterItem?.hsn_code || '',
-                        uom: soItem.uom || masterItem?.uom || '',
-                        alternateUnit: masterItem?.alternate_uom || '',
-                        quantity: soItem.quantity?.toString() || '',
-                        boxes: ''
-                    };
-                });
-                if (newItems.length > 0) setItems(newItems);
+            selectedOrders.forEach(order => {
+                const orderNo = order.voucher_number || order.so_number || order.id.toString();
+                if (order.items && Array.isArray(order.items)) {
+                    order.items.forEach((soItem: any) => {
+                        const code = soItem.item_code || '';
+                        if (!code) return;
+
+                        const key = `${orderNo}_${code}`;
+
+                        if (aggregatedItems[key]) {
+                            // Sum quantities for same item code within same SO
+                            const currentQty = parseFloat(aggregatedItems[key].quantity) || 0;
+                            const additionalQty = parseFloat(soItem.quantity) || 0;
+                            aggregatedItems[key].quantity = (currentQty + additionalQty).toString();
+                        } else {
+                            // Fetch from SO first, fallback to Customer Master
+                            let notes = soItem.packing_notes || '';
+                            if (!notes) {
+                                const customer = customersList.find(c => c.customer_name === customerName);
+                                if (customer && customer.products_services && customer.products_services.items) {
+                                    const custProduct = customer.products_services.items.find((i: any) => i.itemCode === code || i.item_code === code);
+                                    if (custProduct && custProduct.packingNotes) {
+                                        notes = custProduct.packingNotes;
+                                    }
+                                }
+                            }
+
+                            const masterItem = inventoryItems.find(i => (i.item_code || i.service_code) === code);
+                            aggregatedItems[key] = {
+                                id: Date.now() + Math.random(),
+                                itemCode: code,
+                                itemName: soItem.item_name || masterItem?.item_name || masterItem?.service_name || '',
+                                hsnCode: soItem.hsn_code || masterItem?.hsn_code || masterItem?.hsn_sac_code || '',
+                                uom: soItem.uom || masterItem?.uom || masterItem?.unit || '',
+                                alternateUnit: masterItem?.alternate_uom || '',
+                                quantity: soItem.quantity?.toString() || '',
+                                boxes: '',
+                                packingNotes: notes,
+                                soNo: orderNo
+                            };
+                        }
+                    });
+                }
+            });
+
+            const newItemsList = Object.values(aggregatedItems);
+            if (newItemsList.length > 0) {
+                setItems(newItemsList as IssueSlipItem[]);
+            } else {
+                setItems([{ id: Date.now(), itemCode: '', itemName: '', hsnCode: '', uom: '', alternateUnit: '', quantity: '', boxes: '', packingNotes: '' }]);
             }
         } else {
-            setCustomerName('');
-            setBranch('');
-            setItems([{ id: Date.now(), itemCode: '', itemName: '', hsnCode: '', uom: '', alternateUnit: '', quantity: '', boxes: '' }]);
+            // Keep current customer/branch but clear items
+            setItems([{ id: Date.now(), itemCode: '', itemName: '', hsnCode: '', uom: '', alternateUnit: '', quantity: '', boxes: '', packingNotes: '' }]);
         }
+    };
+
+    const removeSO = (so: string) => {
+        handleSalesOrdersChange(selectedSalesOrders.filter(v => v !== so));
     };
 
     const handleAddItem = () => {
@@ -212,7 +344,8 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
             uom: '',
             alternateUnit: '',
             quantity: '',
-            boxes: ''
+            boxes: '',
+            packingNotes: ''
         };
         setItems([...items, newItem]);
     };
@@ -230,18 +363,40 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
             let updatedItem = { ...item, [field]: value };
 
             if (field === 'itemCode') {
-                const found = inventoryItems.find(i => i.item_code === value);
+                const found = inventoryItems.find(i => (i.item_code || i.service_code) === value);
                 if (found) {
-                    updatedItem.itemName = found.item_name || found.name || '';
-                    updatedItem.hsnCode = found.hsn_code || '';
+                    updatedItem.itemName = found.item_name || found.service_name || found.name || '';
+                    updatedItem.hsnCode = found.hsn_code || found.hsn_sac_code || '';
                     updatedItem.uom = found.uom || found.unit || '';
+
+                    // Auto-populate Packing Notes from Customer Master
+                    const customer = customersList.find(c => c.customer_name === customerName);
+                    if (customer && customer.products_services && customer.products_services.items) {
+                        const custProduct = customer.products_services.items.find((i: any) => i.itemCode === value);
+                        if (custProduct && custProduct.packingNotes) {
+                            updatedItem.packingNotes = custProduct.packingNotes;
+                        }
+                    }
+                } else {
+                    updatedItem.itemName = '';
                 }
             } else if (field === 'itemName') {
-                const found = inventoryItems.find(i => (i.item_name || i.name) === value);
+                const found = inventoryItems.find(i => (i.item_name || i.service_name || i.name) === value);
                 if (found) {
-                    updatedItem.itemCode = found.item_code || '';
-                    updatedItem.hsnCode = found.hsn_code || '';
+                    updatedItem.itemCode = found.item_code || found.service_code || '';
+                    updatedItem.hsnCode = found.hsn_code || found.hsn_sac_code || '';
                     updatedItem.uom = found.uom || found.unit || '';
+
+                    // Auto-populate Packing Notes from Customer Master
+                    const customer = customersList.find(c => c.customer_name === customerName);
+                    if (customer && customer.products_services && customer.products_services.items) {
+                        const custProduct = customer.products_services.items.find((i: any) => i.item_name === value || i.itemName === value);
+                        if (custProduct && custProduct.packingNotes) {
+                            updatedItem.packingNotes = custProduct.packingNotes;
+                        }
+                    }
+                } else {
+                    updatedItem.itemCode = '';
                 }
             }
 
@@ -261,6 +416,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
 
         const payload = {
             outward_slip_no: outwardSlipNo,
+            issue_slip_series_name: outwardSlipSeries || '',
             date: date || null,
             time: time || null,
             outward_type: 'sales',
@@ -279,7 +435,8 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                 uom: item.uom || '',
                 alternate_unit: item.alternateUnit || '',
                 quantity: parseFloat(item.quantity) || 0,
-                no_of_boxes: item.boxes || '0'
+                no_of_boxes: item.boxes || '0',
+                packing_notes: item.packingNotes || ''
             })),
 
             // Nested Delivery Challan Object matching Inventory.tsx structure
@@ -346,13 +503,33 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                 <div className="p-6">
                     {/* Row 1 */}
                     <div className="grid grid-cols-4 gap-5">
+                        {/* Outward Slip Series – full width above the 4-col row */}
+                        <div className="col-span-4">
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                Outward Slip Series
+                            </label>
+                            <select
+                                value={outwardSlipSeries}
+                                onChange={(e) => setOutwardSlipSeries(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                            >
+                                <option value="">Select Outward Slip Series</option>
+                                {outwardSeriesList.map((s: any) => (
+                                    <option key={s.id} value={s.name}>{s.name}</option>
+                                ))}
+                            </select>
+                            {outwardSeriesList.length === 0 && (
+                                <p className="text-xs text-amber-600 mt-1">No Outward series found. Go to Inventory &gt; Masters &gt; GRN &amp; Issue Slip &gt; Issue Slip to create one.</p>
+                            )}
+                        </div>
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-2">Outward Slip No</label>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">Outward Slip No.</label>
                             <input
                                 type="text"
                                 value={outwardSlipNo}
-                                onChange={(e) => setOutwardSlipNo(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                readOnly
+                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-gray-100 cursor-not-allowed focus:outline-none"
+                                placeholder="Auto-generated based on series"
                             />
                         </div>
                         <div>
@@ -361,6 +538,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                 type="date"
                                 value={date}
                                 onChange={(e) => setDate(e.target.value)}
+                                max={todayStr}
                                 className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             />
                         </div>
@@ -394,51 +572,68 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                     <div className="grid grid-cols-2 gap-5 mt-4">
                         <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">Sales Order No.</label>
-                            <select
-                                value={salesOrderNo}
-                                onChange={(e) => handleSalesOrderChange(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            >
-                                <option value="">Select Pending Sales Order</option>
-                                {salesOrdersList.map((so) => (
-                                    <option key={so.id} value={so.voucher_number || so.so_number || so.id}>
-                                        {so.voucher_number || so.sales_order_no || `SO #${so.id}`}
-                                    </option>
-                                ))}
-                            </select>
+                            <MultiSelectDropdown
+                                options={filteredSalesOrders.map(so => ({
+                                    value: so.voucher_number || so.so_number || so.id.toString(),
+                                    label: so.voucher_number || so.so_number || `SO #${so.id}`
+                                }))}
+                                selectedValues={selectedSalesOrders}
+                                onChange={handleSalesOrdersChange}
+                                placeholder={customerName && branch ? "Select Pending Sales Orders" : "Select Customer & Branch first"}
+                                disabled={!customerName || !branch}
+                            />
+                            {/* Color-coded SO Tags */}
+                            {selectedSalesOrders.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 mt-2.5">
+                                    {selectedSalesOrders.map((so) => (
+                                        <div
+                                            key={so}
+                                            className={`group flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border transition-all duration-200 hover:shadow-md ${getSOColor(so)}`}
+                                        >
+                                            <span className="tracking-wide uppercase">SO: {so}</span>
+                                            <span
+                                                onClick={() => removeSO(so)}
+                                                className="cursor-pointer hover:bg-white/50 rounded-full p-0.5"
+                                                title="Remove"
+                                            >
+                                                <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                                                </svg>
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                         <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">Customer Name</label>
-                                {salesOrderNo ? (
-                                    <input
-                                        type="text"
-                                        value={customerName}
-                                        readOnly
-                                        className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-100"
-                                    />
-                                ) : (
-                                    <select
-                                        value={customerName}
-                                        onChange={(e) => {
-                                            setCustomerName(e.target.value);
-                                            setBranch('');
-                                        }}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                    >
-                                        <option value="">Select Customer</option>
-                                        {customersList.map((c) => (
-                                            <option key={c.id} value={c.customer_name}>{c.customer_name}</option>
-                                        ))}
-                                    </select>
-                                )}
+                            <div className="space-y-1">
+                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                                    Customer Name
+                                </label>
+                                <SearchableDropdown
+                                    options={customersList.map(c => c.customer_name).filter(Boolean)}
+                                    value={customerName}
+                                    onChange={(val) => {
+                                        setCustomerName(val);
+                                        setBranch('');
+                                        setSelectedSalesOrders([]);
+                                        setSalesOrderNo('');
+                                    }}
+                                    disabled={selectedSalesOrders.length > 0}
+                                    placeholder="Select Customer"
+                                />
                             </div>
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">Branch</label>
                                 <select
                                     value={branch}
-                                    onChange={(e) => setBranch(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    onChange={(e) => {
+                                        setBranch(e.target.value);
+                                        setSelectedSalesOrders([]);
+                                        setSalesOrderNo('');
+                                    }}
+                                    disabled={selectedSalesOrders.length > 0}
+                                    className={`w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${selectedSalesOrders.length > 0 ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                                 >
                                     <option value="">Select Branch</option>
                                     {availableBranches.map((br: any) => (
@@ -457,9 +652,9 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                             <label className="block text-sm font-semibold text-gray-700 mb-2">Address</label>
                             <textarea
                                 value={address}
-                                readOnly
+                                onChange={(e) => setAddress(e.target.value)}
                                 rows={2}
-                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-100 cursor-not-allowed"
+                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             />
                         </div>
                         <div>
@@ -498,90 +693,113 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200">
-                                    {items.map((item) => (
-                                        <tr key={item.id}>
-                                            <td className="px-3 py-2">
-                                                <select
-                                                    value={item.itemCode}
-                                                    onChange={(e) => handleItemChange(item.id, 'itemCode', e.target.value)}
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm min-w-[120px]"
-                                                >
-                                                    <option value="">Code</option>
-                                                    {inventoryItems.map(i => (
-                                                        <option key={i.id} value={i.item_code}>{i.item_code}</option>
-                                                    ))}
-                                                </select>
-                                            </td>
-                                            <td className="px-3 py-2">
-                                                <select
-                                                    value={item.itemName}
-                                                    onChange={(e) => handleItemChange(item.id, 'itemName', e.target.value)}
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm min-w-[150px]"
-                                                >
-                                                    <option value="">Item</option>
-                                                    {inventoryItems.map(i => (
-                                                        <option key={i.id} value={i.item_name || i.name}>{i.item_name || i.name}</option>
-                                                    ))}
-                                                </select>
-                                            </td>
-                                            <td className="px-3 py-2">
-                                                <input
-                                                    type="text"
-                                                    value={item.hsnCode}
-                                                    readOnly
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-gray-50"
-                                                />
-                                            </td>
-                                            <td className="px-3 py-2">
-                                                <select
-                                                    value={item.uom}
-                                                    onChange={(e) => handleItemChange(item.id, 'uom', e.target.value)}
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-center"
-                                                >
-                                                    <option value="">Unit</option>
-                                                    {(() => {
-                                                        const selectedItem = inventoryItems.find(i => i.item_code === item.itemCode);
-                                                        const units = [];
-                                                        if (selectedItem) {
-                                                            const u1 = selectedItem.uom || selectedItem.unit;
-                                                            const u2 = selectedItem.alternate_uom || selectedItem.alternative_unit;
-                                                            if (u1) units.push(u1);
-                                                            if (u2 && u2 !== u1) units.push(u2);
-                                                        }
-                                                        if (item.uom && !units.includes(item.uom)) units.push(item.uom);
+                                    {items.map((item) => {
+                                        // Get base color classes for this item's Sales Order
+                                        const soColorClasses = item.soNo && selectedSalesOrders.length > 1
+                                            ? getSOColor(item.soNo)
+                                            : '';
 
-                                                        return units.map(u => (
-                                                            <option key={u} value={u}>{u}</option>
-                                                        ));
-                                                    })()}
-                                                </select>
-                                            </td>
-                                            <td className="px-3 py-2">
-                                                <input
-                                                    type="number"
-                                                    value={item.quantity}
-                                                    onChange={(e) => handleItemChange(item.id, 'quantity', e.target.value)}
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                                                />
-                                            </td>
-                                            <td className="px-3 py-2">
-                                                <input
-                                                    type="number"
-                                                    value={item.boxes}
-                                                    onChange={(e) => handleItemChange(item.id, 'boxes', e.target.value)}
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                                                />
-                                            </td>
-                                            <td className="px-3 py-2 text-center">
-                                                <button
-                                                    onClick={() => handleRemoveItem(item.id)}
-                                                    className="text-red-600 hover:text-red-800 text-sm font-medium"
-                                                >
-                                                    Remove
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
+                                        // Extract just the background part for the row (e.g., bg-indigo-50)
+                                        const rowBgClass = soColorClasses
+                                            ? soColorClasses.split(' ').find(c => c.startsWith('bg-'))
+                                            : '';
+                                        const borderClass = soColorClasses
+                                            ? `border-l-4 ${soColorClasses.split(' ').find(c => c.startsWith('border-'))?.replace('border-', 'border-l-')}`
+                                            : '';
+
+                                        return (
+                                            <React.Fragment key={item.id}>
+                                                <tr className={`border-t border-gray-100 ${rowBgClass} ${borderClass}`}>
+                                                    <td className="px-3 py-2 min-w-[150px]">
+                                                        <SearchableDropdown
+                                                            options={inventoryItems.map(i => i.item_code || i.service_code).filter(Boolean)}
+                                                            value={item.itemCode}
+                                                            onChange={(val) => handleItemChange(item.id, 'itemCode', val)}
+                                                            placeholder="Code"
+                                                        />
+                                                    </td>
+                                                    <td className="px-3 py-2 min-w-[200px]">
+                                                        <SearchableDropdown
+                                                            options={inventoryItems.map(i => i.item_name || i.service_name || i.name).filter(Boolean)}
+                                                            value={item.itemName}
+                                                            onChange={(val) => handleItemChange(item.id, 'itemName', val)}
+                                                            placeholder="Item"
+                                                        />
+                                                    </td>
+                                                    <td className="px-3 py-2">
+                                                        <input
+                                                            type="text"
+                                                            value={item.hsnCode}
+                                                            readOnly
+                                                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-gray-50"
+                                                        />
+                                                    </td>
+                                                    <td className="px-3 py-2">
+                                                        <select
+                                                            value={item.uom}
+                                                            onChange={(e) => handleItemChange(item.id, 'uom', e.target.value)}
+                                                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-center"
+                                                        >
+                                                            <option value="">Unit</option>
+                                                            {(() => {
+                                                                const selectedItem = inventoryItems.find(i => i.item_code === item.itemCode);
+                                                                const units = [];
+                                                                if (selectedItem) {
+                                                                    const u1 = selectedItem.uom || selectedItem.unit;
+                                                                    const u2 = selectedItem.alternate_uom || selectedItem.alternative_unit;
+                                                                    if (u1) units.push(u1);
+                                                                    if (u2 && u2 !== u1) units.push(u2);
+                                                                }
+                                                                if (item.uom && !units.includes(item.uom)) units.push(item.uom);
+
+                                                                return units.map(u => (
+                                                                    <option key={u} value={u}>{u}</option>
+                                                                ));
+                                                            })()}
+                                                        </select>
+                                                    </td>
+                                                    <td className="px-3 py-2">
+                                                        <input
+                                                            type="number"
+                                                            value={item.quantity}
+                                                            onChange={(e) => handleItemChange(item.id, 'quantity', e.target.value)}
+                                                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                                                        />
+                                                    </td>
+                                                    <td className="px-3 py-2">
+                                                        <input
+                                                            type="number"
+                                                            value={item.boxes}
+                                                            onChange={(e) => handleItemChange(item.id, 'boxes', e.target.value)}
+                                                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                                                        />
+                                                    </td>
+                                                    <td className="px-3 py-2 text-center">
+                                                        <button
+                                                            onClick={() => handleRemoveItem(item.id)}
+                                                            className="text-red-600 hover:text-red-800 text-sm font-medium"
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                                <tr className={`${rowBgClass} ${borderClass}`}>
+                                                    <td colSpan={7} className="px-3 py-2 border-b border-gray-100">
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Packing Notes:</span>
+                                                            <input
+                                                                type="text"
+                                                                value={item.packingNotes}
+                                                                onChange={(e) => handleItemChange(item.id, 'packingNotes', e.target.value)}
+                                                                className="w-full px-3 py-1.5 border border-indigo-100 rounded text-sm focus:ring-1 focus:ring-indigo-500 bg-white shadow-sm"
+                                                                placeholder="Enter specific packing instructions for this item..."
+                                                            />
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            </React.Fragment>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
@@ -650,6 +868,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                             type="date"
                                             value={dispatchDate}
                                             onChange={(e) => setDispatchDate(e.target.value)}
+                                            max={todayStr}
                                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                         />
                                     </div>
@@ -790,7 +1009,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                         <div className="space-y-4">
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Bill Date</label>
-                                                <input type="date" value={uptoPortShippingBillDate} onChange={(e) => setUptoPortShippingBillDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                                <input type="date" value={uptoPortShippingBillDate} onChange={(e) => setUptoPortShippingBillDate(e.target.value)} max={todayStr} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                                             </div>
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">Origin</label>
@@ -829,7 +1048,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                         <div className="space-y-4">
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Bill Date</label>
-                                                <input type="date" value={beyondPortShippingBillDate} onChange={(e) => setBeyondPortShippingBillDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                                <input type="date" value={beyondPortShippingBillDate} onChange={(e) => setBeyondPortShippingBillDate(e.target.value)} max={todayStr} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                                             </div>
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">Vessel/Flight No.</label>
@@ -903,7 +1122,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                         <div className="space-y-4">
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">Railway Receipt Date</label>
-                                                <input type="date" value={railBeyondPortRailwayReceiptDate} onChange={(e) => setRailBeyondPortRailwayReceiptDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                                <input type="date" value={railBeyondPortRailwayReceiptDate} onChange={(e) => setRailBeyondPortRailwayReceiptDate(e.target.value)} max={todayStr} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                                             </div>
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">Origin Country</label>

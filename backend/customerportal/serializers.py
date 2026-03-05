@@ -238,7 +238,8 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
                         'itemName': item.item_name,
                         'uom': item.uom,
                         'custItemCode': item.customer_item_code,
-                        'custItemName': item.customer_item_name
+                        'custItemName': item.customer_item_name,
+                        'packingNotes': item.packing_notes
                     }
                     for item in instance.product_services.all()
                 ]
@@ -443,6 +444,7 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
                         uom=item.get('uom'),
                         customer_item_code=item.get('custItemCode'),
                         customer_item_name=item.get('custItemName'),
+                        packing_notes=item.get('packingNotes'),
                         created_by=basic_details.created_by
                     )
                     logger.info(f"  ✅ Product/Service created: ID={prod_record.id}, Code={item_code}")
@@ -667,6 +669,7 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
                             uom=item.get('uom'),
                             customer_item_code=item.get('custItemCode'),
                             customer_item_name=item.get('custItemName'),
+                            packing_notes=item.get('packingNotes'),
                             updated_by=instance.updated_by
                         )
             
@@ -827,7 +830,7 @@ class CustomerTransactionSalesQuotationSpecificSerializer(serializers.ModelSeria
 class CustomerTransactionSalesOrderItemDetailsSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomerTransactionSalesOrderItemDetails
-        fields = ['id', 'item_code', 'item_name', 'quantity', 'uom', 'price', 'taxable_value', 'gst_rate', 'gst', 'net_value']
+        fields = ['id', 'item_code', 'item_name', 'quantity', 'uom', 'price', 'taxable_value', 'gst_rate', 'gst', 'net_value', 'packing_notes']
 
 
 class CustomerTransactionSalesOrderDeliveryTermsSerializer(serializers.ModelSerializer):

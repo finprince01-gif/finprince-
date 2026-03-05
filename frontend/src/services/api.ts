@@ -165,7 +165,23 @@ class ApiService {
      * Returns: Array of customers with customer_name, branches (branch_reference_name, gstin, address fields)
      */
     async getPortalCustomers() {
-        return httpClient.get<any[]>('/api/customerportal/customers/');
+        return httpClient.get<any[]>('/api/customerportal/customer-master/');
+    }
+
+    /**
+     * Get Sales Orders from Customer Portal
+     * @param filters - Optional filters like customer_name, branch, status
+     * @returns Array of sales orders with items and details
+     */
+    async getSalesOrders(filters?: any) {
+        const params = new URLSearchParams();
+        if (filters?.customer_name) params.append('customer_name', filters.customer_name);
+        if (filters?.branch) params.append('branch', filters.branch);
+        if (filters?.status) params.append('status', filters.status);
+
+        const queryString = params.toString();
+        const endpoint = queryString ? `/api/customerportal/sales-orders/?${queryString}` : '/api/customerportal/sales-orders/';
+        return httpClient.get<any[]>(endpoint);
     }
 
     /**
@@ -188,9 +204,17 @@ class ApiService {
         return httpClient.get<any[]>('/api/inventory/locations/');
     }
 
+    async getUnits() {
+        return httpClient.get<Unit[]>('/api/inventory/units/');
+    }
+
 
     async getStockItems() {
         return httpClient.get<StockItem[]>('/api/inventory/items/');
+    }
+
+    async getServices() {
+        return httpClient.get<any[]>('/api/services/services/');
     }
 
     async saveStockItem(data: any) {
