@@ -4,6 +4,7 @@ import json
 import logging
 import hashlib
 import base64
+from core.ocr_cache import compute_file_hash, get_cached_ocr, save_ocr_cache, update_ocr_cache_session
 from django.core.files.uploadedfile import UploadedFile
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,7 @@ def create_dynamic_voucher_extraction_request(
     mime_type: str = 'image/jpeg',
     user_id: str = '',
     tenant_id: str = '',
+    upload_session_id: str = None,
 ) -> dict:
     """
     Enterprise-Grade ERP Invoice Extraction Engine — 5-Phase Processing Pipeline.
@@ -49,8 +51,28 @@ def create_dynamic_voucher_extraction_request(
         # Read file content
         image_content = image_file.read()
 
-        # MD5 hash for cache deduplication
-        file_hash = hashlib.md5(image_content).hexdigest()
+        # SHA-256 hash for cache deduplication
+        file_hash = compute_file_hash(image_content)
+
+        # ── DUPLICATE CHECK ──────────────────────────────────────────────────
+        existing = get_cached_ocr(file_hash, tenant_id)
+        if existing:
+            logger.info(f"Duplicate detect: Reusing cached OCR for hash={file_hash[:12]} tenant={tenant_id}")
+            return {
+                "reply": json.dumps(existing.get('extracted_data', {}), default=str),
+                "duplicate": True,
+                "from_cache": True,
+                "message": "Invoice already scanned. Using cached extraction.",
+                "cache_record_id": existing.get('id')
+            }
+
+        # Transfer session if needed (for bulk scan)
+        if existing and upload_session_id and not existing.get('processed'):
+             try:
+                 from .ocr_cache import update_ocr_cache_session
+                 update_ocr_cache_session(existing['id'], upload_session_id)
+             except Exception as e:
+                 logger.warning(f"Failed to update session for cached record: {e}")
 
         # Base64-encode for passing through the proxy
         image_b64 = base64.b64encode(image_content).decode('utf-8')
@@ -106,9 +128,12 @@ def create_dynamic_voucher_extraction_request(
         semantic_hints = """
 SEMANTIC MAPPING GUIDE (map document labels → column names):
 - Invoice Date / Bill Date / Date             → Date
-- Bill No / Invoice No / Ref No / Supplier Bill No → Supplier Invoice No.
-- Seller / Vendor / Supplier / Party Name    → Vendor Name
-- Branch / Site / Location / Division / Sub-division → Branch
+- Bill No / Invoice No / Ref No / Supplier Bill No → Invoice Number (e.g. Sales Invoice No. or Supplier Invoice No.)
+- Seller / Vendor / Supplier / Party Name / Bill From → Vendor Name
+- Buyer / Customer / Recipient / Consignee / Bill To → Customer Name
+- Branch / Site / Location / Division / Sub-division / Plant / Depot / Unit / Office → Branch
+- Location Suffix in Name (e.g. "ABC Corp - CHENNAI") → Branch
+- Area/City in Address block identifying the site → Branch
 - GST No / GSTIN / UIN (Supplier)           → GSTIN
 - Address / Billing Address                  → Bill From - Address Line 1
 - State / Place of Supply                    → Place of Supply
@@ -144,6 +169,11 @@ You MUST extract footer totals even if item table does not contain tax columns.
 SCHEMA (TARGET COLUMNS)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {columns_json_list}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SEMANTIC MAPPING HINTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{semantic_hints}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 OUTPUT STRUCTURE (MANDATORY)
@@ -207,21 +237,28 @@ CRITICAL RULES
    • Extract Grand Total exactly as printed.
    • DO NOT set them to 0 if visible in footer.
 
-5. ALL numeric values:
+5. BRANCH EXTRACTION RULE:
+   If 'Branch' is not explicitly labeled on the document:
+   - Carefully examine the Vendor's name and address block.
+   - If the vendor name includes a location (e.g., 'ABC CORP - CHENNAI'), extract 'CHENNAI' as the Branch.
+   - If the address shows both an area/locality and a city (e.g., 'ADYAR, CHENNAI' or 'GANAPATHY, COIMBATORE'), PREFER the CITY (e.g., 'COIMBATORE') as the Branch.
+   - Use 'MAIN' only if no specific city or branch info is found.
+
+6. ALL numeric values:
    • Must be STRINGS
    • Must have exactly 2 decimal places
    • Example: "897.95", "0.00"
 
-6. PHASE 1 — OCR NORMALIZATION:
+7. PHASE 1 — OCR NORMALIZATION:
    • Convert text to UPPERCASE.
    • Remove commas from numbers (1,234.50 → 1234.50).
    • Standardize dates to DD/MM/YYYY.
 
-7. PHASE 2 — TABLE BOUNDARY DETECTION:
+8. PHASE 2 — TABLE BOUNDARY DETECTION:
    • START item extraction only when item headers appear.
    • STOP when footer labels appear (TOTAL, SUB TOTAL, GRAND TOTAL).
 
-8. NEVER return null. NEVER skip footer totals. NEVER fabricate tax values.
+9. NEVER return null. NEVER skip footer totals. NEVER fabricate tax values.
 
 Return raw JSON only. No explanation text.
 """
@@ -244,9 +281,22 @@ SCHEMA (TARGET COLUMNS)
 {columns_json_list}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SEMANTIC MAPPING HINTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{semantic_hints}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 OUTPUT STRUCTURE (MANDATORY)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {output_template}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BRANCH EXTRACTION RULE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+If 'Branch' is not explicitly labeled:
+- Extract it from the vendor's address or name block. 
+- If multiple location parts are found (e.g. area and city), PREFER the CITY name (e.g. "COIMBATORE" instead of "GANAPATHY").
+- Look for city names that identify the specific site or division.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PHASE 1 — OCR NORMALIZATION
@@ -311,6 +361,7 @@ STRICT RULES
 • Return raw JSON only.
 """
 
+
         request_data = {
             'prompt': prompt,
             'file_hash': file_hash,
@@ -319,7 +370,27 @@ STRICT RULES
         }
 
         from .ai_proxy import ai_service
-        return ai_service.make_request('invoice', request_data, user_id, tenant_id)
+        result = ai_service.make_request('invoice', request_data, user_id, tenant_id)
+
+        # ── SAVE TO CACHE (Only for new files) ──────────────────────────────
+        if result and 'reply' in result and not result.get('error'):
+            try:
+                # We need to parse it to store structured data
+                from .processing_engine import parse_and_process_ocr
+                processed = parse_and_process_ocr(result['reply'])
+                
+                save_ocr_cache(
+                    file_hash=file_hash,
+                    tenant_id=tenant_id,
+                    upload_session_id=upload_session_id,
+                    file_path=getattr(image_file, 'name', ''),
+                    ocr_raw_text=result['reply'],
+                    extracted_data=processed
+                )
+            except Exception as e:
+                logger.warning(f"Failed to cache fresh OCR result: {e}")
+
+        return result
 
     except Exception as e:
         logger.exception(f"Error creating dynamic {voucher_type} processing request")

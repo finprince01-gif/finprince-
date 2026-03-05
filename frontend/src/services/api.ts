@@ -513,6 +513,77 @@ class ApiService {
         return httpClient.get<{ average_time_per_invoice: number }>('/api/extraction-average-time/');
     }
 
+    /**
+     * Update the extracted_data JSON stored in invoice_ocr_temp for a given cache record.
+     * Called whenever the user edits invoice fields AFTER scanning.
+     * OCR is NEVER re-run — only the stored JSON is updated.
+     *
+     * @param recordId      - The id returned by the backend in cache_record_id
+     * @param extractedData - The full updated {invoice, items} object
+     */
+    async updateOcrCache(recordId: number, extractedData: { invoice: Record<string, any>; items: any[] }) {
+        return httpClient.patch<{ success: boolean }>(
+            `/api/ai/ocr-cache/${recordId}/update/`,
+            { extracted_data: extractedData },
+        );
+    }
+
+    // ============================================================================
+    // BULK OCR STAGING WORKFLOW
+    // ============================================================================
+    // Methods for the fully editable staging workflow that uses invoice_ocr_temp
+
+    /** Fetch all unresolved staged invoices for the current tenant. */
+    async getStagedInvoices(uploadSessionId?: string) {
+        const url = uploadSessionId
+            ? `/api/ocr-staging/?upload_session_id=${encodeURIComponent(uploadSessionId)}`
+            : '/api/ocr-staging/';
+        return httpClient.get<any[]>(url);
+    }
+
+    /** Upload files + run OCR → save results to staging. Returns staged list. */
+    async uploadToStaging(files: File[], uploadSessionId: string) {
+        const formData = new FormData();
+        files.forEach(f => formData.append('files', f));
+        formData.append('upload_session_id', uploadSessionId);
+        return httpClient.postFormData<{ success: boolean; staged: any[] }>('/api/ocr-staging/', formData);
+    }
+
+    /**
+     * Save edited extracted_data for a staged invoice and auto-revalidate.
+     * Returns the updated row including new validation status.
+     */
+    async saveStagingEdit(fileHash: string, extractedData: any) {
+        return httpClient.patch<any>(
+            `/api/ocr-staging/${fileHash}/`,
+            { extracted_data: extractedData },
+        );
+    }
+
+    /** Delete a specific staged invoice row. */
+    async deleteStagedInvoice(fileHash: string) {
+        return httpClient.delete<{ success: boolean }>(`/api/ocr-staging/${fileHash}/`);
+    }
+
+    /**
+     * Finalize: upload all valid (vendor-found) staged invoices as purchase vouchers.
+     * Invoices with missing vendors remain in staging.
+     */
+    async finalizeStagedInvoices(uploadSessionId?: string) {
+        return httpClient.post<any>('/api/ocr-staging-finalize/', uploadSessionId ? { upload_session_id: uploadSessionId } : {});
+    }
+
+    /** Create a vendor from the staging screen, then trigger re-validation. */
+    async createVendorFromStaging(data: {
+        vendor_name: string;
+        gstin?: string;
+        address?: string;
+        state?: string;
+        branch?: string;
+    }) {
+        return httpClient.post<{ status: string; vendor_id: number }>('/api/purchase/vendors/create/', data);
+    }
+
     async extractStockItemsFromFile(file: File) {
         const formData = new FormData();
         formData.append('file', file);

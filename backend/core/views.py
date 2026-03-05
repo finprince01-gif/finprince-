@@ -338,25 +338,6 @@ class AIProxyView(views.APIView):
             if 'file' not in request.FILES:
                 return Response({'error': 'No file provided.'}, status=400)
 
-            # Check AI Usage Limit
-            from .usage_service import check_and_increment_usage
-
-            # Determine limit based on plan (default to FREE)
-            plan = getattr(request.user, 'selected_plan', 'FREE') or 'FREE'
-            plan = plan.upper()
-
-            # Basic limits - can be moved to a configuration file later
-            LIMITS = {
-                'FREE': 5,
-                'STARTER': 100,
-                'PRO': 1000,
-                'ENTERPRISE': 10000
-            }
-            limit = LIMITS.get(plan, 5)
-
-            if not check_and_increment_usage(tenant_id, limit):
-                raise UsageLimitExceeded(f"Monthly AI extraction limit of {limit} has been reached.")
-
             file_obj = request.FILES['file']
             voucher_type = request.data.get('voucher_type', 'Purchase')
             table_name = request.data.get('table_name', voucher_type)
@@ -368,7 +349,8 @@ class AIProxyView(views.APIView):
             except Exception:
                 columns_list = []
 
-            # Use updated invoice processing — returns {'reply': json_string} or {'error': ...}
+            # ── Call AI Service ──────────────────────────────────────────────
+            # This now handles its own internal caching/duplicate check.
             from .ai_service import create_dynamic_voucher_extraction_request
             result = create_dynamic_voucher_extraction_request(
                 file_obj,
@@ -383,190 +365,47 @@ class AIProxyView(views.APIView):
             if 'error' in result:
                 raise ExternalServiceError(result.get('error', 'AI service is temporarily unavailable.'))
 
+            # ── Check for Duplicate Hit ──────────────────────────────────────
+            # If it's a duplicate, we skip usage increment and return cached data.
+            is_duplicate = result.get('duplicate', False)
+
+            if is_duplicate:
+                cached_data = result.get('cached_data', {})
+                return Response({
+                    'success': True,
+                    'from_cache': True,
+                    'duplicate': True,
+                    'message': result.get('message', 'Invoice already scanned.'),
+                    'cache_record_id': result.get('cache_record_id'),
+                    'data': {
+                        'invoice': cached_data.get('invoice', {}),
+                        'items':   cached_data.get('items', []),
+                    }
+                })
+
+            # ── Only if NOT a duplicate, increment usage ──────────────────────
+            from .usage_service import check_and_increment_usage
+            plan = getattr(request.user, 'selected_plan', 'FREE') or 'FREE'
+            plan = plan.upper()
+            LIMITS = {'FREE': 5, 'STARTER': 100, 'PRO': 1000, 'ENTERPRISE': 10000}
+            limit = LIMITS.get(plan, 5)
+
+            if not check_and_increment_usage(tenant_id, limit):
+                raise UsageLimitExceeded(f"Monthly AI extraction limit of {limit} has been reached.")
+
             # ── Parse the raw AI text into {header, line_items} ────────────────
             raw_text = result.get('reply', '').strip()
 
-            # Strip markdown code fences if present
-            if raw_text.startswith('```json'):
-                raw_text = raw_text[7:]
-            if raw_text.startswith('```'):
-                raw_text = raw_text[3:]
-            if raw_text.endswith('```'):
-                raw_text = raw_text[:-3]
-            raw_text = raw_text.strip()
-
+            # ── Unified Mapping Engine ────────────────────────────────────────
+            from .processing_engine import parse_and_process_ocr
             try:
-                extracted = _json.loads(raw_text)
-            except Exception:
-                # Try to salvage by finding the outermost {} block
-                import re
-                match = re.search(r'\{[\s\S]*\}', raw_text)
-                if match:
-                    extracted = _json.loads(match.group(0))
-                else:
-                    return Response({'error': 'Failed to parse AI response as JSON.'}, status=500)
-
-            # Support both dynamic output {data: {..., items: []}} and legacy formats
-            if isinstance(extracted, dict) and 'data' in extracted:
-                data_obj = extracted['data']
-                if isinstance(data_obj, list) and len(data_obj) > 0 and isinstance(data_obj[0], dict):
-                    # AI wrapped the object in an array instead of returning a singular dict
-                    data_obj = data_obj[0]
-
-                if isinstance(data_obj, dict):
-                    items = data_obj.pop('items', [])
-                    invoice_data = data_obj
-                elif isinstance(data_obj, list):
-                    # Fallback flat list
-                    invoice_data = {}
-                    items = data_obj
-                else:
-                    invoice_data = {}
-                    items = []
-            elif isinstance(extracted, dict) and ('invoice' in extracted or 'header' in extracted):
-                invoice_data = extracted.get('invoice', extracted.get('header', {}))
-                items = extracted.get('items', extracted.get('line_items', []))
-            elif isinstance(extracted, list) and extracted:
-                # Legacy: array of flat objects — treat first element as header, no line items
-                invoice_data = extracted[0] if extracted else {}
-                items = []
-            else:
-                invoice_data = extracted if isinstance(extracted, dict) else {}
-                items = []
-
-            # Ensure items is a list
-            if not items:
-                items = []
-            elif isinstance(items, dict):
-                items = [items]
-            elif not isinstance(items, list):
-                items = []
-
-            if not isinstance(invoice_data, dict):
-                invoice_data = {}
-
-            # ── Post-processing: normalise every line item and header ──────────
-            import re as _re
-
-            # Numeric-only fields — strip currency symbols, commas, stray units
-            NUMERIC_FIELDS = {
-                'Rate', 'Item Rate', 'Taxable Value', 'Taxable Amount',
-                'Integrated Tax (IGST)', 'Central Tax (CGST)', 'State Tax (SGST)', 
-                'IGST', 'CGST', 'SGST/UTGST', 'Cess', 'Item Amount', 'Amount', 
-                'Disc %', 'Disc%', 'Disc Amount', 'GST %', 'GST Rate',
-                'Total Taxable Value', 'Total IGST', 'Total CGST', 'Total SGST', 'Total Cess', 
-                'Total State Cess', 'Total Invoice Value', 'Invoice Value',
-                'TDS Income Tax', 'TDS GST', 'TDS/TCS under GST', 'TDS/TCS under Income Tax',
-                'Advance Paid', 'To Pay', 'IGST Rate', 'CGST Rate', 'SGST/UTGST Rate', 
-                'Cess Rate', 'Cess Rate Per Unit', 'State Cess Rate',
-                'Quantity', 'Qty', 'Billed Quantity', 'Actual Quantity',
-                'Advance Payment/Receipt/Refund Details - IGST Rate',
-                'Advance Payment/Receipt/Refund Details - IGST Amount',
-                'Advance Payment/Receipt/Refund Details - SGST Rate',
-                'Advance Payment/Receipt/Refund Details - SGST Amount',
-                'Advance Payment/Receipt/Refund Details - CGST Rate',
-                'Advance Payment/Receipt/Refund Details - CGST Amount',
-                'Tax Type Allocations - IGST Liability',
-                'Tax Type Allocations - CGST Liability',
-                'Tax Type Allocations - SGST/UTGST Liability',
-                'GST Advance Details - GST Rate',
-                'GST Advance Details - Cess Rate',
-                'GST Advance Details - Advance Amount',
-                'TDS - Assessable Value', 'TCS - Assessable Value',
-                'Amount'
-            }
-
-            def clean_numeric_fields(obj: dict):
-                for k, v in list(obj.items()):
-                    if v is None:
-                        obj[k] = ''
-                        continue
-                        
-                    # 1. Normalize strings to UPPERCASE and clean noise
-                    if isinstance(v, str):
-                        v = ' '.join(v.split()).upper()
-                        obj[k] = v
-
-                    # 2. Extract numeric values rigorously
-                    if k in NUMERIC_FIELDS:
-                        val = str(v).strip()
-                        if val:
-                            # Remove commas and non-numeric except dot and minus
-                            cleaned = _re.sub(r'[^\d.\-]', '', val.replace(',', ''))
-                            obj[k] = cleaned if cleaned else '0'
-                        else:
-                            obj[k] = '0'
-
-            # Clean header data
-            clean_numeric_fields(invoice_data)
-
-            # --- Financial Consistency Validation ---
-            total_taxable_items = 0.0
-            total_tax_items = 0.0
-            
-            for idx, item in enumerate(items, start=1):
-                if not isinstance(item, dict): continue
-                
-                item['S.No'] = str(idx)
-                clean_numeric_fields(item)
-
-                # 1. Qty + UOM split
-                qty_raw = str(item.get('Quantity') or item.get('Qty') or item.get('Billed Quantity') or '').strip()
-                uom_raw = str(item.get('UOM') or item.get('Quantity UOM') or '').strip()
-                if qty_raw and not uom_raw:
-                    m = _re.match(r'^([\d.]+)\s*([A-Z]+)$', qty_raw)
-                    if m:
-                        # Attempt to assign back to whichever field was present
-                        if 'Quantity' in item: item['Quantity'] = m.group(1)
-                        if 'Qty' in item: item['Qty'] = m.group(1)
-                        if 'UOM' in item: item['UOM'] = m.group(2)
-                        if 'Quantity UOM' in item: item['Quantity UOM'] = m.group(2)
-
-                # 2. Per-Row Validation: Rate * Qty ≈ Taxable Value
-                try:
-                    q = float(item.get('Quantity') or item.get('Qty') or item.get('Billed Quantity') or 0)
-                    r = float(item.get('Item Rate') or item.get('Rate') or item.get('Ledger Rate') or 0)
-                    t = float(item.get('Taxable Value') or item.get('Taxable Amount') or 0)
-                    if q > 0 and r > 0 and t > 0:
-                        expected_t = q * r
-                        if abs(expected_t - t) > 2.0: # allow tolerance
-                            logger.warning(f"Row {idx} calculation mismatch: {q} * {r} = {expected_t} but found {t}")
-                except (ValueError, TypeError): pass
-
-                # 3. Aggregate for validation
-                try:
-                    total_taxable_items += float(item.get('Taxable Value') or item.get('Taxable Amount') or 0)
-                    total_tax_items += float(item.get('IGST') or item.get('Integrated Tax (IGST)') or 0) + \
-                                       float(item.get('CGST') or item.get('Central Tax (CGST)') or 0) + \
-                                       float(item.get('SGST/UTGST') or item.get('State Tax (SGST)') or 0) + \
-                                       float(item.get('Cess') or 0)
-                except (ValueError, TypeError): pass
-
-                # 4. HSN normalization
-                hsn = _re.sub(r'[^\d]', '', str(item.get('HSN/SAC', '')))
-                item['HSN/SAC'] = hsn if 4 <= len(hsn) <= 8 else ''
-            
-            # --- Cross-check Totals & Prevent Numeric Drift ---
-            try:
-                header_taxable = float(invoice_data.get('Total Taxable Value') or 0)
-                header_total = float(invoice_data.get('Total Invoice Value') or 0)
-                total_tax_header = float(invoice_data.get('Total IGST') or 0) + \
-                                  float(invoice_data.get('Total CGST') or 0) + \
-                                  float(invoice_data.get('Total SGST') or 0)
-
-                # If item-level aggregation is strong but header is zero/missing, promote items
-                if total_taxable_items > 0 and header_taxable == 0:
-                    invoice_data['Total Taxable Value'] = str(total_taxable_items)
-                
-                # Verify taxable subtotal
-                if abs(total_taxable_items - header_taxable) > 2.0 and total_taxable_items > 0:
-                    logger.warning(f"Consistency Check Failed: Items Sum ({total_taxable_items}) != Header Subtotal ({header_taxable})")
-                
-                # Verify Grand Total Integrity: Subtotal + Taxes ≈ Total
-                computed_total = total_taxable_items + (total_tax_header if total_tax_header > 0 else total_tax_items)
-                if abs(computed_total - header_total) > 5.0 and header_total > 0:
-                     logger.warning(f"Grand Total Integrity Mismatch: Found {header_total}, expected approx {computed_total}")
-            except Exception: pass
+                processed_data = parse_and_process_ocr(raw_text)
+                invoice_data = processed_data.get('invoice', {})
+                items = processed_data.get('items', [])
+            except Exception as e:
+                logger.error(f"Mapping Engine failed: {e}")
+                return Response({'error': f'Failed to parse AI response: {str(e)}'}, status=500)
+            # ─────────────────────────────────────────────────────────────────
 
             # Store extraction performance
             end_time = time.time()
@@ -578,6 +417,9 @@ class AIProxyView(views.APIView):
 
             return Response({
                 'success': True,
+                'from_cache': False,
+                'duplicate': False,
+                'cache_record_id': result.get('cache_record_id'),
                 'data': {
                     'invoice': invoice_data,
                     'items': items,
@@ -702,3 +544,79 @@ def extraction_average_time(request):
     return Response({
         'average_time_per_invoice': round(avg_time, 2)
     })
+
+
+# ---------------------------------------------------------------------------
+# OCR Cache — Update Endpoint
+# ---------------------------------------------------------------------------
+
+@method_decorator(csrf_exempt, name='dispatch')
+class OCRCacheUpdateView(views.APIView):
+    """
+    PATCH /api/ai/ocr-cache/<record_id>/update/
+
+    Update the extracted_data JSON in invoice_ocr_temp when the user edits
+    invoice fields after scanning.  OCR is *never* re-run.
+
+    Request body (JSON):
+        {
+            "extracted_data": {
+                "invoice": { ... },
+                "items":   [ ... ]
+            }
+        }
+
+    Response:
+        200  { "success": true }
+        400  missing / invalid body
+        404  record not found or expired
+        403  record belongs to a different tenant
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, record_id):
+        import json as _json
+        from django.db import connection
+
+        tenant_id = getattr(request.user, 'tenant_id', None)
+        if not tenant_id:
+            return Response({'error': 'Tenant not identified.'}, status=400)
+
+        # Validate request body
+        extracted_data = request.data.get('extracted_data')
+        if not extracted_data or not isinstance(extracted_data, dict):
+            return Response(
+                {'error': 'extracted_data (dict) is required in the request body.'},
+                status=400,
+            )
+
+        # Verify the record exists and belongs to this tenant
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT id FROM invoice_ocr_temp
+                    WHERE  id = %s AND tenant_id = %s AND expires_at > NOW()
+                    """,
+                    [record_id, str(tenant_id)],
+                )
+                row = cursor.fetchone()
+        except Exception as exc:
+            logger.error("OCRCacheUpdateView DB error: %s", exc)
+            return Response({'error': 'Database error.'}, status=500)
+
+        if not row:
+            return Response(
+                {'error': 'OCR cache record not found, expired, or access denied.'},
+                status=404,
+            )
+
+        # Perform the update
+        from core.ocr_cache import update_ocr_cache_extracted_data
+        success = update_ocr_cache_extracted_data(record_id, extracted_data)
+
+        if success:
+            return Response({'success': True})
+        return Response({'error': 'Failed to update OCR cache record.'}, status=500)
+

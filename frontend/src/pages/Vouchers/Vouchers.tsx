@@ -9,6 +9,7 @@ import { showError, showSuccess, showInfo, confirm } from '../../utils/toast';
 
 import MassUploadModal from '../../components/MassUploadModal';
 import InvoiceScannerModal from '../../components/InvoiceScannerModal';
+import BulkInvoiceUploadModal from '../../components/SmartInvoiceUploadModal';
 import TallyMasterScannerModal from '../../components/TallyMasterScannerModal';
 import ErrorBoundary from '../../components/ErrorBoundary';
 import SalesVoucher from './SalesVoucher';
@@ -180,6 +181,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [uploadedInvoiceFiles, setUploadedInvoiceFiles] = useState<File[]>([]);
   const [isExtracting, setIsExtracting] = useState(false);
 
+  // Bulk Upload State
+  const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
+  const bulkScannerInputRef = useRef<HTMLInputElement>(null);
+
+  // Scan type: 'single' (Finpixe Single Scan) or 'bulk' handled via BulkInvoiceUploadModal
+  const [scanType, setScanType] = useState<'single' | 'bulk'>('single');
+  const singleScanInputRef = useRef<HTMLInputElement>(null);
+
   // Vendor Validation and Creation State
   const [vendorValidationStatus, setVendorValidationStatus] = useState<string | null>(null);
   const [vendorMatchedBy, setVendorMatchedBy] = useState<string>('');
@@ -201,6 +210,20 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     }
   };
 
+  // Single-scan file input handler — enforces exactly one file
+  const handleSingleScanFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    if (files.length > 1) {
+      showError('FINPIXE SINGLE SCAN allows only one invoice. Use FINPIXE BULK SCAN for multiple invoices.');
+      if (singleScanInputRef.current) singleScanInputRef.current.value = '';
+      return;
+    }
+    setScanType('single');
+    setScannerFiles(files);
+    setIsInvoiceScannerOpen(true);
+  };
+
   const handleMasterScannerFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
@@ -209,10 +232,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     }
   };
 
-  const openScanner = (mode: 'finpixe' | 'tally' = 'finpixe') => {
+  const openScanner = (mode: 'finpixe' | 'tally' = 'finpixe', type: 'single' | 'bulk' = 'single') => {
     setExtractionMode(mode);
+    setScanType(type);
     if (isLimitReached) {
       handleLimitReached();
+    } else if (mode === 'finpixe' && type === 'single') {
+      singleScanInputRef.current?.click();
     } else {
       scannerInputRef.current?.click();
     }
@@ -1786,6 +1812,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const validateVendorFromInvoice = async (vendorName: string, gstin: string, state: string, address: string, branch: string = '') => {
     try {
       setExtractedVendorData({ vendor_name: vendorName, gstin, state, address, branch });
+
+      // Pre-fill branch in the form immediately if provided by AI
+      if (branch) setSelectedBranch(branch);
+
       const response = await httpClient.post<any>('/api/purchase/vendors/validate/', {
         vendor_name: vendorName,
         gstin: gstin,
@@ -6119,12 +6149,20 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 <div className="origin-top-right absolute right-0 mt-2 w-56 rounded shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-[60]">
                   <div className="py-1" role="menu">
                     <button
-                      onClick={() => { openScanner('finpixe'); setIsScannerMenuOpen(false); }}
+                      onClick={() => { openScanner('finpixe', 'single'); setIsScannerMenuOpen(false); }}
                       className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                       role="menuitem"
                     >
                       <Icon name="sparkles" className="w-4 h-4 mr-3 text-indigo-500" />
-                      Finpixe (AI Scan)
+                      Finpixe Single Scan
+                    </button>
+                    <button
+                      onClick={() => { setIsBulkUploadOpen(true); setIsScannerMenuOpen(false); }}
+                      className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 border-t border-gray-50"
+                      role="menuitem"
+                    >
+                      <Icon name="scanner" className="w-4 h-4 mr-3 text-emerald-500" />
+                      Finpixe Bulk Scan
                     </button>
                     <button
                       onClick={() => setIsOthersSubmenuOpen(prev => !prev)}
@@ -6214,6 +6252,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             </div>
 
 
+            {/* Single scan input – NO multiple attribute */}
+            <input type="file" ref={singleScanInputRef} onClick={(e) => { (e.target as any).value = null; }} onChange={handleSingleScanFileChange} accept=".pdf,.jpg,.jpeg,.png" className="hidden" />
+            {/* Multi-file scanner input for tally/other modes */}
             <input type="file" ref={scannerInputRef} onClick={(e) => { (e.target as any).value = null; }} onChange={handleScannerFileChange} accept="image/*,.pdf" multiple className="hidden" />
             <input type="file" ref={masterScannerInputRef} onClick={(e) => { (e.target as any).value = null; }} onChange={handleMasterScannerFileChange} accept="image/*,.pdf" multiple className="hidden" />
             <input type="file" ref={excelInputRef} onChange={handleExcelFileChange} accept=".xlsx, .xls" className="hidden" />
@@ -6388,6 +6429,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         isInvoiceScannerOpen && (
           <InvoiceScannerModal
             extractionMode={extractionMode}
+            scanType={scanType}
             initialFiles={scannerFiles}
             voucherType={voucherType}
             onClose={() => {
@@ -6408,8 +6450,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             }}
             onUpload={(data) => {
               console.log('[VouchersPage] Data received from InvoiceScannerModal:', data);
-              if (!data || data.length === 0) return;
-
               const firstRow = data[0];
 
               if (voucherType === 'Purchase' || voucherType === 'Debit Note') {
@@ -6425,6 +6465,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 if (partyVal) handlePartyChange(partyVal);
 
                 if (firstRow['GSTIN']) setGstin(firstRow['GSTIN']);
+
+                // Branch
+                const branchVal = firstRow['Branch'] || '';
+                if (branchVal) setSelectedBranch(branchVal);
 
                 // Date — new schema: "Date"; legacy Tally: "Voucher Date"
                 if (firstRow['Date'] || firstRow['Voucher Date'])
@@ -6927,6 +6971,25 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             </div>
           </div>
         </div>
+      )}
+
+      {/* Bulk Invoice Upload Modal */}
+      {isBulkUploadOpen && (
+        <BulkInvoiceUploadModal
+          voucherType={voucherType}
+          onClose={() => {
+            setIsBulkUploadOpen(false);
+            refetch(); // Refresh usage
+          }}
+          onFinalized={(summary) => {
+            showSuccess(`Successfully processed ${summary.created} invoices!`);
+            setIsBulkUploadOpen(false);
+            // Optionally reload vouchers list or navigate
+            if (window.location.reload) {
+              // We might want to refresh the page or the list
+            }
+          }}
+        />
       )}
     </div>
   );

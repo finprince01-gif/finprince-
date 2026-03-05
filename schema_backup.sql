@@ -1076,6 +1076,7 @@ CREATE TABLE `customer_master_customer_basicdetails` (
   `updated_by` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `customer_basic_tenant_code_uniq` (`tenant_id`,`customer_code`),
+  UNIQUE KEY `customer_basic_tenant_id_uniq` (`tenant_id`, `id`),
   KEY `customer_basic_tenant_id_idx` (`tenant_id`),
   KEY `customer_basic_category_idx` (`customer_category_id`),
   CONSTRAINT `customer_basic_category_fk` FOREIGN KEY (`customer_category_id`) REFERENCES `customer_master_category` (`id`) ON DELETE SET NULL
@@ -1596,6 +1597,7 @@ CREATE TABLE `voucher_sales_invoicedetails` (
   `voucher_name` VARCHAR(100),
   `outward_slip_no` VARCHAR(50),
   `customer_name` VARCHAR(255),
+  `customer_id` BIGINT NOT NULL COMMENT 'FK to customer_master_customer_basicdetails.id (tenant-scoped)',
 
   `bill_to` LONGTEXT,
   `ship_to` LONGTEXT,
@@ -1618,10 +1620,16 @@ CREATE TABLE `voucher_sales_invoicedetails` (
   `shipping_bill_number` VARCHAR(50) DEFAULT NULL COMMENT 'Shipping bill number for exports',
   `shipping_bill_date` DATE DEFAULT NULL COMMENT 'Shipping bill date for exports',
   `ecommerce_gstin` VARCHAR(15) DEFAULT NULL COMMENT 'E-commerce GSTIN',
-
+  
   PRIMARY KEY (`id`),
   KEY `idx_tenant_id` (`tenant_id`),
-  KEY `idx_sales_invoice_no` (`sales_invoice_no`)
+  KEY `idx_sales_invoice_no` (`sales_invoice_no`),
+  KEY `idx_sales_tenant_customer` (`tenant_id`, `customer_id`),
+  CONSTRAINT `fk_sales_invoice_customer` 
+    FOREIGN KEY (`tenant_id`, `customer_id`) 
+    REFERENCES `customer_master_customer_basicdetails` (`tenant_id`, `id`)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE
 ) ENGINE=InnoDB
 DEFAULT CHARSET=utf8mb4
 COLLATE=utf8mb4_unicode_ci;
@@ -1945,6 +1953,8 @@ CREATE TABLE voucher_purchase_transit_details (
   received_in VARCHAR(255),
   receipt_date DATE,
   receipt_time TIME(6),
+  received_quantity VARCHAR(50),
+  uqc VARCHAR(50),
   delivery_type VARCHAR(100),
   self_third_party VARCHAR(100),
   transporter_id VARCHAR(100),
@@ -2683,3 +2693,65 @@ ALTER TABLE `voucher_sales_invoicedetails`
 --       voucher_sales_ewaybill, voucher_sales_paymentdetails, voucher_sales_items_foreign)
 --       are intentionally NOT modified — they link to the header via invoice_id.
 
+ALTER TABLE voucher_purchase_transit_details
+
+ADD COLUMN upto_port_origin_city VARCHAR(255),
+ADD COLUMN upto_port_origin_country VARCHAR(100),
+ADD COLUMN upto_port_vessel_flight_no VARCHAR(100),
+ADD COLUMN upto_port_port_of_loading VARCHAR(255),
+ADD COLUMN upto_port_port_of_discharge VARCHAR(255),
+ADD COLUMN upto_port_final_dest_city VARCHAR(255),
+ADD COLUMN upto_port_final_dest_country VARCHAR(100),
+ADD COLUMN upto_port_rr_no VARCHAR(100),
+ADD COLUMN upto_port_rr_date DATE,
+ADD COLUMN upto_port_fnr_no VARCHAR(100),
+ADD COLUMN upto_port_station_loading VARCHAR(255),
+ADD COLUMN upto_port_station_discharge VARCHAR(255),
+
+ADD COLUMN beyond_port_sb_no VARCHAR(100),
+ADD COLUMN beyond_port_sb_date DATE,
+ADD COLUMN beyond_port_ship_port_code VARCHAR(100),
+ADD COLUMN beyond_port_vessel_flight_no VARCHAR(100),
+ADD COLUMN beyond_port_port_of_loading VARCHAR(255),
+ADD COLUMN beyond_port_port_of_discharge VARCHAR(255),
+ADD COLUMN beyond_port_final_dest VARCHAR(255),
+ADD COLUMN beyond_port_dest_country VARCHAR(100),
+ADD COLUMN beyond_port_origin_country VARCHAR(100),
+
+ADD COLUMN rail_beyond_rr_no VARCHAR(100),
+ADD COLUMN rail_beyond_origin VARCHAR(255),
+ADD COLUMN rail_beyond_rr_date DATE,
+ADD COLUMN rail_beyond_rail_no VARCHAR(100),
+ADD COLUMN rail_beyond_station_loading VARCHAR(255),
+ADD COLUMN rail_beyond_origin_country VARCHAR(100),
+ADD COLUMN rail_beyond_station_discharge VARCHAR(255),
+ADD COLUMN rail_beyond_final_dest VARCHAR(255),
+ADD COLUMN rail_beyond_dest_country VARCHAR(100),
+
+ADD COLUMN rail_upto_delivery_type VARCHAR(100),
+ADD COLUMN rail_upto_transporter_name VARCHAR(255),
+ADD COLUMN rail_upto_transporter_id VARCHAR(100);
+
+CREATE TABLE IF NOT EXISTS invoice_ocr_temp (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+
+    file_hash VARCHAR(64) NOT NULL,       -- SHA-256 hex of uploaded bytes
+    tenant_id VARCHAR(64) NOT NULL,       -- Tenant isolation
+
+    file_path VARCHAR(512) NOT NULL,      -- Uploaded file path / filename
+
+    ocr_raw_text LONGTEXT DEFAULT NULL,   -- Raw OCR output
+    extracted_data JSON DEFAULT NULL,     -- Structured invoice JSON
+
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME NOT NULL,         -- created_at + 15 days
+
+    PRIMARY KEY (id),
+
+    UNIQUE KEY uniq_hash_tenant (file_hash, tenant_id),
+
+    INDEX idx_ocr_temp_expires (expires_at)
+
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;

@@ -8,7 +8,7 @@ from .views import (
     CompanySettingsViewSet, health_check, check_status, check_phone,
     AgentMessageView, AIProxyView,
     ai_metrics, health_with_metrics, AdminPaymentsView,
-    extraction_average_time
+    extraction_average_time, OCRCacheUpdateView
 )
 from .admin_views import AdminSubscriptionsView, AdminUserStatusView
 from .direct_registration import DirectRegisterView
@@ -44,6 +44,7 @@ urlpatterns = [
 
     # AI Services
     path('ai/<str:action>/', AIProxyView.as_view(), name='ai-proxy'),
+    path('ai/ocr-cache/<int:record_id>/update/', OCRCacheUpdateView.as_view(), name='ocr-cache-update'),
     path('agent/message/', AgentMessageView.as_view()),  # Legacy endpoint, uses AI proxy internally
     path('metrics/ai/', ai_metrics, name='ai-metrics'),
     path('extraction-average-time/', extraction_average_time, name='extraction-average-time'),

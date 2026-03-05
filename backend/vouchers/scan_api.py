@@ -1,4 +1,5 @@
 import os
+import io
 import json
 import tempfile
 import uuid
@@ -246,10 +247,11 @@ ALL_HEADERS = LINE_ITEM_FIELDS + HEADER_FIELDS
 @require_http_methods(["POST"])
 def extract_invoice(request):
     """
-    1. Accept uploaded invoice image.
-    2. Extract data via Gemini OCR.
-    3. Generate temporary Excel with one row per line item.
-    4. Provide for download and delete.
+    1. Accept uploaded invoice image / PDF.
+    2. If PDF is multi-invoice, split it into per-invoice temp PDFs first.
+    3. Run Gemini OCR + mapping engine on each detected invoice.
+    4. Return an array of results (one per invoice).
+       For a single-page PDF or image, returns a single-element result.
     """
     if not request.FILES.get('file'):
         return JsonResponse({'error': 'No file uploaded'}, status=400)
@@ -264,13 +266,49 @@ def extract_invoice(request):
         if not api_key:
             return JsonResponse({'error': 'AI service busy (No healthy keys)'}, status=503)
 
-        # Read file bytes
+        # Read file bytes once
         file_bytes = uploaded_file.read()
+        mime_type = uploaded_file.content_type or 'application/octet-stream'
+        original_name = uploaded_file.name or 'invoice'
 
-        # -----------------------------------------------------------------------
-        # Prompt: separate header data from per-row line item data
-        # -----------------------------------------------------------------------
-        prompt_text = f"""
+        # ── Multi-invoice PDF splitting (preprocessing) ──────────────────────
+        is_pdf = (
+            mime_type == 'application/pdf'
+            or (original_name or '').lower().endswith('.pdf')
+        )
+
+        if is_pdf:
+            from core.pdf_splitter import split_pdf_into_invoice_files, cleanup_temp_pdf
+            invoice_chunks = split_pdf_into_invoice_files(
+                pdf_bytes=file_bytes,
+                original_filename=original_name,
+            )
+        else:
+            # Non-PDF (image): treat as a single chunk
+            invoice_chunks = [('SINGLE', None, None)]  # sentinel
+
+        # ── Process each detected invoice through the existing OCR pipeline ──
+        all_invoice_results = []
+
+        for inv_number, tmp_path, group in invoice_chunks:
+            try:
+                # Load the bytes for this invoice
+                if tmp_path:                   # PDF split chunk
+                    with open(tmp_path, 'rb') as fh:
+                        chunk_bytes = fh.read()
+                    chunk_mime = 'application/pdf'
+                    chunk_label = (
+                        f"{original_name} [Inv {inv_number}]"
+                        if len(invoice_chunks) > 1
+                        else original_name
+                    )
+                else:                          # Non-PDF image
+                    chunk_bytes = file_bytes
+                    chunk_mime = mime_type
+                    chunk_label = original_name
+
+                # ── Existing prompt (unchanged) ──────────────────────────────
+                prompt_text = f"""
 You are a precision invoice OCR and data-extraction system.
 Extract every figure exactly where it is printed — correct column, correct row — with zero shifting, duplication, or guessing.
 
@@ -387,172 +425,381 @@ Return the data in this EXACT JSON structure:
 Return ONLY the raw JSON object. No markdown, no code fences, no explanation.
 """
 
-        raw_text = execute_with_retry(
-            [
-                prompt_text,
-                {'mime_type': uploaded_file.content_type, 'data': file_bytes}
-            ],
-            {},
-            api_key
-        )
+                raw_text = execute_with_retry(
+                    [
+                        prompt_text,
+                        {'mime_type': chunk_mime, 'data': chunk_bytes}
+                    ],
+                    {},
+                    api_key
+                )
 
-        # Strip markdown fences if present
-        raw_text = raw_text.strip()
-        if raw_text.startswith('```json'):
-            raw_text = raw_text[7:]
-        if raw_text.startswith('```'):
-            raw_text = raw_text[3:]
-        if raw_text.endswith('```'):
-            raw_text = raw_text[:-3]
-        raw_text = raw_text.strip()
-
-        extracted_json = json.loads(raw_text)
-
-        # -----------------------------------------------------------------------
-        # Normalise extracted data
-        # -----------------------------------------------------------------------
-        import re as _re
-        # Support both {invoice, items} and legacy {header, line_items} formats
-        if isinstance(extracted_json, dict) and ('invoice' in extracted_json or 'header' in extracted_json):
-            invoice_data = extracted_json.get('invoice', extracted_json.get('header', {}))
-            items = extracted_json.get('items', extracted_json.get('line_items', []))
-        else:
-            invoice_data = extracted_json if isinstance(extracted_json, dict) else {}
-            items = []
-
-        # Ensure items is a list even if AI returned a single object
-        if isinstance(items, dict):
-            items = [items]
-
-        # Numeric-only fields — strip currency symbols, commas, stray units
-        NUMERIC_FIELDS = {
-            'Rate', 'Taxable Value', 'Integrated Tax (IGST)', 'Central Tax (CGST)',
-            'State Tax (SGST)', 'Cess', 'Item Amount', 'Disc %', 'Disc Amount', 'GST %',
-            'Total Taxable Value', 'Total IGST', 'Total CGST', 'Total SGST', 'Total Cess', 
-            'Total State Cess', 'Total Invoice Value', 'TDS Income Tax', 'TDS GST', 
-            'Advance Paid', 'To Pay', 'IGST Rate', 'CGST Rate', 'SGST/UTGST Rate', 
-            'Cess Rate', 'Cess Rate Per Unit', 'State Cess Rate',
-            'Advance Payment/Receipt/Refund Details - IGST Rate',
-            'Advance Payment/Receipt/Refund Details - IGST Amount',
-            'Advance Payment/Receipt/Refund Details - SGST Rate',
-            'Advance Payment/Receipt/Refund Details - SGST Amount',
-            'Advance Payment/Receipt/Refund Details - CGST Rate',
-            'Advance Payment/Receipt/Refund Details - CGST Amount',
-            'Tax Type Allocations - IGST Liability',
-            'Tax Type Allocations - CGST Liability',
-            'Tax Type Allocations - SGST/UTGST Liability',
-            'GST Advance Details - GST Rate',
-            'GST Advance Details - Cess Rate',
-            'GST Advance Details - Advance Amount',
-            'TDS - Assessable Value', 'TCS - Assessable Value',
-        }
-
-        for idx, item in enumerate(items, start=1):
-            # 1. Sequential S.No
-            item['S.No'] = str(idx)
-            # 2. null → empty string
-            for k, v in item.items():
-                if v is None:
-                    item[k] = ''
-            # 3. Auto-split combined Qty+UOM (e.g. "8 NOS", "2.5 KG")
-            qty_raw = str(item.get('Quantity', '')).strip()
-            uom_raw = str(item.get('UOM', '')).strip()
-            if qty_raw and not uom_raw:
-                # Try to split "8 NOS" or "2.500 KGS"
-                m = _re.match(r'^([\d.,]+)\s*([A-Za-z]+)$', qty_raw)
-                if m:
-                    item['Quantity'] = m.group(1)
-                    item['UOM'] = m.group(2).upper()
-            
-            # 4. Item Name promote logic (Safety net)
-            if not item.get('Item Name') and item.get('Description'):
-                item['Item Name'] = item['Description']
-                item['Description'] = ''
-            # 5. Strip non-numeric chars from amount fields
-            for field in NUMERIC_FIELDS:
-                val = str(item.get(field, '')).strip()
-                if val:
-                    cleaned = _re.sub(r'[^\d.\-]', '', val.replace(',', ''))
-                    item[field] = cleaned if cleaned else ''
-            # 6. HSN/SAC must be 4-8 digits only
-            hsn = str(item.get('HSN/SAC', '')).strip()
-            if hsn:
-                hsn_digits = _re.sub(r'[^\d]', '', hsn)
-                item['HSN/SAC'] = hsn_digits if 4 <= len(hsn_digits) <= 8 else ''
-
-        # Filter empty header fields for UI display
-        filtered_header = {k: v for k, v in invoice_data.items() if v and str(v).strip()}
-
-        # -----------------------------------------------------------------------
-        # Build Excel: row 1 = headers, row 2..N = one row per line item
-        # -----------------------------------------------------------------------
-        temp_dir = tempfile.gettempdir()
-        file_name = (
-            f"Invoice_Export_{uuid.uuid4().hex[:8]}_"
-            f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        )
-        file_path = os.path.join(temp_dir, file_name)
-
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Extracted Invoice"
-
-        header_fill = PatternFill(start_color="1E40AF", end_color="1E40AF", fill_type="solid")
-        header_font = Font(color="FFFFFF", bold=True)
-
-        # Write column header row
-        for col, header in enumerate(ALL_HEADERS, start=1):
-            cell = ws.cell(row=1, column=col, value=header)
-            cell.fill = header_fill
-            cell.font = header_font
-            cell.alignment = Alignment(horizontal="center", wrap_text=True)
-
-        # Write one data row per line item
-        # Header fields repeat on every row; line-item fields are unique per row
-        if not items:
-            # No line items found — write a single data row with header data only
-            items = [{}]
-
-        for row_idx, item in enumerate(items, start=2):
-            for col, field in enumerate(ALL_HEADERS, start=1):
-                if field in HEADER_FIELDS:
-                    value = invoice_data.get(field, '')
-                else:
-                    value = item.get(field, '')
-                ws.cell(row=row_idx, column=col, value=value)
-
-        # Auto-adjust column widths
-        for column in ws.columns:
-            max_length = 0
-            column_letter = column[0].column_letter
-            for cell in column:
+                # ── Existing mapping engine (unchanged) ───────────────────────
+                from core.processing_engine import parse_and_process_ocr
                 try:
-                    if cell.value and len(str(cell.value)) > max_length:
-                        max_length = len(str(cell.value))
-                except Exception:
-                    pass
-            ws.column_dimensions[column_letter].width = min(max_length + 4, 50)
+                    processed_data = parse_and_process_ocr(raw_text)
+                    invoice_data = processed_data.get('invoice', {})
+                    items = processed_data.get('items', [])
+                except Exception as e:
+                    all_invoice_results.append({
+                        'error': f'Failed to parse AI response: {str(e)}',
+                        'source_file': chunk_label,
+                    })
+                    continue
 
-        wb.save(file_path)
+                # Filter empty header fields for UI display
+                filtered_header = {k: v for k, v in invoice_data.items() if v and str(v).strip()}
 
-        # Encode to base64 for JSON response
-        with open(file_path, "rb") as f:
-            excel_base64 = base64.b64encode(f.read()).decode('utf-8')
+                # ── Build Excel per invoice ───────────────────────────────────
+                _tmp_dir = tempfile.gettempdir()
+                _file_name = (
+                    f"Invoice_Export_{uuid.uuid4().hex[:8]}_"
+                    f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+                )
+                _file_path = os.path.join(_tmp_dir, _file_name)
 
-        # Cleanup temp file
-        if os.path.exists(file_path):
-            os.remove(file_path)
+                wb = Workbook()
+                ws = wb.active
+                ws.title = "Extracted Invoice"
 
-        return JsonResponse({
-            'success': True,
-            'data': {
-                'header': filtered_header,
-                'line_items': items,
-            },
-            'excel_file': excel_base64,
-            'file_name': file_name
-        })
+                header_fill = PatternFill(start_color="1E40AF", end_color="1E40AF", fill_type="solid")
+                header_font = Font(color="FFFFFF", bold=True)
+
+                for col, header in enumerate(ALL_HEADERS, start=1):
+                    cell = ws.cell(row=1, column=col, value=header)
+                    cell.fill = header_fill
+                    cell.font = header_font
+                    cell.alignment = Alignment(horizontal="center", wrap_text=True)
+
+                _items = items if items else [{}]
+                for row_idx, item in enumerate(_items, start=2):
+                    for col, field in enumerate(ALL_HEADERS, start=1):
+                        if field in HEADER_FIELDS:
+                            value = invoice_data.get(field, '')
+                        else:
+                            value = item.get(field, '')
+                        ws.cell(row=row_idx, column=col, value=value)
+
+                for column in ws.columns:
+                    max_length = 0
+                    column_letter = column[0].column_letter
+                    for cell in column:
+                        try:
+                            if cell.value and len(str(cell.value)) > max_length:
+                                max_length = len(str(cell.value))
+                        except Exception:
+                            pass
+                    ws.column_dimensions[column_letter].width = min(max_length + 4, 50)
+
+                wb.save(_file_path)
+                with open(_file_path, "rb") as f:
+                    excel_base64 = base64.b64encode(f.read()).decode('utf-8')
+                if os.path.exists(_file_path):
+                    os.remove(_file_path)
+
+                all_invoice_results.append({
+                    'success': True,
+                    'source_file': chunk_label,
+                    'invoice_number': inv_number if len(invoice_chunks) > 1 else None,
+                    'data': {
+                        'header': filtered_header,
+                        'line_items': items,
+                    },
+                    'excel_file': excel_base64,
+                    'file_name': _file_name,
+                })
+
+            except Exception as chunk_err:
+                import traceback
+                all_invoice_results.append({
+                    'error': str(chunk_err),
+                    'source_file': chunk_label if 'chunk_label' in dir() else original_name,
+                    'trace': traceback.format_exc(),
+                })
+            finally:
+                # Clean up the temp split PDF
+                if tmp_path:
+                    from core.pdf_splitter import cleanup_temp_pdf
+                    cleanup_temp_pdf(tmp_path)
+
+        # ── Return ───────────────────────────────────────────────────────────
+        if len(all_invoice_results) == 1:
+            # Single invoice: preserve original flat response shape for backward compat
+            result = all_invoice_results[0]
+            if 'error' in result:
+                return JsonResponse({'error': result['error']}, status=500)
+            return JsonResponse({
+                'success': True,
+                'data': result['data'],
+                'excel_file': result['excel_file'],
+                'file_name': result['file_name'],
+            })
+        else:
+            # Multiple invoices detected: return array so frontend can create one row per invoice
+            return JsonResponse({
+                'success': True,
+                'multi_invoice': True,
+                'invoice_count': len(all_invoice_results),
+                'results': all_invoice_results,
+                # Backward compat: expose first invoice's data at top-level
+                'data': all_invoice_results[0].get('data') if all_invoice_results else {},
+                'excel_file': all_invoice_results[0].get('excel_file') if all_invoice_results else '',
+                'file_name': all_invoice_results[0].get('file_name') if all_invoice_results else '',
+            })
 
     except Exception as e:
         import traceback
         return JsonResponse({'error': str(e), 'trace': traceback.format_exc()}, status=500)
+
+
+# --------------------------------------------------------------------------------
+# BULK SCAN PROCESS (3-STEP)
+# --------------------------------------------------------------------------------
+
+def detect_vendor(tenant_id, gstin, vendor_name):
+    """
+    Helper to find vendor by GSTIN or Name.
+    """
+    if gstin:
+        gst_record = VendorMasterGSTDetails.objects.filter(
+            tenant_id=tenant_id,
+            gstin__iexact=gstin.strip()
+        ).select_related('vendor_basic_detail').first()
+        if gst_record:
+            return gst_record.vendor_basic_detail, "FOUND"
+
+    if vendor_name:
+        vendor = VendorMasterBasicDetail.objects.filter(
+            tenant_id=tenant_id,
+            vendor_name__iexact=vendor_name.strip()
+        ).first()
+        if vendor:
+            return vendor, "FOUND"
+            
+    return None, "MISSING"
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def bulk_scan_invoices(request):
+    """
+    STEP 1 - BULK SCAN (EXTRACTION ONLY)
+    """
+    files = request.FILES.getlist('files')
+    if not files:
+        return JsonResponse({'error': 'No files uploaded'}, status=400)
+
+    tenant_id = getattr(request.user, 'tenant_id', 'default_tenant')
+    scan_id = str(uuid.uuid4())
+    results = []
+    
+    from core.ai_proxy import execute_with_retry, api_key_manager
+
+    for uploaded_file in files:
+        try:
+            # Get healthy key
+            api_key = api_key_manager.get_healthy_key()
+            if not api_key:
+                results.append({
+                    'file_name': uploaded_file.name,
+                    'error': 'AI service busy',
+                    'vendor_status': 'FAILED'
+                })
+                continue
+
+            file_bytes = uploaded_file.read()
+            
+            # Prompt (Simplified version of extract_invoice prompt)
+            prompt_text = f"""
+Extract invoice data in JSON:
+{{
+  "invoice": {{
+    "Voucher Date": "", "Supplier Invoice No": "", "Vendor Name": "", "GSTIN": "",
+    "Total Invoice Value": "", "Total Taxable Value": "", "Total IGST": "", "Total CGST": "", "Total SGST": ""
+  }},
+  "items": [
+    {{ "Item Name": "", "Quantity": "", "UOM": "", "Rate": "", "Taxable Value": "", "GST %": "" }}
+  ]
+}}
+"""
+            raw_text = execute_with_retry([prompt_text, {'mime_type': uploaded_file.content_type, 'data': file_bytes}], {}, api_key)
+            raw_text = raw_text.strip().strip('```json').strip('```').strip()
+            extracted_json = json.loads(raw_text)
+            
+            invoice_data = extracted_json.get('invoice', {})
+            items = extracted_json.get('items', [])
+            
+            vendor_name = invoice_data.get('Vendor Name', '')
+            gstin = invoice_data.get('GSTIN', '')
+            
+            vendor, status = detect_vendor(tenant_id, gstin, vendor_name)
+            
+            results.append({
+                'file_name': uploaded_file.name,
+                'vendor_status': status,
+                'vendor_id': vendor.id if vendor else None,
+                'vendor_name': vendor.vendor_name if vendor else vendor_name,
+                'gstin': vendor.gstin if (vendor and hasattr(vendor, 'gstin')) else gstin,
+                'extracted_data': extracted_json
+            })
+            
+        except Exception as e:
+            results.append({
+                'file_name': uploaded_file.name,
+                'error': str(e),
+                'vendor_status': 'FAILED'
+            })
+
+    # Store in cache for 1 hour
+    cache.set(f"bulk_scan_{scan_id}", results, timeout=3600)
+    
+    # Response to frontend
+    frontend_results = []
+    for res in results:
+        frontend_results.append({
+            'file_name': res.get('file_name'),
+            'vendor_status': res.get('vendor_status'),
+            'vendor_id': res.get('vendor_id'),
+            'vendor_name': res.get('vendor_name'),
+            'gstin': res.get('gstin'),
+            'error': res.get('error')
+        })
+
+    return JsonResponse({
+        'scan_id': scan_id,
+        'results': frontend_results
+    })
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def resolve_bulk_vendor(request):
+    """
+    STEP 2 - UPDATE CACHE WITH NEW VENDOR ID
+    """
+    data = json.loads(request.body)
+    scan_id = data.get('scan_id')
+    file_name = data.get('file_name')
+    vendor_id = data.get('vendor_id')
+    
+    if not scan_id or not file_name or not vendor_id:
+        return JsonResponse({'error': 'Missing required fields'}, status=400)
+        
+    cache_key = f"bulk_scan_{scan_id}"
+    results = cache.get(cache_key)
+    if not results:
+        return JsonResponse({'error': 'Scan session expired or invalid'}, status=404)
+        
+    updated = False
+    for res in results:
+        if res.get('file_name') == file_name:
+            res['vendor_id'] = vendor_id
+            res['vendor_status'] = 'RESOLVED'
+            updated = True
+            break
+            
+    if updated:
+        cache.set(cache_key, results, timeout=3600)
+        return JsonResponse({'success': True})
+    else:
+        return JsonResponse({'error': 'File not found in scan results'}, status=404)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def bulk_finalize_vouchers(request):
+    """
+    STEP 3 - FINALIZE & SAVE VOUCHERS
+    """
+    data = json.loads(request.body)
+    scan_id = data.get('scan_id')
+    
+    if not scan_id:
+        return JsonResponse({'error': 'Missing scan_id'}, status=400)
+        
+    cache_key = f"bulk_scan_{scan_id}"
+    results = cache.get(cache_key)
+    if not results:
+        return JsonResponse({'error': 'Scan session expired or invalid'}, status=404)
+        
+    tenant_id = getattr(request.user, 'tenant_id', 'default_tenant')
+    
+    summary = {
+        'total_processed': len(results),
+        'created_count': 0,
+        'failed_count': 0,
+        'errors': []
+    }
+    
+    for res in results:
+        if res.get('vendor_status') == 'MISSING' or res.get('vendor_status') == 'FAILED':
+            summary['failed_count'] += 1
+            summary['errors'].append({
+                'file_name': res.get('file_name'),
+                'error': 'Vendor unresolved or scan failed'
+            })
+            continue
+            
+        try:
+            extracted_data = res.get('extracted_data')
+            invoice = extracted_data.get('invoice', {})
+            items = extracted_data.get('items', [])
+            
+            def clean_num(v):
+                if not v: return 0
+                import re
+                s = re.sub(r'[^\d.]', '', str(v))
+                return float(s) if s else 0
+
+            raw_date = invoice.get('Voucher Date', '')
+            try:
+                if '/' in raw_date:
+                    d, m, y = raw_date.split('/')
+                    formatted_date = f"{y}-{m}-{d}"
+                else:
+                    formatted_date = raw_date
+            except:
+                formatted_date = datetime.now().strftime('%Y-%m-%d')
+
+            payload = {
+                'date': formatted_date,
+                'supplier_invoice_no': invoice.get('Supplier Invoice No', ''),
+                'vendor_id': res.get('vendor_id'),
+                'gstin': invoice.get('GSTIN', ''),
+                'tenant_id': tenant_id,
+                'supply_inr_details': {
+                    'items': [
+                        {
+                            'item_name': item.get('Item Name', ''),
+                            'qty': clean_num(item.get('Quantity', 0)),
+                            'uom': item.get('UOM', ''),
+                            'rate': clean_num(item.get('Rate', 0)),
+                            'taxable_value': clean_num(item.get('Taxable Value', 0)),
+                            'gst_pct': clean_num(item.get('GST %', 0)),
+                        } for item in items
+                    ]
+                },
+                'due_details': {
+                    'to_pay': clean_num(invoice.get('Total Invoice Value', 0)),
+                    'tds_gst': clean_num(invoice.get('Total IGST', 0)) + clean_num(invoice.get('Total CGST', 0)) + clean_num(invoice.get('Total SGST', 0))
+                }
+            }
+            
+            with transaction.atomic():
+                serializer = VoucherPurchaseSupplierDetailsSerializer(data=payload, context={'request': request})
+                if serializer.is_valid():
+                    instance = serializer.save(tenant_id=tenant_id)
+                    summary['created_count'] += 1
+                else:
+                    summary['failed_count'] += 1
+                    summary['errors'].append({
+                        'file_name': res.get('file_name'),
+                        'error': serializer.errors
+                    })
+                    
+        except Exception as e:
+            summary['failed_count'] += 1
+            summary['errors'].append({
+                'file_name': res.get('file_name'),
+                'error': str(e)
+            })
+            
+    cache.delete(cache_key)
+    return JsonResponse(summary)

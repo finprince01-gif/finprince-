@@ -2693,3 +2693,61 @@ ALTER TABLE `voucher_sales_invoicedetails`
 --       voucher_sales_ewaybill, voucher_sales_paymentdetails, voucher_sales_items_foreign)
 --       are intentionally NOT modified — they link to the header via invoice_id.
 
+ALTER TABLE voucher_purchase_transit_details
+
+ADD COLUMN upto_port_origin_city VARCHAR(255),
+ADD COLUMN upto_port_origin_country VARCHAR(100),
+ADD COLUMN upto_port_vessel_flight_no VARCHAR(100),
+ADD COLUMN upto_port_port_of_loading VARCHAR(255),
+ADD COLUMN upto_port_port_of_discharge VARCHAR(255),
+ADD COLUMN upto_port_final_dest_city VARCHAR(255),
+ADD COLUMN upto_port_final_dest_country VARCHAR(100),
+ADD COLUMN upto_port_rr_no VARCHAR(100),
+ADD COLUMN upto_port_rr_date DATE,
+ADD COLUMN upto_port_fnr_no VARCHAR(100),
+ADD COLUMN upto_port_station_loading VARCHAR(255),
+ADD COLUMN upto_port_station_discharge VARCHAR(255),
+
+ADD COLUMN beyond_port_sb_no VARCHAR(100),
+ADD COLUMN beyond_port_sb_date DATE,
+ADD COLUMN beyond_port_ship_port_code VARCHAR(100),
+ADD COLUMN beyond_port_vessel_flight_no VARCHAR(100),
+ADD COLUMN beyond_port_port_of_loading VARCHAR(255),
+ADD COLUMN beyond_port_port_of_discharge VARCHAR(255),
+ADD COLUMN beyond_port_final_dest VARCHAR(255),
+ADD COLUMN beyond_port_dest_country VARCHAR(100),
+ADD COLUMN beyond_port_origin_country VARCHAR(100),
+
+ADD COLUMN rail_beyond_rr_no VARCHAR(100),
+ADD COLUMN rail_beyond_origin VARCHAR(255),
+ADD COLUMN rail_beyond_rr_date DATE,
+ADD COLUMN rail_beyond_rail_no VARCHAR(100),
+ADD COLUMN rail_beyond_station_loading VARCHAR(255),
+ADD COLUMN rail_beyond_origin_country VARCHAR(100),
+ADD COLUMN rail_beyond_station_discharge VARCHAR(255),
+ADD COLUMN rail_beyond_final_dest VARCHAR(255),
+ADD COLUMN rail_beyond_dest_country VARCHAR(100),
+
+ADD COLUMN rail_upto_delivery_type VARCHAR(100),
+ADD COLUMN rail_upto_transporter_name VARCHAR(255),
+ADD COLUMN rail_upto_transporter_id VARCHAR(100);
+
+CREATE TABLE IF NOT EXISTS invoice_ocr_temp (
+    id              BIGINT          NOT NULL AUTO_INCREMENT,
+    file_hash       VARCHAR(64)     NOT NULL,          -- SHA-256 hex of uploaded bytes
+    tenant_id       VARCHAR(64)     NOT NULL,          -- Tenant isolation
+    upload_session_id VARCHAR(64)   DEFAULT NULL,      -- Bulk upload session identification
+    file_path       TEXT            NOT NULL,          -- Original upload path / filename
+    ocr_raw_text    LONGTEXT        DEFAULT NULL,       -- Raw OCR output from Gemini
+    extracted_data  JSON            DEFAULT NULL,       -- Structured invoice + items JSON
+    validation_status VARCHAR(20)   DEFAULT 'PENDING',  -- FOUND, NOT_FOUND, GSTIN_CONFLICT, etc.
+    matched_by      VARCHAR(50)     DEFAULT NULL,       -- GSTIN, Name, etc.
+    conflict_message TEXT           DEFAULT NULL,       -- Why it failed validation
+    processed       BOOLEAN         DEFAULT FALSE,      -- Marked TRUE once voucher is created
+    created_at      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at      DATETIME        NOT NULL,           -- created_at + 15 days
+    PRIMARY KEY (id),
+    INDEX idx_ocr_temp_hash_tenant (file_hash, tenant_id),
+    INDEX idx_ocr_temp_expires     (expires_at),
+    INDEX idx_ocr_temp_session     (upload_session_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
