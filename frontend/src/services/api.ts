@@ -106,7 +106,7 @@ class ApiService {
      * Returns: Array of ledger objects
      */
     async getLedgers() {
-        return httpClient.get<Ledger[]>('/api/masters/ledgers/');
+        return httpClient.get<Ledger[]>('/api/masters/ledgers/?page_size=10000&limit=10000');
     }
 
     async saveLedger(data: Ledger) {
@@ -148,7 +148,7 @@ class ApiService {
      * Used for AI Context
      */
     async getRichVendors() {
-        return httpClient.get<any[]>('/api/vendors/basic-details/');
+        return httpClient.get<any[]>('/api/vendors/basic-details/?page_size=10000&limit=10000');
     }
 
     /**
@@ -156,7 +156,7 @@ class ApiService {
      * Used for AI Context
      */
     async getRichCustomers() {
-        return httpClient.get<any[]>('/api/customerportal/customer-master/');
+        return httpClient.get<any[]>('/api/customerportal/customer-master/?page_size=10000&limit=10000');
     }
 
     /**

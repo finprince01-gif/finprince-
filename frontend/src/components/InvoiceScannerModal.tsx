@@ -18,6 +18,7 @@ import {
     type MappingDecision,
     type AuditEvent,
 } from '../services/mappingEngine';
+import CreateVendorModal from './CreateVendorModal';
 
 declare const XLSX: any;
 
@@ -337,6 +338,71 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
     const [estimatedExtractionTime, setEstimatedExtractionTime] = useState<number | null>(null);
     const [countdownSeconds, setCountdownSeconds] = useState<number | null>(null);
 
+    // ── Auto-Validate Vendor for Purchase Vouchers ───────────────────────────────
+    const [vendorValidation, setVendorValidation] = useState<'IDLE' | 'VALIDATING' | 'FOUND' | 'NOT_FOUND' | 'GSTIN_CONFLICT'>('IDLE');
+    const [vendorValidationMessage, setVendorValidationMessage] = useState<string>('');
+    const [isCreateVendorModalOpen, setIsCreateVendorModalOpen] = useState(false);
+    const [extractedVendorData, setExtractedVendorData] = useState<any>(null);
+
+    const firstInvoiceVendorStr = invoiceResults.length > 0 && !isExtracting && voucherType === 'Purchase'
+        ? String(invoiceResults[0].invoice['Vendor Name'] || '') + '|' + String(invoiceResults[0].invoice['GSTIN'] || '') + '|' + String(invoiceResults[0].invoice['Branch'] || '')
+        : '';
+
+    useEffect(() => {
+        if (!firstInvoiceVendorStr || voucherType !== 'Purchase') {
+            setVendorValidation('IDLE');
+            return;
+        }
+
+        const checkVendor = async () => {
+            const firstRow = invoiceResults[0].invoice;
+            const vendorName = firstRow['Vendor Name'] || firstRow['Bill From'] || firstRow['Buyer/Supplier - Mailing Name'] || '';
+            if (!vendorName) return;
+
+            const gstin = firstRow['GSTIN'] || '';
+            const branch = firstRow['Branch'] || '';
+            const state = firstRow['State'] || firstRow['Billing State'] || firstRow['Bill From - State'] || '';
+            const billFrom = firstRow['Bill From'] || firstRow['Buyer/Supplier - Address'] || firstRow['Bill From - Address Line 1'] || '';
+
+            setVendorValidation('VALIDATING');
+            try {
+                const res = await httpClient.post<any>('/api/purchase/vendors/validate/', {
+                    vendor_name: vendorName,
+                    gstin,
+                    state,
+                    address: billFrom,
+                    branch
+                });
+
+                const items = invoiceResults[0].items.filter((pi: any) => pi['Item Name'] || pi['Item Code'])
+                    .map((pi: any) => ({
+                        supplierItemCode: String(pi['Item Code'] || ''),
+                        supplierItemName: String(pi['Item Name'] || ''),
+                        hsnSac: String(pi['HSN/SAC'] || ''),
+                    }));
+
+                if (res?.status === 'FOUND') {
+                    setVendorValidation('FOUND');
+                } else if (res?.status === 'NOT_FOUND') {
+                    setVendorValidation('NOT_FOUND');
+                    setExtractedVendorData({ vendor_name: vendorName, gstin, state, address: billFrom, branch, supplier_items: items.length > 0 ? items : undefined });
+                } else if (res?.status === 'GSTIN_CONFLICT') {
+                    setVendorValidation('GSTIN_CONFLICT');
+                    setVendorValidationMessage(res.message);
+                    setExtractedVendorData({ vendor_name: vendorName, gstin, state, address: billFrom, branch, supplier_items: items.length > 0 ? items : undefined });
+                } else {
+                    setVendorValidation('IDLE');
+                }
+            } catch (e) {
+                console.error("Vendor validation failed", e);
+                setVendorValidation('IDLE');
+            }
+        };
+
+        const timeout = setTimeout(checkVendor, 500); // debounce typing
+        return () => clearTimeout(timeout);
+    }, [firstInvoiceVendorStr]);
+
     const { incrementUsage, isLimitReached, subscriptionUsage } = useSubscriptionUsage();
 
     // ── Live countdown timer ──────────────────────────────────────────────────
@@ -408,44 +474,72 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             if (fileCount > 0) {
                 const avgRes = await apiService.getExtractionAverageTime();
                 const avgTime = avgRes?.average_time_per_invoice || 3.85;
-                setEstimatedExtractionTime(avgTime * fileCount);
+                const batchCount = Math.ceil(fileCount / 5); // 5 files concurrent
+                setEstimatedExtractionTime(avgTime * batchCount);
             } else {
                 setEstimatedExtractionTime(null);
             }
         } catch (error) {
             console.error("Failed to fetch avg extraction time", error);
-            setEstimatedExtractionTime(fileCount > 0 ? 3.85 * fileCount : null);
+            const batchCount = Math.ceil(fileCount / 5);
+            setEstimatedExtractionTime(fileCount > 0 ? 3.85 * batchCount : null);
         }
 
         try {
             const allResults: InvoiceResult[] = [];
             let batchProcessedCount = 0;
+            const CONCURRENCY_LIMIT = 5;
 
-            for (let i = 0; i < newFiles.length; i++) {
-                // Check subscription limit
-                if (subscriptionUsage && subscriptionUsage.limit !== 'Unlimited') {
-                    const limit =
-                        typeof subscriptionUsage.limit === 'string'
+            for (let i = 0; i < newFiles.length; i += CONCURRENCY_LIMIT) {
+                const batch = newFiles.slice(i, i + CONCURRENCY_LIMIT);
+
+                const batchPromises = batch.map(async (file) => {
+                    // Check subscription limit before initiating request
+                    if (subscriptionUsage && subscriptionUsage.limit !== 'Unlimited') {
+                        const limit = typeof subscriptionUsage.limit === 'string'
                             ? parseFloat(subscriptionUsage.limit)
                             : subscriptionUsage.limit;
-                    const currentUsed = (subscriptionUsage.used || 0) + batchProcessedCount;
-                    if (currentUsed >= limit) {
-                        showError(`❌ AI Extraction limit reached (${limit}). Processed ${batchProcessedCount} files.`);
-                        break;
+                        if ((subscriptionUsage.used || 0) + batchProcessedCount >= limit) {
+                            return { file, error: 'LIMIT_REACHED', success: false };
+                        }
                     }
-                }
 
-                const file = newFiles[i];
-                const formData = new FormData();
-                formData.append('file', file);
-                formData.append('voucher_type', voucherType);
-                formData.append('table_name', voucherType);
-                formData.append('columns', JSON.stringify(ALL_COLUMNS));
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    formData.append('voucher_type', voucherType);
+                    formData.append('table_name', voucherType);
+                    formData.append('columns', JSON.stringify(ALL_COLUMNS));
 
-                try {
-                    const result = await httpClient.postFormData<any>('/api/ai/extract-invoice/', formData);
+                    try {
+                        const result = await httpClient.postFormData<any>('/api/ai/extract-invoice/', formData);
+                        return { file, result, success: true };
+                    } catch (err) {
+                        return { file, error: err, success: false };
+                    }
+                });
 
-                    if (result.error) throw new Error(result.error);
+                const batchResponses = await Promise.all(batchPromises);
+
+                for (const response of batchResponses) {
+                    if (response.error === 'LIMIT_REACHED') {
+                        showError(`❌ AI Extraction limit reached.`);
+                        continue;
+                    }
+
+                    batchProcessedCount++;
+                    const file = response.file;
+
+                    if (!response.success) {
+                        console.error(`Extraction failed for ${file.name}:`, response.error);
+                        showError(`❌ Extraction Failed for ${file.name}.`);
+                        continue;
+                    }
+
+                    const result = response.result;
+                    if (result.error) {
+                        showError(`❌ Extraction Failed for ${file.name}: ${result.error}`);
+                        continue;
+                    }
 
                     if (result.duplicate) {
                         showInfo(`✨ ${file.name} already scanned — results loaded instantly.`);
@@ -606,11 +700,8 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                         normalised.cacheRecordId = result.cache_record_id ?? null;
                         allResults.push(normalised);
                     } else {
-                        throw new Error('No data received from backend');
+                        showError(`❌ No data received from backend for ${file.name}`);
                     }
-                } catch (err) {
-                    console.error(`Extraction failed for ${file.name}:`, err);
-                    throw err;
                 }
             }
 
@@ -640,6 +731,12 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
     const handleUploadToFinpixe = () => {
         if (!onUpload) return;
         if (invoiceResults.length === 0) { showError('No data extracted.'); return; }
+
+        if (voucherType === 'Purchase' && (vendorValidation === 'NOT_FOUND' || vendorValidation === 'GSTIN_CONFLICT')) {
+            // Force user to handle Create Vendor first
+            setIsCreateVendorModalOpen(true);
+            return;
+        }
 
         // ── Auto-compute Invoice Value if missing (sum of Item Amount across all items) ──
         // Sales & Purchase use "Invoice Value"; Credit/Debit Notes use "Total Invoice Value"
@@ -742,6 +839,24 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         onClose();
     };
 
+    const handleVendorCreated = async (data: any) => {
+        try {
+            const response = await httpClient.post<any>('/api/purchase/vendors/create/', data);
+            if (response && response.status === 'CREATED') {
+                showSuccess(response.message || 'Vendor created successfully');
+                setIsCreateVendorModalOpen(false);
+                setVendorValidation('FOUND');
+
+                // Once the vendor is created, automatically continue the Upload to Finpixe process.
+                setTimeout(() => {
+                    handleUploadToFinpixe();
+                }, 200);
+            }
+        } catch (error: any) {
+            console.error('Vendor creation error:', error);
+            showError(error.response?.data?.error || error.message || 'Failed to create vendor');
+        }
+    };
 
     const handleDownloadExcel = () => {
         if (invoiceResults.length === 0) return;
@@ -1030,15 +1145,45 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                                         Download CSV
                                     </button>
                                     {extractionMode !== 'tally' && (
-                                        <button
-                                            onClick={handleUploadToFinpixe}
-                                            disabled={displayRows.length === 0}
-                                            className={`inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-[4px] border-slate-200 text-white ${displayRows.length === 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'
-                                                }`}
-                                        >
-                                            <Icon name="check-circle" className="w-5 h-5 mr-2" />
-                                            Upload to Finpixe
-                                        </button>
+                                        <div className="flex items-center">
+                                            <button
+                                                onClick={handleUploadToFinpixe}
+                                                disabled={displayRows.length === 0 || vendorValidation === 'VALIDATING'}
+                                                className={`inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-[4px] border-slate-200 text-white transition-colors ${displayRows.length === 0 || vendorValidation === 'VALIDATING' ? 'bg-gray-400 cursor-not-allowed opacity-75' : 'bg-emerald-600 hover:bg-emerald-700'
+                                                    }`}
+                                            >
+                                                {vendorValidation === 'VALIDATING' ? <Icon name="spinner" className="w-5 h-5 mr-2 animate-spin" /> : <Icon name="check-circle" className="w-5 h-5 mr-2" />}
+                                                Upload to Finpixe
+                                            </button>
+
+                                            {voucherType === 'Purchase' && vendorValidation === 'NOT_FOUND' && (
+                                                <div className="flex items-center gap-2 ml-4 animate-fade-in-up">
+                                                    <div className="text-xs text-red-600 font-semibold flex items-center gap-1.5 whitespace-nowrap bg-red-50 px-2 py-1.5 rounded border border-red-100 shadow-sm">
+                                                        <Icon name="x" className="w-3.5 h-3.5" /> Vendor Not Found
+                                                    </div>
+                                                    <button
+                                                        onClick={() => setIsCreateVendorModalOpen(true)}
+                                                        className="px-4 py-1.5 bg-white hover:bg-red-50 border border-red-200 hover:border-red-300 text-red-600 rounded-[4px] flex items-center justify-center font-medium shadow-sm transition-all focus:ring-1 focus:ring-red-500 focus:outline-none whitespace-nowrap text-sm"
+                                                    >
+                                                        <Icon name="plus" className="w-4 h-4 mr-1.5" /> Create Vendor
+                                                    </button>
+                                                </div>
+                                            )}
+                                            {voucherType === 'Purchase' && vendorValidation === 'GSTIN_CONFLICT' && (
+                                                <div className="flex items-center gap-2 ml-4 animate-fade-in-up max-w-[350px]">
+                                                    <div className="text-[11px] leading-tight text-amber-700 flex items-start gap-1.5 bg-amber-50 px-2.5 py-1.5 rounded border border-amber-200 shadow-sm overflow-hidden">
+                                                        <Icon name="alert-triangle" className="w-4 h-4 shrink-0 mt-0.5 text-amber-500" />
+                                                        <span className="line-clamp-2">{vendorValidationMessage}</span>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => setIsCreateVendorModalOpen(true)}
+                                                        className="px-3 py-1.5 shrink-0 bg-white hover:bg-amber-50 border border-amber-300 hover:border-amber-400 text-amber-700 rounded flex items-center justify-center font-medium shadow-sm transition-colors text-xs"
+                                                    >
+                                                        <Icon name="plus" className="w-3 h-3 mr-1" /> Create Vendor
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                             )}
@@ -1120,6 +1265,15 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                     )}
                 </div>
             </div>
+
+            {/* Inline Create Vendor Modal triggered during Upload to Finpixe */}
+            {isCreateVendorModalOpen && extractedVendorData && (
+                <CreateVendorModal
+                    initialData={extractedVendorData}
+                    onClose={() => setIsCreateVendorModalOpen(false)}
+                    onSave={handleVendorCreated}
+                />
+            )}
         </div >
     );
 };

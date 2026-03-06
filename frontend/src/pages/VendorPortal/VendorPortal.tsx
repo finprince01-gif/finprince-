@@ -421,7 +421,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const fetchVendors = async () => {
         try {
             setLoadingVendors(true);
-            const response = await httpClient.get<VendorBasicDetail[] | any>('/api/vendors/basic-details/');
+            const response = await httpClient.get<VendorBasicDetail[] | any>('/api/vendors/basic-details/?page_size=10000&limit=10000');
             // Handle pagination or list
             const data = Array.isArray(response) ? response : (response.results || []);
             setVendorList(data);
@@ -552,6 +552,25 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 }
             } catch (e) {
                 console.error('Error fetching existing terms:', e);
+            }
+
+            // 5. Products/Services Details
+            try {
+                const prodRes: any = await httpClient.get(`/api/vendors/product-services/?vendor_basic_detail=${vendor.id}`);
+                const prodData = prodRes.items || [];
+                if (prodData.length > 0) {
+                    const mappedItems = prodData.map((item: any, idx: number) => ({
+                        id: idx + 1,
+                        hsnSacCode: item.hsn_sac_code || '',
+                        itemCode: item.item_code || '',
+                        itemName: item.item_name || '',
+                        supplierItemCode: item.supplier_item_code || '',
+                        supplierItemName: item.supplier_item_name || ''
+                    }));
+                    setItems(mappedItems);
+                }
+            } catch (e) {
+                console.error('Error fetching existing products/services:', e);
             }
 
             setActiveMasterSubTab('Vendor Creation');

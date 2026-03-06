@@ -288,9 +288,10 @@ def extract_invoice(request):
             invoice_chunks = [('SINGLE', None, None)]  # sentinel
 
         # ── Process each detected invoice through the existing OCR pipeline ──
-        all_invoice_results = []
+        import concurrent.futures
 
-        for inv_number, tmp_path, group in invoice_chunks:
+        def process_chunk(chunk):
+            inv_number, tmp_path, group = chunk
             try:
                 # Load the bytes for this invoice
                 if tmp_path:                   # PDF split chunk
@@ -441,11 +442,10 @@ Return ONLY the raw JSON object. No markdown, no code fences, no explanation.
                     invoice_data = processed_data.get('invoice', {})
                     items = processed_data.get('items', [])
                 except Exception as e:
-                    all_invoice_results.append({
+                    return {
                         'error': f'Failed to parse AI response: {str(e)}',
                         'source_file': chunk_label,
-                    })
-                    continue
+                    }
 
                 # Filter empty header fields for UI display
                 filtered_header = {k: v for k, v in invoice_data.items() if v and str(v).strip()}
@@ -497,7 +497,7 @@ Return ONLY the raw JSON object. No markdown, no code fences, no explanation.
                 if os.path.exists(_file_path):
                     os.remove(_file_path)
 
-                all_invoice_results.append({
+                return {
                     'success': True,
                     'source_file': chunk_label,
                     'invoice_number': inv_number if len(invoice_chunks) > 1 else None,
@@ -507,20 +507,25 @@ Return ONLY the raw JSON object. No markdown, no code fences, no explanation.
                     },
                     'excel_file': excel_base64,
                     'file_name': _file_name,
-                })
+                }
 
             except Exception as chunk_err:
-                import traceback
-                all_invoice_results.append({
+                return {
                     'error': str(chunk_err),
                     'source_file': chunk_label if 'chunk_label' in dir() else original_name,
                     'trace': traceback.format_exc(),
-                })
+                }
             finally:
                 # Clean up the temp split PDF
                 if tmp_path:
                     from core.pdf_splitter import cleanup_temp_pdf
                     cleanup_temp_pdf(tmp_path)
+                
+                from django.db import connection
+                connection.close()
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            all_invoice_results = list(executor.map(process_chunk, invoice_chunks))
 
         # ── Return ───────────────────────────────────────────────────────────
         if len(all_invoice_results) == 1:

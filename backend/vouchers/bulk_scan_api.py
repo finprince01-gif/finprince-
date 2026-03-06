@@ -52,8 +52,11 @@ class BulkScanAPIView(APIView):
         import re as _re
         _bulk_logger = _logging.getLogger(__name__)
 
+        # SHA-256 hash for cache deduplication
+        from core.ocr_cache import compute_file_hash
+        file_hash = compute_file_hash(file_bytes)
+
         # ── Call AI Service ──────────────────────────────────────────────
-        # This now handles its own internal caching/duplicate check.
         extraction_res = create_dynamic_voucher_extraction_request(
             image_file=io.BytesIO(file_bytes),
             voucher_type=voucher_type,
@@ -72,81 +75,39 @@ class BulkScanAPIView(APIView):
                 'error': extraction_res['error'],
             }
 
-        _from_cache = extraction_res.get('from_cache', False)
-        _cache_record_id = extraction_res.get('cache_record_id')
-        raw_text = extraction_res.get('reply', '').strip()
+        # ── Run the Processing Pipeline (Normalization + Validation + Cache Update) ──
+        from core.processing_engine import run_invoice_processing_pipeline
+        pipeline_res = run_invoice_processing_pipeline(file_hash, tenant_id)
 
-        if raw_text.startswith('```'):
-            match = _re.search(r'\{[\s\S]*\}', raw_text)
-            if match:
-                raw_text = match.group(0)
+        if not pipeline_res:
+            return {
+                'file_name': file_name,
+                'vendor_status': 'ERROR',
+                'error': 'Pipeline processing failed',
+            }
 
-        try:
-            extracted_data = json.loads(raw_text)
-        except json.JSONDecodeError:
-            match = _re.search(r'\{[\s\S]*\}', raw_text)
-            if match:
-                extracted_data = json.loads(match.group(0))
-            else:
-                raise ValueError("Failed to parse AI response as JSON")
-
-        # ── Parse invoice data ───────────────────────────────────────────────
-        if extracted_data:
-            invoice_data = extracted_data.get('invoice',
-                extracted_data.get('header',
-                    extracted_data.get('data', extracted_data)
-                )
-            )
-            if isinstance(invoice_data, list):
-                invoice_data = invoice_data[0] if invoice_data else {}
-            if not isinstance(invoice_data, dict):
-                invoice_data = {}
-        else:
-            invoice_data = {}
-
-        # ── Vendor Detection (unchanged logic) ───────────────────────────────
-        vendor_name = (invoice_data.get('Vendor Name') or '').strip()
-        gstin = (invoice_data.get('GSTIN') or '').strip()
-
-        vendor_status = 'MISSING'
-        vendor_id = None
-
-        if gstin:
-            gst_record = VendorMasterGSTDetails.objects.filter(
-                tenant_id=tenant_id,
-                gstin__iexact=gstin
-            ).select_related('vendor_basic_detail').first()
-            if gst_record:
-                vendor_status = 'FOUND'
-                vendor_id = gst_record.vendor_basic_detail.id
-                vendor_name = gst_record.vendor_basic_detail.vendor_name
-
-        if vendor_status == 'MISSING' and vendor_name:
-            vendor = VendorMasterBasicDetail.objects.filter(
-                tenant_id=tenant_id,
-                vendor_name__iexact=vendor_name
-            ).first()
-            if vendor:
-                vendor_status = 'FOUND'
-                vendor_id = vendor.id
-                vendor_name = vendor.vendor_name
+        extracted_data = pipeline_res['extracted_data']
+        invoice_header = extracted_data.get('invoice', {})
+        v_status = pipeline_res['status']
+        v_id = pipeline_res.get('vendor_id')
 
         return {
             'file_name': file_name,
-            'vendor_status': vendor_status,
-            'vendor_id': vendor_id,
-            'vendor_name': vendor_name,
-            'gstin': gstin,
-            'invoice_number': invoice_data.get('Supplier Invoice No') or invoice_data.get('Sales Invoice No.'),
-            'invoice_date': invoice_data.get('Voucher Date') or invoice_data.get('Date'),
-            'total_amount': invoice_data.get('Grand Total') or (invoice_data.get('summary_totals') or {}).get('Grand Total'),
-            'address': invoice_data.get('Bill From - Address Line 1', ''),
-            'city': invoice_data.get('Bill From - City', ''),
-            'state': invoice_data.get('Bill From - State', ''),
-            'branch': invoice_data.get('Branch', ''),
+            'file_hash': file_hash,
+            'vendor_status': 'FOUND' if v_status in ['READY', 'FOUND', 'RESOLVED'] else 'MISSING',
+            'vendor_id': v_id,
+            'vendor_name': invoice_header.get('Vendor Name') or invoice_header.get('vendor_name'),
+            'gstin': invoice_header.get('GSTIN') or invoice_header.get('vendor_gstin'),
+            'invoice_number': invoice_header.get('Supplier Invoice No') or invoice_header.get('invoice_number'),
+            'invoice_date': invoice_header.get('Voucher Date') or invoice_header.get('invoice_date'),
+            'total_amount': invoice_header.get('Total Invoice Value') or invoice_header.get('Grand Total') or invoice_header.get('total_amount'),
+            'address': invoice_header.get('Bill From - Address Line 1', ''),
+            'state': invoice_header.get('Bill From - State', ''),
+            'branch': invoice_header.get('Branch', ''),
             'extracted_data': extracted_data,
-            'from_cache': _from_cache,
-            'cache_record_id': _cache_record_id,
+            'status': v_status,
+            'from_cache': extraction_res.get('from_cache', False),
+            'cache_record_id': extraction_res.get('cache_record_id'),
         }
 
     def post(self, request):

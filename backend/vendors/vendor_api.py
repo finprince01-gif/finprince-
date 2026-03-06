@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 
 from .models import Vendor
 from .vendor_serializers import (
@@ -26,7 +26,8 @@ from .models import (
     VendorMasterGSTDetails,
     VendorMasterTDS,
     VendorMasterBanking,
-    VendorMasterTerms
+    VendorMasterTerms,
+    VendorMasterProductService
 )
 
 
@@ -510,12 +511,11 @@ class PurchaseVendorCreateView(APIView):
 
     def get_tenant_id(self):
         user = self.request.user
-        if hasattr(user, 'tenant_id'):
+        if hasattr(user, 'tenant_id') and user.tenant_id:
             return user.tenant_id
         elif hasattr(user, 'tenant') and hasattr(user.tenant, 'tenant_id'):
             return user.tenant.tenant_id
-        else:
-            return getattr(user, 'id', 'default_tenant')
+        return None
             
     def get_username(self):
         user = self.request.user
@@ -534,115 +534,135 @@ class PurchaseVendorCreateView(APIView):
         state = request.data.get('state', '').strip()
         supplier_items = request.data.get('supplier_items', [])
         
-        # Check uniqueness of GSTIN
+        # Step 1: Pre-creation Validation (Branch-based rules)
+        from .vendor_validation_logic import validate_vendor
+        val_result = validate_vendor(
+            tenant_id=tenant_id,
+            vendor_name=vendor_name,
+            gstin=gstin,
+            branch=branch
+        )
+
+        if val_result['status'] == 'FOUND':
+            # Rule 1: Exact Duplicate (Name + GSTIN + Branch match)
+            # We treat this as "CREATED" to maintain idempotency in the creation flow
+            return Response({
+                "status": "CREATED",
+                "vendor_id": val_result['vendor_id'],
+                "message": val_result['message']
+            }, status=status.HTTP_200_OK)
+            
+        elif val_result['status'] == 'GSTIN_CONFLICT':
+            # Rule 4: GSTIN matches but Name is different
+            return Response({
+                "status": "VALIDATION_WARNING",
+                "message": val_result['message'],
+                "vendor_id": val_result['vendor_id']
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Rule 2 & 3: Allowed to continue (val_result['status'] == 'NOT_FOUND')
+        
+        # Cleanup orphaned GST records for this GSTIN if any (to prevent UNIQUE constraints failure if we create a new link)
         if gstin:
-            # Check if this GSTIN already exists for the tenant
-            existing_gst = VendorMasterGSTDetails.objects.filter(tenant_id=tenant_id, gstin__iexact=gstin).first()
-            if existing_gst:
-                if existing_gst.vendor_basic_detail:
-                    # 1. If it exists and is linked to a vendor, just return that vendor.
-                    # This makes the operation idempotent and solves the "already exists" error for the user.
-                    return Response({
-                        "status": "CREATED",
-                        "vendor_id": existing_gst.vendor_basic_detail.id,
-                        "message": "Vendor already exists with this GSTIN."
-                    }, status=status.HTTP_200_OK)
-                else:
-                    # 2. If it's an "orphaned" record (exists but has no master vendor detail), 
-                    # delete it so we can create a fresh, clean link.
-                    existing_gst.delete()
+            VendorMasterGSTDetails.objects.filter(
+                tenant_id=tenant_id, 
+                gstin__iexact=gstin, 
+                vendor_basic_detail__isnull=True
+            ).delete()
                 
         # Vendor Master Basic Detail requires some mandatory fields (email/phone)
         # If not provided, we add placeholder values.
+        tenant_prefix = str(tenant_id)[:5] if tenant_id else "unknown"
         vendor_data = {
             "vendor_name": vendor_name,
             "pan_no": gstin[2:12] if gstin and len(gstin) >= 15 else None,
-            "email": f"pending_{tenant_id[:5]}@example.com",
+            "email": f"pending_{tenant_prefix}@example.com",
             "contact_no": "+910000000000",
             "vendor_category": "Supplier",
         }
         
         try:
-            vendor = VendorBasicDetailDatabase.create_vendor_basic_detail(
-                tenant_id=tenant_id,
-                vendor_data=vendor_data,
-                created_by=username
-            )
-            
-            # If a GSTIN was found, also create the GST Details record attached to it.
-            if gstin:
-                VendorMasterGSTDetails.objects.create(
+            with transaction.atomic():
+                vendor = VendorBasicDetailDatabase.create_vendor_basic_detail(
                     tenant_id=tenant_id,
+                    vendor_data=vendor_data,
+                    created_by=username
+                )
+                
+                # Use the tenant_id that was actually used for the vendor
+                effective_tenant_id = vendor.tenant_id
+                
+                # If a GSTIN was found, also create the GST Details record attached to it.
+                if gstin:
+                    VendorMasterGSTDetails.objects.create(
+                        tenant_id=effective_tenant_id,
+                        vendor_basic_detail=vendor,
+                        gstin=gstin,
+                        legal_name=vendor_name,
+                        gst_state=state,
+                        reference_name=branch if branch else "Main Branch",
+                        branch_address=address
+                    )
+
+                # Generate default workflow records to complete Vendor Portal table instantiation
+                # 1. TDS & Statutory
+                VendorMasterTDS.objects.create(
+                    tenant_id=effective_tenant_id,
                     vendor_basic_detail=vendor,
-                    gstin=gstin,
-                    legal_name=vendor_name,
-                    gst_state=state,
-                    reference_name=branch if branch else "Main Branch",
-                    branch_address=address
+                    created_by=username
+                )
+                
+                # 2. Banking Info
+                VendorMasterBanking.objects.create(
+                    tenant_id=effective_tenant_id,
+                    vendor_basic_detail=vendor,
+                    bank_account_no="",
+                    bank_name="",
+                    ifsc_code="",
+                    created_by=username
+                )
+                
+                # 3. Terms & Conditions
+                VendorMasterTerms.objects.create(
+                    tenant_id=effective_tenant_id,
+                    vendor_basic_detail=vendor,
+                    delivery_terms="",
+                    warranty_guarantee_details="",
+                    force_majeure="",
+                    dispute_redressal_terms="",
+                    created_by=username
                 )
 
-            # Generate default workflow records to complete Vendor Portal table instantiation
-            # 1. TDS & Statutory
-            VendorMasterTDS.objects.create(
-                tenant_id=tenant_id,
-                vendor_basic_detail=vendor,
-                created_by=username
-            )
-            
-            # 2. Banking Info
-            VendorMasterBanking.objects.create(
-                tenant_id=tenant_id,
-                vendor_basic_detail=vendor,
-                bank_account_no="",
-                bank_name="",
-                ifsc_code="",
-                created_by=username
-            )
-            
-            # 3. Terms & Conditions
-            VendorMasterTerms.objects.create(
-                tenant_id=tenant_id,
-                vendor_basic_detail=vendor,
-                delivery_terms="",
-                warranty_guarantee_details="",
-                force_majeure="",
-                dispute_redressal_terms="",
-                created_by=username
-            )
-
-            # 4. Product Services (Supplier Items)
-            if supplier_items:
-                # Map frontend field names to backend JSON structure
-                # Frontend: [{supplierItemCode, supplierItemName, hsnSac}]
-                # Backend: [{"hsn_sac_code": "", "item_code": "", "item_name": "", "supplier_item_code": "", "supplier_item_name": ""}]
-                mapped_items = []
-                for item in supplier_items:
-                    mapped_items.append({
-                        "hsn_sac_code": item.get("hsnSac", ""),
-                        "item_code": "", # Internal item code mapping can happen later
-                        "item_name": "", 
-                        "supplier_item_code": item.get("supplierItemCode", ""),
-                        "supplier_item_name": item.get("supplierItemName", "")
-                    })
+                # 4. Product Services (Supplier Items)
+                # Filter out items that are completely empty
+                valid_items = []
+                if supplier_items:
+                    for item in supplier_items:
+                        s_name = item.get("supplierItemName", "").strip()
+                        s_code = item.get("supplierItemCode", "").strip()
+                        hsn = item.get("hsnSacCode", item.get("hsnSac", "")).strip()
+                        
+                        # At least name or code should exist
+                        if s_name or s_code:
+                            valid_items.append({
+                                "hsn_sac_code": hsn,
+                                "item_code": "", # Internal item code mapping can happen later
+                                "item_name": "", 
+                                "supplier_item_code": s_code,
+                                "supplier_item_name": s_name
+                            })
                 
                 VendorMasterProductService.objects.create(
-                    tenant_id=tenant_id,
+                    tenant_id=effective_tenant_id,
                     vendor_basic_detail=vendor,
-                    items=mapped_items,
-                    created_by=username
-                )
-            else:
-                VendorMasterProductService.objects.create(
-                    tenant_id=tenant_id,
-                    vendor_basic_detail=vendor,
-                    items=[],
+                    items=valid_items,
                     created_by=username
                 )
 
-            return Response({
-                "status": "CREATED",
-                "vendor_id": vendor.id
-            }, status=status.HTTP_201_CREATED)
+                return Response({
+                    "status": "CREATED",
+                    "vendor_id": vendor.id
+                }, status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 

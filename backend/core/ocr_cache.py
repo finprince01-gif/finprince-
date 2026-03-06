@@ -53,7 +53,8 @@ def get_cached_ocr(file_hash: str, tenant_id: str) -> dict | None:
             cursor.execute(
                 """
                 SELECT id, file_hash, file_path, ocr_raw_text,
-                       extracted_data, created_at, expires_at, upload_session_id, processed, validation_status, matched_by, conflict_message
+                       extracted_data, created_at, expires_at, upload_session_id, processed, 
+                       validation_status, matched_by, conflict_message, vendor_id, voucher_id
                 FROM   invoice_ocr_temp
                 WHERE  file_hash  = %s
                   AND  tenant_id  = %s
@@ -69,7 +70,9 @@ def get_cached_ocr(file_hash: str, tenant_id: str) -> dict | None:
 
         col_names = [
             "id", "file_hash", "file_path", "ocr_raw_text",
-            "extracted_data", "created_at", "expires_at", "upload_session_id", "processed", "validation_status"
+            "extracted_data", "created_at", "expires_at", "upload_session_id", 
+            "processed", "validation_status", "matched_by", "conflict_message", 
+            "vendor_id", "voucher_id"
         ]
         record = dict(zip(col_names, row))
 
@@ -101,6 +104,7 @@ def save_ocr_cache(
     validation_status: str = 'PENDING',
     matched_by: str = None,
     conflict_message: str = None,
+    vendor_id: int = None,
 ) -> int | None:
     """
     Persist an OCR result into invoice_ocr_temp.
@@ -118,8 +122,8 @@ def save_ocr_cache(
                 """
                 INSERT INTO invoice_ocr_temp
                     (file_hash, tenant_id, upload_session_id, file_path, ocr_raw_text, extracted_data,
-                     created_at, expires_at, processed, validation_status, matched_by, conflict_message)
-                VALUES (%s, %s, %s, %s, %s, %s, NOW(), %s, FALSE, %s, %s, %s)
+                     created_at, expires_at, processed, validation_status, matched_by, conflict_message, vendor_id)
+                VALUES (%s, %s, %s, %s, %s, %s, NOW(), %s, FALSE, %s, %s, %s, %s)
                 """,
                 [
                     file_hash,
@@ -132,6 +136,7 @@ def save_ocr_cache(
                     validation_status,
                     matched_by,
                     conflict_message,
+                    vendor_id,
                 ],
             )
             record_id = cursor.lastrowid
@@ -184,7 +189,8 @@ def update_staged_invoice_extracted_data(
     extracted_data: dict, 
     validation_status: str = None,
     matched_by: str = None,
-    conflict_message: str = None
+    conflict_message: str = None,
+    vendor_id: int = None
 ) -> bool:
     """
     Update the extracted_data JSON for a staged invoice identified by file_hash + tenant_id.
@@ -208,13 +214,14 @@ def update_staged_invoice_extracted_data(
                     SET    extracted_data = %s,
                            validation_status = %s,
                            matched_by = %s,
-                           conflict_message = %s
+                           conflict_message = %s,
+                           vendor_id = %s
                     WHERE  file_hash  = %s
                       AND  tenant_id  = %s
                       AND  expires_at > NOW()
                       AND  processed  = FALSE
                     """,
-                    [extracted_json, validation_status, matched_by, conflict_message, file_hash, tenant_id],
+                    [extracted_json, validation_status, matched_by, conflict_message, vendor_id, file_hash, tenant_id],
                 )
             else:
                 cursor.execute(
@@ -302,7 +309,8 @@ def get_all_staged_invoices(tenant_id: str, upload_session_id: str = None) -> li
         with connection.cursor() as cursor:
             query = """
                 SELECT id, file_hash, file_path, ocr_raw_text,
-                       extracted_data, created_at, expires_at, upload_session_id, processed, validation_status, matched_by, conflict_message
+                       extracted_data, created_at, expires_at, upload_session_id, processed, 
+                       validation_status, matched_by, conflict_message, vendor_id, voucher_id
                 FROM   invoice_ocr_temp
                 WHERE  tenant_id  = %s
                   AND  expires_at > NOW()
@@ -320,7 +328,8 @@ def get_all_staged_invoices(tenant_id: str, upload_session_id: str = None) -> li
         col_names = [
             "id", "file_hash", "file_path", "ocr_raw_text",
             "extracted_data", "created_at", "expires_at", "upload_session_id", 
-            "processed", "validation_status", "matched_by", "conflict_message"
+            "processed", "validation_status", "matched_by", "conflict_message",
+            "vendor_id", "voucher_id"
         ]
         
         results = []
@@ -362,22 +371,36 @@ def remove_staged_invoice(file_hash: str, tenant_id: str) -> bool:
         return False
 
 
-def mark_invoice_as_processed(file_hash: str, tenant_id: str) -> bool:
+def mark_invoice_as_processed(file_hash: str, tenant_id: str, voucher_id: int = None) -> bool:
     """
     Mark a staged invoice as processed after voucher creation.
+    If voucher_id is provided, store it and update status to 'Voucher Created'.
     """
     from django.db import connection
     try:
         with connection.cursor() as cursor:
-            cursor.execute(
-                """
-                UPDATE invoice_ocr_temp
-                SET    processed = TRUE
-                WHERE  file_hash = %s
-                  AND  tenant_id = %s
-                """,
-                [file_hash, tenant_id]
-            )
+            if voucher_id:
+                cursor.execute(
+                    """
+                    UPDATE invoice_ocr_temp
+                    SET    processed = TRUE,
+                           voucher_id = %s,
+                           validation_status = 'Voucher Created'
+                    WHERE  file_hash = %s
+                      AND  tenant_id = %s
+                    """,
+                    [voucher_id, file_hash, tenant_id]
+                )
+            else:
+                cursor.execute(
+                    """
+                    UPDATE invoice_ocr_temp
+                    SET    processed = TRUE
+                    WHERE  file_hash = %s
+                      AND  tenant_id = %s
+                    """,
+                    [file_hash, tenant_id]
+                )
             return cursor.rowcount > 0
     except Exception as exc:
         logger.warning("ocr_cache.mark_invoice_as_processed error: %s", exc)

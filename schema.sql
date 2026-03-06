@@ -2743,6 +2743,8 @@ CREATE TABLE IF NOT EXISTS invoice_ocr_temp (
     validation_status VARCHAR(20)   DEFAULT 'PENDING',  -- FOUND, NOT_FOUND, GSTIN_CONFLICT, etc.
     matched_by      VARCHAR(50)     DEFAULT NULL,       -- GSTIN, Name, etc.
     conflict_message TEXT           DEFAULT NULL,       -- Why it failed validation
+    vendor_id       BIGINT          DEFAULT NULL,       -- Linked vendor ID
+    voucher_id      BIGINT          DEFAULT NULL,       -- Finalized voucher ID
     processed       BOOLEAN         DEFAULT FALSE,      -- Marked TRUE once voucher is created
     created_at      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     expires_at      DATETIME        NOT NULL,           -- created_at + 15 days
