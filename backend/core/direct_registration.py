@@ -25,6 +25,10 @@ class DirectRegisterView(APIView):
         # Validate input data
         data = request.data
         
+        # Debug: log incoming registration data
+        logger.info(f"📩 Registration request data keys: {list(data.keys())}")
+        logger.info(f"📩 state received: '{data.get('state', 'NOT_PRESENT')}'")
+
         # Basic validation
         required_fields = ['username', 'password', 'company_name', 'selected_plan']
         for field in required_fields:
@@ -39,6 +43,7 @@ class DirectRegisterView(APIView):
         selected_plan = data['selected_plan']
         email = data.get('email', '')
         phone = data.get('phone', '')
+        state = data.get('state', '')
         
         # Check if username already exists
         if User.objects.filter(username=username).exists():
@@ -89,6 +94,7 @@ class DirectRegisterView(APIView):
                     password=password_hash,
                     company_name=company_name,
                     phone=phone,
+                    state=state,
                     phone_verified=True,  # No OTP, so mark as verified
                     selected_plan=selected_plan,
                     tenant_id=tenant_uuid,

@@ -46,6 +46,7 @@ class DirectRegisterView(APIView):
                 'password': data['password'],
                 'company_name': data['company_name'],
                 'phone': data.get('phone', ''),
+                'state': data.get('state', ''),
                 'selected_plan': data['selected_plan'],
                 # Logo file handling not currently in register_user, but can be added later
             }

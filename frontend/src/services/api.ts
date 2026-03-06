@@ -669,6 +669,7 @@ class ApiService {
         email?: string;
         password: string;
         phone: string;
+        state: string;
         selectedPlan: string;
         logoFile?: File | null;
     }) {
@@ -680,6 +681,7 @@ class ApiService {
             formData.append('email', userData.email || '');
             formData.append('password', userData.password);
             formData.append('phone', userData.phone);
+            formData.append('state', userData.state);
             formData.append('selected_plan', userData.selectedPlan);
             formData.append('logo', userData.logoFile);
             data = await httpClient.postFormData('/api/auth/register/', formData);
@@ -690,6 +692,7 @@ class ApiService {
                 email: userData.email,
                 password: userData.password,
                 phone: userData.phone,
+                state: userData.state,
                 selected_plan: userData.selectedPlan,
             });
         }

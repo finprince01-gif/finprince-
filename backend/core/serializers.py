@@ -105,8 +105,8 @@ class UserSignupSerializer(serializers.ModelSerializer):
         return user
 
 class CompanySettingsSerializer(serializers.ModelSerializer):
-    name = serializers.CharField(source='company_name', required=False)
-    address = serializers.CharField(source='address_line1', allow_blank=True, required=False)
+    name = serializers.CharField(source='company_name', allow_blank=True, allow_null=True, required=False)
+    address = serializers.CharField(source='address_line1', allow_blank=True, allow_null=True, required=False)
     logo = serializers.CharField(source='logo_path', read_only=True)
     
     class Meta:

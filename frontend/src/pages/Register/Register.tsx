@@ -8,6 +8,7 @@
 import React, { useState, useEffect } from "react";
 import "./Register.css";
 import { apiService } from "../../services";
+import { INDIA_STATE_CODES } from "../../utils/gstConstants";
 
 interface SignupPageProps {
   onSwitchToLogin: () => void;
@@ -20,6 +21,7 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
   const [companyName, setCompanyName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [state, setState] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -47,7 +49,7 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
     e.preventDefault();
     setError('');
 
-    if (!username || !companyName || !email || !phone || !password || !confirmPassword) {
+    if (!username || !companyName || !email || !phone || !state || !password || !confirmPassword) {
       setError('Please fill in all required fields.');
       return;
     }
@@ -89,6 +91,7 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
         email,
         password,
         phone,
+        state,
         selectedPlan,
         logoFile
       });
@@ -198,6 +201,18 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onBack }) => {
               <div className="form-group">
                 <label className="form-label" htmlFor="phone">PHONE NUMBER</label>
                 <input id="phone" type="tel" required className="form-input" placeholder="+1 234 567 890" value={phone} onChange={(e) => setPhone(e.target.value)} />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="state">STATE</label>
+                <select id="state" required className="form-input" value={state} onChange={(e) => setState(e.target.value)}>
+                  <option value="">Select a State</option>
+                  {INDIA_STATE_CODES.map((st) => (
+                    <option key={st.code} value={st.name}>
+                      {st.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="form-group">
