@@ -20,7 +20,7 @@ import { VOUCHER_COLUMN_SCHEMAS } from '../services/mappingEngine';
 // ─────────────────────────────────────────────────────────────────────────────
 
 type VendorStatus = 'FOUND' | 'MISSING' | 'RESOLVED' | 'ERROR';
-type ValidationStatus = 'READY' | 'VENDOR_MISSING' | 'VALIDATION_FAILED' | 'EXTRACTION_FAILED' | 'PENDING' | 'RESOLVED' | 'FOUND' | 'NOT_FOUND' | 'GSTIN_CONFLICT' | 'ERROR';
+type ValidationStatus = 'READY' | 'VENDOR_MISSING' | 'VALIDATION_FAILED' | 'EXTRACTION_FAILED' | 'PENDING' | 'RESOLVED' | 'FOUND' | 'NOT_FOUND' | 'GSTIN_CONFLICT' | 'ERROR' | 'VOUCHER_CREATED';
 
 interface ScanResult {
     id: number;
@@ -78,6 +78,7 @@ const StatusBadge: React.FC<{ status: ValidationStatus, title?: string }> = ({ s
         EXTRACTION_FAILED: { label: 'Scan Failed', cls: 'bg-red-100 text-red-800 border border-red-300', icon: '❌' },
         GSTIN_CONFLICT: { label: 'Conflict', cls: 'bg-red-100 text-red-800 border border-red-300', icon: '⚠️' },
         PENDING: { label: '...', cls: 'bg-gray-100 text-gray-600 border border-gray-200', icon: '⏳' },
+        VOUCHER_CREATED: { label: 'Voucher Created', cls: 'bg-indigo-100 text-indigo-800 border border-indigo-300', icon: '🧾' },
         ERROR: { label: 'Error', cls: 'bg-red-100 text-red-800 border border-red-300', icon: '❌' },
     };
     const { label, cls, icon } = cfg[status as string] || cfg.ERROR;
@@ -662,6 +663,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                     else if (backendStatus === 'NOT_FOUND' || backendStatus === 'Vendor Missing') vStatus = 'VENDOR_MISSING';
                     else if (backendStatus === 'GSTIN_CONFLICT') vStatus = 'GSTIN_CONFLICT';
                     else if (backendStatus === 'RESOLVED') vStatus = 'RESOLVED';
+                    else if (backendStatus === 'Voucher Created' || backendStatus === 'VOUCHER_CREATED') vStatus = 'VOUCHER_CREATED';
                     else if (backendStatus === 'ERROR') vStatus = 'EXTRACTION_FAILED';
 
                     return {
@@ -705,9 +707,27 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
         try {
             const avgRes = await apiService.getExtractionAverageTime();
             const avgTime = avgRes?.average_time_per_invoice || 3.85;
-            setEstimatedExtractionTime(avgTime * selectedFiles.length);
+
+            let estimatedTasks = 0;
+            selectedFiles.forEach(f => {
+                if (f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')) {
+                    estimatedTasks += Math.max(1, Math.ceil(f.size / 100000)); // Estimate ~100KB per page
+                } else {
+                    estimatedTasks += 1;
+                }
+            });
+
+            // Backend uses 5 parallel threads for the chunks
+            const batchCount = Math.ceil(estimatedTasks / 5);
+            setEstimatedExtractionTime(avgTime * batchCount);
         } catch (error) {
-            setEstimatedExtractionTime(3.85 * selectedFiles.length);
+            let estimatedTasks = 0;
+            selectedFiles.forEach(f => {
+                const isPdf = f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf');
+                estimatedTasks += isPdf ? Math.max(1, Math.ceil(f.size / 100000)) : 1;
+            });
+            const batchCount = Math.ceil(estimatedTasks / 5);
+            setEstimatedExtractionTime(3.85 * batchCount);
         }
 
         try {
@@ -875,7 +895,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
 
     // ── STEP 3 — FINALIZE ────────────────────────────────────────────────────
 
-    const canFinalize = scanResults.some(r => ['READY', 'FOUND', 'RESOLVED'].includes(r.validationStatus));
+    const canFinalize = scanResults.some(r => ['READY', 'FOUND', 'RESOLVED'].includes(r.validationStatus) && r.validationStatus !== 'VOUCHER_CREATED');
 
     const handleFinalize = async () => {
         if (!canFinalize) {
@@ -883,8 +903,9 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             return;
         }
 
-        const validCount = scanResults.filter(r => ['READY', 'FOUND', 'RESOLVED'].includes(r.validationStatus)).length;
-        const total = scanResults.length;
+        const readyRows = scanResults.filter(r => ['READY', 'FOUND', 'RESOLVED'].includes(r.validationStatus) && r.validationStatus !== 'VOUCHER_CREATED');
+        const validCount = readyRows.length;
+        const total = scanResults.filter(r => r.validationStatus !== 'VOUCHER_CREATED').length;
 
         if (validCount < total) {
             if (!window.confirm(`Only ${validCount} of ${total} invoices are ready.\n\nReady invoices will be uploaded.\nProblematic invoices will safely remain here so you can fix and retry them without stopping the batch.\n\nContinue?`)) {
@@ -932,6 +953,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     const readyCount = scanResults.filter(r => r.validationStatus === 'READY' || r.validationStatus === 'FOUND').length;
     const errorCount = scanResults.filter(r => r.validationStatus === 'VALIDATION_FAILED' || r.validationStatus === 'EXTRACTION_FAILED' || r.validationStatus === 'ERROR').length;
     const pendingCount = scanResults.filter(r => r.validationStatus === 'PENDING').length;
+    const vouchersCreatedCount = scanResults.filter(r => r.validationStatus === 'VOUCHER_CREATED').length;
 
     const attentionNeededCount = scanResults.filter(r => !['READY', 'FOUND', 'RESOLVED'].includes(r.validationStatus)).length;
 
@@ -969,7 +991,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 const supplier_items = rawItems.map((it: any) => ({
                     supplierItemCode: it['Item Code'] || it['Part No'] || '',
                     supplierItemName: it['Item Name'] || it['Description'] || '',
-                    hsnSac: it['HSN/SAC'] || it['HSN Code'] || ''
+                    hsnSacCode: it['HSN/SAC'] || it['HSN Code'] || ''
                 }));
 
                 return (
@@ -1256,7 +1278,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                         {/* ────── STEP: REVIEW ────── */}
                         {step === 'review' && (
                             <div className="p-4 space-y-4">
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 gap-4">
                                     <div
                                         onClick={() => setFilterStatus('pending')}
                                         className={`p-4 rounded-2xl border-2 text-center font-bold cursor-pointer transition-all shadow-lg ${filterStatus === 'pending'
@@ -1272,21 +1294,6 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                             {missingCount > 0 ? `${missingCount} missing vendors` : ''}
                                             {conflictCount > 0 ? `${missingCount > 0 ? ' & ' : ''}${conflictCount} conflicts` : ''}
                                             {attentionNeededCount === 0 && 'All clear!'}
-                                        </div>
-                                    </div>
-
-                                    <div
-                                        onClick={() => setFilterStatus('ready')}
-                                        className={`p-4 rounded-2xl border-2 text-center font-bold cursor-pointer transition-all shadow-lg ${filterStatus === 'ready'
-                                            ? 'border-emerald-500 bg-emerald-50 text-emerald-700 ring-4 ring-emerald-100'
-                                            : 'border-emerald-100 bg-emerald-50/50 text-emerald-600 hover:border-emerald-300'
-                                            }`}
-                                    >
-                                        <div className="text-2xl mb-1">✅</div>
-                                        <div className="text-3xl">{readyCount + resolvedCount}</div>
-                                        <div className="text-[10px] uppercase opacity-70 tracking-wider">Ready for Upload</div>
-                                        <div className="text-[9px] font-medium text-emerald-500 mt-1 italic leading-tight">
-                                            {(readyCount + resolvedCount) > 0 ? 'Verified & ready to save' : 'No items ready yet'}
                                         </div>
                                     </div>
                                 </div>
@@ -1338,6 +1345,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                     onChange={toggleSelectAll}
                                                 />
                                             </th>
+                                            <th className="px-3 py-3 text-center w-10">S.No</th>
                                             <th className="px-3 py-3 text-left">File Name</th>
                                             <th className="px-3 py-3 text-left">Inv No</th>
                                             <th className="px-3 py-3 text-left">Date</th>
@@ -1370,6 +1378,9 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                                 onChange={() => toggleSelectRow(row.file_hash)}
                                                                 onClick={e => e.stopPropagation()}
                                                             />
+                                                        </td>
+                                                        <td className="px-3 py-3 text-center text-xs font-bold text-gray-500">
+                                                            {idx + 1}
                                                         </td>
                                                         <td className="px-3 py-3">
                                                             <div className="flex flex-col">
@@ -1404,6 +1415,13 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                                     <span className="text-red-500 text-[10px] uppercase font-bold text-center px-1" title={row.conflictMessage || "Extraction failed"}>Retry</span>
                                                                 ) : row.validationStatus === 'PENDING' ? (
                                                                     <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent animate-spin rounded-full" />
+                                                                ) : row.validationStatus === 'VOUCHER_CREATED' ? (
+                                                                    <div className="flex flex-col items-center">
+                                                                        <div className="w-5 h-5 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center">
+                                                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                                                        </div>
+                                                                        <span className="text-[8px] font-black text-indigo-600 uppercase mt-0.5 whitespace-nowrap">Voucher Created</span>
+                                                                    </div>
                                                                 ) : (
                                                                     <div className="w-5 h-5 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center">
                                                                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>

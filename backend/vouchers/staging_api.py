@@ -88,7 +88,9 @@ class OCRStagingView(views.APIView):
                 'status': inv.get('validation_status', 'PENDING'), # Use stored status
                 'validation_status': inv.get('validation_status', 'PENDING'), # Explicitly for new UI
                 'extracted_data': extracted,
-                'created_at': inv['created_at']
+                'created_at': inv['created_at'],
+                'vendor_id': inv.get('vendor_id'),
+                'voucher_id': inv.get('voucher_id'),
             })
 
         return Response(results)
@@ -220,61 +222,78 @@ class OCRStagingView(views.APIView):
         ]
         all_columns = HEADER_FIELDS + LINE_ITEM_FIELDS
 
-        duplicate_count = 0
+        import concurrent.futures
+        import traceback
+
+        # ── FLATTEN TASKS ──────────────────────────────
+        tasks = []
         for uploaded_file in files:
             try:
                 file_bytes = uploaded_file.read()
                 uploaded_file.seek(0)
 
-                # ── MULTI-INVOICE PDF SPLITTING (preprocessing layer) ────────
                 if self._is_pdf(uploaded_file) and len(file_bytes) > 0:
-                    from core.pdf_splitter import split_pdf_into_invoice_files, cleanup_temp_pdf
-
+                    from core.pdf_splitter import split_pdf_into_invoice_files
+                    
                     split_results = split_pdf_into_invoice_files(
                         pdf_bytes=file_bytes,
                         original_filename=uploaded_file.name,
                     )
-
+                    
                     for inv_number, tmp_path, group in split_results:
                         try:
                             with open(tmp_path, 'rb') as fh:
                                 split_bytes = fh.read()
-
-                            if len(split_results) > 1:
-                                label = f"{uploaded_file.name} [Inv {inv_number}]"
-                            else:
-                                label = uploaded_file.name
-
-                            is_dup = self._process_single_invoice(
-                                request,
-                                file_bytes=split_bytes,
-                                file_path=label,
-                                mime_type='application/pdf',
-                                tenant_id=tenant_id,
-                                user_id=user_id,
-                                upload_session_id=upload_session_id,
-                                all_columns=all_columns,
-                            )
-                            if is_dup: duplicate_count += 1
-                        finally:
+                            
+                            label = f"{uploaded_file.name} [Inv {inv_number}]" if len(split_results) > 1 else uploaded_file.name
+                            tasks.append({
+                                'file_bytes': split_bytes,
+                                'file_path': label,
+                                'mime_type': 'application/pdf',
+                                'tmp_path': tmp_path
+                            })
+                        except Exception as e:
+                            logger.error(f"Error reading split {tmp_path}: {e}")
+                            from core.pdf_splitter import cleanup_temp_pdf
                             cleanup_temp_pdf(tmp_path)
-
                 else:
-                    # ── Non-PDF (images) → existing single-file flow ─────────
-                    is_dup = self._process_single_invoice(
-                        request,
-                        file_bytes=file_bytes,
-                        file_path=uploaded_file.name,
-                        mime_type=uploaded_file.content_type or 'application/octet-stream',
-                        tenant_id=tenant_id,
-                        user_id=user_id,
-                        upload_session_id=upload_session_id,
-                        all_columns=all_columns,
-                    )
-                    if is_dup: duplicate_count += 1
-
+                    tasks.append({
+                        'file_bytes': file_bytes,
+                        'file_path': uploaded_file.name,
+                        'mime_type': uploaded_file.content_type or 'application/octet-stream',
+                        'tmp_path': None
+                    })
             except Exception as exc:
-                logger.exception("Error handling uploaded file %s", uploaded_file.name)
+                logger.exception("Error preparing uploaded file %s", uploaded_file.name)
+
+        # ── EXECUTE CONCURRENTLY ───────────────────────
+        def worker(task):
+            from django.db import connection
+            try:
+                is_dup = self._process_single_invoice(
+                    request,
+                    file_bytes=task['file_bytes'],
+                    file_path=task['file_path'],
+                    mime_type=task['mime_type'],
+                    tenant_id=tenant_id,
+                    user_id=user_id,
+                    upload_session_id=upload_session_id,
+                    all_columns=all_columns,
+                )
+                return is_dup
+            except Exception as e:
+                logger.error(f"Worker exception on {task['file_path']}: {e}\n{traceback.format_exc()}")
+                return False
+            finally:
+                if task.get('tmp_path'):
+                    from core.pdf_splitter import cleanup_temp_pdf
+                    cleanup_temp_pdf(task['tmp_path'])
+                connection.close()
+
+        duplicate_count = 0
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            results = list(executor.map(worker, tasks))
+            duplicate_count = sum(1 for is_dup in results if is_dup)
 
         # Return the fresh staged list so the frontend can go straight to Review
         response = self.get(request)
@@ -357,7 +376,8 @@ class OCRStagingView(views.APIView):
                 extracted_data=processed_data, # Save the normalized version
                 validation_status=final_status,
                 matched_by=val_result.get('matched_by'),
-                conflict_message=conflict_msg
+                conflict_message=conflict_msg,
+                vendor_id=val_result.get('vendor_id')
             )
         except Exception as e:
             logger.error(f"Error in manual edit processing: {e}")
@@ -484,11 +504,11 @@ class OCRStagingFinalizeView(views.APIView):
                 with transaction.atomic():
                     serializer = VoucherPurchaseSupplierDetailsSerializer(data=payload, context={'request': request})
                     if serializer.is_valid():
-                        serializer.save(tenant_id=tenant_id)
+                        voucher = serializer.save(tenant_id=tenant_id)
                         summary['created'] += 1
                         processed_hashes.append(inv['file_hash'])
-                        # Mark as processed in DB for duplicate protection
-                        mark_invoice_as_processed(inv['file_hash'], tenant_id)
+                        # Mark as processed in DB and store the voucher reference
+                        mark_invoice_as_processed(inv['file_hash'], tenant_id, voucher_id=voucher.id)
                     else:
                         summary['failed'] += 1
                         summary['errors'].append({'file': inv['file_path'], 'error': serializer.errors})
@@ -498,9 +518,9 @@ class OCRStagingFinalizeView(views.APIView):
                 summary['failed'] += 1
                 summary['errors'].append({'file': inv['file_path'], 'error': str(e)})
 
-        # ── Step 4: Delete ONLY Successfully Processed Invoices for this Session ──
-        if processed_hashes:
-            remove_processed_invoices(processed_hashes, tenant_id, upload_session_id)
+        # No longer deleting processed invoices instantly, to support status progression
+        # if processed_hashes:
+        #    remove_processed_invoices(processed_hashes, tenant_id, upload_session_id)
 
         # ── Step 5: User Message ──────────────────────────────────────────────
         total_unresolved = summary['skipped'] + summary['failed']

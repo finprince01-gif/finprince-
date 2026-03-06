@@ -225,12 +225,14 @@ def run_invoice_processing_pipeline(file_hash, tenant_id):
             extracted_data=processed_data,
             validation_status=final_status,
             matched_by=val_result.get('matched_by'),
-            conflict_message=conflict_msg
+            conflict_message=conflict_msg,
+            vendor_id=val_result.get('vendor_id')
         )
         
         return {
             'success': True,
             'status': final_status,
+            'vendor_id': val_result.get('vendor_id'),
             'extracted_data': processed_data
         }
     except Exception as e:
