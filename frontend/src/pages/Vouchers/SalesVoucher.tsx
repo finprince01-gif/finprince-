@@ -8,7 +8,7 @@ import AddNewCustomerModal from '../../components/AddNewCustomerModal';
 
 import { INDIA_STATE_CODES, GST_INVOICE_TYPES, EXPORT_TYPES } from '../../utils/gstConstants';
 
-import { ExtractedInvoiceData } from '../../types';
+import { ExtractedInvoiceData, CompanyDetails } from '../../types';
 
 interface ItemRow {
     id: number;
@@ -37,9 +37,17 @@ interface SalesVoucherProps {
     isLimitReached?: boolean;
     onLimitReached?: () => void;
     customers?: any[];
+    companyDetails: CompanyDetails;
 }
 
-const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefilledData, isLimitReached, onLimitReached, customers = [] }) => {
+const SalesVoucher: React.FC<SalesVoucherProps> = ({
+    prefilledData,
+    clearPrefilledData,
+    isLimitReached,
+    onLimitReached,
+    customers = [],
+    companyDetails
+}) => {
     const [activeTab, setActiveTab] = useState('invoice');
     const [isIssueSlipModalOpen, setIsIssueSlipModalOpen] = useState(false);
     const [inventoryItems, setInventoryItems] = useState<any[]>([]);
@@ -48,6 +56,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
     const [ledgers, setLedgers] = useState<any[]>([]);
     const [hierarchy, setHierarchy] = useState<any[]>([]);
     const [units, setUnits] = useState<any[]>([]);
+
+
 
     React.useEffect(() => {
         const fetchAllData = async () => {
@@ -162,7 +172,6 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
             setCustomerName(prefilledData.sellerName || ''); // Maps Seller/Party -> Customer Name
             if (prefilledData.gstin) setGstin(prefilledData.gstin);
             if (prefilledData.placeOfSupply) setPlaceOfSupply(prefilledData.placeOfSupply);
-            if (prefilledData.stateType) setStateType(prefilledData.stateType);
             if (prefilledData.invoiceType) setInvoiceType(prefilledData.invoiceType);
             if (prefilledData.currency) setCustomerBillingCurrency(prefilledData.currency);
 
@@ -409,6 +418,9 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
     const [customerBillingCurrency, setCustomerBillingCurrency] = useState('');
     const [customerTcsRate, setCustomerTcsRate] = useState<number>(0); // TCS rate as decimal (e.g. 0.01 for 1%)
     const [customerTdsRate, setCustomerTdsRate] = useState<number>(0); // TDS rate as decimal
+    const [customerGstTdsApplicable, setCustomerGstTdsApplicable] = useState(false);
+    const [customerTdsEnabled, setCustomerTdsEnabled] = useState(false);
+    const [customerTcsEnabled, setCustomerTcsEnabled] = useState(false);
     const [billToAddress1, setBillToAddress1] = useState('');
     const [billToAddress2, setBillToAddress2] = useState('');
     const [billToAddress3, setBillToAddress3] = useState('');
@@ -624,11 +636,25 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
             const tdsSectionName = tdsSection.includes('|') ? tdsSection.split('|')[1] : tdsSection;
             const tdsRateVal = TDS_RATE_MAP[tdsSectionName] ?? 0;
             setCustomerTdsRate(tdsRateVal);
+
+            // ── GST TDS Configuration from Customer Master ──
+            console.log('Customer TDS Data:', {
+                name: val,
+                gst_tds_applicable: customer.gst_tds_applicable,
+                tds_enabled: customer.tds_enabled,
+                tcs_enabled: customer.tcs_enabled
+            });
+            setCustomerGstTdsApplicable(!!customer.gst_tds_applicable);
+            setCustomerTdsEnabled(!!customer.tds_enabled);
+            setCustomerTcsEnabled(!!customer.tcs_enabled);
         } else {
             setTermsConditions('');
             setMasterTermsData(null);
             setCustomerTcsRate(0);
             setCustomerTdsRate(0);
+            setCustomerGstTdsApplicable(false);
+            setCustomerTdsEnabled(false);
+            setCustomerTcsEnabled(false);
         }
     };
 
@@ -694,7 +720,6 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
     const [gstin, setGstin] = useState('');
     const [contact, setContact] = useState('');
     const [taxType, setTaxType] = useState('');
-    const [stateType, setStateType] = useState<'within' | 'other' | 'export'>('within');
     const [exportType, setExportType] = useState('EXWP');
     const [supportingDocument, setSupportingDocument] = useState<File | null>(null);
     const [salesPreviewUrl, setSalesPreviewUrl] = useState<string | null>(null);
@@ -749,6 +774,34 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
             setEcommerceGstin(ledger.gstin);
         }
     };
+
+    // --- TAX HELPERS ---
+    const getPlaceOfSupplyName = (code: string) => {
+        const state = INDIA_STATE_CODES.find(s => s.code === code);
+        return state ? state.name : '';
+    };
+
+    const placeOfSupplyName = useMemo(() => getPlaceOfSupplyName(placeOfSupply), [placeOfSupply]);
+
+    const isTaxHidden = useMemo(() => {
+        return invoiceType === 'SEZ without payment' || invoiceType === 'Export without payment';
+    }, [invoiceType]);
+
+    const isCessHidden = useMemo(() => {
+        return invoiceType === 'Regular' || invoiceType === 'SEZ with payment' || invoiceType === 'Export with payment' || invoiceType === 'Deemed Export' || isTaxHidden;
+    }, [invoiceType, isTaxHidden]);
+
+    const stateType = useMemo(() => {
+        const lowerType = invoiceType.toLowerCase();
+        if (lowerType.includes('export') && lowerType !== 'deemed export') return 'export';
+        if (placeOfSupplyName.toLowerCase() !== (companyDetails?.state || '').toLowerCase()) return 'other';
+        return 'within';
+    }, [invoiceType, placeOfSupplyName, companyDetails?.state]);
+
+    const isInterState = useMemo(() => {
+        if (invoiceType === 'SEZ with payment' || invoiceType === 'Export with payment') return true;
+        return stateType === 'export' || placeOfSupplyName.toLowerCase() !== (companyDetails?.state || '').toLowerCase();
+    }, [stateType, placeOfSupplyName, companyDetails?.state, invoiceType]);
 
     // Item & Tax Details State
     const [salesOrderNos, setSalesOrderNos] = useState<string[]>([]);
@@ -2060,9 +2113,21 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
             };
         }, { taxableValue: 0, igst: 0, cgst: 0, sgst: 0, cess: 0 });
 
-        const invoiceValue = sums.taxableValue + sums.igst + sums.cgst + sums.sgst + sums.cess;
+        const finalIgst = (isInterState && !isTaxHidden) ? sums.igst : 0;
+        const finalCgst = (!isInterState && !isTaxHidden) ? sums.cgst : 0;
+        const finalSgst = (!isInterState && !isTaxHidden) ? sums.sgst : 0;
+        const finalCess = isCessHidden ? 0 : sums.cess;
 
-        return { ...sums, invoiceValue };
+        const invoiceValue = sums.taxableValue + finalIgst + finalCgst + finalSgst + finalCess;
+
+        return {
+            taxableValue: sums.taxableValue,
+            igst: finalIgst,
+            cgst: finalCgst,
+            sgst: finalSgst,
+            cess: finalCess,
+            invoiceValue
+        };
     };
 
     React.useEffect(() => {
@@ -2071,9 +2136,17 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
         const tdsIT = parseFloat(paymentTdsIncomeTax) || 0;
         const tdsGST = parseFloat(paymentTdsGst) || 0;
         const advance = parseFloat(paymentAdvance) || 0;
-        const payable = invVal - tdsIT - tdsGST - advance;
+        const isTcsActive = customerTcsEnabled || customerTcsRate > 0;
+
+        let payable = invVal - tdsGST - advance;
+        if (isTcsActive) {
+            payable += tdsIT;
+        } else {
+            payable -= tdsIT;
+        }
+
         setPaymentPayable(payable.toFixed(2));
-    }, [itemRows, paymentTdsIncomeTax, paymentTdsGst, paymentAdvance]);
+    }, [itemRows, paymentTdsIncomeTax, paymentTdsGst, paymentAdvance, customerTcsEnabled, customerTcsRate]);
 
     // Auto-calculate TDS/TCS under Income Tax = Invoice Value × (TCS Rate + TDS Rate)
     React.useEffect(() => {
@@ -2086,6 +2159,50 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
             setPaymentTdsIncomeTax('0.00');
         }
     }, [itemRows, customerTcsRate, customerTdsRate]);
+
+    // Auto-calculate TDS/TCS under GST
+    // Condition 1: Basic Details (gst_tds_applicable) YES AND TDS & Statutory (tds_enabled) YES (or equivalent derived config via rates or TCS) - Rate: 2%
+    // Condition 2: TDS & Statutory (tds_enabled) YES AND Taxable Value > 2,50,000 - Rate: 2%
+    // Condition 3: Sales through E-Commerce Operator (Yes) AND TCS Configuration Active (customerTcsEnabled or customerTcsRate > 0) - Rate: 1%
+    React.useEffect(() => {
+        const taxableVal = calculateTotals().taxableValue;
+
+        // Treat as enabled if the toggle is ON or a valid rate has been configured
+        const isTdsOrTcsEnabled = customerTdsEnabled || customerTcsEnabled || customerTdsRate > 0 || customerTcsRate > 0;
+        const isTcsActive = customerTcsEnabled || customerTcsRate > 0;
+
+        const condition1 = customerGstTdsApplicable && isTdsOrTcsEnabled;
+        const condition2 = isTdsOrTcsEnabled && taxableVal > 250000;
+        const condition3 = isEcommerceSales === 'Yes' && isTcsActive;
+
+        console.log('TDS Calculation Debug:', {
+            taxableVal,
+            customerGstTdsApplicable,
+            customerTdsEnabled,
+            customerTcsEnabled,
+            customerTdsRate,
+            customerTcsRate,
+            isTdsOrTcsEnabled,
+            isTcsActive,
+            isEcommerceSales,
+            condition1,
+            condition2,
+            condition3
+        });
+
+        if (condition3) {
+            const tcsAmount = taxableVal * 0.01;
+            console.log('Setting paymentTdsGst (E-Commerce TCS 1%):', tcsAmount.toFixed(2));
+            setPaymentTdsGst(tcsAmount.toFixed(2));
+        } else if (condition1 || condition2) {
+            const tdsGstAmount = taxableVal * 0.02;
+            console.log('Setting paymentTdsGst (Regular TDS 2%):', tdsGstAmount.toFixed(2));
+            setPaymentTdsGst(tdsGstAmount.toFixed(2));
+        } else {
+            console.log('Resetting paymentTdsGst to 0.00');
+            setPaymentTdsGst('0.00');
+        }
+    }, [itemRows, customerGstTdsApplicable, customerTdsEnabled, customerTcsEnabled, customerTdsRate, customerTcsRate, isEcommerceSales]);
 
     // Sync qty, description, and INR rate from Foreign Currency tab → INR tab whenever foreign rows change
     React.useEffect(() => {
@@ -2704,69 +2821,19 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
 
                         </div>
 
-                        {/* Row 4: Tax Type and State Selection */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Tax Type
-                            </label>
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                                <div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setStateType('within')}
-                                        className={`w-full px-4 py-2 border rounded-[4px] transition-all duration-200 ${stateType === 'within'
-                                            ? 'bg-indigo-600 border-indigo-600 text-white shadow-md font-semibold scale-105'
-                                            : 'bg-white border-gray-300 text-gray-600 hover:border-indigo-400 hover:text-indigo-600'
-                                            }`}
-                                    >
-                                        Within State
-                                    </button>
-                                </div>
-
-                                <div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setStateType('other')}
-                                        className={`w-full px-4 py-2 border rounded-[4px] transition-all duration-200 ${stateType === 'other'
-                                            ? 'bg-indigo-600 border-indigo-600 text-white shadow-md font-semibold scale-105'
-                                            : 'bg-white border-gray-300 text-gray-600 hover:border-indigo-400 hover:text-indigo-600'
-                                            }`}
-                                    >
-                                        Other State
-                                    </button>
-                                </div>
-
-                                <div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setStateType('export')}
-                                        className={`w-full px-4 py-2 border rounded-[4px] transition-all duration-200 ${stateType === 'export'
-                                            ? 'bg-indigo-600 border-indigo-600 text-white shadow-md font-semibold scale-105'
-                                            : 'bg-white border-gray-300 text-gray-600 hover:border-indigo-400 hover:text-indigo-600'
-                                            }`}
-                                    >
-                                        Export
-                                    </button>
-                                </div>
-
-                                <div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setActiveTab(showForeignTabs ? 'item_tax_foreign' : 'item_tax')}
-                                        className="w-full px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors flex items-center justify-center gap-2 font-medium"
-                                    >
-                                        NEXT
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                        </svg>
-                                    </button>
-                                </div>
-                            </div>
-
-
+                        {/* Row 4: Navigation */}
+                        <div className="flex justify-end mt-6">
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab(showForeignTabs ? 'item_tax_foreign' : 'item_tax')}
+                                className="px-10 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors flex items-center justify-center gap-2 font-medium shadow-sm hover:shadow-md"
+                            >
+                                NEXT
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                            </button>
                         </div>
-
-
                     </div>
                 )
                 }
@@ -3150,15 +3217,19 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                             <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">Alternate Unit</th>
                                             <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">Item Rate</th>
                                             <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">Taxable Value</th>
-                                            {stateType === 'within' ? (
-                                                <>
-                                                    <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">CGST</th>
-                                                    <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">SGST/UTGST</th>
-                                                </>
-                                            ) : (
-                                                <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">IGST</th>
+                                            {!isTaxHidden && (
+                                                !isInterState ? (
+                                                    <>
+                                                        <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">CGST</th>
+                                                        <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">SGST/UTGST</th>
+                                                    </>
+                                                ) : (
+                                                    <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">IGST</th>
+                                                )
                                             )}
-                                            <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">CESS</th>
+                                            {!isCessHidden && (
+                                                <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">CESS</th>
+                                            )}
                                             <th className="px-3 py-2 text-xs font-semibold text-center border-r border-blue-400">Invoice Value</th>
                                             <th className="px-3 py-2 text-xs font-semibold text-center">Delete</th>
                                         </tr>
@@ -3254,51 +3325,55 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                                 className="w-24 px-2 py-1 bg-gray-50 bg-opacity-50 border-0 rounded text-sm"
                                                             />
                                                         </td>
-                                                        {stateType === 'within' ? (
-                                                            <>
+                                                        {!isTaxHidden && (
+                                                            !isInterState ? (
+                                                                <>
+                                                                    <td className="px-2 py-2 border-r border-gray-200">
+                                                                        <input
+                                                                            type="number"
+                                                                            value={row.cgst}
+                                                                            min="0"
+                                                                            onChange={(e) => handleItemRowChange(row.id, 'cgst', e.target.value)}
+                                                                            className="w-20 px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm bg-transparent"
+                                                                            placeholder="CGST"
+                                                                        />
+                                                                    </td>
+                                                                    <td className="px-2 py-2 border-r border-gray-200">
+                                                                        <input
+                                                                            type="number"
+                                                                            value={row.sgst}
+                                                                            min="0"
+                                                                            onChange={(e) => handleItemRowChange(row.id, 'sgst', e.target.value)}
+                                                                            className="w-20 px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm bg-transparent"
+                                                                            placeholder="SGST"
+                                                                        />
+                                                                    </td>
+                                                                </>
+                                                            ) : (
                                                                 <td className="px-2 py-2 border-r border-gray-200">
                                                                     <input
                                                                         type="number"
-                                                                        value={row.cgst}
+                                                                        value={row.igst}
                                                                         min="0"
-                                                                        onChange={(e) => handleItemRowChange(row.id, 'cgst', e.target.value)}
+                                                                        onChange={(e) => handleItemRowChange(row.id, 'igst', e.target.value)}
                                                                         className="w-20 px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm bg-transparent"
-                                                                        placeholder="CGST"
+                                                                        placeholder="IGST"
                                                                     />
                                                                 </td>
-                                                                <td className="px-2 py-2 border-r border-gray-200">
-                                                                    <input
-                                                                        type="number"
-                                                                        value={row.sgst}
-                                                                        min="0"
-                                                                        onChange={(e) => handleItemRowChange(row.id, 'sgst', e.target.value)}
-                                                                        className="w-20 px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm bg-transparent"
-                                                                        placeholder="SGST"
-                                                                    />
-                                                                </td>
-                                                            </>
-                                                        ) : (
+                                                            )
+                                                        )}
+                                                        {!isCessHidden && (
                                                             <td className="px-2 py-2 border-r border-gray-200">
                                                                 <input
                                                                     type="number"
-                                                                    value={row.igst}
+                                                                    value={row.cess}
                                                                     min="0"
-                                                                    onChange={(e) => handleItemRowChange(row.id, 'igst', e.target.value)}
+                                                                    onChange={(e) => handleItemRowChange(row.id, 'cess', e.target.value)}
                                                                     className="w-20 px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm bg-transparent"
-                                                                    placeholder="IGST"
+                                                                    placeholder="CESS"
                                                                 />
                                                             </td>
                                                         )}
-                                                        <td className="px-2 py-2 border-r border-gray-200">
-                                                            <input
-                                                                type="number"
-                                                                value={row.cess}
-                                                                min="0"
-                                                                onChange={(e) => handleItemRowChange(row.id, 'cess', e.target.value)}
-                                                                className="w-20 px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm bg-transparent"
-                                                                placeholder="CESS"
-                                                            />
-                                                        </td>
                                                         <td className="px-2 py-2 border-r border-gray-200">
                                                             <input
                                                                 type="text"
@@ -3335,7 +3410,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                                 </div>
                                                             </div>
                                                         </td>
-                                                        <td colSpan={stateType === 'within' ? 10 : 9} className="px-2 py-2">
+                                                        <td colSpan={!isInterState ? 10 : 9} className="px-2 py-2">
                                                             <div className="flex items-center gap-2">
                                                                 <label className="text-xs font-medium text-gray-700 whitespace-nowrap">ledger narration:</label>
                                                                 <input
@@ -3363,43 +3438,47 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     className="w-24 px-2 py-1 bg-white border border-gray-300 rounded text-sm font-semibold text-center"
                                                 />
                                             </td>
-                                            {stateType === 'within' ? (
-                                                <>
+                                            {!isTaxHidden && (
+                                                !isInterState ? (
+                                                    <>
+                                                        <td className="px-2 py-2">
+                                                            <input
+                                                                type="text"
+                                                                value={calculateTotals().cgst.toFixed(2)}
+                                                                readOnly
+                                                                className="w-20 px-2 py-1 bg-white border border-gray-300 rounded text-sm font-semibold text-center"
+                                                            />
+                                                        </td>
+                                                        <td className="px-2 py-2">
+                                                            <input
+                                                                type="text"
+                                                                value={calculateTotals().sgst.toFixed(2)}
+                                                                readOnly
+                                                                className="w-20 px-2 py-1 bg-white border border-gray-300 rounded text-sm font-semibold text-center"
+                                                            />
+                                                        </td>
+                                                    </>
+                                                ) : (
                                                     <td className="px-2 py-2">
                                                         <input
                                                             type="text"
-                                                            value={calculateTotals().cgst.toFixed(2)}
+                                                            value={calculateTotals().igst.toFixed(2)}
                                                             readOnly
                                                             className="w-20 px-2 py-1 bg-white border border-gray-300 rounded text-sm font-semibold text-center"
                                                         />
                                                     </td>
-                                                    <td className="px-2 py-2">
-                                                        <input
-                                                            type="text"
-                                                            value={calculateTotals().sgst.toFixed(2)}
-                                                            readOnly
-                                                            className="w-20 px-2 py-1 bg-white border border-gray-300 rounded text-sm font-semibold text-center"
-                                                        />
-                                                    </td>
-                                                </>
-                                            ) : (
+                                                )
+                                            )}
+                                            {!isCessHidden && (
                                                 <td className="px-2 py-2">
                                                     <input
                                                         type="text"
-                                                        value={calculateTotals().igst.toFixed(2)}
+                                                        value={calculateTotals().cess.toFixed(2)}
                                                         readOnly
                                                         className="w-20 px-2 py-1 bg-white border border-gray-300 rounded text-sm font-semibold text-center"
                                                     />
                                                 </td>
                                             )}
-                                            <td className="px-2 py-2">
-                                                <input
-                                                    type="text"
-                                                    value={calculateTotals().cess.toFixed(2)}
-                                                    readOnly
-                                                    className="w-20 px-2 py-1 bg-white border border-gray-300 rounded text-sm font-semibold text-center"
-                                                />
-                                            </td>
                                             <td className="px-2 py-2">
                                                 <input
                                                     type="text"
@@ -3479,11 +3558,21 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                     <thead className="bg-gray-100">
                                         <tr>
                                             <th className="px-4 py-2 text-sm font-semibold text-gray-700 border-r border-gray-300">Taxable Value</th>
-                                            <th className="px-4 py-2 text-sm font-semibold text-gray-700 border-r border-gray-300">IGST</th>
-                                            <th className="px-4 py-2 text-sm font-semibold text-gray-700 border-r border-gray-300">CGST</th>
-                                            <th className="px-4 py-2 text-sm font-semibold text-gray-700 border-r border-gray-300">SGST/UTGST</th>
-                                            <th className="px-4 py-2 text-sm font-semibold text-gray-700 border-r border-gray-300">Cess</th>
-                                            <th className="px-4 py-2 text-sm font-semibold text-gray-700">State Cess</th>
+                                            {isInterState && (
+                                                <th className="px-4 py-2 text-sm font-semibold text-gray-700 border-r border-gray-300">IGST</th>
+                                            )}
+                                            {!isInterState && (
+                                                <>
+                                                    <th className="px-4 py-2 text-sm font-semibold text-gray-700 border-r border-gray-300">CGST</th>
+                                                    <th className="px-4 py-2 text-sm font-semibold text-gray-700 border-r border-gray-300">SGST/UTGST</th>
+                                                </>
+                                            )}
+                                            {!isCessHidden && (
+                                                <>
+                                                    <th className="px-4 py-2 text-sm font-semibold text-gray-700 border-r border-gray-300">Cess</th>
+                                                    <th className="px-4 py-2 text-sm font-semibold text-gray-700">State Cess</th>
+                                                </>
+                                            )}
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -3496,46 +3585,56 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     className="w-full px-2 py-1 bg-gray-50 border-0 rounded text-sm text-center"
                                                 />
                                             </td>
-                                            <td className="px-4 py-3 border-r border-gray-300">
-                                                <input
-                                                    type="text"
-                                                    value={calculateTotals().igst.toFixed(2)}
-                                                    readOnly
-                                                    className="w-full px-2 py-1 bg-gray-50 border-0 rounded text-sm text-center"
-                                                />
-                                            </td>
-                                            <td className="px-4 py-3 border-r border-gray-300">
-                                                <input
-                                                    type="text"
-                                                    value={calculateTotals().cgst.toFixed(2)}
-                                                    readOnly
-                                                    className="w-full px-2 py-1 bg-gray-50 border-0 rounded text-sm text-center"
-                                                />
-                                            </td>
-                                            <td className="px-4 py-3 border-r border-gray-300">
-                                                <input
-                                                    type="text"
-                                                    value={calculateTotals().sgst.toFixed(2)}
-                                                    readOnly
-                                                    className="w-full px-2 py-1 bg-gray-50 border-0 rounded text-sm text-center"
-                                                />
-                                            </td>
-                                            <td className="px-4 py-3 border-r border-gray-300">
-                                                <input
-                                                    type="text"
-                                                    value={calculateTotals().cess.toFixed(2)}
-                                                    readOnly
-                                                    className="w-full px-2 py-1 bg-gray-50 border-0 rounded text-sm text-center"
-                                                />
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <input
-                                                    type="text"
-                                                    value={paymentStateCess}
-                                                    readOnly
-                                                    className="w-full px-2 py-1 bg-gray-50 border-0 rounded text-sm text-center"
-                                                />
-                                            </td>
+                                            {isInterState && (
+                                                <td className="px-4 py-3 border-r border-gray-300">
+                                                    <input
+                                                        type="text"
+                                                        value={calculateTotals().igst.toFixed(2)}
+                                                        readOnly
+                                                        className="w-full px-2 py-1 bg-gray-50 border-0 rounded text-sm text-center"
+                                                    />
+                                                </td>
+                                            )}
+                                            {!isInterState && (
+                                                <>
+                                                    <td className="px-4 py-3 border-r border-gray-300">
+                                                        <input
+                                                            type="text"
+                                                            value={calculateTotals().cgst.toFixed(2)}
+                                                            readOnly
+                                                            className="w-full px-2 py-1 bg-gray-50 border-0 rounded text-sm text-center"
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3 border-r border-gray-300">
+                                                        <input
+                                                            type="text"
+                                                            value={calculateTotals().sgst.toFixed(2)}
+                                                            readOnly
+                                                            className="w-full px-2 py-1 bg-gray-50 border-0 rounded text-sm text-center"
+                                                        />
+                                                    </td>
+                                                </>
+                                            )}
+                                            {!isCessHidden && (
+                                                <>
+                                                    <td className="px-4 py-3 border-r border-gray-300">
+                                                        <input
+                                                            type="text"
+                                                            value={calculateTotals().cess.toFixed(2)}
+                                                            readOnly
+                                                            className="w-full px-2 py-1 bg-gray-50 border-0 rounded text-sm text-center"
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <input
+                                                            type="text"
+                                                            value={paymentStateCess}
+                                                            readOnly
+                                                            className="w-full px-2 py-1 bg-gray-50 border-0 rounded text-sm text-center"
+                                                        />
+                                                    </td>
+                                                </>
+                                            )}
                                         </tr>
                                     </tbody>
                                 </table>
@@ -3600,6 +3699,30 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                             onChange={(e) => setPaymentTdsGst(e.target.value)}
                                             className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-right"
                                             placeholder="0.00"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Gross Amount Receivable
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={(() => {
+                                                const invVal = calculateTotals().invoiceValue;
+                                                const tdsIT = parseFloat(paymentTdsIncomeTax) || 0;
+                                                const tdsGst = parseFloat(paymentTdsGst) || 0;
+                                                const isTcsActive = customerTcsEnabled || customerTcsRate > 0;
+
+                                                // If TCS is configured: Invoice Value + IT - GST
+                                                if (isTcsActive) {
+                                                    return (invVal + tdsIT - tdsGst).toFixed(2);
+                                                }
+                                                // Default/TDS configured: Invoice Value - IT - GST
+                                                return (invVal - tdsIT - tdsGst).toFixed(2);
+                                            })()}
+                                            readOnly
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right cursor-not-allowed"
                                         />
                                     </div>
 
@@ -5074,9 +5197,10 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                     <th style={{ padding: '9px 6px', textAlign: 'center', fontWeight: 600 }}>Qty</th>
                                                     <th style={{ padding: '9px 6px', textAlign: 'right', fontWeight: 600 }}>Rate</th>
                                                     <th style={{ padding: '9px 6px', textAlign: 'right', fontWeight: 600 }}>Taxable</th>
-                                                    <th style={{ padding: '9px 6px', textAlign: 'right', fontWeight: 600 }}>CGST</th>
-                                                    <th style={{ padding: '9px 6px', textAlign: 'right', fontWeight: 600 }}>SGST</th>
-                                                    <th style={{ padding: '9px 6px', textAlign: 'right', fontWeight: 600 }}>IGST</th>
+                                                    {Number(postedVoucherData.totals?.cgst || 0) > 0 && <th style={{ padding: '9px 6px', textAlign: 'right', fontWeight: 600 }}>CGST</th>}
+                                                    {Number(postedVoucherData.totals?.sgst || 0) > 0 && <th style={{ padding: '9px 6px', textAlign: 'right', fontWeight: 600 }}>SGST</th>}
+                                                    {Number(postedVoucherData.totals?.igst || 0) > 0 && <th style={{ padding: '9px 6px', textAlign: 'right', fontWeight: 600 }}>IGST</th>}
+                                                    {Number(postedVoucherData.totals?.cess || 0) > 0 && <th style={{ padding: '9px 6px', textAlign: 'right', fontWeight: 600 }}>Cess</th>}
                                                     <th style={{ padding: '9px 6px', textAlign: 'right', fontWeight: 600 }}>Total</th>
                                                 </tr>
                                             </thead>
@@ -5094,9 +5218,10 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                         <td style={{ padding: '7px 6px', textAlign: 'center' }}>{item.qty} {item.uom}</td>
                                                         <td style={{ padding: '7px 6px', textAlign: 'right', fontFamily: 'monospace' }}>₹{Number(item.item_rate).toFixed(2)}</td>
                                                         <td style={{ padding: '7px 6px', textAlign: 'right', fontFamily: 'monospace' }}>₹{Number(item.taxable_value).toFixed(2)}</td>
-                                                        <td style={{ padding: '7px 6px', textAlign: 'right', fontFamily: 'monospace' }}>₹{Number(item.cgst).toFixed(2)}</td>
-                                                        <td style={{ padding: '7px 6px', textAlign: 'right', fontFamily: 'monospace' }}>₹{Number(item.sgst).toFixed(2)}</td>
-                                                        <td style={{ padding: '7px 6px', textAlign: 'right', fontFamily: 'monospace' }}>₹{Number(item.igst).toFixed(2)}</td>
+                                                        {Number(postedVoucherData.totals?.cgst || 0) > 0 && <td style={{ padding: '7px 6px', textAlign: 'right', fontFamily: 'monospace' }}>₹{Number(item.cgst).toFixed(2)}</td>}
+                                                        {Number(postedVoucherData.totals?.sgst || 0) > 0 && <td style={{ padding: '7px 6px', textAlign: 'right', fontFamily: 'monospace' }}>₹{Number(item.sgst).toFixed(2)}</td>}
+                                                        {Number(postedVoucherData.totals?.igst || 0) > 0 && <td style={{ padding: '7px 6px', textAlign: 'right', fontFamily: 'monospace' }}>₹{Number(item.igst).toFixed(2)}</td>}
+                                                        {Number(postedVoucherData.totals?.cess || 0) > 0 && <td style={{ padding: '7px 6px', textAlign: 'right', fontFamily: 'monospace' }}>₹{Number(item.cess).toFixed(2)}</td>}
                                                         <td style={{ padding: '7px 6px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700 }}>₹{Number(item.invoice_value).toFixed(2)}</td>
                                                     </tr>
                                                 ))}
@@ -5132,7 +5257,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({ prefilledData, clearPrefill
                                                 { label: 'TDS (Income Tax)', value: postedVoucherData.payment_details?.payment_tds_income_tax },
                                                 { label: 'TDS (GST)', value: postedVoucherData.payment_details?.payment_tds_gst },
                                                 { label: 'Advance Paid', value: postedVoucherData.payment_details?.payment_advance },
-                                                { label: 'State Cess', value: postedVoucherData.payment_details?.payment_state_cess },
+                                                ...(Number(postedVoucherData.payment_details?.payment_state_cess || 0) > 0 ? [{ label: 'State Cess', value: postedVoucherData.payment_details?.payment_state_cess }] : []),
                                                 { label: 'Net Payable', value: postedVoucherData.payment_details?.payment_payable },
                                             ].map((row, i) => (
                                                 <div key={i} className="bg-gray-50 rounded-lg p-3 border border-gray-100">

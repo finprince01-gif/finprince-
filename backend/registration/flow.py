@@ -29,10 +29,19 @@ def register_user(registration_data):
         password = registration_data.get('password')
         company_name = registration_data.get('company_name')
         phone = registration_data.get('phone')
+        state = registration_data.get('state', '')
+        logo_file = registration_data.get('logo')
         selected_plan = registration_data.get('selected_plan', 'Free')
         
         # Generate tenant ID
         tenant_id = str(uuid.uuid4())
+
+        from django.core.files.storage import default_storage
+        final_logo_path = None
+        if logo_file:
+            final_filename = f"logos/{tenant_id}_{logo_file.name}"
+            file_path = default_storage.save(final_filename, logo_file)
+            final_logo_path = default_storage.url(file_path)
         
         # Create user with transaction
         with transaction.atomic():
@@ -48,16 +57,29 @@ def register_user(registration_data):
                 password=make_password(password),
                 company_name=company_name,
                 phone=phone,
+                state=state,
                 tenant_id=tenant_id,
                 selected_plan=selected_plan,
+                logo_path=final_logo_path,
                 phone_verified=True,  # No OTP for direct registration
                 is_active=True,
                 is_superuser=True,  # All users are superusers (RBAC removed)
             )
+
+            # Create CompanyFullInfo record with the provided state
+            from core.models import CompanyFullInfo
+            CompanyFullInfo.objects.create(
+                tenant_id=tenant_id,
+                company_name=company_name,
+                email=email,
+                phone=phone,
+                state=state,
+                logo_path=final_logo_path
+            )
             
             from django.db import connection
             db_name = connection.settings_dict['NAME']
-            logger.info(f"✅ User {user.id} created successfully with tenant {tenant_id} in DB: {db_name}")
+            logger.info(f"✅ User {user.id} and CompanyFullInfo created successfully with tenant {tenant_id} in DB: {db_name}")
         
         # Seed tenant data (Outside atomic block to prevent rollback on seeding failure)
         # Seeding errors are caught inside the function
@@ -83,6 +105,7 @@ def register_user(registration_data):
                 'email': user.email,
                 'company_name': user.company_name,
                 'phone': user.phone,
+                'state': state,
                 'tenant_id': user.tenant_id,
                 'selected_plan': user.selected_plan,
             },

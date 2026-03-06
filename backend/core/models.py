@@ -72,6 +72,7 @@ class User(AbstractBaseUser):
     # Email must be unique globally across all tenants
     email = models.CharField(max_length=255, unique=True, blank=True, null=True)
     
+    state = models.CharField(max_length=100, null=True, blank=True)
     selected_plan = models.CharField(max_length=50, null=True, blank=True)
     logo_path = models.CharField(max_length=500, blank=True, null=True)
     tenant_id = models.CharField(max_length=36, null=True, blank=True)
@@ -160,7 +161,7 @@ class CompanyFullInfo(BaseModel):
     
     class Meta:
         managed = False
-        db_table = 'core_companyfullinfo'
+        db_table = 'company_informations'
 
 class PasswordResetOTP(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_reset_otps')
