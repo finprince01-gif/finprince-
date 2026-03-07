@@ -1,3 +1,4 @@
+import json
 from rest_framework import serializers
 from vendors.models import VendorMasterBasicDetail
 from .models_voucher_purchase import (
@@ -105,6 +106,7 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):
     supply_inr_details = VoucherPurchaseSupplyINRDetailsSerializer(required=False, allow_null=True)
     due_details = VoucherPurchaseDueDetailsSerializer(required=False, allow_null=True)
     transit_details = VoucherPurchaseTransitDetailsSerializer(required=False, allow_null=True)
+    transit_document = serializers.FileField(required=False, write_only=True)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -117,9 +119,9 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):
     class Meta:
         model = VoucherPurchaseSupplierDetails
         fields = [
-            'id', 'date', 'supplier_invoice_no', 'purchase_voucher_series', 'purchase_voucher_no', 
+            'id', 'date', 'supplier_invoice_no', 'supplier_invoice_date', 'purchase_voucher_series', 'purchase_voucher_no', 
             'vendor_id', 'vendor_name', 'branch', 'gstin', 'grn_reference', 'bill_from', 'ship_from', 
-            'input_type', 'invoice_in_foreign_currency', 'supporting_document',
+            'input_type', 'invoice_in_foreign_currency', 'supporting_document', 'transit_document',
             'supply_foreign_details', 'supply_inr_details',
             'due_details', 'transit_details', 'created_at'
         ]
@@ -129,12 +131,26 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):
         supply_inr_data = validated_data.pop('supply_inr_details', None)
         due_data = validated_data.pop('due_details', None)
         transit_data = validated_data.pop('transit_details', None)
+        transit_document = validated_data.pop('transit_document', None)
         
-        # FALLBACK: If Validated Token dropped it, check initial_data
-        if supply_foreign_data is None: supply_foreign_data = self.initial_data.get('supply_foreign_details')
-        if supply_inr_data is None: supply_inr_data = self.initial_data.get('supply_inr_details')
-        if due_data is None: due_data = self.initial_data.get('due_details')
-        if transit_data is None: transit_data = self.initial_data.get('transit_details')
+        # FALLBACK & PARSING: Handle stringified JSON from FormData
+        def parse_json(val):
+            if isinstance(val, str):
+                try: return json.loads(val)
+                except: return None
+            return val
+
+        if supply_foreign_data is None: supply_foreign_data = parse_json(self.initial_data.get('supply_foreign_details'))
+        else: supply_foreign_data = parse_json(supply_foreign_data)
+
+        if supply_inr_data is None: supply_inr_data = parse_json(self.initial_data.get('supply_inr_details'))
+        else: supply_inr_data = parse_json(supply_inr_data)
+
+        if due_data is None: due_data = parse_json(self.initial_data.get('due_details'))
+        else: due_data = parse_json(due_data)
+
+        if transit_data is None: transit_data = parse_json(self.initial_data.get('transit_details'))
+        else: transit_data = parse_json(transit_data)
 
         supplier_instance = VoucherPurchaseSupplierDetails.objects.create(**validated_data)
         tenant_id = supplier_instance.tenant_id
@@ -167,8 +183,10 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):
             )
             
         if transit_data is not None:
-            valid_fields = {'mode', 'received_in', 'receipt_date', 'receipt_time', 'received_quantity', 'uqc', 'delivery_type', 'self_third_party', 'transporter_id', 'transporter_name', 'vehicle_no', 'lr_gr_consignment', 'extra_details'}
+            valid_fields = {'mode', 'received_in', 'receipt_date', 'receipt_time', 'received_quantity', 'uqc', 'delivery_type', 'self_third_party', 'transporter_id', 'transporter_name', 'vehicle_no', 'lr_gr_consignment', 'extra_details', 'document'}
             filtered_data = {k: v for k, v in transit_data.items() if k in valid_fields}
+            if transit_document:
+                filtered_data['document'] = transit_document
             VoucherPurchaseTransitDetails.objects.create(
                 supplier_details=supplier_instance, 
                 tenant_id=tenant_id,
@@ -182,12 +200,26 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):
         supply_inr_data = validated_data.pop('supply_inr_details', None)
         due_data = validated_data.pop('due_details', None)
         transit_data = validated_data.pop('transit_details', None)
+        transit_document = validated_data.pop('transit_document', None)
         
-        # FALLBACK: If Validated Token dropped it, check initial_data
-        if supply_foreign_data is None: supply_foreign_data = self.initial_data.get('supply_foreign_details')
-        if supply_inr_data is None: supply_inr_data = self.initial_data.get('supply_inr_details')
-        if due_data is None: due_data = self.initial_data.get('due_details')
-        if transit_data is None: transit_data = self.initial_data.get('transit_details')
+        # FALLBACK & PARSING: Handle stringified JSON from FormData
+        def parse_json(val):
+            if isinstance(val, str):
+                try: return json.loads(val)
+                except: return None
+            return val
+
+        if supply_foreign_data is None: supply_foreign_data = parse_json(self.initial_data.get('supply_foreign_details'))
+        else: supply_foreign_data = parse_json(supply_foreign_data)
+
+        if supply_inr_data is None: supply_inr_data = parse_json(self.initial_data.get('supply_inr_details'))
+        else: supply_inr_data = parse_json(supply_inr_data)
+
+        if due_data is None: due_data = parse_json(self.initial_data.get('due_details'))
+        else: due_data = parse_json(due_data)
+
+        if transit_data is None: transit_data = parse_json(self.initial_data.get('transit_details'))
+        else: transit_data = parse_json(transit_data)
 
         # Update Supplier Fields
         for attr, value in validated_data.items():
@@ -221,8 +253,10 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):
             )
             
         if transit_data is not None:
-            valid_fields = {'mode', 'received_in', 'receipt_date', 'receipt_time', 'received_quantity', 'uqc', 'delivery_type', 'self_third_party', 'transporter_id', 'transporter_name', 'vehicle_no', 'lr_gr_consignment', 'extra_details'}
+            valid_fields = {'mode', 'received_in', 'receipt_date', 'receipt_time', 'received_quantity', 'uqc', 'delivery_type', 'self_third_party', 'transporter_id', 'transporter_name', 'vehicle_no', 'lr_gr_consignment', 'extra_details', 'document'}
             filtered_data = {k: v for k, v in transit_data.items() if k in valid_fields}
+            if transit_document:
+                filtered_data['document'] = transit_document
             VoucherPurchaseTransitDetails.objects.update_or_create(
                 supplier_details=instance,
                 defaults={**filtered_data, 'tenant_id': tenant_id}

@@ -49,14 +49,19 @@ class VendorPOViewSet(viewsets.ModelViewSet):
             status_filter = request.query_params.get('status')
             vendor_name = request.query_params.get('vendor_name')
             
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"[VendorPOViewSet] Listing POs. tenant_id={tenant_id}, status={status_filter}, vendor_name={vendor_name}")
+            
             po_list = db.get_all_purchase_orders(tenant_id, status_filter, vendor_name)
+            logger.info(f"[VendorPOViewSet] Found {len(po_list)} POs")
             
             return Response({
                 'success': True,
                 'data': po_list,
                 'count': len(po_list)
             }, status=status.HTTP_200_OK)
-            
+           
         except PermissionDenied as e:
             return Response({
                 'success': False,

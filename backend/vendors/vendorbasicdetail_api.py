@@ -232,13 +232,13 @@ class VendorBasicDetailViewSet(viewsets.ModelViewSet):
             )
     
     def destroy(self, request, *args, **kwargs):
-        """Soft delete a vendor basic detail"""
+        """Hard delete a vendor basic detail (permanently remove from DB)"""
         instance = self.get_object()
-        success = VendorBasicDetailDatabase.delete_vendor_basic_detail(instance.id, soft_delete=True)
+        success = VendorBasicDetailDatabase.delete_vendor_basic_detail(instance.id, soft_delete=False)
         
         if success:
             return Response(
-                {'message': 'Vendor deactivated successfully'},
+                {'message': 'Vendor deleted successfully'},
                 status=status.HTTP_204_NO_CONTENT
             )
         else:
