@@ -19,6 +19,7 @@ import ReceiptVoucher from './ReceiptVoucher';
 import CreateGRNModal from '../../components/CreateGRNModal';
 import SearchableSelect from '../../components/SearchableSelect';
 import CreateVendorModal from '../../components/CreateVendorModal';
+import { ChevronDown } from 'lucide-react';
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5003';
 
@@ -105,6 +106,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [vendorAddresses, setVendorAddresses] = useState<string[]>([]);
   const [selectedBranch, setSelectedBranch] = useState('');
   const [inventoryLocations, setInventoryLocations] = useState<any[]>([]);
+  const [services, setServices] = useState<any[]>([]);
 
   const fetchRichData = useCallback(async () => {
     // 1. Rich Vendors & Customers
@@ -142,6 +144,23 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       }
     } catch (err) {
       console.warn('Failed to fetch Inventory Locations', err);
+    }
+
+    // 4. Services
+    try {
+      // Use the same endpoint filter as the Service List page
+      const srv = await apiService.getServices('is_active=true');
+      setServices(Array.isArray(srv) ? srv : ((srv as any).results || []));
+    } catch (err) {
+      console.warn('Failed to fetch Services', err);
+    }
+
+    // 5. Pending GRNs
+    try {
+      const grns = await apiService.getPendingGRNs();
+      setPendingGRNs(Array.isArray(grns) ? grns : ((grns as any).results || []));
+    } catch (err) {
+      console.warn('Failed to fetch Pending GRNs', err);
     }
   }, []);
 
@@ -336,6 +355,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
   // Purchase Supply Details Tab State
   const [purchaseOrderNo, setPurchaseOrderNo] = useState('');
+  const [selectedPurchasePOs, setSelectedPurchasePOs] = useState<string[]>([]);
+  const [isPoDropdownOpen, setIsPoDropdownOpen] = useState(false);
   const [exchangeRate, setExchangeRate] = useState(''); // Added exchangeRate state
   const [purchaseLedger, setPurchaseLedger] = useState('');
   const [purchaseDescription, setPurchaseDescription] = useState('');
@@ -392,16 +413,43 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   // Document
   const [purchaseTransitDocument, setPurchaseTransitDocument] = useState<File | null>(null);
 
+  // Combine Stock Items and Services for a unified list
+  const allItems = React.useMemo(() => {
+    const combined = stockItems.map(si => ({
+      ...si,
+      // Ensure specific fields are mapped consistently
+      item_code: si.item_code || si.code,
+      name: si.name || si.item_name,
+      hsn_sac: si.hsn_sac || si.hsn,
+      uom: si.uom || si.unit,
+      alternate_unit: si.alternate_unit || si.alternateUnit || si.alternate_uom
+    }));
+    services.forEach(s => {
+      combined.push({
+        id: `service_${s.id}`,
+        // Support both camelCase (from backend/service list) and snake_case (standard)
+        item_code: s.serviceCode || s.service_code || s.code,
+        name: s.serviceName || s.service_name || s.name,
+        hsn_sac: s.sacCode || s.sac_code || s.hsn_sac || s.hsn,
+        uom: s.uom || s.unit,
+        alternate_unit: s.alternateUnit || s.alternate_unit || s.alternate_uom || '',
+        gstRate: parseFloat(s.gstRate) || parseFloat(s.gst_rate) || 0,
+        rate: parseFloat(s.rate) || 0,
+        isService: true
+      });
+    });
+    return combined;
+  }, [stockItems, services]);
+
   // Item Options for Dropdowns
   const itemCodeOptions = React.useMemo(() =>
-    Array.from(new Set(stockItems.map((item: any) => item.item_code || item.code).filter(Boolean) as string[])),
-    [stockItems]
+    Array.from(new Set(allItems.map((item: any) => item.item_code || item.code).filter(Boolean) as string[])),
+    [allItems]
   );
   const itemNameOptions = React.useMemo(() =>
-    Array.from(new Set(stockItems.map((item: any) => item.name || item.item_name).filter(Boolean) as string[])),
-    [stockItems]
+    Array.from(new Set(allItems.map((item: any) => item.name || item.item_name).filter(Boolean) as string[])),
+    [allItems]
   );
-
   // From PORT (Local) - Renaming or reusing variables for clarity if needed, 
   // but keeping 'FromPort' prefix for consistency with older code if referenced, 
   // though UI uses the Right Column variables above for Road. 
@@ -500,59 +548,118 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   }, [voucherType, purchaseActiveTab]);
 
   useEffect(() => {
-    const fetchPODetails = async () => {
-      if (purchaseOrderNo) {
-        const selectedPO = availablePOs.find(p => p.po_number === purchaseOrderNo);
-        if (selectedPO?.id) {
-          try {
+    const fetchMultiplePODetails = async () => {
+      if (selectedPurchasePOs.length === 0) {
+        setPurchaseAdvanceRefs([]);
+        return;
+      }
+
+      try {
+        let allPoItems: any[] = [];
+        let vendorNameFound = '';
+
+        for (const poNo of selectedPurchasePOs) {
+          const selectedPO = availablePOs.find(p => p.po_number === poNo);
+          if (selectedPO?.id) {
             const res = await apiService.getVendorPurchaseOrderById(selectedPO.id);
             if (res.success && res.data?.items) {
-              const mappedItems = res.data.items.map((item: any, idx: number) => {
-                const qty = parseFloat(item.quantity) || 0;
-                const rate = parseFloat(item.final_rate) || 0;
-                const gstAmount = parseFloat(item.gst_amount) || 0;
-                const isInter = isInterState;
+              // Add PO number to items to track origin
+              const itemsWithPo = res.data.items.map((item: any) => ({ ...item, _poNumber: poNo }));
+              allPoItems = [...allPoItems, ...itemsWithPo];
 
-                return {
-                  id: item.id?.toString() || String(idx),
-                  itemCode: item.item_code || '',
-                  itemName: item.item_name || '',
-                  hsnSac: '',
-                  qty: qty,
-                  uom: item.uom || '',
-                  rate: rate,
-                  taxableValue: parseFloat(item.taxable_value) || (qty * rate),
-                  foreignRate: 0,
-                  foreignAmount: 0,
-                  igst: isInter ? gstAmount : 0,
-                  cgst: isInter ? 0 : (gstAmount / 2),
-                  sgst: isInter ? 0 : (gstAmount / 2),
-                  cess: 0,
-                  invoiceValue: parseFloat(item.invoice_value) || 0,
-                  description: item.description || ''
-                };
-              });
-
-              setPurchaseItems(mappedItems.length > 0 ? mappedItems : [{ id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '' }]);
-
-              setPurchaseAdvanceRefs([]);
-
-              // Let's also auto-populate the party text if it isn't set yet.
-              if (!party && selectedPO.vendor_name) {
-                setParty(selectedPO.vendor_name);
+              if (!vendorNameFound && selectedPO.vendor_name) {
+                vendorNameFound = selectedPO.vendor_name;
               }
             }
-          } catch (error) {
-            console.error('Failed to fetch PO details:', error);
           }
         }
-      } else {
-        setPurchaseAdvanceRefs([]);
+
+        if (allPoItems.length > 0) {
+          const mappedItems = allPoItems.map((item: any, idx: number) => {
+            const qty = parseFloat(item.quantity) || 0;
+            const rate = parseFloat(item.final_rate) || 0;
+            const gstAmount = parseFloat(item.gst_amount) || 0;
+            const isInter = isInterState;
+
+            return {
+              id: (Date.now() + idx + Math.random()).toString(),
+              itemCode: item.item_code || '',
+              itemName: item.item_name || '',
+              hsnSac: '',
+              qty: qty,
+              uom: item.uom || '',
+              rate: rate,
+              taxableValue: parseFloat(item.taxable_value) || (qty * rate),
+              foreignRate: 0,
+              foreignAmount: 0,
+              igst: isInter ? gstAmount : 0,
+              cgst: isInter ? 0 : (gstAmount / 2),
+              sgst: isInter ? 0 : (gstAmount / 2),
+              cess: 0,
+              invoiceValue: parseFloat(item.invoice_value) || 0,
+              description: item.description || ''
+            };
+          });
+
+          setPurchaseItems(mappedItems);
+          setPurchaseAdvanceRefs([]);
+
+          if (!party && vendorNameFound) {
+            setParty(vendorNameFound);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch multiple PO details:', error);
       }
     };
-    fetchPODetails();
-  }, [purchaseOrderNo, availablePOs, isInterState, party, setParty]);
+    fetchMultiplePODetails();
+  }, [selectedPurchasePOs, availablePOs, isInterState, party, setParty]);
 
+  // Logic to auto-fill items from GRN when selected
+  useEffect(() => {
+    const fillFromGRN = () => {
+      if (!grnRefNo) return;
+      const selectedGRN = pendingGRNs.find(g => g.grn_no === grnRefNo);
+      if (selectedGRN && selectedGRN.items && selectedGRN.items.length > 0) {
+        const mappedItems = selectedGRN.items.map((item: any, idx: number) => {
+          const qty = parseFloat(item.quantity) || 0;
+          const rate = parseFloat(item.rate) || parseFloat(item.final_rate) || 0;
+          const gstRate = parseFloat(item.gst_rate) || 0;
+          const taxable = qty * rate;
+          const totalTax = taxable * (gstRate / 100);
+
+          return {
+            id: (Date.now() + idx + Math.random()).toString(),
+            itemCode: item.item_code || '',
+            itemName: item.item_name || item.name || '',
+            hsnSac: item.hsn_code || item.hsn_sac || '',
+            qty: qty,
+            uom: item.uom || item.unit || '',
+            rate: rate,
+            taxableValue: taxable,
+            igst: isInterState ? totalTax : 0,
+            cgst: isInterState ? 0 : totalTax / 2,
+            sgst: isInterState ? 0 : totalTax / 2,
+            cess: 0,
+            invoiceValue: taxable + totalTax,
+            description: item.description || ''
+          };
+        });
+        setPurchaseItems(mappedItems);
+
+        // Also sync party if available in GRN
+        if (!party && selectedGRN.vendor_name) {
+          setParty(selectedGRN.vendor_name);
+        }
+      }
+    };
+    fillFromGRN();
+  }, [grnRefNo, pendingGRNs, isInterState, party]);
+
+  // Handle purchaseOrderNo sync for submission
+  useEffect(() => {
+    setPurchaseOrderNo(selectedPurchasePOs.join(', '));
+  }, [selectedPurchasePOs]);
   // Journal
   const [entries, setEntries] = useState<JournalEntry[]>([{ ledger: '', note: '', refNo: '', debit: 0, credit: 0 }, { ledger: '', note: '', refNo: '', debit: 0, credit: 0 }]);
 
@@ -1554,8 +1661,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         setIsInterState(newIsInterState);
 
         if (prefilledData.lineItems && prefilledData.lineItems.length > 0) {
-          const newItems = prefilledData.lineItems.map(item => {
-            const stockItem = stockItems.find(si => si.name?.toLowerCase() === (item.itemDescription || '').toLowerCase());
+          const newSimpleItems = prefilledData.lineItems.map(item => {
+            const stockItem = allItems.find(si => (si.name || si.item_name)?.toLowerCase() === (item.itemDescription || '').toLowerCase());
             const gstRate = stockItem?.gstRate || 18;
             const taxableAmount = item.quantity * item.rate;
             const tax = taxableAmount * (gstRate / 100);
@@ -1571,9 +1678,41 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               totalAmount: taxableAmount + tax,
             };
           });
-          setItems(newItems);
+          setItems(newSimpleItems);
+
+          // Also populate the sophisticated purchaseItems grid
+          const newPurchaseItems = prefilledData.lineItems.map((item, idx) => {
+            const stockItem = allItems.find(si => (si.name || si.item_name)?.toLowerCase() === (item.itemDescription || '').toLowerCase());
+            const gstRate = stockItem?.gstRate || 0;
+            const qty = item.quantity || 0;
+            const rate = item.rate || 0;
+            const taxable = qty * rate;
+            const totalTax = taxable * (gstRate / 100);
+
+            return {
+              id: (Date.now() + idx).toString(),
+              itemCode: stockItem?.item_code || stockItem?.code || '',
+              itemName: stockItem?.name || stockItem?.item_name || item.itemDescription || '',
+              hsnSac: stockItem?.hsn_sac || stockItem?.hsn || '',
+              qty: qty,
+              uom: stockItem?.uom || stockItem?.unit || '',
+              rate: rate,
+              taxableValue: taxable,
+              igst: newIsInterState ? totalTax : 0,
+              cgst: newIsInterState ? 0 : totalTax / 2,
+              sgst: newIsInterState ? 0 : totalTax / 2,
+              cess: 0,
+              invoiceValue: taxable + totalTax,
+              description: item.itemDescription || '',
+              foreignRate: 0,
+              foreignAmount: 0
+            };
+          });
+          setPurchaseItems(newPurchaseItems);
+
         } else {
           setItems([{ name: '', qty: 1, rate: 0, taxableAmount: 0, cgstAmount: 0, sgstAmount: 0, igstAmount: 0, totalAmount: 0 }]);
+          setPurchaseItems([{ id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '' }]);
         }
       } else if (voucherType === 'Contra') {
         setDate(formatDateForInput(prefilledData.invoiceDate) || getTodayDate());
@@ -1591,7 +1730,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
       clearPrefilledData();
     }
-  }, [prefilledData, clearPrefilledData, stockItems, ledgers, companyDetails.state]);
+  }, [prefilledData, clearPrefilledData, stockItems, ledgers, companyDetails.state, allItems]);
 
   const setAddressFields = useCallback((addressData: any) => {
     if (typeof addressData === 'string') {
@@ -1889,7 +2028,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     if (draftWarrantyDetails) parts.push(`Warranty / Guarantee: ${draftWarrantyDetails}`);
     if (draftForceMajeure) parts.push(`Force Majeure: ${draftForceMajeure}`);
     if (draftDisputeTerms) parts.push(`Dispute & Redressal: ${draftDisputeTerms}`);
-
     if (parts.length > 0) {
       setPurchaseTerms(parts.join('\n\n'));
     } else {
@@ -1898,16 +2036,15 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     setIsTermsModalOpen(false);
   };
 
-
-  const { totalTaxableAmount, totalCgst, totalSgst, totalIgst, grandTotal } = useMemo(() => {
+  const { totalTaxableAmount, totalCgst, totalSgst, totalIgst, total } = useMemo(() => {
     return items.reduce((acc, item) => {
       acc.totalTaxableAmount += item.taxableAmount;
       acc.totalCgst += item.cgstAmount;
       acc.totalSgst += item.sgstAmount;
       acc.totalIgst += item.igstAmount;
-      acc.grandTotal += item.totalAmount;
+      acc.total += item.totalAmount;
       return acc;
-    }, { totalTaxableAmount: 0, totalCgst: 0, totalSgst: 0, totalIgst: 0, grandTotal: 0 });
+    }, { totalTaxableAmount: 0, totalCgst: 0, totalSgst: 0, totalIgst: 0, total: 0 });
   }, [items]);
 
   const { totalDebit, totalCredit, isJournalBalanced } = useMemo(() => {
@@ -2086,7 +2223,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     switch (voucherType) {
       // (Removed Purchase case from switch and handled above)
       case 'Sales':
-        voucher = { id: '', type: voucherType, date, isInterState, invoiceNo, party, items, totalTaxableAmount, totalCgst, totalSgst, totalIgst, total: grandTotal, narration };
+        voucher = { id: '', type: voucherType, date, isInterState, invoiceNo, party, items, totalTaxableAmount, totalCgst, totalSgst, totalIgst, total, narration };
         break;
       case 'Payment':
       case 'Receipt':
@@ -2127,7 +2264,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     switch (voucherType) {
       case 'Purchase':
       case 'Sales':
-        voucherData = { type: voucherType, party, invoiceNo, total: grandTotal, items };
+        voucherData = { type: voucherType, party, invoiceNo, total, items };
         break;
       case 'Payment':
       case 'Receipt':
@@ -2170,16 +2307,16 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     if (field === 'itemCode' || field === 'itemName') {
       let selectedItem: any;
       if (field === 'itemCode') {
-        selectedItem = stockItems.find((i: any) => (i.item_code || i.code) === value);
+        selectedItem = allItems.find((i: any) => (i.item_code || i.code) === value);
       } else if (field === 'itemName') {
-        selectedItem = stockItems.find((i: any) => (i.name || i.item_name) === value);
+        selectedItem = allItems.find((i: any) => (i.name || i.item_name) === value);
       }
 
       if (selectedItem) {
         item.itemCode = selectedItem.item_code || selectedItem.code || item.itemCode;
         item.itemName = selectedItem.name || selectedItem.item_name || item.itemName;
         item.uom = selectedItem.unit || selectedItem.uom || item.uom;
-        item.hsnSac = selectedItem.hsn_code || selectedItem.hsn || selectedItem.hsnSac || item.hsnSac;
+        item.hsnSac = selectedItem.hsn_code || selectedItem.hsn || selectedItem.hsn_sac || selectedItem.sac_code || item.hsnSac;
         // Optionally update rate if available
         if (selectedItem.rate || selectedItem.selling_price) {
           item.rate = Number(selectedItem.rate || selectedItem.selling_price);
@@ -2194,12 +2331,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       const rate = parseFloat(item.rate.toString()) || 0;
       item.taxableValue = qty * rate;
 
-      // Fetch GST Rate from stock items
-      const selectedStockItem = stockItems.find((si: any) =>
+      // Fetch GST Rate from combined items
+      const selectedStockItem = allItems.find((si: any) =>
         (si.item_code || si.code) === item.itemCode ||
         (si.name || si.item_name) === item.itemName
       );
-
       const gstRate = selectedStockItem?.gstRate || 0;
       const totalTax = item.taxableValue * (gstRate / 100);
 
@@ -2226,7 +2362,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         item.taxableValue = qty * item.rate;
 
         // Recalculate taxes based on new taxable value
-        const selectedStockItem = stockItems.find((si: any) =>
+        const selectedStockItem = allItems.find((si: any) =>
           (si.item_code || si.code) === item.itemCode ||
           (si.name || si.item_name) === item.itemName
         );
@@ -2339,6 +2475,81 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     if (purchaseItems.length > 1) {
       setPurchaseItems(purchaseItems.filter((_, i) => i !== index));
     }
+  };
+
+  // Handle receipt value change for bulk mode
+  const handleBulkRowChange = (index: number, field: keyof ReceiptTransaction, value: string | number) => {
+    const newTransactions = [...receiptTransactions];
+    const transaction = { ...newTransactions[index] };
+
+    if (field === 'receipt') {
+      transaction.receipt = Math.max(0, Math.min(Number(transaction.amount), Number(value)));
+    } else {
+      (transaction as any)[field] = value;
+    }
+    newTransactions[index] = transaction;
+    setReceiptTransactions(newTransactions);
+  };
+
+  // Handle "Receive" button click - copies amount to receipt field
+  const handleReceiveClick = (transactionId: string) => {
+    setReceiptTransactions(prev =>
+      prev.map(t =>
+        t.id === transactionId ? { ...t, receipt: t.amount } : t
+      )
+    );
+  };
+
+  // Handle receipt value change
+  const handleReceiptChange = (transactionId: string, value: number) => {
+    setReceiptTransactions(prev =>
+      prev.map(t =>
+        t.id === transactionId ? { ...t, receipt: value } : t
+      )
+    );
+  };
+
+  // Reset receipt form
+  const handleCancelReceipt = () => {
+    setReceiptTransactions(prev => prev.map(t => ({ ...t, receipt: 0 })));
+    setAccount('');
+    setParty('');
+    setAdvanceRefNo('');
+    setAdvanceAmount(0);
+    setShowAdvance(false);
+  };
+
+  // Post receipt voucher
+  const handlePostReceipt = () => {
+    if (!account || !party) {
+      showError('Please select Receive In and Receive From accounts');
+
+      return;
+    }
+    if (totalReceipt <= 0 && !showAdvance) {
+      showError('Please enter receipt amounts');
+
+      return;
+    }
+    if (showAdvance && advanceAmount <= 0) {
+      showError('Please enter advance amount');
+
+      return;
+    }
+
+    // Create receipt voucher
+    const voucher: PaymentReceiptVoucher = {
+      id: '',
+      type: 'Receipt',
+      date,
+      account,
+      party,
+      amount: showAdvance ? advanceAmount : totalReceipt,
+      narration: showAdvance ? `Advance Receipt: ${advanceRefNo}` : `Receipt against invoices. Total: ${totalReceipt}`
+    };
+
+    onAddVouchers([voucher]);
+    handleCancelReceipt();
   };
 
   // New Purchase Voucher Form with Tabs
@@ -2853,23 +3064,61 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <label className="block text-sm font-medium text-gray-700 mb-1 whitespace-nowrap">
                       Purchase Order No.
                     </label>
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={purchaseOrderNo}
-                        onChange={(e) => setPurchaseOrderNo(e.target.value)}
-                        className="px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 min-w-[200px]"
+                    <div className="flex items-center gap-2 relative">
+                      <button
+                        type="button"
+                        onClick={() => setIsPoDropdownOpen(!isPoDropdownOpen)}
+                        className="px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 min-w-[200px] bg-white text-left flex justify-between items-center"
                         disabled={isFetchingPOs}
                       >
-                        <option value="">{isFetchingPOs ? 'Loading POs...' : 'Select Purchase Order'}</option>
-                        {availablePOs.map(po => (
-                          <option key={po.id} value={po.po_number}>{po.po_number}</option>
-                        ))}
-                      </select>
+                        <span className="truncate">
+                          {selectedPurchasePOs.length > 0 ? selectedPurchasePOs.join(', ') : (isFetchingPOs ? 'Loading POs...' : 'Select Purchase Order')}
+                        </span>
+                        <ChevronDown size={16} className={`text-gray-400 transition-transform ${isPoDropdownOpen ? 'rotate-180' : ''}`} />
+                      </button>
+
+                      {isPoDropdownOpen && (
+                        <>
+                          <div
+                            className="fixed inset-0 z-10"
+                            onClick={() => setIsPoDropdownOpen(false)}
+                          />
+                          <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-[4px] shadow-lg max-h-60 overflow-y-auto top-[42px]">
+                            {availablePOs.length === 0 ? (
+                              <div className="px-3 py-2 text-sm text-gray-500">No POs available</div>
+                            ) : (
+                              availablePOs.map((po) => {
+                                const isSelected = selectedPurchasePOs.includes(po.po_number);
+                                return (
+                                  <div
+                                    key={po.id}
+                                    className="flex items-center px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (isSelected) {
+                                        setSelectedPurchasePOs(selectedPurchasePOs.filter(p => p !== po.po_number));
+                                      } else {
+                                        setSelectedPurchasePOs([...selectedPurchasePOs, po.po_number]);
+                                      }
+                                    }}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      readOnly
+                                      className="mr-2 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                    />
+                                    <span>{po.po_number}</span>
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
-
-
 
                 <div className="flex items-center gap-2 bg-white px-4 py-2 border border-slate-200 rounded-[4px] shadow-none">
                   <span className="text-sm font-medium text-gray-700">1 {vendorBillingCurrency || 'Foreign Currency'} =</span>
@@ -2890,7 +3139,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           const newRate = fRate * exRateNum;
                           const newTaxable = qty * newRate;
 
-                          const selectedStockItem = stockItems.find((si: any) =>
+                          const selectedStockItem = allItems.find((si: any) =>
                             (si.item_code || si.code) === item.itemCode ||
                             (si.name || si.item_name) === item.itemName
                           );
@@ -2932,7 +3181,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <tr>
                       <th className="px-3 py-3 text-center w-12 border-r border-indigo-500"></th>
                       <th className="px-3 py-3 text-sm font-semibold text-center border-r border-indigo-500">Description</th>
-                      <th className="px-3 py-3 text-sm font-semibold text-center w-32 border-r border-indigo-500">Quantity</th>
+                      <th className="px-3 py-3 text-sm font-semibold text-center w-32 border-r border-indigo-500">Inv Qty</th>
                       <th className="px-3 py-3 text-sm font-semibold text-center w-32 border-r border-indigo-500">UQC</th>
                       <th className="px-3 py-3 text-sm font-semibold text-center w-40 border-r border-indigo-500">Rate ({vendorBillingCurrency || 'FC'})</th>
                       <th className="px-3 py-3 text-sm font-semibold text-center w-40 border-r border-indigo-500">Amount ({vendorBillingCurrency || 'FC'})</th>
@@ -2969,13 +3218,21 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           />
                         </td>
                         <td className="px-3 py-2 border-r border-gray-200">
-                          <input
-                            type="text"
+                          <select
                             value={row.uom}
                             onChange={(e) => handlePurchaseItemChange(index, 'uom', e.target.value)}
-                            className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent"
-                            placeholder="UQC"
-                          />
+                            className="w-full px-2 py-1.5 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm text-center bg-transparent appearance-none"
+                          >
+                            <option value="">Select UQC</option>
+                            {(() => {
+                              const selectedItem = allItems.find(i => (i.item_code || i.code) === row.itemCode || (i.name || i.item_name) === row.itemName);
+                              const units = selectedItem ? [selectedItem.uom || selectedItem.unit, selectedItem.alternate_unit].filter(Boolean) : [];
+                              // Unique units
+                              return Array.from(new Set(units)).map(u => (
+                                <option key={u} value={u}>{u}</option>
+                              ));
+                            })()}
+                          </select>
                         </td>
                         <td className="px-3 py-2 border-r border-gray-200">
                           <input
@@ -3001,20 +3258,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   {/* Purchase Ledger and Description Row (Like Sales Voucher) */}
                   <tfoot>
                     <tr className="border-t border-gray-200 bg-gray-50">
-                      <td colSpan={2} className="px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <label className="text-xs font-medium text-gray-700 whitespace-nowrap">Purchase Ledger:</label>
-                          <div className="flex-1">
-                            <SearchableSelect
-                              value={purchaseLedger}
-                              onChange={setPurchaseLedger}
-                              options={ledgers.filter(l => l.group === 'Purchase Accounts').map(l => l.name)} // Assuming 'Purchase Accounts' group
-                              placeholder="Select Purchase Ledger"
-                            />
-                          </div>
-                        </div>
-                      </td>
-                      <td colSpan={4} className="px-3 py-2 border-l border-gray-200">
+                      <td colSpan={6} className="px-3 py-2">
                         <div className="flex items-center gap-2">
                           <label className="text-xs font-medium text-gray-700 whitespace-nowrap">Description:</label>
                           <input
@@ -3072,17 +3316,59 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <label className="text-sm font-medium text-gray-700 whitespace-nowrap">
                     Purchase Order No.
                   </label>
-                  <select
-                    value={purchaseOrderNo}
-                    onChange={(e) => setPurchaseOrderNo(e.target.value)}
-                    className="px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 w-64"
-                    disabled={isFetchingPOs}
-                  >
-                    <option value="">{isFetchingPOs ? 'Loading POs...' : 'Select Purchase Order'}</option>
-                    {availablePOs.map(po => (
-                      <option key={po.id} value={po.po_number}>{po.po_number}</option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsPoDropdownOpen(!isPoDropdownOpen)}
+                      className="px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 w-64 bg-white text-left flex justify-between items-center"
+                      disabled={isFetchingPOs}
+                    >
+                      <span className="truncate">
+                        {selectedPurchasePOs.length > 0 ? selectedPurchasePOs.join(', ') : (isFetchingPOs ? 'Loading POs...' : 'Select Purchase Order')}
+                      </span>
+                      <ChevronDown size={16} className={`text-gray-400 transition-transform ${isPoDropdownOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {isPoDropdownOpen && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-10"
+                          onClick={() => setIsPoDropdownOpen(false)}
+                        />
+                        <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-[4px] shadow-lg max-h-60 overflow-y-auto top-[42px]">
+                          {availablePOs.length === 0 ? (
+                            <div className="px-3 py-2 text-sm text-gray-500">No POs available</div>
+                          ) : (
+                            availablePOs.map((po) => {
+                              const isSelected = selectedPurchasePOs.includes(po.po_number);
+                              return (
+                                <div
+                                  key={po.id}
+                                  className="flex items-center px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isSelected) {
+                                      setSelectedPurchasePOs(selectedPurchasePOs.filter(p => p !== po.po_number));
+                                    } else {
+                                      setSelectedPurchasePOs([...selectedPurchasePOs, po.po_number]);
+                                    }
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    readOnly
+                                    className="mr-2 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                  />
+                                  <span>{po.po_number}</span>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
 
 
@@ -3096,7 +3382,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">Item Code</th>
                         <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">Item Name</th>
                         <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">HSN/SAC</th>
-                        <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">Qty</th>
+                        <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">Inv Qty</th>
                         <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">UQC</th>
                         <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">Item Rate</th>
                         <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">Taxable Value</th>
@@ -3152,13 +3438,21 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             />
                           </td>
                           <td className="px-2 py-2 border-r border-gray-200">
-                            <input
-                              type="text"
+                            <select
                               value={row.uom}
                               onChange={(e) => handlePurchaseItemChange(index, 'uom', e.target.value)}
-                              className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                              placeholder="UOM"
-                            />
+                              className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-white"
+                            >
+                              <option value="">Select UQC</option>
+                              {(() => {
+                                const selectedItem = allItems.find(i => (i.item_code || i.code) === row.itemCode || (i.name || i.item_name) === row.itemName);
+                                const units = selectedItem ? [selectedItem.uom || selectedItem.unit, selectedItem.alternate_unit].filter(Boolean) : [];
+                                // Unique units
+                                return Array.from(new Set(units)).map(u => (
+                                  <option key={u} value={u}>{u}</option>
+                                ));
+                              })()}
+                            </select>
                           </td>
                           <td className="px-2 py-2 border-r border-gray-200">
                             <input
@@ -3217,20 +3511,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     {/* Purchase Ledger and Description Row (Like Sales Voucher) */}
                     <tfoot>
                       <tr className="border-t border-gray-200 bg-gray-50">
-                        <td colSpan={4} className="px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            <label className="text-xs font-medium text-gray-700 whitespace-nowrap">Purchase Ledger:</label>
-                            <div className="flex-1">
-                              <SearchableSelect
-                                value={purchaseLedger}
-                                onChange={setPurchaseLedger}
-                                options={ledgers.filter(l => l.group === 'Purchase Accounts').map(l => l.name)} // Assuming 'Purchase Accounts' group
-                                placeholder="Select Purchase Ledger"
-                              />
-                            </div>
-                          </div>
-                        </td>
-                        <td colSpan={8} className="px-3 py-2 border-l border-gray-200">
+                        <td colSpan={12} className="px-3 py-2">
                           <div className="flex items-center gap-2">
                             <label className="text-xs font-medium text-gray-700 whitespace-nowrap">Description:</label>
                             <input
@@ -3504,6 +3785,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         type="date"
                         value={purchaseTransitReceiptDate}
                         onChange={(e) => setPurchaseTransitReceiptDate(e.target.value)}
+                        max={getTodayDate()}
                         className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                       />
                     </div>
@@ -3521,33 +3803,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       />
                     </div>
 
-                    {/* Received Quantity & UQC */}
-                    <div className="flex gap-4">
-                      <div className="flex-1">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Received Quantity
-                        </label>
-                        <input
-                          type="number"
-                          value={purchaseTransitReceivedQty}
-                          onChange={(e) => setPurchaseTransitReceivedQty(e.target.value)}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                          placeholder="Qty"
-                        />
-                      </div>
-                      <div className="w-1/3">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          UQC
-                        </label>
-                        <input
-                          type="text"
-                          value={purchaseTransitReceivedUqc}
-                          onChange={(e) => setPurchaseTransitReceivedUqc(e.target.value)}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                          placeholder="UQC"
-                        />
-                      </div>
-                    </div>
+                    {/* Removed Received Quantity & UQC as per request */}
                   </div>
                 </div>
 
@@ -3589,9 +3845,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             <input
                               type="text"
                               value={purchaseTransitTransporterId}
-                              onChange={(e) => setPurchaseTransitTransporterId(e.target.value)}
+                              onChange={(e) => setPurchaseTransitTransporterId(e.target.value.toUpperCase())}
+                              maxLength={15}
+                              placeholder="15-digit GSTIN"
                               disabled={purchaseTransitDeliveryType === 'Courier'}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                              className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed uppercase"
                             />
                           </div>
                           <div>
@@ -3931,9 +4189,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           <input
                             type="text"
                             value={purchaseTransitTransporterId}
-                            onChange={(e) => setPurchaseTransitTransporterId(e.target.value)}
+                            onChange={(e) => setPurchaseTransitTransporterId(e.target.value.toUpperCase())}
+                            maxLength={15}
+                            placeholder="15-digit GSTIN"
                             disabled={purchaseTransitDeliveryType === 'Courier'}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                            className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed uppercase"
                           />
                         </div>
                         <div>
@@ -4003,17 +4263,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     </div>
                   </div>
                 )}
-
-
-
-
               </div>
-            )
-          }
-        </div >
-
-        {/* Common Action Buttons (Save/Cancel) can go here if needed globally for the tabs */}
-      </div >
+            )}
+        </div>
+      </div>
     );
   };
 
@@ -4068,74 +4321,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 <div className="flex justify-between items-center"><span className="text-sm text-gray-600">Total SGST</span><span className="font-semibold text-gray-800">{totalSgst.toFixed(2)}</span></div>
               </>}
               {isInterState && <div className="flex justify-between items-center"><span className="text-sm text-gray-600">Total IGST</span><span className="font-semibold text-gray-800">{totalIgst.toFixed(2)}</span></div>}
-              <div className="flex justify-between items-center border-t pt-2 mt-2"><span className="text-lg font-bold text-gray-800">Grand Total</span><span className="text-lg font-bold text-gray-800">{grandTotal.toFixed(2)}</span></div>
+              <div className="flex justify-between items-center border-t pt-2 mt-2"><span className="text-lg font-bold text-gray-800">Grand Total</span><span className="text-lg font-bold text-gray-800">{total.toFixed(2)}</span></div>
             </div>
           </div>
 
         </div>
       </>
     );
-  };
-
-  // Handle "Receive" button click - copies amount to receipt field
-  const handleReceiveClick = (transactionId: string) => {
-    setReceiptTransactions(prev =>
-      prev.map(t =>
-        t.id === transactionId ? { ...t, receipt: t.amount } : t
-      )
-    );
-  };
-
-  // Handle receipt value change
-  const handleReceiptChange = (transactionId: string, value: number) => {
-    setReceiptTransactions(prev =>
-      prev.map(t =>
-        t.id === transactionId ? { ...t, receipt: value } : t
-      )
-    );
-  };
-
-  // Reset receipt form
-  const handleCancelReceipt = () => {
-    setReceiptTransactions(prev => prev.map(t => ({ ...t, receipt: 0 })));
-    setAccount('');
-    setParty('');
-    setAdvanceRefNo('');
-    setAdvanceAmount(0);
-    setShowAdvance(false);
-  };
-
-  // Post receipt voucher
-  const handlePostReceipt = () => {
-    if (!account || !party) {
-      showError('Please select Receive In and Receive From accounts');
-
-      return;
-    }
-    if (totalReceipt <= 0 && !showAdvance) {
-      showError('Please enter receipt amounts');
-
-      return;
-    }
-    if (showAdvance && advanceAmount <= 0) {
-      showError('Please enter advance amount');
-
-      return;
-    }
-
-    // Create receipt voucher
-    const voucher: PaymentReceiptVoucher = {
-      id: '',
-      type: 'Receipt',
-      date,
-      account,
-      party,
-      amount: showAdvance ? advanceAmount : totalReceipt,
-      narration: showAdvance ? `Advance Receipt: ${advanceRefNo}` : `Receipt against invoices. Total: ${totalReceipt}`
-    };
-
-    onAddVouchers([voucher]);
-    handleCancelReceipt();
   };
 
   // New Receipt Voucher Form based on the wireframe design
@@ -4668,7 +4860,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     handleCancelPayment();
   };
 
-  const handleBulkRowChange = (index: number, field: keyof BulkRow, value: string | number) => {
+  const handlePaymentBulkRowChange = (index: number, field: keyof BulkRow, value: string | number) => {
     const newRows = [...bulkRows];
     (newRows[index] as any)[field] = value;
     setBulkRows(newRows);
@@ -6272,17 +6464,17 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           .form-label { display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.25rem; }
           .form-input { display: block; width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); outline: none; transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out; }
           .form-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 1px #3b82f6; }
-          .table-input { 
-            width: 100%; 
-            border: 1px solid transparent; 
+          .table-input {
+            width: 100%;
+            border: 1px solid transparent;
             padding: 0.5rem 0.75rem;
             background-color: transparent;
-            outline: none; 
+            outline: none;
             border-radius: 0.375rem;
             transition: all 0.2s;
             color: #1e293b;
           }
-           .table-input:focus { 
+           .table-input:focus {
             background-color: white;
             border-color: #3b82f6;
             box-shadow: 0 0 0 1px #3b82f6;
@@ -6660,6 +6852,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         isCreateGRNModalOpen && (
           <CreateGRNModal
             onClose={() => setIsCreateGRNModalOpen(false)}
+            initialSupplierInvoiceNo={localPrefilledData?.invoiceNumber || invoiceNo}
+            initialExtractedData={localPrefilledData}
             onSave={async (data) => {
               try {
 
@@ -6672,7 +6866,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 if (data.items && data.items.length > 0) {
                   const mappedItems = data.items.map((item: any, index: number) => {
                     // Try to find full item details from stockItems
-                    const stockItem = stockItems.find((s: any) =>
+                    const stockItem = allItems.find((s: any) =>
                       (s.item_code || s.code) === item.item_code || (s.item_name || s.name) === item.item_name
                     );
 
