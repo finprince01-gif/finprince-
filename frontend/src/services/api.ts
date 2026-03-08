@@ -213,10 +213,16 @@ class ApiService {
         return httpClient.get<StockItem[]>('/api/inventory/items/');
     }
 
-    async getServices() {
-        return httpClient.get<any[]>('/api/services/services/');
+    async getServices(params?: string | Record<string, any>) {
+        if (typeof params === 'string') {
+            return httpClient.get<any[]>(`/api/services/${params ? '?' + params : ''}`);
+        }
+        if (params && typeof params === 'object') {
+            const query = new URLSearchParams(params as any).toString();
+            return httpClient.get<any[]>(`/api/services/?${query}`);
+        }
+        return httpClient.get<any[]>('/api/services/');
     }
-
     async saveStockItem(data: any) {
         return httpClient.post<StockItem>('/api/inventory/items/', data);
     }
@@ -298,7 +304,7 @@ class ApiService {
         let url = `/api/vendors/purchase-orders/`;
         let params = [];
         if (vendorName) {
-            params.push(`vendorName=${encodeURIComponent(vendorName)}`);
+            params.push(`vendor_name=${encodeURIComponent(vendorName)}`);
         }
         if (status) {
             params.push(`status=${encodeURIComponent(status)}`);

@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { apiService } from '../services/api';
 import { httpClient } from '../services/httpClient';
 import { showWarning } from '../utils/toast';
+import { ChevronDown } from 'lucide-react';
 
 interface GRNItem {
     id: number;
     itemCode: string;
     itemName: string;
-    hsnCode: string;
+    hsnCode: string; // This handles HSN or SAC
     uom: string;
     refQty: string; // PO Qty
     secondaryQty: string; // Invoice Qty
@@ -17,6 +18,7 @@ interface GRNItem {
     shortExcessQty: string;
     remarks: string;
     boxes: string;
+    poNumber?: string;
 }
 
 interface Location {
@@ -27,9 +29,11 @@ interface Location {
 interface CreateGRNModalProps {
     onClose: () => void;
     onSave: (data: any) => void;
+    initialSupplierInvoiceNo?: string;
+    initialExtractedData?: any;
 }
 
-const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
+const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initialSupplierInvoiceNo = '', initialExtractedData }) => {
     // Form State
     const [grnType, setGrnType] = useState<'purchases' | 'sales_return'>('purchases');
     const [grnNo, setGrnNo] = useState('');
@@ -47,17 +51,47 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
     const [gstin, setGstin] = useState('');
 
     // References State
-    const [purchaseOrderNo, setPurchaseOrderNo] = useState('');
-    const [supplierInvoiceNo, setSupplierInvoiceNo] = useState('');
+    const [selectedPOs, setSelectedPOs] = useState<string[]>([]);
+    const [isPoDropdownOpen, setIsPoDropdownOpen] = useState(false);
+    const [purchaseOrderNo, setPurchaseOrderNo] = useState(''); // Keep for single value inputs if needed
+    const [supplierInvoiceNo, setSupplierInvoiceNo] = useState(initialSupplierInvoiceNo);
 
     const [postingNote, setPostingNote] = useState('');
 
     // Data Source State
     const [locations, setLocations] = useState<Location[]>([]);
     const [grnSeriesList, setGrnSeriesList] = useState<any[]>([]);
+
+    const filteredGrnSeriesList = useMemo(() => {
+        return grnSeriesList.filter((series: any) => {
+            const seriesType = (series.grn_type || '').toLowerCase().replace(' ', '_');
+            const currentType = (grnType || '').toLowerCase();
+            if (currentType === 'purchases') return seriesType === 'purchase';
+            return seriesType === currentType;
+        });
+    }, [grnSeriesList, grnType]);
     const [vendors, setVendors] = useState<any[]>([]);
     const [customers, setCustomers] = useState<any[]>([]);
     const [itemsList, setItemsList] = useState<any[]>([]);
+
+    // PO Color Mapping
+    const poColorMap = useMemo(() => {
+        const colors = [
+            '#f0f7ff', // Alice Blue
+            '#f0fff4', // Honeydew
+            '#fffaf0', // Floral White
+            '#fff5f5', // Snow Red
+            '#faf5ff', // Lavender
+            '#f0feff', // Azure
+            '#fffaf5', // Seashell
+            '#f5f7ff'  // Ghost White
+        ];
+        const map: Record<string, string> = {};
+        selectedPOs.forEach((po, index) => {
+            map[po] = colors[index % colors.length];
+        });
+        return map;
+    }, [selectedPOs]);
 
     // Dynamic Options State
     const [branchOptions, setBranchOptions] = useState<any[]>([]);
@@ -76,7 +110,7 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
             secondaryQty: '',
             receivedQty: '',
             acceptedQty: '',
-            rejectedQty: '',
+            rejectedQty: '0',
             shortExcessQty: '',
             remarks: '',
             boxes: ''
@@ -87,93 +121,238 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
-                // Fetch GRN Series
-                const seriesResponse = await httpClient.get<any[]>('/api/inventory/master-voucher-grn/');
-                setGrnSeriesList(seriesResponse || []);
+                // Fetch each resource independently to prevent one failure from blocking others
 
-                // Fetch Locations
-                const locResponse = await httpClient.get<any>('/api/inventory/locations/');
-                setLocations(Array.isArray(locResponse) ? locResponse : (locResponse?.results || []));
+                // 1. Fetch GRN Series
+                try {
+                    const seriesResponse = await httpClient.get<any[]>('/api/inventory/master-voucher-grn/');
+                    setGrnSeriesList(seriesResponse || []);
+                } catch (e) { console.error('Failed to fetch GRN series:', e); }
 
-                // Fetch Vendors (Basic Details)
-                const vendorsResponse = await apiService.getRichVendors() as any;
-                setVendors(Array.isArray(vendorsResponse) ? vendorsResponse : (vendorsResponse?.results || []));
+                // 2. Fetch Locations
+                try {
+                    const locResponse = await httpClient.get<any>('/api/inventory/locations/');
+                    setLocations(Array.isArray(locResponse) ? locResponse : (locResponse?.results || []));
+                } catch (e) { console.error('Failed to fetch locations:', e); }
 
-                // Fetch Customers
-                const customersResponse = await apiService.getRichCustomers();
-                setCustomers(customersResponse || []);
+                // 3. Fetch Vendors
+                try {
+                    const vendorsResponse = await apiService.getRichVendors() as any;
+                    setVendors(Array.isArray(vendorsResponse) ? vendorsResponse : (vendorsResponse?.results || []));
+                } catch (e) { console.error('Failed to fetch vendors:', e); }
 
-                // Fetch Items
-                const itemsResponse = await apiService.getStockItems() as any;
-                setItemsList(Array.isArray(itemsResponse) ? itemsResponse : (itemsResponse?.results || []));
+                // 4. Fetch Customers
+                try {
+                    const customersResponse = await apiService.getRichCustomers() as any;
+                    setCustomers(Array.isArray(customersResponse) ? customersResponse : (customersResponse?.results || []));
+                } catch (e) { console.error('Failed to fetch customers:', e); }
+
+                // 5. Fetch Items (Stock Items)
+                let stockItemsData: any[] = [];
+                try {
+                    const itemsResponseRaw = await httpClient.get('/api/inventory/items/') as any;
+                    stockItemsData = Array.isArray(itemsResponseRaw) ? itemsResponseRaw : (itemsResponseRaw?.results || itemsResponseRaw?.data || []);
+                } catch (e) { console.error('Failed to fetch stock items:', e); }
+
+                // 6. Fetch Services
+                let servicesData: any[] = [];
+                try {
+                    const servicesResponseRaw = await httpClient.get('/api/services/') as any;
+                    servicesData = Array.isArray(servicesResponseRaw) ? servicesResponseRaw : (servicesResponseRaw?.results || servicesResponseRaw?.data || []);
+                } catch (e) {
+                    console.error('Failed to fetch services:', e);
+                }
+
+                // Map services to match item structure
+                const mappedServices = servicesData.map((s: any) => ({
+                    ...s,
+                    item_code: s.service_code || s.code || '',
+                    item_name: s.service_name || s.name || '',
+                    hsn_code: s.sac_code || s.hsn_code || s.hsn_sac_code || '',
+                    is_service: true
+                }));
+
+                // Combine and update state
+                setItemsList([...stockItemsData, ...mappedServices]);
 
             } catch (error) {
-                console.error('Failed to fetch locations:');
+                console.error('Fatal error in fetchInitialData:', error);
             }
         };
         fetchInitialData();
     }, []);
 
-    // Handle Vendor Change
-    const handleVendorChange = async (selectedVendorName: string) => {
+    useEffect(() => {
+        if (initialExtractedData) {
+            if (initialExtractedData.sellerName) setVendorName(initialExtractedData.sellerName);
+            if (initialExtractedData.invoiceNumber) setSupplierInvoiceNo(initialExtractedData.invoiceNumber);
+            if (initialExtractedData.invoiceDate) setDate(initialExtractedData.invoiceDate);
+            if (initialExtractedData.postingNote) setPostingNote(initialExtractedData.postingNote);
+
+            if (initialExtractedData.lineItems && initialExtractedData.lineItems.length > 0) {
+                const prefilledItems: GRNItem[] = initialExtractedData.lineItems.map((item: any, index: number) => ({
+                    id: Date.now() + index,
+                    itemCode: '',
+                    itemName: item.itemDescription || '',
+                    hsnCode: item.hsnCode || '',
+                    uom: item.uom || '',
+                    refQty: '',
+                    secondaryQty: (item.quantity || 0).toString(),
+                    receivedQty: (item.quantity || 0).toString(),
+                    acceptedQty: (item.quantity || 0).toString(),
+                    rejectedQty: '0',
+                    shortExcessQty: '0',
+                    remarks: '',
+                    boxes: '0'
+                }));
+                setItems(prefilledItems);
+            }
+        }
+    }, [initialExtractedData]);
+
+    // Handle Vendor Change (Manual)
+    const handleVendorChange = (selectedVendorName: string) => {
         setVendorName(selectedVendorName);
 
-        // Reset dependent fields
+        // Reset dependent fields only on manual change
         setBranch('');
         setBranchOptions([]);
         setAddress('');
         setGstin('');
+        setSelectedPOs([]); // Reset selected POs
         setPurchaseOrderNo('');
         setPoOptions([]);
         setSupplierInvoiceNo('');
         setInvoiceOptions([]);
+    };
 
-        const vendor = vendors.find(v => v.vendor_name === selectedVendorName);
-        if (vendor) {
-            try {
-                // Fetch Branches (GST Details)
-                const branchResponse = await apiService.getVendorGSTDetails(vendor.id);
-                const branches = Array.isArray(branchResponse) ? branchResponse : [];
-                setBranchOptions(branches);
+    // Load Vendor Details (Branches, POs, Invoices) whenever vendorName changes
+    useEffect(() => {
+        const loadDetails = async () => {
+            console.log('[CreateGRNModal] useEffect triggered. vendorName:', vendorName, 'vendors count:', vendors.length);
+            if (!vendorName || vendors.length === 0) return;
 
-                // Auto-select if only one branch exists
-                if (branches.length === 1) {
-                    const onlyBranch = branches[0];
-                    const branchName = onlyBranch.reference_name || onlyBranch.trade_name || 'Main';
-                    setBranch(branchName);
+            const vendor = vendors.find(v => v.vendor_name === vendorName);
+            console.log('[CreateGRNModal] Finding vendor in list:', vendorName, 'Found:', !!vendor);
 
-                    if (onlyBranch.branch_address) {
-                        setAddress(onlyBranch.branch_address);
-                    } else {
-                        const addressParts = [
-                            onlyBranch.address_line_1,
-                            onlyBranch.address_line_2,
-                            onlyBranch.city,
-                            onlyBranch.state,
-                            onlyBranch.pincode,
-                            onlyBranch.country
-                        ].filter(Boolean);
-                        setAddress(addressParts.join(', '));
+            if (vendor) {
+                try {
+                    // Fetch Branches (GST Details)
+                    const branchResponse = await apiService.getVendorGSTDetails(vendor.id);
+                    const branches = Array.isArray(branchResponse) ? branchResponse : [];
+                    setBranchOptions(branches);
+                    console.log('[CreateGRNModal] Branches for vendor:', branches.length);
+
+                    // Auto-select if only one branch exists and no branch selected
+                    if (branches.length === 1 && !branch) {
+                        const onlyBranch = branches[0];
+                        const branchName = onlyBranch.reference_name || onlyBranch.trade_name || 'Main';
+                        setBranch(branchName);
+                        // ... address logic ...
+                        if (onlyBranch.branch_address) {
+                            setAddress(onlyBranch.branch_address);
+                        } else {
+                            const addressParts = [
+                                onlyBranch.address_line_1,
+                                onlyBranch.address_line_2,
+                                onlyBranch.city,
+                                onlyBranch.state,
+                                onlyBranch.pincode,
+                                onlyBranch.country
+                            ].filter(Boolean);
+                            setAddress(addressParts.join(', '));
+                        }
+                        setGstin(onlyBranch.gstin || '');
                     }
-                    setGstin(onlyBranch.gstin || '');
+
+                    // Fetch Purchase Orders (All created orders)
+                    console.log('[CreateGRNModal] Fetching POs for vendor:', vendorName);
+                    const poResponse = await apiService.getVendorPurchaseOrders(vendorName);
+                    console.log('[CreateGRNModal] PO Fetch Response Raw:', poResponse);
+                    if (poResponse && poResponse.success && Array.isArray(poResponse.data)) {
+                        setPoOptions(poResponse.data);
+                        console.log('[CreateGRNModal] Set poOptions with:', poResponse.data.length, 'records');
+                    } else {
+                        console.warn('[CreateGRNModal] PO Fetch Response was not successful or data is not an array:', poResponse);
+                    }
+
+                    // Fetch Purchase Invoices
+                    const invResponse = await apiService.getVendorPurchaseInvoices(vendorName);
+                    if (Array.isArray(invResponse)) {
+                        setInvoiceOptions(invResponse);
+                    }
+                } catch (error) {
+                    console.error("Error loading vendor details in effect:", error);
+                }
+            } else {
+                console.warn('[CreateGRNModal] Could not find vendor object for name:', vendorName, 'in vendors list:', vendors.map(v => v.vendor_name));
+            }
+        };
+
+        loadDetails();
+    }, [vendorName, vendors]);
+
+    // Auto-fetch items when PO(s) are selected
+    useEffect(() => {
+        const fetchMultiplePOItems = async () => {
+            if (selectedPOs.length === 0 || grnType !== 'purchases') return;
+
+            try {
+                let allPoItemsRaw: any[] = [];
+
+                for (const poNo of selectedPOs) {
+                    // Find PO ID from poOptions
+                    const selectedPO = poOptions.find(po => po.po_number === poNo);
+                    if (selectedPO && selectedPO.id) {
+                        const response = await apiService.getVendorPurchaseOrderById(selectedPO.id);
+                        if (response && response.success && response.data && Array.isArray(response.data.items)) {
+                            allPoItemsRaw = [...allPoItemsRaw, ...response.data.items.map((item: any) => ({ ...item, _poNumber: poNo }))];
+                        }
+                    }
                 }
 
-                // Fetch Purchase Orders
-                const poResponse = await apiService.getVendorPurchaseOrders(selectedVendorName);
-                if (poResponse && poResponse.success && Array.isArray(poResponse.data)) {
-                    setPoOptions(poResponse.data);
-                }
+                if (allPoItemsRaw.length > 0) {
+                    const poItems = allPoItemsRaw.map((item: any) => {
+                        // Find full item details to get HSN correctly if not in PO item
+                        const fullItem = itemsList.find(i =>
+                            (i.item_code || i.code) === item.item_code
+                        );
 
-                // Fetch Purchase Invoices
-                const invResponse = await apiService.getVendorPurchaseInvoices(selectedVendorName);
-                if (Array.isArray(invResponse)) {
-                    setInvoiceOptions(invResponse);
+                        return {
+                            id: Date.now() + Math.random(),
+                            itemCode: item.item_code || '',
+                            itemName: item.item_name || '',
+                            hsnCode: fullItem?.hsn_code || fullItem?.hsn_sac_code || fullItem?.sac_code || '',
+                            uom: item.uom || fullItem?.uom || fullItem?.base_unit || '',
+                            refQty: item.quantity?.toString() || '',
+                            secondaryQty: '',
+                            receivedQty: '',
+                            acceptedQty: '',
+                            rejectedQty: '0',
+                            shortExcessQty: '',
+                            remarks: '',
+                            boxes: '',
+                            poNumber: item._poNumber
+                        };
+                    });
+                    setItems(poItems);
                 }
             } catch (error) {
-                console.error("Error fetching vendor details:", error);
+                console.error("Error fetching PO items:", error);
             }
+        };
+
+        fetchMultiplePOItems();
+    }, [selectedPOs, poOptions, grnType, itemsList]);
+
+    // Auto-select GRN Series if only 1 is available
+    useEffect(() => {
+        if (filteredGrnSeriesList.length === 1 && grnSeriesId !== filteredGrnSeriesList[0].id.toString()) {
+            handleGrnSeriesChange(filteredGrnSeriesList[0].id.toString());
+        } else if (filteredGrnSeriesList.length === 0 && grnSeriesId) {
+            handleGrnSeriesChange('');
         }
-    };
+    }, [filteredGrnSeriesList, grnSeriesId]);
 
     // Handle GRN Series Change
     const handleGrnSeriesChange = async (seriesId: string) => {
@@ -263,7 +442,7 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
                 if (selectedStockItem) {
                     updatedItem.itemCode = selectedStockItem.item_code || selectedStockItem.code || '';
                     updatedItem.itemName = selectedStockItem.item_name || selectedStockItem.name || '';
-                    updatedItem.hsnCode = selectedStockItem.hsn_code || selectedStockItem.hsn_sac_code || '';
+                    updatedItem.hsnCode = selectedStockItem.hsn_code || selectedStockItem.hsn_sac_code || selectedStockItem.sac_code || '';
                     updatedItem.uom = selectedStockItem.uom || selectedStockItem.base_unit || selectedStockItem.unit || '';
                 }
             }
@@ -304,7 +483,7 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
             address: address,
             gstin: gstin,
 
-            reference_no: purchaseOrderNo,
+            reference_no: grnType === 'purchases' ? selectedPOs.join(', ') : purchaseOrderNo, // Use selectedPOs for purchases
             secondary_ref_no: supplierInvoiceNo || '',
 
             posting_note: postingNote || '',
@@ -313,6 +492,7 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
             items: items.map(item => ({
                 item_code: item.itemCode || '',
                 item_name: item.itemName || '',
+                hsn_sac_code: item.hsnCode || '',
                 uom: item.uom || '',
                 ref_qty: parseFloat(item.refQty) || 0,
                 secondary_qty: parseFloat(item.secondaryQty) || 0,
@@ -351,6 +531,7 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
                             <input
                                 type="date"
                                 value={date}
+                                max={new Date().toISOString().split('T')[0]}
                                 onChange={(e) => setDate(e.target.value)}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
                             />
@@ -390,7 +571,7 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
                                 className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
                             >
                                 <option value="">Select Series</option>
-                                {grnSeriesList.map((series) => (
+                                {filteredGrnSeriesList.map((series) => (
                                     <option key={series.id} value={series.id.toString()}>
                                         {series.name}
                                     </option>
@@ -402,9 +583,8 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
                             <input
                                 type="text"
                                 value={grnNo}
-                                onChange={(e) => setGrnNo(e.target.value)}
-                                readOnly={!!grnSeriesId}
-                                className={`w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 ${grnSeriesId ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                                readOnly
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none bg-gray-50 cursor-not-allowed"
                             />
                         </div>
                     </div>
@@ -494,18 +674,58 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
                                 {grnType === 'purchases' ? 'PURCHASE ORDER NO.' : 'SALES VOUCHER NO.'}
                             </label>
                             {grnType === 'purchases' ? (
-                                <select
-                                    value={purchaseOrderNo}
-                                    onChange={(e) => setPurchaseOrderNo(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                >
-                                    <option value="">Select PO</option>
-                                    {poOptions.map((po) => (
-                                        <option key={po.id} value={po.po_number}>
-                                            {po.po_number}
-                                        </option>
-                                    ))}
-                                </select>
+                                <div className="relative">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsPoDropdownOpen(!isPoDropdownOpen)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white text-left flex justify-between items-center min-h-[38px]"
+                                    >
+                                        <span className="truncate">
+                                            {selectedPOs.length > 0 ? selectedPOs.join(', ') : 'Select POs'}
+                                        </span>
+                                        <ChevronDown size={16} className={`text-gray-400 transition-transform ${isPoDropdownOpen ? 'rotate-180' : ''}`} />
+                                    </button>
+
+                                    {isPoDropdownOpen && (
+                                        <>
+                                            <div
+                                                className="fixed inset-0 z-10"
+                                                onClick={() => setIsPoDropdownOpen(false)}
+                                            />
+                                            <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-[4px] shadow-lg max-h-60 overflow-y-auto">
+                                                {poOptions.length === 0 ? (
+                                                    <div className="px-3 py-2 text-sm text-gray-500">No POs available</div>
+                                                ) : (
+                                                    poOptions.map((po) => {
+                                                        const isSelected = selectedPOs.includes(po.po_number);
+                                                        return (
+                                                            <div
+                                                                key={po.po_number}
+                                                                className="flex items-center px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (isSelected) {
+                                                                        setSelectedPOs(selectedPOs.filter(p => p !== po.po_number));
+                                                                    } else {
+                                                                        setSelectedPOs([...selectedPOs, po.po_number]);
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={isSelected}
+                                                                    readOnly
+                                                                    className="mr-2 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                                                />
+                                                                <span>{po.po_number}</span>
+                                                            </div>
+                                                        );
+                                                    })
+                                                )}
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
                             ) : (
                                 <input
                                     type="text"
@@ -520,28 +740,13 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
                                 {grnType === 'purchases' ? 'SUPPLIER INVOICE NO.' : 'DEBIT NOTE NO.'}
                             </label>
-                            {grnType === 'purchases' ? (
-                                <select
-                                    value={supplierInvoiceNo}
-                                    onChange={(e) => setSupplierInvoiceNo(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                >
-                                    <option value="">Select Invoice</option>
-                                    {invoiceOptions.map((inv) => (
-                                        <option key={inv.id} value={inv.voucher_number}>
-                                            {inv.voucher_number}
-                                        </option>
-                                    ))}
-                                </select>
-                            ) : (
-                                <input
-                                    type="text"
-                                    value={supplierInvoiceNo}
-                                    onChange={(e) => setSupplierInvoiceNo(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                    placeholder="Enter Debit Note No."
-                                />
-                            )}
+                            <input
+                                type="text"
+                                value={supplierInvoiceNo}
+                                onChange={(e) => setSupplierInvoiceNo(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                                placeholder={grnType === 'purchases' ? "Enter Invoice No." : "Enter Debit Note No."}
+                            />
                         </div>
                     </div>
 
@@ -554,6 +759,7 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
                                     <tr>
                                         <th className="px-3 py-2 text-left text-xs font-bold text-gray-600">Item Code</th>
                                         <th className="px-3 py-2 text-left text-xs font-bold text-gray-600 w-48">Item Name</th>
+                                        <th className="px-3 py-2 text-left text-xs font-bold text-gray-600 w-24">HSN/SAC</th>
                                         <th className="px-3 py-2 text-left text-xs font-bold text-gray-600 w-20">UOM</th>
                                         <th className="px-3 py-2 text-left text-xs font-bold text-gray-600 w-20">PO Qty</th>
                                         <th className="px-3 py-2 text-left text-xs font-bold text-gray-600 w-20">Inv Qty</th>
@@ -567,7 +773,11 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
                                 </thead>
                                 <tbody className="divide-y divide-gray-200">
                                     {items.map((item) => (
-                                        <tr key={item.id}>
+                                        <tr
+                                            key={item.id}
+                                            style={{ backgroundColor: item.poNumber ? poColorMap[item.poNumber] : 'transparent' }}
+                                            className="transition-colors"
+                                        >
                                             <td className="p-2">
                                                 <select
                                                     value={item.itemCode}
@@ -593,6 +803,14 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave }) => {
                                                         return <option key={i.id} value={name}>{name}</option>;
                                                     })}
                                                 </select>
+                                            </td>
+                                            <td className="p-2">
+                                                <input
+                                                    type="text"
+                                                    value={item.hsnCode}
+                                                    readOnly
+                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-xs bg-gray-50"
+                                                />
                                             </td>
                                             <td className="p-2">
                                                 <input

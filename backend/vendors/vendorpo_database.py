@@ -236,6 +236,10 @@ def get_all_purchase_orders(tenant_id: str, status: Optional[str] = None, vendor
     Returns:
         List[Dict]: List of PO records
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"[db.get_all_purchase_orders] tenant_id={tenant_id}, status={status}, vendor_name={vendor_name}")
+
     query = """
         SELECT 
             po.id, po.po_number, po.vendor_name, po.receive_by,
@@ -248,20 +252,24 @@ def get_all_purchase_orders(tenant_id: str, status: Optional[str] = None, vendor
     
     params = [tenant_id]
     
-    if status:
+    if status and status != 'All':
         query += " AND po.status = %s"
         params.append(status)
         
     if vendor_name:
-        query += " AND po.vendor_name = %s"
+        # Use case-insensitive matching and allow for slight whitespace variations
+        query += " AND LOWER(TRIM(po.vendor_name)) = LOWER(TRIM(%s))"
         params.append(vendor_name)
     
-    query += " GROUP BY po.id ORDER BY po.created_at DESC"
+    # Group by id and po_number to handle non-unique ids
+    query += " GROUP BY po.id, po.po_number ORDER BY po.created_at DESC"
     
     with connection.cursor() as cursor:
         cursor.execute(query, params)
         columns = [col[0] for col in cursor.description]
-        return [dict(zip(columns, row)) for row in cursor.fetchall()]
+        results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        logger.info(f"[db.get_all_purchase_orders] Returning {len(results)} results")
+        return results
 
 
 def update_po_status(po_id: int, status: str, updated_by: Optional[str] = None) -> bool:

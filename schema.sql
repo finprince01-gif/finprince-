@@ -8,7 +8,7 @@
     `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
     PRIMARY KEY (`id`)
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   -- Table: amount_transactions
 
   CREATE TABLE `amount_transactions` (
@@ -32,7 +32,7 @@
     KEY `amount_tran_tenant__d7c201_idx` (`tenant_id`,`ledger_id`,`transaction_date`),
     KEY `amount_tran_tenant__9534d3_idx` (`tenant_id`,`transaction_type`),
     KEY `amount_tran_transac_10f4ee_idx` (`transaction_date`)
-  ) ENGINE=InnoDB AUTO_INCREMENT=39 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  ) ENGINE=InnoDB AUTO_INCREMENT=39 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
   -- Table: answers
@@ -46,7 +46,7 @@
     `sub_group_1_2` varchar(255) DEFAULT NULL,
     `question` text,
     PRIMARY KEY (`id`)
-  ) ENGINE=InnoDB AUTO_INCREMENT=35 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  ) ENGINE=InnoDB AUTO_INCREMENT=35 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
   -- Table: company_informations
@@ -83,10 +83,10 @@ CREATE TABLE `company_informations` (
     `updated_at` datetime(6) NOT NULL,
     PRIMARY KEY (`id`),
     UNIQUE KEY `company_informations_tenant_unique` (`tenant_id`),
-    CONSTRAINT `fk_company_info_tenant`
-        FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`)
-        ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    CONSTRAINT `company_informations_tenant_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
+  ) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
 
 
 
@@ -113,7 +113,7 @@ CREATE TABLE `company_informations` (
     `sub_group_3_2` text,
     `ledger_2` text,
     PRIMARY KEY (`id`)
-  ) ENGINE=InnoDB AUTO_INCREMENT=597 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  ) ENGINE=InnoDB AUTO_INCREMENT=597 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
   -- Table: master_ledgers
@@ -148,7 +148,7 @@ CREATE TABLE `company_informations` (
     KEY `master_ledgers_category_idx` (`category`),
     KEY `master_ledgers_group_idx` (`group`),
     CONSTRAINT `master_ledgers_tenant_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
-  ) ENGINE=InnoDB AUTO_INCREMENT=1004 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  ) ENGINE=InnoDB AUTO_INCREMENT=1004 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -163,7 +163,7 @@ CREATE TABLE `company_informations` (
     `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uq_sg1_question` (`sub_group_1_2`,`question`)
-  ) ENGINE=InnoDB AUTO_INCREMENT=1071 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  ) ENGINE=InnoDB AUTO_INCREMENT=1071 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -227,7 +227,7 @@ CREATE TABLE `company_informations` (
     `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     UNIQUE KEY `ledger_code` (`ledger_code`)
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
   -- Table: users
@@ -260,7 +260,7 @@ CREATE TABLE `company_informations` (
     UNIQUE KEY `email` (`email`),
     KEY `users_tenant_id_idx` (`tenant_id`),
     CONSTRAINT `users_tenant_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
-  ) ENGINE=InnoDB AUTO_INCREMENT=42 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  ) ENGINE=InnoDB AUTO_INCREMENT=42 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 
@@ -294,7 +294,7 @@ CREATE TABLE `company_informations` (
   )
   ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_0900_ai_ci
+  COLLATE=utf8mb4_unicode_ci
   COMMENT='Vendor Master Category - Stores vendor category hierarchy';
 
 
@@ -323,10 +323,10 @@ CREATE TABLE `company_informations` (
   )
   ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_0900_ai_ci;
+  COLLATE=utf8mb4_unicode_ci;
 
 
-  -- Table: vendor_master_basicdetail
+  -- Table: vendor_master_vendorcreation_basicdetail
 
   CREATE TABLE `vendor_master_vendorcreation_basicdetail` (
     `id` bigint NOT NULL AUTO_INCREMENT,
@@ -352,7 +352,7 @@ CREATE TABLE `company_informations` (
     KEY `vendor_basicdetail_tenant_name_idx` (`tenant_id`,`vendor_name`),
     KEY `vendor_basicdetail_email_idx` (`email`),
     KEY `vendor_basicdetail_pan_idx` (`pan_no`)
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Vendor Master Basic Details for vendor creation';
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Vendor Master Basic Details for vendor creation';
 
 
   -- Table: vendor_master_gstdetails
@@ -385,7 +385,7 @@ CREATE TABLE `company_informations` (
     KEY `vendor_gstdetails_gstin_idx` (`gstin`),
     KEY `vendor_gstdetails_vendor_basic_detail_id_idx` (`vendor_basic_detail_id`),
     CONSTRAINT `vendor_gstdetails_vendor_fk` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Vendor Master GST Details';
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Vendor Master GST Details';
 
 
   -- Table: vendor_master_vendorcreation_productservices
@@ -405,7 +405,7 @@ CREATE TABLE `company_informations` (
     UNIQUE KEY `vendor_prodserv_vendor_unique` (`vendor_basic_detail_id`),
     KEY `vendor_prodserv_tenant_id_idx` (`tenant_id`),
     CONSTRAINT `vendor_prodserv_vendor_fk` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Vendor Master Products/Services (JSON array per vendor)';
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Vendor Master Products/Services (JSON array per vendor)';
 
 
 
@@ -441,7 +441,7 @@ CREATE TABLE `company_informations` (
     KEY `vendor_tds_tenant_id_idx` (`tenant_id`),
     KEY `vendor_tds_vendor_basic_detail_id_idx` (`vendor_basic_detail_id`),
     CONSTRAINT `vendor_tds_vendor_fk` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Vendor Master TDS & Other Statutory Details';
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Vendor Master TDS & Other Statutory Details';
 
 
   -- Table: inventory_master_category
@@ -478,7 +478,7 @@ CREATE TABLE `company_informations` (
   )
   ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_0900_ai_ci;
+  COLLATE=utf8mb4_unicode_ci;
 
   -- Table: inventory_master_location
 
@@ -514,7 +514,7 @@ CREATE TABLE `company_informations` (
   )
   ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_0900_ai_ci
+  COLLATE=utf8mb4_unicode_ci
   COMMENT='Inventory Master Location - Stores warehouse/storage locations';
 
   -- Table: inventory_master_inventoryitems
@@ -566,7 +566,7 @@ CREATE TABLE `company_informations` (
   )
   ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_0900_ai_ci
+  COLLATE=utf8mb4_unicode_ci
   COMMENT='Inventory Master Items';
 
 
@@ -600,7 +600,7 @@ CREATE TABLE `company_informations` (
       ON DELETE CASCADE
   ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_0900_ai_ci
+  COLLATE=utf8mb4_unicode_ci
   COMMENT='Vendor Master Banking Information';
 
 
@@ -629,7 +629,7 @@ CREATE TABLE `company_informations` (
     KEY `vendor_terms_tenant_id_idx` (`tenant_id`),
     KEY `vendor_terms_vendor_basic_detail_id_idx` (`vendor_basic_detail_id`),
     CONSTRAINT `vendor_terms_vendor_fk` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Vendor Master Terms and Conditions';
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Vendor Master Terms and Conditions';
   --
   -- Table structure for table `vendor_transaction_po`
   -- Purchase Order transaction table for vendors
@@ -640,7 +640,7 @@ CREATE TABLE `company_informations` (
     `tenant_id` varchar(36) NOT NULL COMMENT 'Tenant ID for multi-tenancy',
     `po_number` varchar(50) NOT NULL COMMENT 'Purchase Order Number',
     `po_series_id` bigint DEFAULT NULL COMMENT 'Foreign key to vendor_master_posettings',
-    `vendor_basic_detail_id` bigint DEFAULT NULL COMMENT 'Foreign key to vendor_master_basicdetail',
+    `vendor_basic_detail_id` bigint DEFAULT NULL COMMENT 'Foreign key to vendor_master_vendorcreation_basicdetail',
     `vendor_name` varchar(200) DEFAULT NULL COMMENT 'Vendor name (denormalized)',
     `branch` varchar(200) DEFAULT NULL COMMENT 'Vendor branch',
     `address_line1` varchar(255) DEFAULT NULL COMMENT 'Address Line 1',
@@ -671,8 +671,8 @@ CREATE TABLE `company_informations` (
     KEY `vendor_po_vendor_id_idx` (`vendor_basic_detail_id`),
     KEY `vendor_po_status_idx` (`status`),
     CONSTRAINT `vendor_po_series_fk` FOREIGN KEY (`po_series_id`) REFERENCES `vendor_master_posettings` (`id`) ON DELETE SET NULL,
-    CONSTRAINT `vendor_po_vendor_fk` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_basicdetail` (`id`) ON DELETE CASCADE
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Vendor Purchase Order Transactions';
+    CONSTRAINT `vendor_po_vendor_fk` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Vendor Purchase Order Transactions';
 
   CREATE TABLE `vendor_transaction_po_items` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
@@ -725,7 +725,7 @@ CREATE TABLE `company_informations` (
     PRIMARY KEY (`id`),
     KEY `idx_tenant_sales` (`tenant_id`),
     KEY `idx_voucher_name_sales` (`voucher_name`)
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Sales Voucher Master';
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Sales Voucher Master';
 
   --
   -- Table: master_voucher_creditnote
@@ -749,7 +749,7 @@ CREATE TABLE `company_informations` (
     PRIMARY KEY (`id`),
     KEY `idx_tenant_creditnote` (`tenant_id`),
     KEY `idx_voucher_name_creditnote` (`voucher_name`)
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Credit Note Voucher Master';
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Credit Note Voucher Master';
 
   --
   -- Table: master_voucher_receipts
@@ -773,7 +773,7 @@ CREATE TABLE `company_informations` (
     PRIMARY KEY (`id`),
     KEY `idx_tenant_receipts` (`tenant_id`),
     KEY `idx_voucher_name_receipts` (`voucher_name`)
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Receipts Voucher Master';
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Receipts Voucher Master';
 
   --
   -- Table: master_voucher_purchases
@@ -797,7 +797,7 @@ CREATE TABLE `company_informations` (
     PRIMARY KEY (`id`),
   KEY `idx_tenant_purchases` (`tenant_id`),
   KEY `idx_voucher_name_purchases` (`voucher_name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Purchases Voucher Master';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Purchases Voucher Master';
 
 --
 -- Table: master_voucher_debitnote
@@ -821,7 +821,7 @@ CREATE TABLE IF NOT EXISTS `master_voucher_debitnote` (
   PRIMARY KEY (`id`),
   KEY `idx_tenant_debitnote` (`tenant_id`),
   KEY `idx_voucher_name_debitnote` (`voucher_name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Debit Note Voucher Master';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Debit Note Voucher Master';
 
 --
 -- Table: master_voucher_payments
@@ -845,7 +845,7 @@ CREATE TABLE IF NOT EXISTS `master_voucher_payments` (
   PRIMARY KEY (`id`),
   KEY `idx_tenant_payments` (`tenant_id`),
   KEY `idx_voucher_name_payments` (`voucher_name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Payments Voucher Master';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Payments Voucher Master';
 
 --
 -- Table: master_voucher_expenses
@@ -869,7 +869,7 @@ CREATE TABLE IF NOT EXISTS `master_voucher_expenses` (
   PRIMARY KEY (`id`),
   KEY `idx_tenant_expenses` (`tenant_id`),
   KEY `idx_voucher_name_expenses` (`voucher_name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Expenses Voucher Master';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Expenses Voucher Master';
 
 --
 -- Table: master_voucher_journal
@@ -893,7 +893,7 @@ CREATE TABLE IF NOT EXISTS `master_voucher_journal` (
   PRIMARY KEY (`id`),
   KEY `idx_tenant_journal` (`tenant_id`),
   KEY `idx_voucher_name_journal` (`voucher_name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Journal Voucher Master';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Journal Voucher Master';
 
 --
 -- Table: master_voucher_contra
@@ -917,7 +917,7 @@ CREATE TABLE IF NOT EXISTS `master_voucher_contra` (
   PRIMARY KEY (`id`),
   KEY `idx_tenant_contra` (`tenant_id`),
   KEY `idx_voucher_name_contra` (`voucher_name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Contra Voucher Master';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Contra Voucher Master';
 
 
 --
@@ -944,7 +944,7 @@ CREATE TABLE IF NOT EXISTS `customer_masters_salesquotation` (
   KEY `customer_sq_category_idx` (`customer_category`),
   KEY `customer_sq_is_active_idx` (`is_active`),
   KEY `customer_sq_is_deleted_idx` (`is_deleted`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Customer Portal - Sales Quotation Series Configuration';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Customer Portal - Sales Quotation Series Configuration';
 
 
 -- Table: customer_master_category
@@ -971,7 +971,7 @@ CREATE TABLE `customer_master_category` (
 )
 ENGINE=InnoDB
 DEFAULT CHARSET=utf8mb4
-COLLATE=utf8mb4_0900_ai_ci
+COLLATE=utf8mb4_unicode_ci
 COMMENT='Customer Master Category Hierarchy';
 
 
@@ -1006,7 +1006,7 @@ CREATE TABLE `customer_master_longtermcontracts_basicdetails` (
   KEY `cust_ltc_basic_customer_id_idx` (`tenant_id`, `customer_id`),
   KEY `cust_ltc_basic_validity_idx` (`contract_validity_from`, `contract_validity_to`),
   KEY `cust_ltc_basic_is_deleted_idx` (`tenant_id`, `is_deleted`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Customer Master Long-term Contract Basic Details';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Customer Master Long-term Contract Basic Details';
 
 
 -- Table: customer_master_longtermcontracts_productservices
@@ -1030,7 +1030,7 @@ CREATE TABLE `customer_master_longtermcontracts_productservices` (
   KEY `cust_ltc_prod_tenant_item_idx` (`tenant_id`, `item_code`),
   KEY `cust_ltc_prod_contract_idx` (`contract_basic_detail_id`),
   CONSTRAINT `cust_ltc_prod_contract_fk` FOREIGN KEY (`contract_basic_detail_id`) REFERENCES `customer_master_longtermcontracts_basicdetails` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Customer Master Long-term Contract Products/Services';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Customer Master Long-term Contract Products/Services';
 
 
 -- Table: customer_master_longtermcontracts_termscondition
@@ -1052,7 +1052,7 @@ CREATE TABLE `customer_master_longtermcontracts_termscondition` (
   UNIQUE KEY `cust_ltc_terms_contract_unique` (`contract_basic_detail_id`),
   KEY `cust_ltc_terms_tenant_idx` (`tenant_id`),
   CONSTRAINT `cust_ltc_terms_contract_fk` FOREIGN KEY (`contract_basic_detail_id`) REFERENCES `customer_master_longtermcontracts_basicdetails` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Customer Master Long-term Contract Terms & Conditions';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Customer Master Long-term Contract Terms & Conditions';
 
 
 -- Table: customer_master_customer_basicdetails
@@ -1079,7 +1079,7 @@ CREATE TABLE `customer_master_customer_basicdetails` (
   KEY `customer_basic_tenant_id_idx` (`tenant_id`),
   KEY `customer_basic_category_idx` (`customer_category_id`),
   CONSTRAINT `customer_basic_category_fk` FOREIGN KEY (`customer_category_id`) REFERENCES `customer_master_category` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Table: customer_master_customer_gstdetails
 CREATE TABLE `customer_master_customer_gstdetails` (
@@ -1101,7 +1101,7 @@ CREATE TABLE `customer_master_customer_gstdetails` (
   KEY `customer_gst_tenant_gstin_idx` (`tenant_id`,`gstin`),
   KEY `customer_gst_basic_detail_idx` (`customer_basic_detail_id`),
   CONSTRAINT `customer_gst_basic_detail_fk` FOREIGN KEY (`customer_basic_detail_id`) REFERENCES `customer_master_customer_basicdetails` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Table: customer_master_customer_tds
 CREATE TABLE `customer_master_customer_tds` (
@@ -1124,7 +1124,7 @@ CREATE TABLE `customer_master_customer_tds` (
   UNIQUE KEY `customer_tds_basic_detail_uniq` (`customer_basic_detail_id`),
   KEY `customer_tds_tenant_idx` (`tenant_id`),
   CONSTRAINT `customer_tds_basic_detail_fk` FOREIGN KEY (`customer_basic_detail_id`) REFERENCES `customer_master_customer_basicdetails` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Table: customer_master_customer_banking
 CREATE TABLE `customer_master_customer_banking` (
@@ -1145,7 +1145,7 @@ CREATE TABLE `customer_master_customer_banking` (
   KEY `customer_bank_tenant_acc_idx` (`tenant_id`,`account_number`),
   KEY `customer_bank_basic_detail_idx` (`customer_basic_detail_id`),
   CONSTRAINT `customer_bank_basic_detail_fk` FOREIGN KEY (`customer_basic_detail_id`) REFERENCES `customer_master_customer_basicdetails` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Table: customer_master_customer_productservice
 CREATE TABLE `customer_master_customer_productservice` (
@@ -1165,7 +1165,7 @@ CREATE TABLE `customer_master_customer_productservice` (
   KEY `customer_prod_tenant_item_idx` (`tenant_id`,`item_code`),
   KEY `customer_prod_basic_detail_idx` (`customer_basic_detail_id`),
   CONSTRAINT `customer_prod_basic_detail_fk` FOREIGN KEY (`customer_basic_detail_id`) REFERENCES `customer_master_customer_basicdetails` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Table: customer_master_customer_termscondition
 CREATE TABLE `customer_master_customer_termscondition` (
@@ -1187,7 +1187,7 @@ CREATE TABLE `customer_master_customer_termscondition` (
   UNIQUE KEY `customer_terms_basic_detail_uniq` (`customer_basic_detail_id`),
   KEY `customer_terms_tenant_idx` (`tenant_id`),
   CONSTRAINT `customer_terms_basic_detail_fk` FOREIGN KEY (`customer_basic_detail_id`) REFERENCES `customer_master_customer_basicdetails` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Table: customer_transaction_salesquotation_general
 CREATE TABLE `customer_transaction_salesquotation_general` (
@@ -1205,7 +1205,7 @@ CREATE TABLE `customer_transaction_salesquotation_general` (
   UNIQUE KEY `customer_trans_salesquotation_gen_quote_uniq` (`quote_number`),
   KEY `customer_trans_salesquotation_gen_tenant_idx` (`tenant_id`,`quote_number`),
   KEY `customer_trans_salesquotation_gen_eff_from_idx` (`effective_from`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 -- Table: customer_transaction_salesquotation_specific
@@ -1230,7 +1230,7 @@ CREATE TABLE `customer_transaction_salesquotation_specific` (
   UNIQUE KEY `customer_trans_salesquotation_spec_quote_uniq` (`quote_number`),
   KEY `customer_trans_salesquotation_spec_tenant_idx` (`tenant_id`,`quote_number`),
   KEY `customer_trans_salesquotation_spec_val_from_idx` (`validity_from`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================
 -- CUSTOMER TRANSACTION: SALES ORDER TABLES
@@ -1262,7 +1262,7 @@ CREATE TABLE `customer_transaction_salesorder_basicdetails` (
   KEY `cust_trans_so_basic_tenant_idx` (`tenant_id`),
   KEY `cust_trans_so_basic_customer_idx` (`customer_name`),
   KEY `cust_trans_so_basic_date_idx` (`date`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Customer Transaction - Sales Order Basic Details';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Customer Transaction - Sales Order Basic Details';
 
 
 -- Table 2: customer_transaction_salesorder_items
@@ -1286,7 +1286,7 @@ CREATE TABLE `customer_transaction_salesorder_items` (
   KEY `cust_trans_so_items_tenant_idx` (`tenant_id`),
   KEY `cust_trans_so_items_basic_detail_idx` (`so_basic_detail_id`),
   CONSTRAINT `cust_trans_so_items_basic_detail_fk` FOREIGN KEY (`so_basic_detail_id`) REFERENCES `customer_transaction_salesorder_basicdetails` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Customer Transaction - Sales Order Items';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Customer Transaction - Sales Order Items';
 
 
 -- Table 3: customer_transaction_salesorder_deliveryterms
@@ -1304,7 +1304,7 @@ CREATE TABLE `customer_transaction_salesorder_deliveryterms` (
   UNIQUE KEY `cust_trans_so_delivery_basic_detail_uniq` (`so_basic_detail_id`),
   KEY `cust_trans_so_delivery_tenant_idx` (`tenant_id`),
   CONSTRAINT `cust_trans_so_delivery_basic_detail_fk` FOREIGN KEY (`so_basic_detail_id`) REFERENCES `customer_transaction_salesorder_basicdetails` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Customer Transaction - Sales Order Delivery Terms';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Customer Transaction - Sales Order Delivery Terms';
 
 
 -- Table 4: customer_transaction_salesorder_payment_salesperson
@@ -1323,7 +1323,7 @@ CREATE TABLE `customer_transaction_salesorder_payment_salesperson` (
   UNIQUE KEY `cust_trans_so_pay_sp_basic_detail_uniq` (`so_basic_detail_id`),
   KEY `cust_trans_so_pay_sp_tenant_idx` (`tenant_id`),
   CONSTRAINT `cust_trans_so_pay_sp_basic_detail_fk` FOREIGN KEY (`so_basic_detail_id`) REFERENCES `customer_transaction_salesorder_basicdetails` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Customer Transaction - Sales Order Payment and Salesperson';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Customer Transaction - Sales Order Payment and Salesperson';
 
 
 -- Table 5: customer_transaction_salesorder_quotation_details
@@ -1340,7 +1340,7 @@ CREATE TABLE `customer_transaction_salesorder_quotation_details` (
   UNIQUE KEY `cust_trans_so_quote_basic_detail_uniq` (`so_basic_detail_id`),
   KEY `cust_trans_so_quote_tenant_idx` (`tenant_id`),
   CONSTRAINT `cust_trans_so_quote_basic_detail_fk` FOREIGN KEY (`so_basic_detail_id`) REFERENCES `customer_transaction_salesorder_basicdetails` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Customer Transaction - Sales Order Quotation Details';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Customer Transaction - Sales Order Quotation Details';
 
 -- Table structure for table `payroll_employee_basic_details`
 --
@@ -1364,7 +1364,7 @@ CREATE TABLE `payroll_employee_basic_details` (
   KEY `payroll_employee_basic_details_tenant_id_b56eac73` (`tenant_id`),
   KEY `payroll_emp_tenant__3c85ef_idx` (`tenant_id`,`status`),
   KEY `payroll_emp_employe_d77d0c_idx` (`employee_code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Table structure for table `payroll_employee_employment`
@@ -1384,7 +1384,7 @@ CREATE TABLE `payroll_employee_employment` (
   UNIQUE KEY `employee_basic_id` (`employee_basic_id`),
   KEY `idx_tenant` (`tenant_id`),
   CONSTRAINT `payroll_employee_emp_employee_basic_id_362bd41e_fk_payroll_e` FOREIGN KEY (`employee_basic_id`) REFERENCES `payroll_employee_basic_details` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Table structure for table `payroll_employee_salary`
@@ -1402,7 +1402,7 @@ CREATE TABLE `payroll_employee_employment` (
     UNIQUE KEY `employee_basic_id` (`employee_basic_id`),
     KEY `idx_tenant` (`tenant_id`),
     CONSTRAINT `payroll_employee_sal_employee_basic_id_cdfba561_fk_payroll_e` FOREIGN KEY (`employee_basic_id`) REFERENCES `payroll_employee_basic_details` (`id`)
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Table structure for table `payroll_employee_statutory`
@@ -1422,7 +1422,7 @@ CREATE TABLE `payroll_employee_statutory` (
   UNIQUE KEY `employee_basic_id` (`employee_basic_id`),
   KEY `idx_tenant` (`tenant_id`),
   CONSTRAINT `payroll_employee_sta_employee_basic_id_893b5c6c_fk_payroll_e` FOREIGN KEY (`employee_basic_id`) REFERENCES `payroll_employee_basic_details` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Table structure for table `payroll_employee_bank_details`
@@ -1442,7 +1442,7 @@ CREATE TABLE `payroll_employee_bank_details` (
   UNIQUE KEY `employee_basic_id` (`employee_basic_id`),
   KEY `idx_tenant` (`tenant_id`),
   CONSTRAINT `payroll_employee_ban_employee_basic_id_0c5268e7_fk_payroll_e` FOREIGN KEY (`employee_basic_id`) REFERENCES `payroll_employee_basic_details` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Table structure for table `payroll_pay_run`
@@ -1470,7 +1470,7 @@ CREATE TABLE `payroll_pay_run` (
   KEY `payroll_pay_run_tenant_id_44d7dcb5` (`tenant_id`),
   KEY `payroll_pay_tenant__859fa0_idx` (`tenant_id`,`status`),
   KEY `payroll_pay_start_d_0e9a8e_idx` (`start_date`,`end_date`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Table structure for table `payroll_salary_template`
@@ -1487,7 +1487,7 @@ CREATE TABLE `payroll_salary_template` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `payroll_salary_template_tenant_id_template_name_f5ff8dfa_uniq` (`tenant_id`,`template_name`),
   KEY `payroll_salary_template_tenant_id_27fcb732` (`tenant_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
  
       
 CREATE TABLE `voucher_sales_dispatchdetails` (
@@ -1746,7 +1746,7 @@ CREATE TABLE IF NOT EXISTS `voucher_payment_single` (
   KEY `voucher_payment_single_tenant_id_idx` (`tenant_id`),
   KEY `voucher_payment_single_date_idx` (`date`),
   CONSTRAINT `voucher_payment_single_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Table: voucher_payment_bulk
@@ -1768,7 +1768,7 @@ CREATE TABLE IF NOT EXISTS `voucher_payment_bulk` (
   KEY `voucher_payment_bulk_tenant_id_idx` (`tenant_id`),
   KEY `voucher_payment_bulk_date_idx` (`date`),
   CONSTRAINT `voucher_payment_bulk_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Table: voucher_receipt_single
@@ -1791,7 +1791,7 @@ CREATE TABLE IF NOT EXISTS `voucher_receipt_single` (
   KEY `voucher_receipt_single_tenant_id_idx` (`tenant_id`),
   KEY `voucher_receipt_single_date_idx` (`date`),
   CONSTRAINT `voucher_receipt_single_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Table: voucher_receipt_bulk
@@ -1813,7 +1813,7 @@ CREATE TABLE IF NOT EXISTS `voucher_receipt_bulk` (
   KEY `voucher_receipt_bulk_tenant_id_idx` (`tenant_id`),
   KEY `voucher_receipt_bulk_date_idx` (`date`),
   CONSTRAINT `voucher_receipt_bulk_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Table: voucher_expenses
@@ -1832,7 +1832,7 @@ CREATE TABLE IF NOT EXISTS `voucher_expenses` (
   KEY `voucher_expenses_tenant_id_idx` (`tenant_id`),
   KEY `voucher_expenses_date_idx` (`date`),
   CONSTRAINT `voucher_expenses_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 CREATE TABLE `voucher_contra` (
@@ -1874,6 +1874,7 @@ CREATE TABLE voucher_purchase_supplier_details (
   updated_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   `date` DATE NOT NULL,
   supplier_invoice_no VARCHAR(100),
+  supplier_invoice_date DATE,
   purchase_voucher_no VARCHAR(100),
   vendor_name VARCHAR(255),
   gstin VARCHAR(50),
@@ -2085,7 +2086,7 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_jobwork` (
   KEY `idx_jobwork_outward_no` (`job_work_outward_no`),
   KEY `idx_jobwork_receipt_no` (`job_work_receipt_no`),
   KEY `idx_jobwork_vendor` (`vendor_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Inventory Jobwork Operations';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Inventory Jobwork Operations';
 
 
 -- 2. INTER-UNIT TRANSFER 
@@ -2125,7 +2126,7 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_interunit` (
   PRIMARY KEY (`id`),
   KEY `idx_ioi_tenant` (`tenant_id`),
   KEY `idx_ioi_issue_slip` (`issue_slip_no`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 -- 3. LOCATION CHANGE 
@@ -2162,7 +2163,7 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_locationchange` (
   PRIMARY KEY (`id`),
   KEY `idx_iolc_tenant` (`tenant_id`),
   KEY `idx_iolc_issue_slip` (`issue_slip_no`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 -- 4. PRODUCTION 
@@ -2207,7 +2208,7 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_production` (
   PRIMARY KEY (`id`),
   KEY `idx_iop_tenant` (`tenant_id`),
   KEY `idx_iop_issue_slip` (`issue_slip_no`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 -- 5. CONSUMPTION 
@@ -2244,7 +2245,7 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_consumption` (
   PRIMARY KEY (`id`),
   KEY `idx_ioc_tenant` (`tenant_id`),
   KEY `idx_ioc_issue_slip` (`issue_slip_no`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 -- 6. SCRAP 
@@ -2281,7 +2282,7 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_scrap` (
   PRIMARY KEY (`id`),
   KEY `idx_ios_tenant` (`tenant_id`),
   KEY `idx_ios_issue_slip` (`issue_slip_no`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 -- 7. NEW GRN (Goods Receipt Note) 
@@ -2321,7 +2322,7 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_new_grn` (
   `updated_at` DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 -- 8. OUTWARD 
@@ -2366,7 +2367,7 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_outward` (
   KEY `idx_ioo_tenant` (`tenant_id`),
   KEY `idx_ioo_outward_slip` (`outward_slip_no`),
   KEY `idx_ioo_location` (`location_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 -- 9. (LEGACY) GRN - REMOVED
@@ -2481,7 +2482,7 @@ CREATE TABLE IF NOT EXISTS `extracted_invoices` (
     INDEX `idx_extracted_tenant` (`tenant_id`),
     INDEX `idx_extracted_invoice` (`invoice_number`),
     INDEX `idx_extracted_created` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 ALTER TABLE users
@@ -2502,7 +2503,7 @@ CREATE TABLE IF NOT EXISTS `rbac_roles` (
   UNIQUE KEY `rbac_roles_tenant_name_unique` (`tenant_id`,`name`),
   KEY `rbac_roles_tenant_id_idx` (`tenant_id`),
   CONSTRAINT `rbac_roles_tenant_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='RBAC Roles';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='RBAC Roles';
 
 
 -- Table: rbac_user_roles
@@ -2529,7 +2530,7 @@ CREATE TABLE IF NOT EXISTS `rbac_user_roles` (
   CONSTRAINT `rbac_user_roles_role_fk` FOREIGN KEY (`role_id`) REFERENCES `rbac_roles` (`id`) ON DELETE CASCADE,
   CONSTRAINT `rbac_user_roles_assigned_by_fk` FOREIGN KEY (`assigned_by_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `rbac_user_roles_tenant_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='RBAC User Role Assignments';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='RBAC User Role Assignments';
 
 
 
@@ -2605,7 +2606,7 @@ DELETE FROM `customer_master_category`  WHERE `group` = '' AND `subgroup` = '';
 DELETE FROM `service_group`             WHERE `group` = '' AND `subgroup` = '';
 
 -----------------------------------------------------
-ALTER TABLE vendor_master_basicdetail 
+ALTER TABLE vendor_master_vendorcreation_basicdetail 
 ADD COLUMN billing_currency VARCHAR(10) DEFAULT NULL COMMENT 'Billing currency' 
 AFTER vendor_category;
 
@@ -2776,3 +2777,4 @@ ALTER TABLE `voucher_sales_invoicedetails`
     ADD COLUMN `customer_branch` VARCHAR(100) DEFAULT NULL,
     ADD COLUMN `irn` VARCHAR(255) DEFAULT NULL,
     ADD COLUMN `ack_no` VARCHAR(100) DEFAULT NULL;
+

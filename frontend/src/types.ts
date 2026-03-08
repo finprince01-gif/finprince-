@@ -132,6 +132,10 @@ export interface StockItem {
   hsn_sac_code?: string;
   uom?: string;
   base_unit?: string;
+  isService?: boolean;
+  alternate_unit?: string;
+  alternateUnit?: string;
+  alternate_uom?: string;
 }
 
 export interface Unit {
