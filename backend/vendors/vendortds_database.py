@@ -24,9 +24,10 @@ def create_vendor_tds(data: Dict) -> Dict:
             tenant_id, vendor_basic_detail_id, pan_number, tan_number,
             tds_section, tds_rate, penalty_rate, tds_section_applicable, enable_automatic_tds_posting,
             msme_udyam_no, fssai_license_no, import_export_code, eou_status,
-            cin_number, is_active, created_at, updated_at, created_by, updated_by
+            cin_number, tcs_section_applicable, tcs_rate,
+            is_active, created_at, updated_at, created_by, updated_by
         ) VALUES (
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW(), %s, %s
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW(), %s, %s
         )
     """
     
@@ -45,6 +46,8 @@ def create_vendor_tds(data: Dict) -> Dict:
         data.get('import_export_code'),
         data.get('eou_status'),
         data.get('cin_number'),
+        data.get('tcs_section_applicable'),
+        data.get('tcs_rate'),
         data.get('is_active', True),
         data.get('created_by'),
         data.get('updated_by'),
@@ -78,8 +81,8 @@ def update_vendor_tds(tds_id: int, data: Dict) -> Dict:
         SET pan_number = %s, tan_number = %s, tds_section = %s, tds_rate = %s,
             penalty_rate = %s, tds_section_applicable = %s, enable_automatic_tds_posting = %s,
             msme_udyam_no = %s, fssai_license_no = %s, import_export_code = %s,
-            eou_status = %s, cin_number = %s, is_active = %s,
-            updated_at = NOW(), updated_by = %s
+            eou_status = %s, cin_number = %s, tcs_section_applicable = %s, tcs_rate = %s,
+            is_active = %s, updated_at = NOW(), updated_by = %s
         WHERE id = %s
     """
     
@@ -96,6 +99,8 @@ def update_vendor_tds(tds_id: int, data: Dict) -> Dict:
         data.get('import_export_code'),
         data.get('eou_status'),
         data.get('cin_number'),
+        data.get('tcs_section_applicable'),
+        data.get('tcs_rate'),
         data.get('is_active', True),
         data.get('updated_by'),
         tds_id,
@@ -126,7 +131,8 @@ def get_vendor_tds_by_id(tds_id: int) -> Optional[Dict]:
         SELECT id, tenant_id, vendor_basic_detail_id, pan_number, tan_number,
                tds_section, tds_rate, penalty_rate, tds_section_applicable, enable_automatic_tds_posting,
                msme_udyam_no, fssai_license_no, import_export_code, eou_status,
-               cin_number, is_active, created_at, updated_at, created_by, updated_by
+               cin_number, tcs_section_applicable, tcs_rate,
+               is_active, created_at, updated_at, created_by, updated_by
         FROM vendor_master_vendorcreation_tds
         WHERE id = %s
     """
@@ -153,11 +159,13 @@ def get_vendor_tds_by_id(tds_id: int) -> Optional[Dict]:
                     'import_export_code': row[12],
                     'eou_status': row[13],
                     'cin_number': row[14],
-                    'is_active': bool(row[15]),
-                    'created_at': row[16],
-                    'updated_at': row[17],
-                    'created_by': row[18],
-                    'updated_by': row[19],
+                    'tcs_section_applicable': row[15],
+                    'tcs_rate': row[16],
+                    'is_active': bool(row[17]),
+                    'created_at': row[18],
+                    'updated_at': row[19],
+                    'created_by': row[20],
+                    'updated_by': row[21],
                 }
             return None
     except Exception as e:
@@ -179,7 +187,8 @@ def get_vendor_tds_by_vendor(vendor_basic_detail_id: int) -> Optional[Dict]:
         SELECT id, tenant_id, vendor_basic_detail_id, pan_number, tan_number,
                tds_section, tds_rate, penalty_rate, tds_section_applicable, enable_automatic_tds_posting,
                msme_udyam_no, fssai_license_no, import_export_code, eou_status,
-               cin_number, is_active, created_at, updated_at, created_by, updated_by
+               cin_number, tcs_section_applicable, tcs_rate,
+               is_active, created_at, updated_at, created_by, updated_by
         FROM vendor_master_vendorcreation_tds
         WHERE vendor_basic_detail_id = %s AND is_active = 1
         ORDER BY created_at DESC
@@ -208,11 +217,13 @@ def get_vendor_tds_by_vendor(vendor_basic_detail_id: int) -> Optional[Dict]:
                     'import_export_code': row[12],
                     'eou_status': row[13],
                     'cin_number': row[14],
-                    'is_active': bool(row[15]),
-                    'created_at': row[16],
-                    'updated_at': row[17],
-                    'created_by': row[18],
-                    'updated_by': row[19],
+                    'tcs_section_applicable': row[15],
+                    'tcs_rate': row[16],
+                    'is_active': bool(row[17]),
+                    'created_at': row[18],
+                    'updated_at': row[19],
+                    'created_by': row[20],
+                    'updated_by': row[21],
                 }
             return None
     except Exception as e:
@@ -234,7 +245,8 @@ def list_vendor_tds_by_tenant(tenant_id: str) -> List[Dict]:
         SELECT id, tenant_id, vendor_basic_detail_id, pan_number, tan_number,
                tds_section, tds_rate, penalty_rate, tds_section_applicable, enable_automatic_tds_posting,
                msme_udyam_no, fssai_license_no, import_export_code, eou_status,
-               cin_number, is_active, created_at, updated_at, created_by, updated_by
+               cin_number, tcs_section_applicable, tcs_rate,
+               is_active, created_at, updated_at, created_by, updated_by
         FROM vendor_master_vendorcreation_tds
         WHERE tenant_id = %s
         ORDER BY created_at DESC
@@ -263,11 +275,13 @@ def list_vendor_tds_by_tenant(tenant_id: str) -> List[Dict]:
                     'import_export_code': row[12],
                     'eou_status': row[13],
                     'cin_number': row[14],
-                    'is_active': bool(row[15]),
-                    'created_at': row[16],
-                    'updated_at': row[17],
-                    'created_by': row[18],
-                    'updated_by': row[19],
+                    'tcs_section_applicable': row[15],
+                    'tcs_rate': row[16],
+                    'is_active': bool(row[17]),
+                    'created_at': row[18],
+                    'updated_at': row[19],
+                    'created_by': row[20],
+                    'updated_by': row[21],
                 })
             
             return results

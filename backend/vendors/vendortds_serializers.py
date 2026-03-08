@@ -17,6 +17,8 @@ class VendorMasterTDSSerializer(serializers.ModelSerializer):
             'tds_section',
             'tds_rate',
             'penalty_rate',
+            'tcs_section_applicable',
+            'tcs_rate',
             'enable_automatic_tds_posting',
             'msme_udyam_no',
             'fssai_license_no',

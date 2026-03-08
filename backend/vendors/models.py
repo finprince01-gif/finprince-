@@ -497,6 +497,9 @@ class VendorMasterTDS(models.Model):
     tds_rate = models.CharField(max_length=50, blank=True, null=True, help_text="TDS Rate")
     penalty_rate = models.CharField(max_length=50, blank=True, null=True, help_text="Penalty Rate")
     cin_number = models.CharField(max_length=21, blank=True, null=True, help_text="CIN Number")
+    # TCS Fields
+    tcs_section_applicable = models.CharField(max_length=200, blank=True, null=True, help_text="TCS Section Applicable")
+    tcs_rate = models.CharField(max_length=50, blank=True, null=True, help_text="TCS Rate")
     
     # File Uploads
     msme_file = models.FileField(upload_to='vendors/msme/', blank=True, null=True, help_text="MSME Certificate")

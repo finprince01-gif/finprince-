@@ -108,13 +108,20 @@ export const extractInvoiceDataWithRetry = async (
           subtotal: parseFloat(parsedData["Taxable Value"] || parsedData["subtotal"] || '0'),
           cgstAmount: parseFloat(parsedData["CGST Amount"] || parsedData["cgstAmount"] || '0'),
           sgstAmount: parseFloat(parsedData["SGST/UTGST Amount"] || parsedData["sgstAmount"] || '0'),
+          igstAmount: parseFloat(parsedData["IGST Amount"] || parsedData["igstAmount"] || '0'),
           totalAmount: parseFloat(parsedData["Invoice Value"] || parsedData["totalAmount"] || '0'),
           lineItems: []
         };
 
         // If backend provided "lineItems" array directly (old format):
         if (Array.isArray(parsedData.lineItems)) {
-          mappedData.lineItems = parsedData.lineItems;
+          mappedData.lineItems = parsedData.lineItems.map((item: any) => ({
+            itemDescription: item.itemDescription || item.description || 'Item',
+            quantity: parseFloat(item.quantity || '0'),
+            rate: parseFloat(item.rate || '0'),
+            amount: parseFloat(item.amount || '0') || (parseFloat(item.quantity || '0') * parseFloat(item.rate || '0')),
+            hsnCode: item.hsnCode || item.hsn_code || ''
+          }));
         } else {
           // Construct line item from flat fields ("Item/Description", "Quantity", "Item Rate")
           // The backend prompt aggregates them into strings.
@@ -128,6 +135,7 @@ export const extractInvoiceDataWithRetry = async (
             itemDescription: desc,
             quantity: qty,
             rate: finalRate,
+            amount: qty * finalRate,
             hsnCode: parsedData["HSN/SAC Details"] || ''
           }];
         }

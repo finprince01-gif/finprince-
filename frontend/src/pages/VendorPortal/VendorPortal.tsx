@@ -30,10 +30,15 @@ const VENDOR_SYSTEM_CATEGORIES = [
 
 // TDS Rates Master Data
 const TDS_RATES_MASTER: { [key: string]: { tdsRate: string; penaltyRate: string; description: string } } = {
+    'Section 194C - Individual/HUF': { tdsRate: '1%', penaltyRate: '20%', description: 'Payment to Contractors who are Individuals or Hindu Undivided Family (HUF)' },
+    'Section 194C - Others': { tdsRate: '2%', penaltyRate: '20%', description: 'Payment to Contractors other than Individuals & HUF' },
     'Section 194C': { tdsRate: '1% / 2%', penaltyRate: '20%', description: 'Payment to Contractors who are Individuals or Hindu Undivided Family (HUF) / Payment to Contractors other than Individuals & HUF' },
     'Section 194H': { tdsRate: '2%', penaltyRate: '20%', description: 'Commission and Brokerage to agents' },
-    'Section 194-I': { tdsRate: '2% / 10%', penaltyRate: '20%', description: 'Rent on Land, Building, or Furniture & fitting / Rent on Plant & Machinery, or Equipment' },
-    'Section 194J': { tdsRate: '2% / 10%', penaltyRate: '20%', description: 'Fees for Technical Services, Call Center Operations, Royalty on sale & distribution of films / Professional Services, Royalty from other than films, Non-Compete Fees, etc. / Director\'s Remuneration' },
+    'Section 194-I - Rent- Land, Building, Furniture & fitting': { tdsRate: '2%', penaltyRate: '20%', description: 'Rent on Land, Building, or Furniture & Fitting paid to any entity' },
+    'Section 194-I - Rent- Plant & Machinery, Equipment': { tdsRate: '10%', penaltyRate: '20%', description: 'Rent on Plant & Machinery, or Equipment paid to any entity' },
+    'Section 194J - Technical Services': { tdsRate: '2%', penaltyRate: '20%', description: 'Fees for Technical Services, Call Center Operations, Royalty on sale & distribution of films' },
+    'Section 194J - Professional Services': { tdsRate: '10%', penaltyRate: '20%', description: 'Professional Services, Royalty from other than films, Non-Compete Fees, etc.' },
+    "Section 194J - Director's Remuneration": { tdsRate: '10%', penaltyRate: '20%', description: "Director's Remuneration (other than salary)" },
     'Section 194Q': { tdsRate: '0.10%', penaltyRate: '5%', description: 'Purchase of Goods of aggregate value exceeding Rs. 50 Lakhs' },
     'Section 194A': { tdsRate: '10%', penaltyRate: '20%', description: 'Interest payments made on loans, FDs, advances, etc., other than interest on securities' },
     'Section 194R': { tdsRate: '10%', penaltyRate: '20%', description: 'Benefit or Perquisite given by a business or professional exceeding Rs 20,000' },
@@ -46,6 +51,18 @@ const TDS_RATES_MASTER: { [key: string]: { tdsRate: string; penaltyRate: string;
 };
 
 const getTDSRateInfo = (section: string) => TDS_RATES_MASTER[section] || { tdsRate: '-', penaltyRate: '-', description: 'No info available' };
+
+// TCS Rates Master Data
+const TCS_RATES_MASTER: { [key: string]: { tcsRate: string; penaltyRate: string; description: string } } = {
+    'Section 206C(1) - Sale of Scrap, Alcoholic Liquor, Minerals': { tcsRate: '1%', penaltyRate: '5%', description: 'Sale of Scrap, Alcoholic Liquor, or Minerals' },
+    'Section 206C(1) - Sale of Tendu Leaves': { tcsRate: '5%', penaltyRate: '5%', description: 'Sale of Tendu Leaves' },
+    'Section 206C(1) - Sale of Forest Produce': { tcsRate: '2%', penaltyRate: '5%', description: 'Sale of Forest Produce (other than Tendu Leaves & Timber)' },
+    'Section 206C(1) - Sale of Timber': { tcsRate: '2%', penaltyRate: '5%', description: 'Sale of Timber obtained under a forest lease or by any mode' },
+    'Section 206C(1F) - Sale of Motor Vehicles': { tcsRate: '1%', penaltyRate: '5%', description: 'Sale of Motor Vehicles exceeding Rs. 10 Lakhs' },
+    'Section 206C(1F) - Sale of Specified Luxury Goods': { tcsRate: '1%', penaltyRate: '5%', description: 'Sale of Specified Luxury Goods (watches, art, bags, etc.) exceeding Rs. 10 Lakhs' },
+};
+
+const getTCSRateInfo = (section: string) => TCS_RATES_MASTER[section] || null;
 
 interface Category {
     id: number;
@@ -289,7 +306,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const availableTransactionSubTabs = ['Purchase Orders', 'Procurement', 'Payment'].filter(subTab => isSuperuser || hasTabAccess('Vendor Portal', subTab));
 
     useEffect(() => {
-        if (!isSuperuser && availableMasterSubTabs.length > 0 && !availableMasterSubTabs.includes(activeMasterSubTab as string)) {
+        // Vendor creation inner tabs are valid states — don't reset them to availableMasterSubTabs[0]
+        const vendorFormTabs = ['Basic Details', 'GST Details', 'Products/Services', 'TDS & Other Statutory', 'Banking Info', 'Terms & Conditions'];
+        const isInsideVendorForm = vendorFormTabs.includes(activeMasterSubTab as string);
+        if (!isSuperuser && availableMasterSubTabs.length > 0 && !availableMasterSubTabs.includes(activeMasterSubTab as string) && !isInsideVendorForm) {
             setActiveMasterSubTab(availableMasterSubTabs[0] as MasterSubTab);
         }
     }, [availableMasterSubTabs, activeMasterSubTab, isSuperuser]);
@@ -512,6 +532,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                     setImportExportCode(tds.import_export_code || '');
                     setEouStatus(tds.eou_status || '');
                     setTdsSectionApplicable(tds.tds_section_applicable || '');
+                    setTcsSectionApplicable(tds.tcs_section_applicable || '');
+                    if (tds.tds_section_applicable) setTaxApplicableType('TDS');
+                    else if (tds.tcs_section_applicable) setTaxApplicableType('TCS');
+                    else setTaxApplicableType('');
                     setEnableAutomaticTdsPosting(tds.enable_automatic_tds_posting || false);
                 }
             } catch (e) {
@@ -957,7 +981,27 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             const poNumber = (response as any)?.data?.data?.po_number || (response as any)?.data?.po_number || 'Generated';
             showSuccess(`Purchase Order created successfully! PO Number: ${poNumber}`);
 
+            // Add the new PO to the state list
+            const totalAmount = poItems.reduce((acc, item) => acc + (parseFloat(item.netValue) || 0), 0);
+            const vendorNameDisplay = vendorList.find(v => v.id.toString() === createPOForm.vendorName)?.vendor_name || createPOForm.vendorName || '';
 
+            const newPO: PurchaseOrder = {
+                id: (response as any)?.data?.data?.id || (response as any)?.data?.id || Date.now(),
+                poNumber: poNumber,
+                poDate: new Date().toISOString().split('T')[0],
+                vendorName: vendorNameDisplay,
+                address: createPOForm.addressLine1 || '',
+                status: 'Pending Approval',
+                receiveBy: createPOForm.receiveBy || undefined,
+                receiveAt: createPOForm.receiveAt || undefined,
+                deliveryTerms: createPOForm.deliveryTerms || undefined,
+                branch: createPOForm.branch || undefined,
+                deliveryDate: createPOForm.receiveBy || undefined,
+                amount: totalAmount.toFixed(2)
+            };
+
+            setPurchaseOrders(prevOrig => [newPO, ...prevOrig]);
+            setActiveCreatePOSubTab('Pending for Approval');
 
             // Reset form
             setCreatePOForm({
@@ -1261,6 +1305,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const [importExportCode, setImportExportCode] = useState('');
     const [eouStatus, setEouStatus] = useState('');
     const [tdsSectionApplicable, setTdsSectionApplicable] = useState('');
+    const [tcsSectionApplicable, setTcsSectionApplicable] = useState('');
+    // 'TDS' | 'TCS' | '' — mutually exclusive selection
+    const [taxApplicableType, setTaxApplicableType] = useState<'TDS' | 'TCS' | ''>('');
     const [enableAutomaticTdsPosting, setEnableAutomaticTdsPosting] = useState(false);
 
     // File Upload State for Statutory Documents
@@ -1340,6 +1387,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         setImportExportCode('');
         setEouStatus('');
         setTdsSectionApplicable('');
+        setTcsSectionApplicable('');
+        setTaxApplicableType('');
         setEnableAutomaticTdsPosting(false);
         setUploadedFiles({
             msmeFile: null,
@@ -1506,9 +1555,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 let existingTdsRecord = null;
                 try {
                     const existingTds: any = await httpClient.get(`/api/vendors/tds-details/by-vendor/${newId}/`);
-                    existingTdsRecord = existingTds.data && existingTds.data.length > 0 ? existingTds.data[0] : (existingTds.id ? existingTds : null);
+                    // API returns {} (empty) if not found, or the TDS object with an `id` if found
+                    existingTdsRecord = existingTds && existingTds.id ? existingTds : null;
                 } catch (e) {
-                    // Ignore 404
+                    // Ignore 404 or other errors
                 }
 
                 const tdsFormData = new FormData();
@@ -1527,6 +1577,11 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 tdsFormData.append('tds_rate', rateInfo.tdsRate);
                 tdsFormData.append('penalty_rate', rateInfo.penaltyRate);
                 tdsFormData.append('pan_number', panNo || '');
+                // TCS
+                const tcsMappedSection = tcsSectionApplicable || '';
+                const tcsRateInfo = getTCSRateInfo(tcsMappedSection);
+                tdsFormData.append('tcs_section_applicable', tcsMappedSection);
+                tdsFormData.append('tcs_rate', tcsRateInfo ? tcsRateInfo.tcsRate : '');
                 tdsFormData.append('enable_automatic_tds_posting', enableAutomaticTdsPosting ? 'true' : 'false');
 
                 if (uploadedFiles.msmeFile) tdsFormData.append('msme_file', uploadedFiles.msmeFile);
@@ -1667,6 +1722,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             setImportExportCode('');
             setEouStatus('');
             setTdsSectionApplicable('');
+            setTcsSectionApplicable('');
+            setTaxApplicableType('');
             setEnableAutomaticTdsPosting(false);
             setUploadedFiles({
                 msmeFile: null,
@@ -3012,55 +3069,130 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     <p className="mt-1 text-xs text-indigo-600">? {uploadedFiles.eouFile.name}</p>
                                                 )}
                                             </div>
-                                            <div>
-                                                <label className="label-text">
-                                                    TDS Section Applicable
-                                                </label>
-                                                <select
-                                                    value={tdsSectionApplicable}
-                                                    onChange={(e) => setTdsSectionApplicable(e.target.value)}
-                                                    className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                                                >
-                                                    <option value="">Select TDS Section</option>
-                                                    <option value="Section 194C">Section 194C - Contracts (Individual/HUF & Others)</option>
-                                                    <option value="Section 194H">Section 194H - Commission/Brokerage</option>
-                                                    <option value="Section 194-I">Section 194-I - Rent (Land, Building, Furniture & Fitting, Plant & Machinery, Equipment)</option>
-                                                    <option value="Section 194J">Section 194J - Professional Services, Technical Services, Director's Remuneration</option>
-                                                    <option value="Section 194Q">Section 194Q - Purchase of Goods</option>
-                                                    <option value="Section 194A">Section 194A - Interest other than interest on securities</option>
-                                                    <option value="Section 194R">Section 194R - Benefit or Perquisite</option>
-                                                    <option value="Section 194-IA">Section 194-IA - Immovable Property Transfer</option>
-                                                    <option value="Section 194-IB">Section 194-IB - Rent by Individual or HUF</option>
-                                                    <option value="Section 194-IC">Section 194-IC - Joint Development Agreements</option>
-                                                    <option value="Section 194M">Section 194M - Contractors & Professionals</option>
-                                                    <option value="Section 194-O">Section 194-O - E-Commerce</option>
-                                                    <option value="Section 195">Section 195 - Payment to Non-Residents</option>
-                                                </select>
-                                            </div>
                                         </div>
 
-                                        {/* TDS Rate Information */}
-                                        {tdsSectionApplicable && (() => {
-                                            const rateInfo = getTDSRateInfo(tdsSectionApplicable);
+                                        {/* Tax Type — mutually exclusive selector */}
+                                        <div className="space-y-3">
+                                            <label className="label-text">Tax Deducted / Collected at Source</label>
+                                            <div className="flex gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setTaxApplicableType('TDS'); setTcsSectionApplicable(''); }}
+                                                    className={`px-6 py-2 text-sm font-semibold rounded-[4px] border transition-colors ${taxApplicableType === 'TDS'
+                                                        ? 'bg-indigo-600 text-white border-indigo-600'
+                                                        : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400'
+                                                        }`}
+                                                >TDS</button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setTaxApplicableType('TCS'); setTdsSectionApplicable(''); }}
+                                                    className={`px-6 py-2 text-sm font-semibold rounded-[4px] border transition-colors ${taxApplicableType === 'TCS'
+                                                        ? 'bg-emerald-600 text-white border-emerald-600'
+                                                        : 'bg-white text-gray-600 border-gray-300 hover:border-emerald-400'
+                                                        }`}
+                                                >TCS</button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setTaxApplicableType(''); setTdsSectionApplicable(''); setTcsSectionApplicable(''); }}
+                                                    className={`px-6 py-2 text-sm font-semibold rounded-[4px] border transition-colors ${taxApplicableType === ''
+                                                        ? 'bg-gray-500 text-white border-gray-500'
+                                                        : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+                                                        }`}
+                                                >None</button>
+                                            </div>
 
-                                            return rateInfo ? (
-                                                <div className="mt-4 p-4 bg-slate-50/50 border-l-4 border-indigo-500 rounded-[4px]">
-                                                    <div className="flex items-start gap-3">
-                                                        <svg className="w-6 h-6 text-indigo-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                        </svg>
-                                                        <div className="flex-1">
-                                                            <h4 className="section-title mb-2">TDS Rate Information</h4>
-                                                            <div className="space-y-1 text-sm text-slate-700">
-                                                                <p><span className="font-medium">TDS Rate:</span> {rateInfo.tdsRate}</p>
-                                                                <p><span className="font-medium">Penalty Rate:</span> {rateInfo.penaltyRate}</p>
-                                                                <p className="mt-2 text-xs text-indigo-600 italic">{rateInfo.description}</p>
+                                            {/* TDS Section dropdown */}
+                                            {taxApplicableType === 'TDS' && (
+                                                <div className="space-y-2">
+                                                    <label className="label-text">TDS Section Applicable</label>
+                                                    <select
+                                                        value={tdsSectionApplicable}
+                                                        onChange={(e) => setTdsSectionApplicable(e.target.value)}
+                                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                                    >
+                                                        <option value="">Select TDS Section</option>
+                                                        <option value="Section 194C - Individual/HUF">Section 194C - Contracts - Individual/HUF</option>
+                                                        <option value="Section 194C - Others">Section 194C - Contracts - Others</option>
+                                                        <option value="Section 194H">Section 194H - Commission/Brokerage</option>
+                                                        <option value="Section 194-I - Rent- Land, Building, Furniture &amp; fitting">Section 194-I - Rent- Land, Building, Furniture &amp; fitting</option>
+                                                        <option value="Section 194-I - Rent- Plant &amp; Machinery, Equipment">Section 194-I - Rent- Plant &amp; Machinery, Equipment</option>
+                                                        <option value="Section 194J - Technical Services">Section 194J - Technical Services</option>
+                                                        <option value="Section 194J - Professional Services">Section 194J - Professional Services</option>
+                                                        <option value="Section 194J - Director's Remuneration">Section 194J - Director's Remuneration</option>
+                                                        <option value="Section 194Q">Section 194Q - Purchase of Goods</option>
+                                                        <option value="Section 194A">Section 194A - Interest other than interest on securities</option>
+                                                        <option value="Section 194R">Section 194R - Benefit or Perquisite</option>
+                                                        <option value="Section 194-IA">Section 194-IA - Immovable Property Transfer</option>
+                                                        <option value="Section 194-IB">Section 194-IB - Rent by Individual or HUF</option>
+                                                        <option value="Section 194-IC">Section 194-IC - Joint Development Agreements</option>
+                                                        <option value="Section 194M">Section 194M - Contractors &amp; Professionals</option>
+                                                        <option value="Section 194-O">Section 194-O - E-Commerce</option>
+                                                        <option value="Section 195">Section 195 - Payment to Non-Residents</option>
+                                                    </select>
+                                                    {tdsSectionApplicable && (() => {
+                                                        const rateInfo = getTDSRateInfo(tdsSectionApplicable);
+                                                        return rateInfo ? (
+                                                            <div className="p-4 bg-slate-50/50 border-l-4 border-indigo-500 rounded-[4px]">
+                                                                <div className="flex items-start gap-3">
+                                                                    <svg className="w-5 h-5 text-indigo-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                                    </svg>
+                                                                    <div className="flex-1">
+                                                                        <h4 className="section-title mb-1">TDS Rate Information</h4>
+                                                                        <div className="space-y-1 text-sm text-slate-700">
+                                                                            <p><span className="font-medium">TDS Rate:</span> {rateInfo.tdsRate}</p>
+                                                                            <p><span className="font-medium">Penalty Rate:</span> {rateInfo.penaltyRate}</p>
+                                                                            <p className="mt-1 text-xs text-indigo-600 italic">{rateInfo.description}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    </div>
+                                                        ) : null;
+                                                    })()}
                                                 </div>
-                                            ) : null;
-                                        })()}
+                                            )}
+
+                                            {/* TCS Section dropdown */}
+                                            {taxApplicableType === 'TCS' && (
+                                                <div className="space-y-2">
+                                                    <label className="label-text">TCS Section Applicable</label>
+                                                    <select
+                                                        value={tcsSectionApplicable}
+                                                        onChange={(e) => setTcsSectionApplicable(e.target.value)}
+                                                        className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-emerald-500 focus:border-emerald-500 bg-white"
+                                                    >
+                                                        <option value="">Select TCS Section</option>
+                                                        <option value="Section 206C(1) - Sale of Scrap, Alcoholic Liquor, Minerals">Section 206C(1) - Sale of Scrap, Alcoholic Liquor, Minerals</option>
+                                                        <option value="Section 206C(1) - Sale of Tendu Leaves">Section 206C(1) - Sale of Tendu Leaves</option>
+                                                        <option value="Section 206C(1) - Sale of Forest Produce">Section 206C(1) - Sale of Forest Produce</option>
+                                                        <option value="Section 206C(1) - Sale of Timber">Section 206C(1) - Sale of Timber</option>
+                                                        <option value="Section 206C(1F) - Sale of Motor Vehicles">Section 206C(1F) - Sale of Motor Vehicles</option>
+                                                        <option value="Section 206C(1F) - Sale of Specified Luxury Goods">Section 206C(1F) - Sale of Specified Luxury Goods</option>
+                                                    </select>
+                                                    {tcsSectionApplicable && (() => {
+                                                        const tcsInfo = getTCSRateInfo(tcsSectionApplicable);
+                                                        return tcsInfo ? (
+                                                            <div className="p-4 bg-emerald-50/60 border-l-4 border-emerald-500 rounded-[4px]">
+                                                                <div className="flex items-start gap-3">
+                                                                    <svg className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                                    </svg>
+                                                                    <div className="flex-1">
+                                                                        <h4 className="section-title mb-1">TCS Rate Information</h4>
+                                                                        <div className="space-y-1 text-sm text-slate-700">
+                                                                            <p><span className="font-medium">TCS Rate:</span> {tcsInfo.tcsRate}</p>
+                                                                            <p><span className="font-medium">Penalty Rate:</span> {tcsInfo.penaltyRate}</p>
+                                                                            <p className="mt-1 text-xs text-emerald-600 italic">{tcsInfo.description}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ) : null;
+                                                    })()}
+                                                </div>
+                                            )}
+                                        </div>
+
 
                                         {/* Enable automatic TDS Posting Checkbox */}
                                         <div className="flex items-center gap-2 pt-2">
