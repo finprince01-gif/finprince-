@@ -3,6 +3,7 @@ import re
 import logging
 from datetime import datetime
 from vendors.vendor_validation_logic import validate_vendor
+from accounting.sales_validation_logic import validate_sales_customer_and_invoice
 from core.ocr_cache import update_staged_invoice_extracted_data
 
 logger = logging.getLogger(__name__)
@@ -160,9 +161,9 @@ def parse_and_process_ocr(raw_text: str):
 
     return {'invoice': invoice_data, 'items': items}
 
-def run_invoice_processing_pipeline(file_hash, tenant_id):
+def run_invoice_processing_pipeline(file_hash, tenant_id, voucher_type='Purchase'):
     """
-    The full pipeline: Parse -> Normalize -> Validate Vendor -> Update Staging.
+    The full pipeline: Parse -> Normalize -> Validate (Vendor/Customer) -> Update Staging.
     Returns the updated record info.
     """
     from core.ocr_cache import get_cached_ocr
@@ -182,57 +183,87 @@ def run_invoice_processing_pipeline(file_hash, tenant_id):
         # 2. Mapping Engine (Parse & Normalize)
         processed_data = parse_and_process_ocr(raw_text)
         
-        # 3. Vendor Validation
+        # 3. Validation (Vendor or Customer)
         invoice_header = processed_data.get('invoice', {})
-        v_name = invoice_header.get('Vendor Name') or invoice_header.get('vendor_name') or ''
-        v_gstin = invoice_header.get('GSTIN') or invoice_header.get('vendor_gstin') or ''
-        v_branch = invoice_header.get('Branch') or invoice_header.get('branch_name') or ''
-        v_address = invoice_header.get('Bill From - Address Line 1') or invoice_header.get('vendor_address') or ''
-        v_state = invoice_header.get('Bill From - State') or ''
+        
+        if voucher_type.lower() == 'sales':
+            c_name = invoice_header.get('Customer Name') or invoice_header.get('customer_name') or ''
+            c_gstin = invoice_header.get('GSTIN') or invoice_header.get('customer_gstin') or ''
+            c_branch = invoice_header.get('Branch') or invoice_header.get('branch_name') or ''
+            v_no = invoice_header.get('Sales Invoice No') or invoice_header.get('invoice_number') or ''
+            
+            val_result = validate_sales_customer_and_invoice(
+                tenant_id=tenant_id,
+                customer_name=c_name,
+                gstin=c_gstin,
+                branch=c_branch,
+                sales_invoice_no=v_no
+            )
+            matched_id = val_result.get('customer_id')
+            matched_by = val_result.get('matched_by') # Might need to add this to sales_validation_logic
+        else:
+            v_name = invoice_header.get('Vendor Name') or invoice_header.get('vendor_name') or ''
+            v_gstin = invoice_header.get('GSTIN') or invoice_header.get('vendor_gstin') or ''
+            v_branch = invoice_header.get('Branch') or invoice_header.get('branch_name') or ''
+            v_address = invoice_header.get('Bill From - Address Line 1') or invoice_header.get('vendor_address') or ''
+            v_state = invoice_header.get('Bill From - State') or ''
 
-        val_result = validate_vendor(
-            tenant_id=tenant_id,
-            vendor_name=v_name,
-            gstin=v_gstin,
-            branch=v_branch,
-            address=v_address,
-            state=v_state
-        )
+            val_result = validate_vendor(
+                tenant_id=tenant_id,
+                vendor_name=v_name,
+                gstin=v_gstin,
+                branch=v_branch,
+                address=v_address,
+                state=v_state
+            )
+            matched_id = val_result.get('vendor_id')
+            matched_by = val_result.get('matched_by')
 
         # Field validation
-        inv_no = invoice_header.get('Supplier Invoice No') or invoice_header.get('invoice_number') or ''
+        if voucher_type.lower() == 'sales':
+            inv_no = invoice_header.get('Sales Invoice No') or invoice_header.get('invoice_number') or ''
+            party_name = c_name
+        else:
+            inv_no = invoice_header.get('Supplier Invoice No') or invoice_header.get('invoice_number') or ''
+            party_name = v_name
+            
         taxable_val = invoice_header.get('Total Taxable Value') or invoice_header.get('taxable_value') or ''
         grand_total = invoice_header.get('Total Invoice Value') or invoice_header.get('Grand Total') or invoice_header.get('total_amount') or ''
         
-        fields_valid = bool(v_name and v_gstin and inv_no and taxable_val and grand_total)
-        vendor_status_raw = val_result.get('status')
+        fields_valid = bool(party_name and inv_no and taxable_val and grand_total)
+        val_status_raw = val_result.get('status')
         
-        if vendor_status_raw != 'FOUND':
-            final_status = 'VENDOR_MISSING'
-            conflict_msg = val_result.get('message', 'Vendor not found in master.')
+        if val_status_raw == 'DUPLICATE_INVOICE':
+            final_status = 'DUPLICATE'
+            conflict_msg = val_result.get('message')
+        elif val_status_raw == 'GSTIN_CONFLICT':
+            final_status = 'CONFLICT'
+            conflict_msg = val_result.get('message')
+        elif val_status_raw == 'CUSTOMER_MISSING' or val_status_raw == 'VENDOR_MISSING' or val_status_raw == 'MISSING':
+            final_status = 'PARTY_MISSING'
+            conflict_msg = val_result.get('message', 'Party not found in master.')
         elif not fields_valid:
             final_status = 'VALIDATION_FAILED'
-            conflict_msg = 'Missing required fields (Vendor, GSTIN, Invoice No, Taxable Value, or Grand Total).'
+            conflict_msg = 'Missing required fields (Party, GSTIN, Invoice No, Taxable Value, or Grand Total).'
         else:
             final_status = 'READY'
             conflict_msg = None
 
         # 4. Update Staging Table
-        from core.ocr_cache import update_staged_invoice_extracted_data
         update_staged_invoice_extracted_data(
             file_hash=file_hash,
             tenant_id=tenant_id,
             extracted_data=processed_data,
             validation_status=final_status,
-            matched_by=val_result.get('matched_by'),
+            matched_by=matched_by,
             conflict_message=conflict_msg,
-            vendor_id=val_result.get('vendor_id')
+            vendor_id=matched_id # We reuse vendor_id column for customer_id in sales context or we could rename it in DB but for now reused
         )
         
         return {
             'success': True,
             'status': final_status,
-            'vendor_id': val_result.get('vendor_id'),
+            'vendor_id': matched_id,
             'extracted_data': processed_data
         }
     except Exception as e:

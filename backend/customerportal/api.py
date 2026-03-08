@@ -3,6 +3,7 @@ Customer Portal API
 Handles all API endpoints for customer portal functionality
 """
 from rest_framework import viewsets, status
+from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -546,3 +547,138 @@ class CustomerTransactionSalesOrderViewSet(viewsets.ModelViewSet):
         tenant_id = getattr(user, 'tenant_id', None)
         created_by = getattr(user, 'full_name', user.username)
         serializer.save(tenant_id=tenant_id, created_by=created_by)
+
+class SalesCustomerCreateView(APIView):
+    """
+    Create a new Customer specifically for Sales Excel Upload.
+    Creates records in multiple related tables: Master, GST, Banking, TDS, and Terms.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get_tenant_id(self):
+        user = self.request.user
+        return getattr(user, 'tenant_id', None)
+
+    def get_username(self):
+        return getattr(self.request.user, 'username', 'system')
+
+    def post(self, request, *args, **kwargs):
+        tenant_id = self.get_tenant_id()
+        username = self.get_username()
+        
+        c_name = request.data.get('customer_name', '').strip()
+        gstin = request.data.get('gstin', '')
+        if gstin:
+            gstin = gstin.strip().upper()
+        branch = request.data.get('branch', '').strip()
+        address = request.data.get('address', '').strip()
+        state = request.data.get('state', '').strip()
+        
+        if not c_name:
+            return Response({'error': 'Customer Name is required'}, status=400)
+
+        # Step 1: Validation
+        from accounting.sales_validation_logic import validate_sales_customer_and_invoice
+        val_result = validate_sales_customer_and_invoice(
+            tenant_id=tenant_id,
+            customer_name=c_name,
+            gstin=gstin,
+            branch=branch
+        )
+
+        if val_result['status'] == 'READY':
+            # Already exists
+            return Response({
+                "status": "CREATED",
+                "customer_id": val_result['customer_id'],
+                "message": "Customer already exists."
+            }, status=status.HTTP_200_OK)
+            
+        elif val_result['status'] == 'GSTIN_CONFLICT':
+            return Response({
+                "status": "VALIDATION_WARNING",
+                "message": val_result['message'],
+                "customer_id": val_result['customer_id']
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Step 2: Create Master Basic Detail
+        from .database import (
+            CustomerMasterCustomerBasicDetails,
+            CustomerMasterCustomerGSTDetails,
+            CustomerMasterCustomerBanking,
+            CustomerMasterCustomerTDS,
+            CustomerMasterCustomerTermsCondition
+        )
+
+        try:
+            with transaction.atomic():
+                # 1. Basic Details
+                # Generate a temporary customer code
+                import random
+                import string
+                random_suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+                cust_code = f"CUST-{random_suffix}"
+                
+                # Try to get or create a "Regular" category
+                from .models import CustomerMasterCategory
+                cat, _ = CustomerMasterCategory.objects.get_or_create(
+                    tenant_id=tenant_id,
+                    category="Regular",
+                    defaults={'is_active': True}
+                )
+
+                customer = CustomerMasterCustomerBasicDetails.objects.create(
+                    tenant_id=tenant_id,
+                    customer_name=c_name,
+                    customer_code=cust_code,
+                    pan_number=gstin[2:12] if gstin and len(gstin) >= 15 else None,
+                    contact_number=request.data.get('phone', '+910000000000'),
+                    email_address=request.data.get('email', f"pending_{tenant_id}@example.com"),
+                    customer_category=cat,
+                    created_by=username
+                )
+                
+                # 2. GST Details
+                if gstin or branch:
+                    CustomerMasterCustomerGSTDetails.objects.create(
+                        tenant_id=tenant_id,
+                        customer_basic_detail=customer,
+                        gstin=gstin if gstin else None,
+                        branch_reference_name=branch if branch else "Main Branch",
+                        branch_address=address,
+                        # Populate the new address columns if provided
+                        address_line_1=address,
+                        state=state,
+                        created_by=username
+                    )
+
+                # 3. Banking Table
+                CustomerMasterCustomerBanking.objects.create(
+                    tenant_id=tenant_id,
+                    customer_basic_detail=customer,
+                    created_by=username
+                )
+
+                # 4. Statutory / TDS Table
+                CustomerMasterCustomerTDS.objects.create(
+                    tenant_id=tenant_id,
+                    customer_basic_detail=customer,
+                    created_by=username
+                )
+
+                # 5. Terms Table
+                CustomerMasterCustomerTermsCondition.objects.create(
+                    tenant_id=tenant_id,
+                    customer_basic_detail=customer,
+                    created_by=username
+                )
+
+                return Response({
+                    "status": "CREATED",
+                    "customer_id": customer.id,
+                    "customer_name": c_name,
+                    "customer_code": cust_code
+                }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

@@ -9,6 +9,11 @@ from vouchers.staging_api import OCRStagingView, OCRStagingFinalizeView
 from core.auth_views import CookieTokenObtainPairView, CookieTokenRefreshView, LogoutView
 from core.token import MyTokenObtainPairSerializer
 from core.views import AdminSubscriptionsView, AdminPaymentsView
+from accounting.sales_excel_api import (
+    SalesVoucherColumnSchemaView, SalesExcelTemplateDownloadView, 
+    SalesExcelErrorReportView, SalesExcelUploadView,
+    SalesExcelWorkflowUploadView, SalesExcelWorkflowUpdateView, SalesExcelWorkflowFinalizeView
+)
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 import threading
 import sys
@@ -92,4 +97,10 @@ urlpatterns = [
     path('api/ocr-staging/', OCRStagingView.as_view(), name='ocr-staging-list-upload'),
     path('api/ocr-staging/<str:file_hash>/', OCRStagingView.as_view(), name='ocr-staging-remove'),
     path('api/ocr-staging-finalize/', OCRStagingFinalizeView.as_view(), name='ocr-staging-finalize'),
+
+    # Sales Excel Upload Workflow (New)
+    path('api/sales-excel/workflow/template/', SalesExcelTemplateDownloadView.as_view(), name='sales-excel-workflow-template'),
+    path('api/sales-excel/workflow/upload/', SalesExcelWorkflowUploadView.as_view(), name='sales-excel-workflow-upload'),
+    path('api/sales-excel/workflow/update/', SalesExcelWorkflowUpdateView.as_view(), name='sales-excel-workflow-update'),
+    path('api/sales-excel/workflow/finalize/', SalesExcelWorkflowFinalizeView.as_view(), name='sales-excel-workflow-finalize'),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

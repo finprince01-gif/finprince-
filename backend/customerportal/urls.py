@@ -34,7 +34,10 @@ router.register(r'sales-quotations-general', CustomerTransactionSalesQuotationGe
 router.register(r'sales-quotations-specific', CustomerTransactionSalesQuotationSpecificViewSet, basename='sales-quotation-specific')
 router.register(r'sales-orders', CustomerTransactionSalesOrderViewSet, basename='sales-orders')
 
+from .api import SalesCustomerCreateView
+
 urlpatterns = [
     path('', include(router.urls)),
+    path('sales/customers/create/', SalesCustomerCreateView.as_view(), name='sales-customers-create'),
 ]
 
