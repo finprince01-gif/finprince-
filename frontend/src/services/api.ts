@@ -328,7 +328,7 @@ class ApiService {
      * @param vendorName - Vendor name to filter by
      */
     async getVendorPurchaseInvoices(vendorName: string) {
-        let url = `/api/accounting/vouchers/purchase/?vendor_name=${encodeURIComponent(vendorName)}`;
+        let url = `/api/vouchers/purchase/?vendor_name=${encodeURIComponent(vendorName)}`;
         return httpClient.get<any[]>(url);
     }
 
@@ -337,7 +337,7 @@ class ApiService {
      * @param customerName - Customer name to filter by
      */
     async getCustomerSalesInvoices(customerName: string) {
-        let url = `/api/accounting/vouchers/sales/?customer_name=${encodeURIComponent(customerName)}`;
+        let url = `/api/vouchers/sales/?customer_name=${encodeURIComponent(customerName)}`;
         return httpClient.get<any[]>(url);
     }
 
@@ -612,6 +612,45 @@ class ApiService {
         branch?: string;
     }) {
         return httpClient.post<{ status: string; vendor_id: number }>('/api/purchase/vendors/create/', data);
+    }
+
+    // ============================================================================
+    // SALES EXCEL UPLOAD WORKFLOW
+    // ============================================================================
+
+    /** Get blank template for Sales Excel Upload. */
+    async getSalesExcelTemplate() {
+        return httpClient.get<Blob>('/api/sales-excel/workflow/template/');
+    }
+
+    /** Upload Sales Excel → returns in-memory invoices with validation status. */
+    async uploadSalesExcelWorkflow(file: File) {
+        const formData = new FormData();
+        formData.append('file', file);
+        return httpClient.postFormData<{ session_id: string; invoices: any[] }>('/api/sales-excel/workflow/upload/', formData);
+    }
+
+    /** Update an invoice in the workflow or trigger global re-validation. */
+    async updateSalesWorkflowInvoice(data: { session_id: string; index?: number; invoice?: any; revalidate_all?: boolean }) {
+        return httpClient.post<{ invoices: any[] }>('/api/sales-excel/workflow/update/', data);
+    }
+
+    /** Finalize: create Sales Vouchers for all READY invoices. */
+    async finalizeSalesWorkflow(sessionId: string) {
+        return httpClient.post<{ summary: any; remaining: any[] }>('/api/sales-excel/workflow/finalize/', { session_id: sessionId });
+    }
+
+    /** Create a customer from the sales workflow screen. */
+    async createCustomerFromSalesWorkflow(data: {
+        customer_name: string;
+        gstin?: string;
+        branch?: string;
+        address?: string;
+        state?: string;
+        email?: string;
+        phone?: string;
+    }) {
+        return httpClient.post<{ status: string; customer_id: number }>('/api/customerportal/sales/customers/create/', data);
     }
 
     async extractStockItemsFromFile(file: File) {

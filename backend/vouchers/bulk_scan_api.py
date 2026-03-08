@@ -77,7 +77,7 @@ class BulkScanAPIView(APIView):
 
         # ── Run the Processing Pipeline (Normalization + Validation + Cache Update) ──
         from core.processing_engine import run_invoice_processing_pipeline
-        pipeline_res = run_invoice_processing_pipeline(file_hash, tenant_id)
+        pipeline_res = run_invoice_processing_pipeline(file_hash, tenant_id, voucher_type=voucher_type)
 
         if not pipeline_res:
             return {

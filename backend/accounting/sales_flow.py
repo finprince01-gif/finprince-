@@ -14,6 +14,8 @@ from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
 import os
 
+from .sales_validation_logic import validate_sales_customer_and_invoice
+
 
 def validate_date(date_str: str) -> bool:
     """
@@ -177,46 +179,78 @@ def generate_sales_invoice_number(tenant_id: str, voucher_type_id: int) -> str:
 
 def fetch_customer_address(customer_id: int, tenant_id: str) -> Dict:
     """
-    Fetch customer address details from Customer Module.
+    Fetch customer address details from Customer Module (Customer Master).
     """
-    from accounting.models import MasterLedger
+    from customerportal.models import CustomerMasterCustomerBasicDetails, CustomerMasterCustomerGSTDetails
     
     try:
-        customer = MasterLedger.objects.get(id=customer_id, tenant_id=tenant_id)
-    except MasterLedger.DoesNotExist:
-        raise ValidationError("Customer not found.")
+        customer = CustomerMasterCustomerBasicDetails.objects.prefetch_related('gst_details').get(id=customer_id, tenant_id=tenant_id)
+    except CustomerMasterCustomerBasicDetails.DoesNotExist:
+        # Fallback to MasterLedger if ID not found in Customer Master (Legacy support)
+        from accounting.models import MasterLedger
+        try:
+            customer = MasterLedger.objects.get(id=customer_id, tenant_id=tenant_id)
+            extended_data = customer.extended_data or {}
+            
+            bill_to_parts = [
+                extended_data.get('address_line1'),
+                extended_data.get('address_line2'),
+                extended_data.get('city'),
+                customer.state,
+                extended_data.get('pincode')
+            ]
+            bill_to_address = ', '.join(filter(None, bill_to_parts)) or 'Address not available'
+            
+            return {
+                'customer_name': customer.name,
+                'bill_to_address': bill_to_address,
+                'bill_to_gstin': customer.gstin or '',
+                'bill_to_contact': extended_data.get('phone') or extended_data.get('mobile') or '',
+                'bill_to_state': customer.state or '',
+                'bill_to_country': extended_data.get('country', 'India'),
+                'ship_to_address': bill_to_address,
+                'ship_to_state': customer.state or '',
+                'ship_to_country': extended_data.get('country', 'India'),
+            }
+        except MasterLedger.DoesNotExist:
+            raise ValidationError("Customer not found in Master records.")
+
+    # Main path: Using CustomerMasterCustomerBasicDetails
+    gst_info = customer.gst_details.first() # Get primary branch if exists
     
-    # Extract address from extended_data or construct from available fields
-    extended_data = customer.extended_data or {}
-    
-    # Build bill-to address
-    bill_to_parts = []
-    if extended_data.get('address_line1'):
-        bill_to_parts.append(extended_data['address_line1'])
-    if extended_data.get('address_line2'):
-        bill_to_parts.append(extended_data['address_line2'])
-    if extended_data.get('city'):
-        bill_to_parts.append(extended_data['city'])
-    if customer.state:
-        bill_to_parts.append(customer.state)
-    if extended_data.get('pincode'):
-        bill_to_parts.append(extended_data['pincode'])
-    
-    bill_to_address = ', '.join(filter(None, bill_to_parts)) or 'Address not available'
-    
-    # Ship-to address (same as bill-to by default, but can be edited)
-    ship_to_address = extended_data.get('shipping_address', bill_to_address)
-    
+    # Construct address from GST details
+    if gst_info:
+        bill_to_parts = [
+            gst_info.address_line_1,
+            gst_info.address_line_2,
+            gst_info.address_line_3,
+            gst_info.city,
+            gst_info.state,
+            gst_info.pincode
+        ]
+        bill_to_address = ', '.join(filter(None, bill_to_parts)) or 'Address not available'
+        gstin = gst_info.gstin or ''
+        contact = gst_info.branch_contact_number or customer.contact_number or ''
+        state = gst_info.state or ''
+        country = gst_info.country or 'India'
+    else:
+        # Fallback if no GST info
+        bill_to_address = 'Address not available'
+        gstin = ''
+        contact = customer.contact_number or ''
+        state = ''
+        country = 'India'
+
     return {
-        'customer_name': customer.name,
+        'customer_name': customer.customer_name,
         'bill_to_address': bill_to_address,
-        'bill_to_gstin': customer.gstin or '',
-        'bill_to_contact': extended_data.get('phone') or extended_data.get('mobile') or '',
-        'bill_to_state': customer.state or '',
-        'bill_to_country': extended_data.get('country', 'India'),
-        'ship_to_address': ship_to_address,
-        'ship_to_state': customer.state or '',
-        'ship_to_country': extended_data.get('country', 'India'),
+        'bill_to_gstin': gstin,
+        'bill_to_contact': contact,
+        'bill_to_state': state,
+        'bill_to_country': country,
+        'ship_to_address': bill_to_address,
+        'ship_to_state': state,
+        'ship_to_country': country,
     }
 
 
@@ -281,11 +315,30 @@ def create_sales_voucher(data: Dict, tenant_id: str, user_state: str) -> 'SalesV
     from masters.voucher_master_models import MasterVoucherReceipts as ReceiptVoucherType
     from django.db import transaction
     
-    # Validate date
+    # 1. Date Validation
     validate_date(data['date'])
     
-    # Fetch customer address & name
-    customer_info = fetch_customer_address(data['customer_id'], tenant_id)
+    # 2. Customer & Duplicate Invoice Validation
+    val_res = validate_sales_customer_and_invoice(
+        tenant_id=tenant_id,
+        customer_name=data.get("customer_name"),
+        gstin=data.get("gstin"),
+        branch=data.get("customer_branch"),
+        sales_invoice_no=data.get("sales_invoice_no")
+    )
+    
+    if val_res["status"] != "READY":
+        raise ValidationError(val_res["message"])
+    
+    # 3. Fetch customer address & name
+    # We still use the existing customer_id from input if it matches or the one from validation?
+    # Usually the frontend sends customer_id. 
+    # If customer matched, we can use val_res['customer_id'].
+    cust_id = data.get('customer_id') or val_res.get('customer_id')
+    if not cust_id:
+        raise ValidationError("Customer identification failed.")
+
+    customer_info = fetch_customer_address(cust_id, tenant_id)
     
     # Determine tax type
     tax_type = determine_tax_type(
