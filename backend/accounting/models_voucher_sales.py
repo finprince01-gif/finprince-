@@ -19,6 +19,8 @@ class VoucherSalesInvoiceDetails(BaseModel):
     
     # Customer
     customer_name = models.CharField(max_length=255, help_text="Customer Name as entered/selected")
+    customer_id = models.BigIntegerField(null=True, blank=True, help_text="Link to customer master")
+    customer_branch = models.CharField(max_length=100, null=True, blank=True)
     
     # Addresses
     bill_to = models.TextField(null=True, blank=True, help_text="Billing Address")
@@ -90,6 +92,8 @@ class VoucherSalesInvoiceDetails(BaseModel):
         blank=True, 
         help_text="E-commerce operator GSTIN"
     )
+    irn = models.CharField(max_length=255, null=True, blank=True)
+    ack_no = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
         managed = False
@@ -133,16 +137,16 @@ class VoucherSalesItemsForeign(BaseModel):
     """
     Sales Voucher - Items (Foreign/Export)
     """
-    invoice = models.OneToOneField(VoucherSalesInvoiceDetails, on_delete=models.CASCADE, related_name='foreign_items')
-    # Note: Using OneToOne might be wrong if multiple items, should be ForeignKey. 
-    # Frontend allows multiple rows. Changing to ForeignKey.
     invoice = models.ForeignKey(VoucherSalesInvoiceDetails, on_delete=models.CASCADE, related_name='foreign_items')
 
+    item_name = models.CharField(max_length=255, null=True, blank=True)
     description = models.TextField(null=True, blank=True)
     quantity = models.DecimalField(max_digits=18, decimal_places=4, default=0)
     uqc = models.CharField(max_length=50, null=True, blank=True)
     rate = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     amount = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    alternate_unit = models.CharField(max_length=50, null=True, blank=True)
+    sales_ledger = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:
         managed = False

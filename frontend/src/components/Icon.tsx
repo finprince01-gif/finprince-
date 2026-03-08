@@ -1,6 +1,6 @@
 import React from 'react';
 
-type IconName = 'dashboard' | 'layout-dashboard' | 'masters' | 'inventory' | 'vouchers' | 'reports' | 'plus' | 'trash' | 'upload' | 'close' | 'warning' | 'settings' | 'logout' | 'sparkles' | 'arrow-up-right' | 'arrow-down-left' | 'users' | 'wallet' | 'download' | 'check-circle' | 'x-circle' | 'spinner' | 'wand-sparkles' | 'bot' | 'vendor-portal' | 'customer-portal' | 'payroll' | 'service' | 'gst' | 'ledger' | 'search' | 'clock' | 'inbox' | 'x' | 'exclamation-triangle' | 'edit' | 'chevron-down' | 'document' | 'check' | 'scanner' | 'tag' | 'save' | 'menu' | 'receipt';
+type IconName = 'dashboard' | 'layout-dashboard' | 'masters' | 'inventory' | 'vouchers' | 'reports' | 'plus' | 'trash' | 'upload' | 'close' | 'warning' | 'settings' | 'logout' | 'sparkles' | 'arrow-up-right' | 'arrow-down-left' | 'users' | 'wallet' | 'download' | 'check-circle' | 'x-circle' | 'spinner' | 'wand-sparkles' | 'bot' | 'vendor-portal' | 'customer-portal' | 'payroll' | 'service' | 'gst' | 'ledger' | 'search' | 'clock' | 'inbox' | 'x' | 'exclamation-triangle' | 'edit' | 'chevron-down' | 'document' | 'check' | 'scanner' | 'tag' | 'save' | 'menu' | 'receipt' | 'file-text' | 'file-spreadsheet' | 'bar-chart-2' | 'edit-3' | 'user-plus' | 'trash-2' | 'alert-circle' | 'loader' | 'arrow-left';
 
 interface IconProps {
   name: IconName;
@@ -174,6 +174,15 @@ const Icon: React.FC<IconProps> = ({ name, className = '', size, style }) => {
       </>
     ),
     menu: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />,
+    'file-text': <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />,
+    'file-spreadsheet': <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />,
+    'bar-chart-2': <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 20V10m-4 10V4m-4 10V6m-4 10v4" />,
+    'edit-3': <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 20h9m-9-4h6m-13.414.586l11.293-11.293a1 1 0 011.414 0l1.414 1.414a1 1 0 010 1.414l-11.293 11.293a1 1 0 01-.707.293H7v-2.293a1 1 0 01.293-.707z" />,
+    'user-plus': <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2m14-10a4 4 0 11-8 0 4 4 0 018 0m4 5V9m3 3h-6" />,
+    'trash-2': <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6h18m-2 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2m-6 9h4m-4-4h4" />,
+    'alert-circle': <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />,
+    loader: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83" />,
+    'arrow-left': <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />,
   };
 
   return (

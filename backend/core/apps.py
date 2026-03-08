@@ -19,13 +19,12 @@ class CoreConfig(AppConfig):
                 warnings.filterwarnings("ignore", category=RuntimeWarning, message=".*Accessing the database during app initialization.*")
                 try:
                     # Attempt to test the connection
-                    connection.ensure_connection()
-                    print("\033[92m" + "✔ Database Connection: SUCCESS (" + connection.settings_dict['NAME'] + ")" + "\033[0m")
-                except OperationalError as e:
-                    print("\033[91m" + "✘ Database Connection: FAILED" + "\033[0m")
-                    print("\033[91m" + f"Error: {str(e)}" + "\033[0m")
+                    with connection.cursor() as cursor:
+                        cursor.execute("SELECT 1")
+                    print("\033[92m" + "[OK] Database Connection: SUCCESS (" + connection.settings_dict['NAME'] + ")" + "\033[0m")
+                except OperationalError:
+                    print("\033[91m" + "[ERROR] Database Connection: FAILED TO CONNECT" + "\033[0m")
+                    # Remove sys.exit(1) to allow collectstatic/migrations without DB
                 except Exception as e:
-                    print("\033[91m" + "✘ Database Connection: UNEXPECTED ERROR" + "\033[0m")
+                    print("\033[91m" + "[ERROR] Database Connection: UNEXPECTED ERROR" + "\033[0m")
                     print("\033[91m" + f"Error: {str(e)}" + "\033[0m")
-
-

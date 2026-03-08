@@ -45,7 +45,16 @@ class VoucherSalesInvoiceDetailsSerializer(TenantModelSerializerMixin, serialize
 
     class Meta:
         model = VoucherSalesInvoiceDetails
-        fields = '__all__'
+        fields = [
+            'id', 'tenant_id', 'date', 'sales_invoice_no', 'voucher_name', 'outward_slip_no',
+            'customer_name', 'customer_id', 'customer_branch', 'bill_to', 'ship_to', 'gstin', 'contact',
+            'tax_type', 'state_type', 'export_type', 'exchange_rate', 'supporting_document',
+            'sales_order_no', 'place_of_supply', 'reverse_charge', 'invoice_type',
+            'gst_export_type', 'port_code', 'shipping_bill_number', 'shipping_bill_date',
+            'ecommerce_gstin', 'irn', 'ack_no', 'created_at', 'updated_at',
+            # Nested Fields
+            'items', 'foreign_items', 'payment_details', 'dispatch_details', 'eway_bill_details'
+        ]
         read_only_fields = ('id', 'tenant_id', 'created_at', 'updated_at')
 
     def create(self, validated_data):
@@ -55,16 +64,24 @@ class VoucherSalesInvoiceDetailsSerializer(TenantModelSerializerMixin, serialize
         dispatch_data = validated_data.pop('dispatch_details', None)
         eway_bill_details_data = validated_data.pop('eway_bill_details', [])
         
+        print(f"DEBUG CORE: Creating Invoice for tenant {validated_data.get('tenant_id')}")
+        print(f"DEBUG NESTED: items={len(items_data)}, dispatch={'YES' if dispatch_data else 'NO'}, eway={len(eway_bill_details_data)}")
+        
         # Create Invoice header
         invoice = super().create(validated_data)
         tenant_id = invoice.tenant_id
 
+        print(f"DEBUG BRAIN: items_data count = {len(items_data)}")
+        print(f"DEBUG BRAIN: foreign_items_data count = {len(foreign_items_data)}")
+        
         # Create Items
         for item in items_data:
+            print(f"DEBUG BRAIN: Creating Item: {item.get('item_name')}")
             VoucherSalesItems.objects.create(invoice=invoice, tenant_id=tenant_id, **item)
         
         # Create Foreign Items
         for item in foreign_items_data:
+            print(f"DEBUG BRAIN: Creating Foreign Item: {item.get('item_name')}")
             VoucherSalesItemsForeign.objects.create(invoice=invoice, tenant_id=tenant_id, **item)
         
         # Create Payment Details
@@ -77,6 +94,7 @@ class VoucherSalesInvoiceDetailsSerializer(TenantModelSerializerMixin, serialize
             
         # Create Eway Bill Details
         for eway_data in eway_bill_details_data:
+            print(f"DEBUG BRAIN: Creating Eway Bill: {eway_data.get('eway_bill_no')}")
             VoucherSalesEwayBill.objects.create(invoice=invoice, tenant_id=tenant_id, **eway_data)
 
         return invoice

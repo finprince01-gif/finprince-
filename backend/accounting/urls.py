@@ -14,6 +14,12 @@ from .sales_api import (
     SalesDocumentUploadAPIView,
     CustomerListAPIView
 )
+from .sales_excel_api import (
+    SalesVoucherColumnSchemaView,
+    SalesExcelTemplateDownloadView,
+    SalesExcelUploadView,
+    SalesExcelErrorReportView,
+)
 from .invoice_api import SalesInvoiceViewSet
 from .views_voucher_sales import VoucherSalesViewSet
 
@@ -84,6 +90,12 @@ urlpatterns = [
     path('vouchers/sales/determine-tax-type/', TaxTypeDeterminationAPIView.as_view(), name='determine-tax-type'),
     path('vouchers/sales/upload-document/', SalesDocumentUploadAPIView.as_view(), name='upload-sales-document'),
     path('vouchers/sales/customers/', CustomerListAPIView.as_view(), name='sales-customers'),
+
+    # Sales Excel Template – Download, Upload & Schema
+    path('vouchers/sales/schema/',         SalesVoucherColumnSchemaView.as_view(),      name='sales-voucher-schema'),
+    path('vouchers/sales/excel-template/', SalesExcelTemplateDownloadView.as_view(),   name='sales-excel-template-download'),
+    path('vouchers/sales/upload-excel/',   SalesExcelUploadView.as_view(),             name='sales-excel-upload'),
+    path('vouchers/sales/excel-error-report/', SalesExcelErrorReportView.as_view(),    name='sales-excel-error-report'),
     
     # Subscription Usage
     path('subscription/usage/', SubscriptionUsageView.as_view(), name='subscription-usage'),

@@ -19,6 +19,7 @@ import ReceiptVoucher from './ReceiptVoucher';
 import CreateGRNModal from '../../components/CreateGRNModal';
 import SearchableSelect from '../../components/SearchableSelect';
 import CreateVendorModal from '../../components/CreateVendorModal';
+import SalesExcelUploadWorkflow from '../../components/SalesExcelUploadWorkflow';
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5003';
 
@@ -201,6 +202,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   // Subscription Usage
   const { subscriptionUsage, isLimitReached, refetch } = useSubscriptionUsage();
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const [isSalesExcelWorkflowOpen, setIsSalesExcelWorkflowOpen] = useState(false);
 
   const handleScannerFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -6110,165 +6112,180 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         </div>
       </div>
 
-      {/* Main Tabs */}
-      <div className="erp-tab-container">
-        {availableVoucherTypes.map(type => (
-          <button
-            key={type.id}
-            onClick={() => { setVoucherType(type.id); resetForm(); }}
-            className={`erp-tab ${voucherType === type.id ? 'active' : ''}`}
-          >
-            {type.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="erp-container">
-        <div className="flex justify-between items-center border-b pb-4 mb-6">
-          <div className="flex items-center space-x-4">
-            <h3 className="erp-section-title border-none mb-0 pb-0">{voucherType} Voucher</h3>
-            {subscriptionUsage && (
-              <div className={`px-3 py-1 rounded-full text-xs font-medium ${isLimitReached ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
-                Usage: {subscriptionUsage.used} / {subscriptionUsage.limit}
-              </div>
-            )}
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="relative" ref={scannerMenuRef}>
+      {isSalesExcelWorkflowOpen ? (
+        <div className="erp-container relative">
+          <SalesExcelUploadWorkflow onClose={() => setIsSalesExcelWorkflowOpen(false)} />
+        </div>
+      ) : (
+        <>
+          {/* Main Tabs */}
+          <div className="erp-tab-container">
+            {availableVoucherTypes.map(type => (
               <button
-                onClick={() => isLimitReached ? handleLimitReached() : setIsScannerMenuOpen(prev => !prev)}
-                className={`erp-button-primary ${isLimitReached ? 'opacity-50 cursor-not-allowed !bg-gray-400 !shadow-none' : ''}`}
-                title={isLimitReached ? "Limit Reached" : "Upload Invoices"}
+                key={type.id}
+                onClick={() => { setVoucherType(type.id); resetForm(); }}
+                className={`erp-tab ${voucherType === type.id ? 'active' : ''}`}
               >
-                <Icon name="upload" className="w-4 h-4 mr-2" />
-                Upload Invoices
-                <Icon name="chevron-down" className="w-3 h-3 ml-2" />
+                {type.label}
               </button>
+            ))}
+          </div>
 
-              {isScannerMenuOpen && (
-                <div className="origin-top-right absolute right-0 mt-2 w-56 rounded shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-[60]">
-                  <div className="py-1" role="menu">
-                    <button
-                      onClick={() => { openScanner('finpixe', 'single'); setIsScannerMenuOpen(false); }}
-                      className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                      role="menuitem"
-                    >
-                      <Icon name="sparkles" className="w-4 h-4 mr-3 text-indigo-500" />
-                      Finpixe Single Scan
-                    </button>
-                    <button
-                      onClick={() => { setIsBulkUploadOpen(true); setIsScannerMenuOpen(false); }}
-                      className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 border-t border-gray-50"
-                      role="menuitem"
-                    >
-                      <Icon name="scanner" className="w-4 h-4 mr-3 text-emerald-500" />
-                      Finpixe Bulk Scan
-                    </button>
-                    <button
-                      onClick={() => setIsOthersSubmenuOpen(prev => !prev)}
-                      className="flex items-center justify-between w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                      role="menuitem"
-                    >
-                      <div className="flex items-center">
-                        <Icon name="menu" className="w-4 h-4 mr-3 text-gray-500" />
-                        Others
-                      </div>
-                      <Icon name="chevron-down" className={`w-3 h-3 transition-transform ${isOthersSubmenuOpen ? 'rotate-180' : ''}`} />
-                    </button>
+          <div className="erp-container">
+            <div className="flex justify-between items-center border-b pb-4 mb-6">
+              <div className="flex items-center space-x-4">
+                <h3 className="erp-section-title border-none mb-0 pb-0">{voucherType} Voucher</h3>
+                {subscriptionUsage && (
+                  <div className={`px-3 py-1 rounded-full text-xs font-medium ${isLimitReached ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+                    Usage: {subscriptionUsage.used} / {subscriptionUsage.limit}
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="relative" ref={scannerMenuRef}>
+                  <button
+                    onClick={() => isLimitReached ? handleLimitReached() : setIsScannerMenuOpen(prev => !prev)}
+                    className={`erp-button-primary ${isLimitReached ? 'opacity-50 cursor-not-allowed !bg-gray-400 !shadow-none' : ''}`}
+                    title={isLimitReached ? "Limit Reached" : "Upload Invoices"}
+                  >
+                    <Icon name="upload" className="w-4 h-4 mr-2" />
+                    Upload Invoices
+                    <Icon name="chevron-down" className="w-3 h-3 ml-2" />
+                  </button>
 
-                    {isOthersSubmenuOpen && (
-                      <div className="bg-gray-50 py-1 shadow-inner">
+                  {isScannerMenuOpen && (
+                    <div className="origin-top-right absolute right-0 mt-2 w-56 rounded shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-[60]">
+                      <div className="py-1" role="menu">
                         <button
-                          onClick={() => setIsTallySubmenuOpen(prev => !prev)}
-                          className="flex items-center justify-between w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
+                          onClick={() => { openScanner('finpixe', 'single'); setIsScannerMenuOpen(false); }}
+                          className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                          role="menuitem"
+                        >
+                          <Icon name="sparkles" className="w-4 h-4 mr-3 text-indigo-500" />
+                          Finpixe Single Scan
+                        </button>
+                        <button
+                          onClick={() => { setIsBulkUploadOpen(true); setIsScannerMenuOpen(false); }}
+                          className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 border-t border-gray-50"
+                          role="menuitem"
+                        >
+                          <Icon name="scanner" className="w-4 h-4 mr-3 text-emerald-500" />
+                          Finpixe Bulk Scan
+                        </button>
+                        <button
+                          onClick={() => setIsOthersSubmenuOpen(prev => !prev)}
+                          className="flex items-center justify-between w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                           role="menuitem"
                         >
                           <div className="flex items-center">
-                            <Icon name="document" className="w-3 h-3 mr-3" />
-                            Tally
+                            <Icon name="menu" className="w-4 h-4 mr-3 text-gray-500" />
+                            Others
                           </div>
-                          <Icon name="chevron-down" className={`w-2.5 h-2.5 transition-transform ${isTallySubmenuOpen ? 'rotate-180' : ''}`} />
+                          <Icon name="chevron-down" className={`w-3 h-3 transition-transform ${isOthersSubmenuOpen ? 'rotate-180' : ''}`} />
                         </button>
 
-                        {isTallySubmenuOpen && (
-                          <div className="bg-gray-100/50 py-0.5 shadow-inner">
+                        {isOthersSubmenuOpen && (
+                          <div className="bg-gray-50 py-1 shadow-inner">
                             <button
-                              onClick={() => { openScanner('tally'); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); setIsTallySubmenuOpen(false); }}
-                              className="flex items-center w-full text-left px-12 py-1.5 text-xs text-gray-500 hover:bg-gray-200"
+                              onClick={() => setIsTallySubmenuOpen(prev => !prev)}
+                              className="flex items-center justify-between w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
                               role="menuitem"
                             >
-                              <Icon name="plus" className="w-3 h-3 mr-2" />
-                              Voucher
+                              <div className="flex items-center">
+                                <Icon name="document" className="w-3 h-3 mr-3" />
+                                Tally
+                              </div>
+                              <Icon name="chevron-down" className={`w-2.5 h-2.5 transition-transform ${isTallySubmenuOpen ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {isTallySubmenuOpen && (
+                              <div className="bg-gray-100/50 py-0.5 shadow-inner">
+                                <button
+                                  onClick={() => { openScanner('tally'); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); setIsTallySubmenuOpen(false); }}
+                                  className="flex items-center w-full text-left px-12 py-1.5 text-xs text-gray-500 hover:bg-gray-200"
+                                  role="menuitem"
+                                >
+                                  <Icon name="plus" className="w-3 h-3 mr-2" />
+                                  Voucher
+                                </button>
+                                <button
+                                  onClick={() => { masterScannerInputRef.current?.click(); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); setIsTallySubmenuOpen(false); }}
+                                  className="flex items-center w-full text-left px-12 py-1.5 text-xs text-gray-500 hover:bg-gray-200"
+                                  role="menuitem"
+                                >
+                                  <Icon name="masters" className="w-3 h-3 mr-2" />
+                                  Master
+                                </button>
+                              </div>
+                            )}
+                            <button
+                              onClick={() => { showInfo("Zoho import triggered"); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); }}
+                              className="flex items-center w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
+                              role="menuitem"
+                            >
+                              <Icon name="document" className="w-3 h-3 mr-3" />
+                              Zoho
                             </button>
                             <button
-                              onClick={() => { masterScannerInputRef.current?.click(); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); setIsTallySubmenuOpen(false); }}
-                              className="flex items-center w-full text-left px-12 py-1.5 text-xs text-gray-500 hover:bg-gray-200"
+                              onClick={() => { showInfo("SAP import triggered"); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); }}
+                              className="flex items-center w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
                               role="menuitem"
                             >
-                              <Icon name="masters" className="w-3 h-3 mr-2" />
-                              Master
+                              <Icon name="document" className="w-3 h-3 mr-3" />
+                              SAP
                             </button>
                           </div>
                         )}
+
+                        <div className="border-t border-gray-100 my-1"></div>
                         <button
-                          onClick={() => { showInfo("Zoho import triggered"); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); }}
-                          className="flex items-center w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
+                          onClick={() => { excelInputRef.current?.click(); setIsScannerMenuOpen(false); }}
+                          className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                           role="menuitem"
                         >
-                          <Icon name="document" className="w-3 h-3 mr-3" />
-                          Zoho
+                          <Icon name="receipt" className="w-4 h-4 mr-3 text-green-500" />
+                          From Excel
+                        </button>
+
+                        <button
+                          onClick={() => { setIsSalesExcelWorkflowOpen(true); setIsScannerMenuOpen(false); }}
+                          className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                          role="menuitem"
+                        >
+                          <Icon name="file-spreadsheet" className="w-4 h-4 mr-3 text-blue-500" />
+                          {voucherType === 'Sales' ? 'Sales Excel Workflow (Upload)' : 'Sales Excel Workflow'}
                         </button>
                         <button
-                          onClick={() => { showInfo("SAP import triggered"); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); }}
-                          className="flex items-center w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
+                          onClick={() => { jsonInputRef.current?.click(); setIsScannerMenuOpen(false); }}
+                          className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                           role="menuitem"
                         >
-                          <Icon name="document" className="w-3 h-3 mr-3" />
-                          SAP
+                          <Icon name="tag" className="w-4 h-4 mr-3 text-amber-500" />
+                          From JSON
                         </button>
                       </div>
-                    )}
-
-                    <div className="border-t border-gray-100 my-1"></div>
-                    <button
-                      onClick={() => { excelInputRef.current?.click(); setIsScannerMenuOpen(false); }}
-                      className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                      role="menuitem"
-                    >
-                      <Icon name="receipt" className="w-4 h-4 mr-3 text-green-500" />
-                      From Excel
-                    </button>
-                    <button
-                      onClick={() => { jsonInputRef.current?.click(); setIsScannerMenuOpen(false); }}
-                      className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                      role="menuitem"
-                    >
-                      <Icon name="tag" className="w-4 h-4 mr-3 text-amber-500" />
-                      From JSON
-                    </button>
-                  </div>
+                    </div>
+                  )}
                 </div>
-              )}
+
+
+                {/* Single scan input – NO multiple attribute */}
+                <input type="file" ref={singleScanInputRef} onClick={(e) => { (e.target as any).value = null; }} onChange={handleSingleScanFileChange} accept=".pdf,.jpg,.jpeg,.png" className="hidden" />
+                {/* Multi-file scanner input for tally/other modes */}
+                <input type="file" ref={scannerInputRef} onClick={(e) => { (e.target as any).value = null; }} onChange={handleScannerFileChange} accept="image/*,.pdf" multiple className="hidden" />
+                <input type="file" ref={masterScannerInputRef} onClick={(e) => { (e.target as any).value = null; }} onChange={handleMasterScannerFileChange} accept="image/*,.pdf" multiple className="hidden" />
+                <input type="file" ref={excelInputRef} onChange={handleExcelFileChange} accept=".xlsx, .xls" className="hidden" />
+                <input type="file" ref={jsonInputRef} onChange={handleJsonFileChange} accept=".json" className="hidden" />
+                <input type="file" ref={imageInputRef} onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    if (voucherType === 'Purchase') setPurchaseSupportingDocument(file);
+                    showInfo(`File "${file.name}" attached for manual entry.`);
+                  }
+                }} accept="image/*,.pdf" className="hidden" />
+              </div>
             </div>
-
-
-            {/* Single scan input – NO multiple attribute */}
-            <input type="file" ref={singleScanInputRef} onClick={(e) => { (e.target as any).value = null; }} onChange={handleSingleScanFileChange} accept=".pdf,.jpg,.jpeg,.png" className="hidden" />
-            {/* Multi-file scanner input for tally/other modes */}
-            <input type="file" ref={scannerInputRef} onClick={(e) => { (e.target as any).value = null; }} onChange={handleScannerFileChange} accept="image/*,.pdf" multiple className="hidden" />
-            <input type="file" ref={masterScannerInputRef} onClick={(e) => { (e.target as any).value = null; }} onChange={handleMasterScannerFileChange} accept="image/*,.pdf" multiple className="hidden" />
-            <input type="file" ref={excelInputRef} onChange={handleExcelFileChange} accept=".xlsx, .xls" className="hidden" />
-            <input type="file" ref={jsonInputRef} onChange={handleJsonFileChange} accept=".json" className="hidden" />
-            <input type="file" ref={imageInputRef} onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) {
-                if (voucherType === 'Purchase') setPurchaseSupportingDocument(file);
-                showInfo(`File "${file.name}" attached for manual entry.`);
-              }
-            }} accept="image/*,.pdf" className="hidden" />
-          </div>
-        </div>
-        <style>{`
+            <style>{`
           .form-label { display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.25rem; }
           .form-input { display: block; width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); outline: none; transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out; }
           .form-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 1px #3b82f6; }
@@ -6294,702 +6311,704 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           }
           .table-header { padding: 0.75rem 1rem; text-align: center; font-size: 0.75rem; font-weight: 600; color: #4b5563; text-transform: uppercase; letter-spacing: 0.05em; background-color: #f9fafb; }
         `}
-        </style>
-        {voucherType === 'Sales' && <SalesVoucher prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} customers={richCustomers} companyDetails={companyDetails} />}
-        {voucherType === 'Payment' && <PaymentVoucherSingle prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} />}
-        {voucherType === 'Receipt' && <ReceiptVoucher prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} />}
-        {voucherType === 'Purchase' && renderSalesPurchaseForm()}
-        {voucherType === 'Contra' && renderSimpleForm(voucherType)}
-        {voucherType === 'Journal' && renderJournalForm()}
-        {voucherType === 'Expenses' && renderExpensesForm()}
-        {voucherType === 'Credit Note' && (
-          <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed border-gray-300 rounded-[4px] bg-gray-50">
-            <h3 className="text-xl font-medium text-gray-900 mb-2">Credit Note Voucher</h3>
-            <p className="text-gray-500">Credit Note entry form is under development.</p>
-          </div>
-        )}
-        {voucherType === 'Debit Note' && (
-          <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed border-gray-300 rounded-[4px] bg-gray-50">
-            <h3 className="text-xl font-medium text-gray-900 mb-2">Debit Note Voucher</h3>
-            <p className="text-gray-500">Debit Note entry form is under development.</p>
-          </div>
-        )}
+            </style>
+            {voucherType === 'Sales' && <SalesVoucher prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} customers={richCustomers} companyDetails={companyDetails} />}
+            {voucherType === 'Payment' && <PaymentVoucherSingle prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} />}
+            {voucherType === 'Receipt' && <ReceiptVoucher prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} />}
+            {voucherType === 'Purchase' && renderSalesPurchaseForm()}
+            {voucherType === 'Contra' && renderSimpleForm(voucherType)}
+            {voucherType === 'Journal' && renderJournalForm()}
+            {voucherType === 'Expenses' && renderExpensesForm()}
+            {voucherType === 'Credit Note' && (
+              <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed border-gray-300 rounded-[4px] bg-gray-50">
+                <h3 className="text-xl font-medium text-gray-900 mb-2">Credit Note Voucher</h3>
+                <p className="text-gray-500">Credit Note entry form is under development.</p>
+              </div>
+            )}
+            {voucherType === 'Debit Note' && (
+              <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed border-gray-300 rounded-[4px] bg-gray-50">
+                <h3 className="text-xl font-medium text-gray-900 mb-2">Debit Note Voucher</h3>
+                <p className="text-gray-500">Debit Note entry form is under development.</p>
+              </div>
+            )}
 
-        {/* Hide page-level buttons for Receipt, Payment, Expenses and Sales since they have their own buttons */}
-        {voucherType !== 'Receipt' && voucherType !== 'Payment' && voucherType !== 'Expenses' && voucherType !== 'Sales' && (
-          <div className="mt-8 pt-4 border-t flex justify-end space-x-3">
-            <button
-              onClick={resetForm}
-              className="erp-button-secondary"
-            >
-              Cancel
-            </button>
+            {/* Hide page-level buttons for Receipt, Payment, Expenses and Sales since they have their own buttons */}
+            {voucherType !== 'Receipt' && voucherType !== 'Payment' && voucherType !== 'Expenses' && voucherType !== 'Sales' && (
+              <div className="mt-8 pt-4 border-t flex justify-end space-x-3">
+                <button
+                  onClick={resetForm}
+                  className="erp-button-secondary"
+                >
+                  Cancel
+                </button>
 
-            {voucherType === 'Purchase' && purchaseActiveTab !== 'transit' ? (
-              <button
-                onClick={() => {
-                  if (purchaseActiveTab === 'supplier') {
-                    if (invoiceInForeignCurrency === 'Yes') setPurchaseActiveTab('supply_foreign');
-                    else setPurchaseActiveTab('supply');
-                  }
-                  else if (purchaseActiveTab === 'supply_foreign') setPurchaseActiveTab('supply_inr');
-                  else if (purchaseActiveTab === 'supply_inr') setPurchaseActiveTab('due');
-                  else if (purchaseActiveTab === 'supply') setPurchaseActiveTab('due');
-                  else if (purchaseActiveTab === 'due') setPurchaseActiveTab('transit');
-                }}
-                className="erp-button-primary"
-              >
-                Next
-              </button>
-            ) : (
-              <div className="flex space-x-3">
-                <button
-                  onClick={handleSaveVoucher}
-                  className="erp-button-primary"
-                >
-                  Post & Close
-                </button>
-                <button
-                  onClick={handleSaveVoucher}
-                  className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50"
-                >
-                  Post & Print/Email
-                </button>
+                {voucherType === 'Purchase' && purchaseActiveTab !== 'transit' ? (
+                  <button
+                    onClick={() => {
+                      if (purchaseActiveTab === 'supplier') {
+                        if (invoiceInForeignCurrency === 'Yes') setPurchaseActiveTab('supply_foreign');
+                        else setPurchaseActiveTab('supply');
+                      }
+                      else if (purchaseActiveTab === 'supply_foreign') setPurchaseActiveTab('supply_inr');
+                      else if (purchaseActiveTab === 'supply_inr') setPurchaseActiveTab('due');
+                      else if (purchaseActiveTab === 'supply') setPurchaseActiveTab('due');
+                      else if (purchaseActiveTab === 'due') setPurchaseActiveTab('transit');
+                    }}
+                    className="erp-button-primary"
+                  >
+                    Next
+                  </button>
+                ) : (
+                  <div className="flex space-x-3">
+                    <button
+                      onClick={handleSaveVoucher}
+                      className="erp-button-primary"
+                    >
+                      Post & Close
+                    </button>
+                    <button
+                      onClick={handleSaveVoucher}
+                      className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                    >
+                      Post & Print/Email
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
-        )}
-      </div>
 
 
 
-      {/* Recent / Imported Vouchers - show below the form so imports are visible immediately */}
-      {
-        vouchers && vouchers.length > 0 && (
-          <div className="mt-8 erp-container p-0 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100">
-              <h3 className="erp-section-title border-none mb-0 pb-0 shadow-none">Recent Vouchers</h3>
-            </div>
-            <div className="erp-table-container border-none rounded-none shadow-none">
-              <table className="erp-table">
-                <thead><tr>
-                  <th>Date</th>
-                  <th>Type</th>
-                  <th>Inv No.</th>
-                  <th>Party</th>
-                  <th className="text-right">Taxable</th>
-                  <th className="text-right">Tax</th>
-                  <th className="text-right">Total</th>
-                </tr></thead>
-                <tbody className="divide-y divide-gray-200">
-                  {vouchers.slice().sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((v, idx) => (
-                    <tr key={`${v.type}-${v.date}-${(v as any).invoiceNo || (v as any).party || ''}-${idx}`}>
-                      <td className="px-4 py-2 text-sm text-gray-700">{v.date}</td>
-                      <td className="px-4 py-2 text-sm text-gray-700">{v.type}</td>
-                      <td className="px-4 py-2 text-sm text-gray-700">{(v as any).invoiceNo || ''}</td>
-                      <td className="px-4 py-2 text-sm text-gray-700">{(v as any).party || ''}</td>
-                      <td className="px-4 py-2 text-sm text-gray-800 text-right font-mono">
-                        {Number((v as any).totalTaxableAmount || (v as any).amount || 0).toFixed(2)}
-                      </td>
-                      <td className="px-4 py-2 text-sm text-gray-800 text-right font-mono">
-                        {Number(((v as any).totalCgst || 0) + ((v as any).totalSgst || 0) + ((v as any).totalIgst || 0)).toFixed(2)}
-                      </td>
-                      <td className="px-4 py-2 text-sm text-gray-900 text-right font-bold font-mono">
-                        {Number((v as any).total || (v as any).amount || 0).toFixed(2)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )
-      }
+          {/* Recent / Imported Vouchers - show below the form so imports are visible immediately */}
+          {
+            vouchers && vouchers.length > 0 && (
+              <div className="mt-8 erp-container p-0 overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-100">
+                  <h3 className="erp-section-title border-none mb-0 pb-0 shadow-none">Recent Vouchers</h3>
+                </div>
+                <div className="erp-table-container border-none rounded-none shadow-none">
+                  <table className="erp-table">
+                    <thead><tr>
+                      <th>Date</th>
+                      <th>Type</th>
+                      <th>Inv No.</th>
+                      <th>Party</th>
+                      <th className="text-right">Taxable</th>
+                      <th className="text-right">Tax</th>
+                      <th className="text-right">Total</th>
+                    </tr></thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {vouchers.slice().sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((v, idx) => (
+                        <tr key={`${v.type}-${v.date}-${(v as any).invoiceNo || (v as any).party || ''}-${idx}`}>
+                          <td className="px-4 py-2 text-sm text-gray-700">{v.date}</td>
+                          <td className="px-4 py-2 text-sm text-gray-700">{v.type}</td>
+                          <td className="px-4 py-2 text-sm text-gray-700">{(v as any).invoiceNo || ''}</td>
+                          <td className="px-4 py-2 text-sm text-gray-700">{(v as any).party || ''}</td>
+                          <td className="px-4 py-2 text-sm text-gray-800 text-right font-mono">
+                            {Number((v as any).totalTaxableAmount || (v as any).amount || 0).toFixed(2)}
+                          </td>
+                          <td className="px-4 py-2 text-sm text-gray-800 text-right font-mono">
+                            {Number(((v as any).totalCgst || 0) + ((v as any).totalSgst || 0) + ((v as any).totalIgst || 0)).toFixed(2)}
+                          </td>
+                          <td className="px-4 py-2 text-sm text-gray-900 text-right font-bold font-mono">
+                            {Number((v as any).total || (v as any).amount || 0).toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )
+          }
 
 
-      {/* Tally Master Scanner Modal */}
-      {
-        isTallyMasterScannerOpen && (
-          <TallyMasterScannerModal
-            initialFiles={masterScannerFiles}
-            onClose={() => {
-              setIsTallyMasterScannerOpen(false);
-              setMasterScannerFiles(null);
-              if (masterScannerInputRef.current) masterScannerInputRef.current.value = '';
-            }}
-            onUpload={(data) => {
-              console.log('[VouchersPage] Tally Master records received:', data.length);
-            }}
-          />
-        )
-      }
+          {/* Tally Master Scanner Modal */}
+          {
+            isTallyMasterScannerOpen && (
+              <TallyMasterScannerModal
+                initialFiles={masterScannerFiles}
+                onClose={() => {
+                  setIsTallyMasterScannerOpen(false);
+                  setMasterScannerFiles(null);
+                  if (masterScannerInputRef.current) masterScannerInputRef.current.value = '';
+                }}
+                onUpload={(data) => {
+                  console.log('[VouchersPage] Tally Master records received:', data.length);
+                }}
+              />
+            )
+          }
 
-      {/* Invoice Scanner Modal */}
-      {
-        isInvoiceScannerOpen && (
-          <InvoiceScannerModal
-            extractionMode={extractionMode}
-            scanType={scanType}
-            initialFiles={scannerFiles}
-            voucherType={voucherType}
-            onClose={() => {
-              setIsInvoiceScannerOpen(false);
-              setScannerFiles(null);
-              refetch(); // Refresh usage after scan
-            }}
-            onExtractionSuccess={(extractedData) => {
-              if (voucherType !== 'Purchase') return;
+          {/* Invoice Scanner Modal */}
+          {
+            isInvoiceScannerOpen && (
+              <InvoiceScannerModal
+                extractionMode={extractionMode}
+                scanType={scanType}
+                initialFiles={scannerFiles}
+                voucherType={voucherType}
+                onClose={() => {
+                  setIsInvoiceScannerOpen(false);
+                  setScannerFiles(null);
+                  refetch(); // Refresh usage after scan
+                }}
+                onExtractionSuccess={(extractedData) => {
+                  if (voucherType !== 'Purchase') return;
 
-              validateVendorFromInvoice(
-                extractedData.vendor_name,
-                extractedData.gstin,
-                extractedData.state,
-                extractedData.bill_from,
-                extractedData.branch
-              );
-            }}
-            onUpload={(data) => {
-              console.log('[VouchersPage] Data received from InvoiceScannerModal:', data);
-              const firstRow = data[0];
+                  validateVendorFromInvoice(
+                    extractedData.vendor_name,
+                    extractedData.gstin,
+                    extractedData.state,
+                    extractedData.bill_from,
+                    extractedData.branch
+                  );
+                }}
+                onUpload={(data) => {
+                  console.log('[VouchersPage] Data received from InvoiceScannerModal:', data);
+                  const firstRow = data[0];
 
-              if (voucherType === 'Purchase' || voucherType === 'Debit Note') {
-                // Map flat "Finpixe schema" columns to Purchase form internal state
-                // Column names exactly match VOUCHER_COLUMN_SCHEMAS['Purchase']
+                  if (voucherType === 'Purchase' || voucherType === 'Debit Note') {
+                    // Map flat "Finpixe schema" columns to Purchase form internal state
+                    // Column names exactly match VOUCHER_COLUMN_SCHEMAS['Purchase']
 
-                // "Supplier Invoice No." (with dot) — also tolerate legacy name without dot
-                const supplierInvNo = firstRow['Supplier Invoice No.'] || firstRow['Supplier Invoice No'] || '';
-                if (supplierInvNo) setInvoiceNo(supplierInvNo);
+                    // "Supplier Invoice No." (with dot) — also tolerate legacy name without dot
+                    const supplierInvNo = firstRow['Supplier Invoice No.'] || firstRow['Supplier Invoice No'] || '';
+                    if (supplierInvNo) setInvoiceNo(supplierInvNo);
 
-                // Flexible mapping for Party/Vendor
-                const partyVal = firstRow['Vendor Name'] || firstRow['Buyer/Supplier - Mailing Name'] || '';
-                if (partyVal) handlePartyChange(partyVal);
+                    // Flexible mapping for Party/Vendor
+                    const partyVal = firstRow['Vendor Name'] || firstRow['Buyer/Supplier - Mailing Name'] || '';
+                    if (partyVal) handlePartyChange(partyVal);
 
-                if (firstRow['GSTIN']) setGstin(firstRow['GSTIN']);
+                    if (firstRow['GSTIN']) setGstin(firstRow['GSTIN']);
 
-                // Branch
-                const branchVal = firstRow['Branch'] || '';
-                if (branchVal) setSelectedBranch(branchVal);
+                    // Branch
+                    const branchVal = firstRow['Branch'] || '';
+                    if (branchVal) setSelectedBranch(branchVal);
 
-                // Date — new schema: "Date"; legacy Tally: "Voucher Date"
-                if (firstRow['Date'] || firstRow['Voucher Date'])
-                  setDate(formatDateForInput(firstRow['Date'] || firstRow['Voucher Date']) || getTodayDate());
+                    // Date — new schema: "Date"; legacy Tally: "Voucher Date"
+                    if (firstRow['Date'] || firstRow['Voucher Date'])
+                      setDate(formatDateForInput(firstRow['Date'] || firstRow['Voucher Date']) || getTodayDate());
 
-                // Bill From address — new schema uses granular sub-fields
-                if (firstRow['Bill From - Address Line 1']) setBillFromAddress1(firstRow['Bill From - Address Line 1']);
-                if (firstRow['Bill From - Address Line 2']) setBillFromAddress2(firstRow['Bill From - Address Line 2']);
-                if (firstRow['Bill From - City']) setBillFromCity(firstRow['Bill From - City']);
-                if (firstRow['Bill From - State']) setBillFromState(firstRow['Bill From - State']);
-                if (firstRow['Bill From - Pincode']) setBillFromPincode(firstRow['Bill From - Pincode']);
-                if (firstRow['Bill From - Country']) setBillFromCountry(firstRow['Bill From - Country']);
+                    // Bill From address — new schema uses granular sub-fields
+                    if (firstRow['Bill From - Address Line 1']) setBillFromAddress1(firstRow['Bill From - Address Line 1']);
+                    if (firstRow['Bill From - Address Line 2']) setBillFromAddress2(firstRow['Bill From - Address Line 2']);
+                    if (firstRow['Bill From - City']) setBillFromCity(firstRow['Bill From - City']);
+                    if (firstRow['Bill From - State']) setBillFromState(firstRow['Bill From - State']);
+                    if (firstRow['Bill From - Pincode']) setBillFromPincode(firstRow['Bill From - Pincode']);
+                    if (firstRow['Bill From - Country']) setBillFromCountry(firstRow['Bill From - Country']);
 
-                // Ship From address
-                if (firstRow['Ship From - Address Line 1']) setShipFromAddress1(firstRow['Ship From - Address Line 1']);
-                if (firstRow['Ship From - Address Line 2']) setShipFromAddress2(firstRow['Ship From - Address Line 2']);
-                if (firstRow['Ship From - City']) setShipFromCity(firstRow['Ship From - City']);
-                if (firstRow['Ship From - State']) setShipFromState(firstRow['Ship From - State']);
-                if (firstRow['Ship From - Pincode']) setShipFromPincode(firstRow['Ship From - Pincode']);
-                if (firstRow['Ship From - Country']) setShipFromCountry(firstRow['Ship From - Country']);
+                    // Ship From address
+                    if (firstRow['Ship From - Address Line 1']) setShipFromAddress1(firstRow['Ship From - Address Line 1']);
+                    if (firstRow['Ship From - Address Line 2']) setShipFromAddress2(firstRow['Ship From - Address Line 2']);
+                    if (firstRow['Ship From - City']) setShipFromCity(firstRow['Ship From - City']);
+                    if (firstRow['Ship From - State']) setShipFromState(firstRow['Ship From - State']);
+                    if (firstRow['Ship From - Pincode']) setShipFromPincode(firstRow['Ship From - Pincode']);
+                    if (firstRow['Ship From - Country']) setShipFromCountry(firstRow['Ship From - Country']);
 
-                // Additional Purchase Header Fields
-                const purchaseOrderNoVal = firstRow['Purchase Order No.'] || '';
-                if (purchaseOrderNoVal) setPurchaseOrderNo(purchaseOrderNoVal);
+                    // Additional Purchase Header Fields
+                    const purchaseOrderNoVal = firstRow['Purchase Order No.'] || '';
+                    if (purchaseOrderNoVal) setPurchaseOrderNo(purchaseOrderNoVal);
 
-                const voucherSeriesVal = firstRow['Purchase Voucher Series'] || '';
-                if (voucherSeriesVal) setSelectedPurchaseConfig(voucherSeriesVal);
+                    const voucherSeriesVal = firstRow['Purchase Voucher Series'] || '';
+                    if (voucherSeriesVal) setSelectedPurchaseConfig(voucherSeriesVal);
 
-                const inputType = firstRow['Input Type'] || '';
-                if (inputType) {
-                  if (inputType.toLowerCase().includes('interstate')) setPurchaseInputTypes(['Interstate']);
-                  else if (inputType.toLowerCase().includes('import')) setPurchaseInputTypes(['Import']);
-                  else setPurchaseInputTypes(['Intrastate']);
-                }
+                    const inputType = firstRow['Input Type'] || '';
+                    if (inputType) {
+                      if (inputType.toLowerCase().includes('interstate')) setPurchaseInputTypes(['Interstate']);
+                      else if (inputType.toLowerCase().includes('import')) setPurchaseInputTypes(['Import']);
+                      else setPurchaseInputTypes(['Intrastate']);
+                    }
 
-                const foreignCurrVal = firstRow['Foreign Currency'] || '';
-                if (foreignCurrVal) {
-                  setInvoiceInForeignCurrency(foreignCurrVal.toLowerCase() === 'yes' ? 'Yes' : 'No');
-                }
+                    const foreignCurrVal = firstRow['Foreign Currency'] || '';
+                    if (foreignCurrVal) {
+                      setInvoiceInForeignCurrency(foreignCurrVal.toLowerCase() === 'yes' ? 'Yes' : 'No');
+                    }
 
-                const conversionRateVal = firstRow['Conversion Rate'] || '';
-                if (conversionRateVal) setExchangeRate(conversionRateVal);
+                    const conversionRateVal = firstRow['Conversion Rate'] || '';
+                    if (conversionRateVal) setExchangeRate(conversionRateVal);
 
-                const currencyVal = firstRow['Currency'] || '';
-                if (currencyVal) setVendorBillingCurrency(currencyVal);
+                    const currencyVal = firstRow['Currency'] || '';
+                    if (currencyVal) setVendorBillingCurrency(currencyVal);
 
-                const posVal = firstRow['Place of Supply'] || '';
-                if (posVal) setBillFromState(posVal);
+                    const posVal = firstRow['Place of Supply'] || '';
+                    if (posVal) setBillFromState(posVal);
 
-                // Summary / Due Details
-                if (firstRow['TDS/TCS under GST']) setPurchaseTdsGst(firstRow['TDS/TCS under GST']);
-                if (firstRow['TDS/TCS under Income Tax']) setPurchaseTdsIt(firstRow['TDS/TCS under Income Tax']);
-                if (firstRow['Advance Paid']) setPurchaseAdvancePaid(firstRow['Advance Paid']);
-                if (firstRow['Amount Due']) setPurchaseToPay(firstRow['Amount Due']);
-                if (firstRow['Posting Note']) setPurchasePostingNote(firstRow['Posting Note']);
+                    // Summary / Due Details
+                    if (firstRow['TDS/TCS under GST']) setPurchaseTdsGst(firstRow['TDS/TCS under GST']);
+                    if (firstRow['TDS/TCS under Income Tax']) setPurchaseTdsIt(firstRow['TDS/TCS under Income Tax']);
+                    if (firstRow['Advance Paid']) setPurchaseAdvancePaid(firstRow['Advance Paid']);
+                    if (firstRow['Amount Due']) setPurchaseToPay(firstRow['Amount Due']);
+                    if (firstRow['Posting Note']) setPurchasePostingNote(firstRow['Posting Note']);
 
-                // Transit Details
-                if (firstRow['Received In']) setPurchaseTransitReceivedIn(firstRow['Received In']);
-                if (firstRow['Mode of Transport']) setPurchaseTransitMode(firstRow['Mode of Transport']);
-                if (firstRow['Received Date']) setPurchaseTransitReceiptDate(formatDateForInput(firstRow['Received Date']) || getTodayDate());
-                if (firstRow['Received Time']) setPurchaseTransitReceiptTime(firstRow['Received Time']);
-                if (firstRow['Received Quantity']) setPurchaseTransitReceivedQty(firstRow['Received Quantity']);
-                if (firstRow['Delivery Type']) setPurchaseTransitDeliveryType(firstRow['Delivery Type']);
-                if (firstRow['Transporter ID/GSTIN']) setPurchaseTransitTransporterId(firstRow['Transporter ID/GSTIN']);
-                if (firstRow['Transporter Name']) setPurchaseTransitTransporterName(firstRow['Transporter Name']);
-                if (firstRow['Vehicle No.']) setPurchaseTransitVehicleNo(firstRow['Vehicle No.']);
-                if (firstRow['LR/GR/Consignment No']) setPurchaseTransitLrGrConsignment(firstRow['LR/GR/Consignment No']);
+                    // Transit Details
+                    if (firstRow['Received In']) setPurchaseTransitReceivedIn(firstRow['Received In']);
+                    if (firstRow['Mode of Transport']) setPurchaseTransitMode(firstRow['Mode of Transport']);
+                    if (firstRow['Received Date']) setPurchaseTransitReceiptDate(formatDateForInput(firstRow['Received Date']) || getTodayDate());
+                    if (firstRow['Received Time']) setPurchaseTransitReceiptTime(firstRow['Received Time']);
+                    if (firstRow['Received Quantity']) setPurchaseTransitReceivedQty(firstRow['Received Quantity']);
+                    if (firstRow['Delivery Type']) setPurchaseTransitDeliveryType(firstRow['Delivery Type']);
+                    if (firstRow['Transporter ID/GSTIN']) setPurchaseTransitTransporterId(firstRow['Transporter ID/GSTIN']);
+                    if (firstRow['Transporter Name']) setPurchaseTransitTransporterName(firstRow['Transporter Name']);
+                    if (firstRow['Vehicle No.']) setPurchaseTransitVehicleNo(firstRow['Vehicle No.']);
+                    if (firstRow['LR/GR/Consignment No']) setPurchaseTransitLrGrConsignment(firstRow['LR/GR/Consignment No']);
 
-                const mappedItems = data.map((row, idx) => {
-                  const igst = parseFloat(row['IGST'] || row['Integrated Tax (IGST)'] || '0') || 0;
-                  const cgst = parseFloat(row['CGST'] || row['Central Tax (CGST)'] || '0') || 0;
-                  const sgst = parseFloat(row['SGST/UTGST'] || row['SGST'] || row['State Tax (SGST)'] || '0') || 0;
-                  const cess = parseFloat(row['Cess'] || '0') || 0;
-                  const taxable = parseFloat(row['Taxable Value'] || '0') || 0;
-                  // If Invoice Value not extracted directly, derive it
-                  const rawInv = parseFloat(row['Invoice Value'] || row['Item Amount'] || '0') || 0;
-                  const invoiceValue = rawInv > 0 ? rawInv : (taxable + igst + cgst + sgst + cess) || taxable;
+                    const mappedItems = data.map((row, idx) => {
+                      const igst = parseFloat(row['IGST'] || row['Integrated Tax (IGST)'] || '0') || 0;
+                      const cgst = parseFloat(row['CGST'] || row['Central Tax (CGST)'] || '0') || 0;
+                      const sgst = parseFloat(row['SGST/UTGST'] || row['SGST'] || row['State Tax (SGST)'] || '0') || 0;
+                      const cess = parseFloat(row['Cess'] || '0') || 0;
+                      const taxable = parseFloat(row['Taxable Value'] || '0') || 0;
+                      // If Invoice Value not extracted directly, derive it
+                      const rawInv = parseFloat(row['Invoice Value'] || row['Item Amount'] || '0') || 0;
+                      const invoiceValue = rawInv > 0 ? rawInv : (taxable + igst + cgst + sgst + cess) || taxable;
 
-                  return {
-                    id: (Date.now() + idx).toString(),
-                    itemCode: row['Item Code'] || '',
-                    itemName: row['Item Name'] || '',
-                    hsnSac: row['HSN/SAC'] || '',
-                    qty: parseFloat(row['Qty'] || row['Quantity'] || '0') || 0,
-                    uom: row['UOM'] || '',
-                    rate: parseFloat(row['Item Rate'] || row['Rate'] || '0') || 0,
-                    taxableValue: taxable,
-                    foreignRate: parseFloat(row['Rate (FC)'] || '0') || 0,
-                    foreignAmount: parseFloat(row['Amount (FC)'] || '0') || 0,
-                    igst,
-                    cgst,
-                    sgst,
-                    cess,
-                    invoiceValue,
-                    description: row['Description'] || ''
-                  };
-                });
-                console.log('[VouchersPage] Mapped Purchase Items:', mappedItems);
-                setPurchaseItems(mappedItems);
-              } else {
-                // For Sales, Payment, Receipt: use reconstructed ExtractedInvoiceData for sub-components
-                const lineItems = data.map(row => ({
-                  itemDescription: row['Item Name'] || '',
-                  hsnCode: row['HSN/SAC'] || '',
-                  // New schema: "Qty" — also tolerate legacy "Quantity"
-                  quantity: parseFloat(row['Qty'] || row['Quantity'] || '0') || 0,
-                  // New schema: "Item Rate" — also tolerate legacy "Rate"
-                  rate: parseFloat(row['Item Rate'] || row['Rate'] || '0') || 0,
-                  // New schema: "Invoice Value" per row — also tolerate legacy "Item Amount"
-                  amount: parseFloat(row['Invoice Value'] || row['Item Amount'] || '0') || 0,
-                  cgst: parseFloat(row['CGST'] || '0') || 0,
-                  sgst: parseFloat(row['SGST/UTGST'] || row['SGST'] || '0') || 0,
-                  igst: parseFloat(row['IGST'] || '0') || 0,
-                  cess: parseFloat(row['Cess'] || '0') || 0,
-                  taxableValue: parseFloat(row['Taxable Value'] || '0') || 0
-                }));
+                      return {
+                        id: (Date.now() + idx).toString(),
+                        itemCode: row['Item Code'] || '',
+                        itemName: row['Item Name'] || '',
+                        hsnSac: row['HSN/SAC'] || '',
+                        qty: parseFloat(row['Qty'] || row['Quantity'] || '0') || 0,
+                        uom: row['UOM'] || '',
+                        rate: parseFloat(row['Item Rate'] || row['Rate'] || '0') || 0,
+                        taxableValue: taxable,
+                        foreignRate: parseFloat(row['Rate (FC)'] || '0') || 0,
+                        foreignAmount: parseFloat(row['Amount (FC)'] || '0') || 0,
+                        igst,
+                        cgst,
+                        sgst,
+                        cess,
+                        invoiceValue,
+                        description: row['Description'] || ''
+                      };
+                    });
+                    console.log('[VouchersPage] Mapped Purchase Items:', mappedItems);
+                    setPurchaseItems(mappedItems);
+                  } else {
+                    // For Sales, Payment, Receipt: use reconstructed ExtractedInvoiceData for sub-components
+                    const lineItems = data.map(row => ({
+                      itemDescription: row['Item Name'] || '',
+                      hsnCode: row['HSN/SAC'] || '',
+                      // New schema: "Qty" — also tolerate legacy "Quantity"
+                      quantity: parseFloat(row['Qty'] || row['Quantity'] || '0') || 0,
+                      // New schema: "Item Rate" — also tolerate legacy "Rate"
+                      rate: parseFloat(row['Item Rate'] || row['Rate'] || '0') || 0,
+                      // New schema: "Invoice Value" per row — also tolerate legacy "Item Amount"
+                      amount: parseFloat(row['Invoice Value'] || row['Item Amount'] || '0') || 0,
+                      cgst: parseFloat(row['CGST'] || '0') || 0,
+                      sgst: parseFloat(row['SGST/UTGST'] || row['SGST'] || '0') || 0,
+                      igst: parseFloat(row['IGST'] || '0') || 0,
+                      cess: parseFloat(row['Cess'] || '0') || 0,
+                      taxableValue: parseFloat(row['Taxable Value'] || '0') || 0
+                    }));
 
-                // Compute totals by summing per-row values
-                const computedTaxableValue = data.reduce((s, r) => s + (parseFloat(r['Taxable Value'] || '0') || 0), 0);
-                const computedCgst = data.reduce((s, r) => s + (parseFloat(r['CGST'] || '0') || 0), 0);
-                // Schema uses "SGST/UTGST" as the unified key
-                const computedSgst = data.reduce((s, r) => s + (parseFloat(r['SGST/UTGST'] || r['SGST'] || '0') || 0), 0);
-                const computedIgst = data.reduce((s, r) => s + (parseFloat(r['IGST'] || '0') || 0), 0);
-                const computedCess = data.reduce((s, r) => s + (parseFloat(r['Cess'] || '0') || 0), 0);
-                const computedInvoiceValue = data.reduce((s, r) => s + (parseFloat(r['Invoice Value'] || r['Item Amount'] || '0') || 0), 0);
+                    // Compute totals by summing per-row values
+                    const computedTaxableValue = data.reduce((s, r) => s + (parseFloat(r['Taxable Value'] || '0') || 0), 0);
+                    const computedCgst = data.reduce((s, r) => s + (parseFloat(r['CGST'] || '0') || 0), 0);
+                    // Schema uses "SGST/UTGST" as the unified key
+                    const computedSgst = data.reduce((s, r) => s + (parseFloat(r['SGST/UTGST'] || r['SGST'] || '0') || 0), 0);
+                    const computedIgst = data.reduce((s, r) => s + (parseFloat(r['IGST'] || '0') || 0), 0);
+                    const computedCess = data.reduce((s, r) => s + (parseFloat(r['Cess'] || '0') || 0), 0);
+                    const computedInvoiceValue = data.reduce((s, r) => s + (parseFloat(r['Invoice Value'] || r['Item Amount'] || '0') || 0), 0);
 
-                const reconstructed: any = {
-                  sellerName: firstRow['Customer Name'] || firstRow['Vendor Name'] || firstRow['Buyer/Supplier - Mailing Name'] || '',
-                  // New schema: "Sales Invoice No." (with dot)
-                  invoiceNumber: firstRow['Sales Invoice No.'] || firstRow['Sales Invoice No'] || firstRow['Supplier Invoice No.'] || firstRow['Supplier Invoice No'] || '',
-                  // New schema: "Date" (was "Voucher Date")
-                  invoiceDate: formatDateForInput(firstRow['Date'] || firstRow['Voucher Date'] || '') || getTodayDate(),
-                  subtotal: computedTaxableValue,
-                  cgstAmount: computedCgst,
-                  sgstAmount: computedSgst,
-                  igstAmount: computedIgst,
-                  cessAmount: computedCess,
-                  totalAmount: computedInvoiceValue,
-                  lineItems,
-                  // Additional Sales Fields for direct sync
-                  gstin: firstRow['GSTIN'] || '',
-                  placeOfSupply: firstRow['Place of Supply'] || '',
-                  stateType: (firstRow['State Type'] || 'within').toLowerCase(),
-                  invoiceType: firstRow['Invoice Type'] || 'Regular',
-                  currency: firstRow['Currency'] || '',
-                  exchangeRate: parseFloat(firstRow['Conversion Rate'] || '0') || 0,
-                  billToAddress1: firstRow['Bill To - Address Line 1'] || '',
-                  billToAddress2: firstRow['Bill To - Address Line 2'] || '',
-                  billToCity: firstRow['Bill To - City'] || '',
-                  billToState: firstRow['Bill To - State'] || '',
-                  billToPincode: firstRow['Bill To - Pincode'] || '',
-                  billToCountry: firstRow['Bill To - Country'] || '',
-                  // Summary Fields
-                  stateCess: firstRow['State Cess'] || '',
-                  tdsIncomeTax: firstRow['TDS/TCS under Income Tax'] || '',
-                  tdsGst: firstRow['TDS/TCS under GST'] || '',
-                  advanceAmount: firstRow['Advance'] || '',
-                  payable: firstRow['Payable'] || '',
-                  postingNote: firstRow['Posting Note:'] || '',
-                  // Dispatch Fields
-                  dispatchFrom: firstRow['Dispatch From'] || '',
-                  modeOfTransport: firstRow['Mode of Transport'] || '',
-                  dispatchDate: firstRow['Dispatch Date'] || '',
-                  dispatchTime: firstRow['Dispatch Time'] || '',
-                  transporterId: firstRow['Transporter ID/GSTIN'] || '',
-                  transporterName: firstRow['Transporter Name'] || '',
-                  vehicleNo: firstRow['Vehicle No.'] || '',
-                  lrGrConsignment: firstRow['LR/GR/Consignment No'] || ''
-                };
-                console.log('[VouchersPage] Reconstructed PrefilledData:', reconstructed);
-                setLocalPrefilledData(reconstructed);
-              }
-            }}
-          />
-        )
-      }
-
-      {/* Create Vendor Modal */}
-      {isCreateVendorModalOpen && extractedVendorData && (
-        <CreateVendorModal
-          onClose={() => setIsCreateVendorModalOpen(false)}
-          onSave={handleCreateVendorFromInvoice}
-          initialData={extractedVendorData}
-        />
-      )}
-
-      {/* Create GRN Modal */}
-      {
-        isCreateGRNModalOpen && (
-          <CreateGRNModal
-            onClose={() => setIsCreateGRNModalOpen(false)}
-            onSave={async (data) => {
-              try {
-
-                const response = await apiService.createInventoryOperationGRN(data);
-
-                setGrnRefNo(response.grn_no);
-                showSuccess('GRN Created Successfully!');
-
-                // Sync items to Supply Details table
-                if (data.items && data.items.length > 0) {
-                  const mappedItems = data.items.map((item: any, index: number) => {
-                    // Try to find full item details from stockItems
-                    const stockItem = stockItems.find((s: any) =>
-                      (s.item_code || s.code) === item.item_code || (s.item_name || s.name) === item.item_name
-                    );
-
-                    const qty = item.accepted_qty || item.received_qty || 0;
-                    const rate = stockItem?.standard_rate || stockItem?.rate || 0;
-                    const taxableValue = qty * rate;
-
-                    return {
-                      id: (index + 1).toString(),
-                      itemCode: item.item_code || stockItem?.item_code || stockItem?.code || '',
-                      itemName: item.item_name || stockItem?.item_name || stockItem?.name || '',
-                      hsnSac: stockItem?.hsn_sac || '',
-                      qty: qty,
-                      uom: item.uom || stockItem?.uom || '',
-                      rate: rate,
-                      taxableValue: taxableValue,
-                      foreignRate: 0,
-                      foreignAmount: 0,
-                      igst: 0,
-                      cgst: 0,
-                      sgst: 0,
-                      cess: 0,
-                      invoiceValue: taxableValue,
-                      description: item.remarks || ''
+                    const reconstructed: any = {
+                      sellerName: firstRow['Customer Name'] || firstRow['Vendor Name'] || firstRow['Buyer/Supplier - Mailing Name'] || '',
+                      // New schema: "Sales Invoice No." (with dot)
+                      invoiceNumber: firstRow['Sales Invoice No.'] || firstRow['Sales Invoice No'] || firstRow['Supplier Invoice No.'] || firstRow['Supplier Invoice No'] || '',
+                      // New schema: "Date" (was "Voucher Date")
+                      invoiceDate: formatDateForInput(firstRow['Date'] || firstRow['Voucher Date'] || '') || getTodayDate(),
+                      subtotal: computedTaxableValue,
+                      cgstAmount: computedCgst,
+                      sgstAmount: computedSgst,
+                      igstAmount: computedIgst,
+                      cessAmount: computedCess,
+                      totalAmount: computedInvoiceValue,
+                      lineItems,
+                      // Additional Sales Fields for direct sync
+                      gstin: firstRow['GSTIN'] || '',
+                      placeOfSupply: firstRow['Place of Supply'] || '',
+                      stateType: (firstRow['State Type'] || 'within').toLowerCase(),
+                      invoiceType: firstRow['Invoice Type'] || 'Regular',
+                      currency: firstRow['Currency'] || '',
+                      exchangeRate: parseFloat(firstRow['Conversion Rate'] || '0') || 0,
+                      billToAddress1: firstRow['Bill To - Address Line 1'] || '',
+                      billToAddress2: firstRow['Bill To - Address Line 2'] || '',
+                      billToCity: firstRow['Bill To - City'] || '',
+                      billToState: firstRow['Bill To - State'] || '',
+                      billToPincode: firstRow['Bill To - Pincode'] || '',
+                      billToCountry: firstRow['Bill To - Country'] || '',
+                      // Summary Fields
+                      stateCess: firstRow['State Cess'] || '',
+                      tdsIncomeTax: firstRow['TDS/TCS under Income Tax'] || '',
+                      tdsGst: firstRow['TDS/TCS under GST'] || '',
+                      advanceAmount: firstRow['Advance'] || '',
+                      payable: firstRow['Payable'] || '',
+                      postingNote: firstRow['Posting Note:'] || '',
+                      // Dispatch Fields
+                      dispatchFrom: firstRow['Dispatch From'] || '',
+                      modeOfTransport: firstRow['Mode of Transport'] || '',
+                      dispatchDate: firstRow['Dispatch Date'] || '',
+                      dispatchTime: firstRow['Dispatch Time'] || '',
+                      transporterId: firstRow['Transporter ID/GSTIN'] || '',
+                      transporterName: firstRow['Transporter Name'] || '',
+                      vehicleNo: firstRow['Vehicle No.'] || '',
+                      lrGrConsignment: firstRow['LR/GR/Consignment No'] || ''
                     };
-                  });
-                  setPurchaseItems(mappedItems);
-                }
+                    console.log('[VouchersPage] Reconstructed PrefilledData:', reconstructed);
+                    setLocalPrefilledData(reconstructed);
+                  }
+                }}
+              />
+            )
+          }
 
-                // Sync other relevant fields
-                if (data.vendor_name) setParty(data.vendor_name);
-                if (data.gstin) setGstin(data.gstin);
-                if (data.address) {
-                  setAddressFields(data.address);
-                }
-                if (data.secondary_ref_no) setInvoiceNo(data.secondary_ref_no);
-                if (data.reference_no) setPurchaseOrderNo(data.reference_no);
+          {/* Create Vendor Modal */}
+          {isCreateVendorModalOpen && extractedVendorData && (
+            <CreateVendorModal
+              onClose={() => setIsCreateVendorModalOpen(false)}
+              onSave={handleCreateVendorFromInvoice}
+              initialData={extractedVendorData}
+            />
+          )}
 
-                // Add to pending list and select it
-                if (response.grn_no) {
-                  setPendingGRNs(prev => [...prev, response]);
-                }
+          {/* Create GRN Modal */}
+          {
+            isCreateGRNModalOpen && (
+              <CreateGRNModal
+                onClose={() => setIsCreateGRNModalOpen(false)}
+                onSave={async (data) => {
+                  try {
 
-                setIsCreateGRNModalOpen(false);
-              } catch (error) {
-                console.error("Failed to create GRN");
-                showError("Failed to create GRN. Please check inputs.");
-              }
+                    const response = await apiService.createInventoryOperationGRN(data);
 
-            }}
-          />
-        )
-      }
-      {/* Upgrade Modal */}
-      {
-        isUpgradeModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-            <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-bold text-gray-900">Upgrade Plan</h3>
-                <button onClick={() => setIsUpgradeModalOpen(false)} className="text-gray-400 hover:text-gray-600">
-                  <Icon name="x" className="w-5 h-5" />
-                </button>
-              </div>
+                    setGrnRefNo(response.grn_no);
+                    showSuccess('GRN Created Successfully!');
 
-              <div className="text-center mb-6">
-                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-indigo-100 mb-4">
-                  <Icon name="upload" className="h-6 w-6 text-indigo-600" />
-                </div>
-                <h4 className="text-lg font-medium text-gray-900">Upload Limit Reached</h4>
-                <p className="text-sm text-gray-500 mt-2">
-                  You have reached the invoice upload limit ({subscriptionUsage?.limit}) for your current plan ({subscriptionUsage?.plan}).
-                </p>
-                <div className="mt-4 bg-gray-50 p-4 rounded text-left">
-                  <p className="text-sm text-gray-700"><strong>Current Usage:</strong> {subscriptionUsage?.used}</p>
-                  <p className="text-sm text-gray-700"><strong>Reset Date:</strong> {new Date(subscriptionUsage?.cycle_start).toLocaleDateString()}</p>
-                </div>
-              </div>
+                    // Sync items to Supply Details table
+                    if (data.items && data.items.length > 0) {
+                      const mappedItems = data.items.map((item: any, index: number) => {
+                        // Try to find full item details from stockItems
+                        const stockItem = stockItems.find((s: any) =>
+                          (s.item_code || s.code) === item.item_code || (s.item_name || s.name) === item.item_name
+                        );
 
-              <div className="flex justify-end space-x-3">
-                <button
-                  onClick={() => setIsUpgradeModalOpen(false)}
-                  className="px-4 py-2 border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Close
-                </button>
-                <button
-                  onClick={() => window.location.href = '/?page=Settings&tab=Subscription'}
-                  className="px-4 py-2 bg-indigo-600 border border-transparent rounded text-sm font-medium text-white hover:bg-indigo-700"
-                >
-                  Upgrade to Pro
-                </button>
-              </div>
-            </div>
-          </div>
-        )
-      }
-      {/* Terms & Conditions Master Modal */}
-      {isTermsModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-[4px] shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
-            {/* Modal Header */}
-            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 bg-gray-50">
-              <div>
-                <h2 className="text-lg font-bold text-gray-900">Edit Terms &amp; Conditions</h2>
-                {masterTermsData && (
-                  <p className="text-sm text-gray-500 mt-0.5">{masterTermsData.vendor_name || masterTermsData.customer_name}</p>
-                )}
-              </div>
-              <button
-                onClick={() => setIsTermsModalOpen(false)}
-                className="p-1.5 hover:bg-red-50 hover:text-red-500 rounded-[4px] text-gray-400 transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
+                        const qty = item.accepted_qty || item.received_qty || 0;
+                        const rate = stockItem?.standard_rate || stockItem?.rate || 0;
+                        const taxableValue = qty * rate;
 
-            {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
-              {/* Credit Period */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Credit Period</label>
-                <input
-                  type="text"
-                  value={draftCreditPeriod}
-                  onChange={(e) => setDraftCreditPeriod(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400"
-                  placeholder="e.g., 30 Days"
-                />
-              </div>
+                        return {
+                          id: (index + 1).toString(),
+                          itemCode: item.item_code || stockItem?.item_code || stockItem?.code || '',
+                          itemName: item.item_name || stockItem?.item_name || stockItem?.name || '',
+                          hsnSac: stockItem?.hsn_sac || '',
+                          qty: qty,
+                          uom: item.uom || stockItem?.uom || '',
+                          rate: rate,
+                          taxableValue: taxableValue,
+                          foreignRate: 0,
+                          foreignAmount: 0,
+                          igst: 0,
+                          cgst: 0,
+                          sgst: 0,
+                          cess: 0,
+                          invoiceValue: taxableValue,
+                          description: item.remarks || ''
+                        };
+                      });
+                      setPurchaseItems(mappedItems);
+                    }
 
-              {/* Credit Terms */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Credit Terms</label>
-                <textarea
-                  value={draftCreditTerms}
-                  onChange={(e) => setDraftCreditTerms(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 resize-none"
-                  rows={2}
-                  placeholder="Payment terms..."
-                />
-              </div>
+                    // Sync other relevant fields
+                    if (data.vendor_name) setParty(data.vendor_name);
+                    if (data.gstin) setGstin(data.gstin);
+                    if (data.address) {
+                      setAddressFields(data.address);
+                    }
+                    if (data.secondary_ref_no) setInvoiceNo(data.secondary_ref_no);
+                    if (data.reference_no) setPurchaseOrderNo(data.reference_no);
 
-              {/* Delivery Terms */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Delivery Terms</label>
-                <textarea
-                  value={draftDeliveryTerms}
-                  onChange={(e) => setDraftDeliveryTerms(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 resize-none"
-                  rows={2}
-                  placeholder="FOB, CIF, etc..."
-                />
-              </div>
+                    // Add to pending list and select it
+                    if (response.grn_no) {
+                      setPendingGRNs(prev => [...prev, response]);
+                    }
 
-              {/* Penalty Terms */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Penalty Terms</label>
-                <textarea
-                  value={draftPenaltyTerms}
-                  onChange={(e) => setDraftPenaltyTerms(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 resize-none"
-                  rows={2}
-                  placeholder="Late delivery penalties..."
-                />
-              </div>
+                    setIsCreateGRNModalOpen(false);
+                  } catch (error) {
+                    console.error("Failed to create GRN");
+                    showError("Failed to create GRN. Please check inputs.");
+                  }
 
-              {/* Warranty Details */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Warranty / Guarantee Details</label>
-                <textarea
-                  value={draftWarrantyDetails}
-                  onChange={(e) => setDraftWarrantyDetails(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 resize-none"
-                  rows={2}
-                  placeholder="Warranty period and scope..."
-                />
-              </div>
+                }}
+              />
+            )
+          }
+          {/* Upgrade Modal */}
+          {
+            isUpgradeModalOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold text-gray-900">Upgrade Plan</h3>
+                    <button onClick={() => setIsUpgradeModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                      <Icon name="x" className="w-5 h-5" />
+                    </button>
+                  </div>
 
-              {/* Force Majeure */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Force Majeure</label>
-                <textarea
-                  value={draftForceMajeure}
-                  onChange={(e) => setDraftForceMajeure(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 resize-none"
-                  rows={2}
-                  placeholder="Standard force majeure clause..."
-                />
-              </div>
+                  <div className="text-center mb-6">
+                    <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-indigo-100 mb-4">
+                      <Icon name="upload" className="h-6 w-6 text-indigo-600" />
+                    </div>
+                    <h4 className="text-lg font-medium text-gray-900">Upload Limit Reached</h4>
+                    <p className="text-sm text-gray-500 mt-2">
+                      You have reached the invoice upload limit ({subscriptionUsage?.limit}) for your current plan ({subscriptionUsage?.plan}).
+                    </p>
+                    <div className="mt-4 bg-gray-50 p-4 rounded text-left">
+                      <p className="text-sm text-gray-700"><strong>Current Usage:</strong> {subscriptionUsage?.used}</p>
+                      <p className="text-sm text-gray-700"><strong>Reset Date:</strong> {new Date(subscriptionUsage?.cycle_start).toLocaleDateString()}</p>
+                    </div>
+                  </div>
 
-              {/* Dispute Terms */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Dispute &amp; Redressal</label>
-                <textarea
-                  value={draftDisputeTerms}
-                  onChange={(e) => setDraftDisputeTerms(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 resize-none"
-                  rows={2}
-                  placeholder="Jurisdiction and arbitration..."
-                />
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
-              <button
-                onClick={() => setIsTermsModalOpen(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-[4px] hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveTermsModal}
-                className="px-6 py-2 text-sm font-medium text-white bg-indigo-600 rounded-[4px] hover:bg-indigo-700 transition-colors shadow-sm"
-              >
-                Save to Voucher
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Document Preview Modal */}
-      {isPurchasePreviewModalOpen && (
-        <div className="fixed inset-0 bg-black/75 z-[100] flex flex-col items-center justify-center p-4 backdrop-blur-sm">
-          <div className="w-full h-full max-w-6xl bg-white rounded-lg shadow-2xl flex flex-col overflow-hidden animate-zoom-in">
-            {/* Modal Header */}
-            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-50 text-indigo-600 rounded">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900 leading-none">
-                    Document Preview
-                  </h3>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {purchaseSupportingDocument?.name}
-                  </p>
+                  <div className="flex justify-end space-x-3">
+                    <button
+                      onClick={() => setIsUpgradeModalOpen(false)}
+                      className="px-4 py-2 border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      Close
+                    </button>
+                    <button
+                      onClick={() => window.location.href = '/?page=Settings&tab=Subscription'}
+                      className="px-4 py-2 bg-indigo-600 border border-transparent rounded text-sm font-medium text-white hover:bg-indigo-700"
+                    >
+                      Upgrade to Pro
+                    </button>
+                  </div>
                 </div>
               </div>
-              <div className="flex items-center gap-4">
-                {purchasePreviewUrl && (
-                  <a
-                    href={purchasePreviewUrl}
-                    download={purchaseSupportingDocument?.name}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            )
+          }
+          {/* Terms & Conditions Master Modal */}
+          {isTermsModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+              <div className="bg-white rounded-[4px] shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+                {/* Modal Header */}
+                <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 bg-gray-50">
+                  <div>
+                    <h2 className="text-lg font-bold text-gray-900">Edit Terms &amp; Conditions</h2>
+                    {masterTermsData && (
+                      <p className="text-sm text-gray-500 mt-0.5">{masterTermsData.vendor_name || masterTermsData.customer_name}</p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setIsTermsModalOpen(false)}
+                    className="p-1.5 hover:bg-red-50 hover:text-red-500 rounded-[4px] text-gray-400 transition-colors"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
-                    Download
-                  </a>
-                )}
-                <button
-                  onClick={() => setIsPurchasePreviewModalOpen(false)}
-                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+                  </button>
+                </div>
+
+                {/* Modal Body */}
+                <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
+                  {/* Credit Period */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Credit Period</label>
+                    <input
+                      type="text"
+                      value={draftCreditPeriod}
+                      onChange={(e) => setDraftCreditPeriod(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400"
+                      placeholder="e.g., 30 Days"
+                    />
+                  </div>
+
+                  {/* Credit Terms */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Credit Terms</label>
+                    <textarea
+                      value={draftCreditTerms}
+                      onChange={(e) => setDraftCreditTerms(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 resize-none"
+                      rows={2}
+                      placeholder="Payment terms..."
+                    />
+                  </div>
+
+                  {/* Delivery Terms */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Delivery Terms</label>
+                    <textarea
+                      value={draftDeliveryTerms}
+                      onChange={(e) => setDraftDeliveryTerms(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 resize-none"
+                      rows={2}
+                      placeholder="FOB, CIF, etc..."
+                    />
+                  </div>
+
+                  {/* Penalty Terms */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Penalty Terms</label>
+                    <textarea
+                      value={draftPenaltyTerms}
+                      onChange={(e) => setDraftPenaltyTerms(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 resize-none"
+                      rows={2}
+                      placeholder="Late delivery penalties..."
+                    />
+                  </div>
+
+                  {/* Warranty Details */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Warranty / Guarantee Details</label>
+                    <textarea
+                      value={draftWarrantyDetails}
+                      onChange={(e) => setDraftWarrantyDetails(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 resize-none"
+                      rows={2}
+                      placeholder="Warranty period and scope..."
+                    />
+                  </div>
+
+                  {/* Force Majeure */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Force Majeure</label>
+                    <textarea
+                      value={draftForceMajeure}
+                      onChange={(e) => setDraftForceMajeure(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 resize-none"
+                      rows={2}
+                      placeholder="Standard force majeure clause..."
+                    />
+                  </div>
+
+                  {/* Dispute Terms */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Dispute &amp; Redressal</label>
+                    <textarea
+                      value={draftDisputeTerms}
+                      onChange={(e) => setDraftDisputeTerms(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-[4px] text-sm text-gray-800 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 resize-none"
+                      rows={2}
+                      placeholder="Jurisdiction and arbitration..."
+                    />
+                  </div>
+                </div>
+
+                {/* Modal Footer */}
+                <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+                  <button
+                    onClick={() => setIsTermsModalOpen(false)}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-[4px] hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveTermsModal}
+                    className="px-6 py-2 text-sm font-medium text-white bg-indigo-600 rounded-[4px] hover:bg-indigo-700 transition-colors shadow-sm"
+                  >
+                    Save to Voucher
+                  </button>
+                </div>
               </div>
             </div>
+          )}
 
-            {/* Modal Body */}
-            <div className="flex-1 bg-gray-100/50 relative overflow-auto flex items-center justify-center">
-              {purchaseSupportingDocument?.type.startsWith('image/') ? (
-                <img
-                  src={purchasePreviewUrl || ''}
-                  alt="Full Preview"
-                  className="max-w-full max-h-full object-contain p-4"
-                />
-              ) : (
-                <iframe
-                  src={purchasePreviewUrl || ''}
-                  className="w-full h-full border-none bg-white"
-                  title="PDF Preview"
-                />
-              )}
+          {/* Document Preview Modal */}
+          {isPurchasePreviewModalOpen && (
+            <div className="fixed inset-0 bg-black/75 z-[100] flex flex-col items-center justify-center p-4 backdrop-blur-sm">
+              <div className="w-full h-full max-w-6xl bg-white rounded-lg shadow-2xl flex flex-col overflow-hidden animate-zoom-in">
+                {/* Modal Header */}
+                <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-indigo-50 text-indigo-600 rounded">
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900 leading-none">
+                        Document Preview
+                      </h3>
+                      <p className="text-sm text-gray-500 mt-1">
+                        {purchaseSupportingDocument?.name}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    {purchasePreviewUrl && (
+                      <a
+                        href={purchasePreviewUrl}
+                        download={purchaseSupportingDocument?.name}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        Download
+                      </a>
+                    )}
+                    <button
+                      onClick={() => setIsPurchasePreviewModalOpen(false)}
+                      className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all"
+                    >
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Modal Body */}
+                <div className="flex-1 bg-gray-100/50 relative overflow-auto flex items-center justify-center">
+                  {purchaseSupportingDocument?.type.startsWith('image/') ? (
+                    <img
+                      src={purchasePreviewUrl || ''}
+                      alt="Full Preview"
+                      className="max-w-full max-h-full object-contain p-4"
+                    />
+                  ) : (
+                    <iframe
+                      src={purchasePreviewUrl || ''}
+                      className="w-full h-full border-none bg-white"
+                      title="PDF Preview"
+                    />
+                  )}
+                </div>
+
+                {/* Modal Footer */}
+                <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-center">
+                  <button
+                    onClick={() => setIsPurchasePreviewModalOpen(false)}
+                    className="px-10 py-2.5 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-95"
+                  >
+                    Close Preview
+                  </button>
+                </div>
+              </div>
             </div>
+          )}
 
-            {/* Modal Footer */}
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-center">
-              <button
-                onClick={() => setIsPurchasePreviewModalOpen(false)}
-                className="px-10 py-2.5 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-95"
-              >
-                Close Preview
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Bulk Invoice Upload Modal */}
-      {isBulkUploadOpen && (
-        <BulkInvoiceUploadModal
-          voucherType={voucherType}
-          onClose={() => {
-            setIsBulkUploadOpen(false);
-            refetch(); // Refresh usage
-          }}
-          onFinalized={(summary) => {
-            showSuccess(`Successfully processed ${summary.created} invoices!`);
-            setIsBulkUploadOpen(false);
-            // Optionally reload vouchers list or navigate
-            if (window.location.reload) {
-              // We might want to refresh the page or the list
-            }
-          }}
-        />
+          {/* Bulk Invoice Upload Modal */}
+          {isBulkUploadOpen && (
+            <BulkInvoiceUploadModal
+              voucherType={voucherType}
+              onClose={() => {
+                setIsBulkUploadOpen(false);
+                refetch(); // Refresh usage
+              }}
+              onFinalized={(summary) => {
+                showSuccess(`Successfully processed ${summary.created} invoices!`);
+                setIsBulkUploadOpen(false);
+                // Optionally reload vouchers list or navigate
+                if (window.location.reload) {
+                  // We might want to refresh the page or the list
+                }
+              }}
+            />
+          )}
+        </>
       )}
     </div>
   );

@@ -50,8 +50,7 @@
 
 
   -- Table: company_informations
-
-  CREATE TABLE `company_informations` (
+CREATE TABLE `company_informations` (
     `id` bigint NOT NULL AUTO_INCREMENT,
     `tenant_id` char(36) NOT NULL,
     `company_name` varchar(255) NOT NULL,
@@ -84,10 +83,10 @@
     `updated_at` datetime(6) NOT NULL,
     PRIMARY KEY (`id`),
     UNIQUE KEY `company_informations_tenant_unique` (`tenant_id`),
-    CONSTRAINT `company_informations_tenant_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
-  ) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
+    CONSTRAINT `fk_company_info_tenant`
+        FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`)
+        ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
 
@@ -1597,7 +1596,8 @@ CREATE TABLE `voucher_sales_invoicedetails` (
   `voucher_name` VARCHAR(100),
   `outward_slip_no` VARCHAR(50),
   `customer_name` VARCHAR(255),
-  `customer_id` BIGINT NOT NULL COMMENT 'FK to customer_master_customer_basicdetails.id (tenant-scoped)',
+  `customer_id` BIGINT DEFAULT NULL COMMENT 'Link to customer_master_customer_basicdetails.id',
+  `customer_branch` VARCHAR(100) DEFAULT NULL,
 
   `bill_to` LONGTEXT,
   `ship_to` LONGTEXT,
@@ -1620,6 +1620,8 @@ CREATE TABLE `voucher_sales_invoicedetails` (
   `shipping_bill_number` VARCHAR(50) DEFAULT NULL COMMENT 'Shipping bill number for exports',
   `shipping_bill_date` DATE DEFAULT NULL COMMENT 'Shipping bill date for exports',
   `ecommerce_gstin` VARCHAR(15) DEFAULT NULL COMMENT 'E-commerce GSTIN',
+  `irn` VARCHAR(255) DEFAULT NULL,
+  `ack_no` VARCHAR(100) DEFAULT NULL,
   
   PRIMARY KEY (`id`),
   KEY `idx_tenant_id` (`tenant_id`),
@@ -1627,7 +1629,7 @@ CREATE TABLE `voucher_sales_invoicedetails` (
   KEY `idx_sales_tenant_customer` (`tenant_id`, `customer_id`),
   CONSTRAINT `fk_sales_invoice_customer` 
     FOREIGN KEY (`tenant_id`, `customer_id`) 
-    REFERENCES `customer_master_customer_basicdetails` (`tenant_id`, `id`)
+    REFERENCES `customer_master_customer_basicdetails` (`id`)
     ON DELETE RESTRICT
     ON UPDATE CASCADE
 ) ENGINE=InnoDB
@@ -2733,23 +2735,44 @@ ADD COLUMN rail_upto_transporter_name VARCHAR(255),
 ADD COLUMN rail_upto_transporter_id VARCHAR(100);
 
 CREATE TABLE IF NOT EXISTS invoice_ocr_temp (
-    id              BIGINT          NOT NULL AUTO_INCREMENT,
-    file_hash       VARCHAR(64)     NOT NULL,          -- SHA-256 hex of uploaded bytes
-    tenant_id       VARCHAR(64)     NOT NULL,          -- Tenant isolation
-    upload_session_id VARCHAR(64)   DEFAULT NULL,      -- Bulk upload session identification
-    file_path       TEXT            NOT NULL,          -- Original upload path / filename
-    ocr_raw_text    LONGTEXT        DEFAULT NULL,       -- Raw OCR output from Gemini
-    extracted_data  JSON            DEFAULT NULL,       -- Structured invoice + items JSON
-    validation_status VARCHAR(20)   DEFAULT 'PENDING',  -- FOUND, NOT_FOUND, GSTIN_CONFLICT, etc.
-    matched_by      VARCHAR(50)     DEFAULT NULL,       -- GSTIN, Name, etc.
-    conflict_message TEXT           DEFAULT NULL,       -- Why it failed validation
-    vendor_id       BIGINT          DEFAULT NULL,       -- Linked vendor ID
-    voucher_id      BIGINT          DEFAULT NULL,       -- Finalized voucher ID
-    processed       BOOLEAN         DEFAULT FALSE,      -- Marked TRUE once voucher is created
-    created_at      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    expires_at      DATETIME        NOT NULL,           -- created_at + 15 days
+    id BIGINT NOT NULL AUTO_INCREMENT,
+
+    file_hash VARCHAR(64) NOT NULL,       -- SHA-256 hex of uploaded bytes
+    tenant_id VARCHAR(64) NOT NULL,       -- Tenant isolation
+
+    file_path VARCHAR(512) NOT NULL,      -- Uploaded file path / filename
+
+    ocr_raw_text LONGTEXT DEFAULT NULL,   -- Raw OCR output
+    extracted_data JSON DEFAULT NULL,     -- Structured invoice JSON
+
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME NOT NULL,         -- created_at + 15 days
+
     PRIMARY KEY (id),
-    INDEX idx_ocr_temp_hash_tenant (file_hash, tenant_id),
-    INDEX idx_ocr_temp_expires     (expires_at),
-    INDEX idx_ocr_temp_session     (upload_session_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    UNIQUE KEY uniq_hash_tenant (file_hash, tenant_id),
+
+    INDEX idx_ocr_temp_expires (expires_at)
+
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+ALTER TABLE customer_master_customer_productservice ADD COLUMN packing_notes TEXT DEFAULT NULL;
+
+-- Updates for Sales Customer Validation and Bulk Scan Staging
+ALTER TABLE `invoice_ocr_temp` 
+    ADD COLUMN `upload_session_id` VARCHAR(255) DEFAULT NULL,
+    ADD COLUMN `processed` BOOLEAN DEFAULT FALSE,
+    ADD COLUMN `validation_status` VARCHAR(50) DEFAULT 'PENDING',
+    ADD COLUMN `matched_by` VARCHAR(50) DEFAULT NULL,
+    ADD COLUMN `conflict_message` TEXT DEFAULT NULL,
+    ADD COLUMN `vendor_id` BIGINT DEFAULT NULL,
+    ADD COLUMN `voucher_id` BIGINT DEFAULT NULL;
+
+-- Updates for Sales Voucher Invoice Details
+ALTER TABLE `voucher_sales_invoicedetails` 
+    ADD COLUMN `customer_id` BIGINT DEFAULT NULL,
+    ADD COLUMN `customer_branch` VARCHAR(100) DEFAULT NULL,
+    ADD COLUMN `irn` VARCHAR(255) DEFAULT NULL,
+    ADD COLUMN `ack_no` VARCHAR(100) DEFAULT NULL;
