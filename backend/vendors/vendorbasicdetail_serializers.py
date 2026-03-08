@@ -163,6 +163,7 @@ class VendorBasicDetailListSerializer(serializers.ModelSerializer):
             'id',
             'vendor_code',
             'vendor_name',
+            'vendor_category',
             'email',
             'contact_no',
             'pan_no',
@@ -174,15 +175,25 @@ class VendorBasicDetailListSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         """
-        Flatten terms and conditions into the response
+        Flatten terms and conditions AND TDS details into the response.
+        This is used by the purchase voucher to get the vendor TDS rate.
         """
         data = super().to_representation(instance)
         
         terms = None
         if hasattr(instance, 'terms_conditions'):
             terms = instance.terms_conditions.filter(is_active=True).first()
+
+        # Flatten TDS details
+        tds = None
+        if hasattr(instance, 'tds_details'):
+            tds = instance.tds_details.filter(is_active=True).first()
+            # Fallback: if no active record, take the most recent one
+            if not tds:
+                tds = instance.tds_details.order_by('-updated_at').first()
             
         data.update({
+            # Terms fields
             'credit_limit': float(terms.credit_limit) if terms and terms.credit_limit else None,
             'credit_period': terms.credit_period if terms else None,
             'credit_terms': terms.credit_terms if terms else None,
@@ -191,6 +202,15 @@ class VendorBasicDetailListSerializer(serializers.ModelSerializer):
             'warranty_guarantee_details': terms.warranty_guarantee_details if terms else None,
             'force_majeure': terms.force_majeure if terms else None,
             'dispute_redressal_terms': terms.dispute_redressal_terms if terms else None,
+            # TDS fields
+            'tds_section_applicable': tds.tds_section_applicable if tds else None,
+            'tds_rate': tds.tds_rate if tds else None,
+            'tcs_section_applicable': tds.tcs_section_applicable if tds else None,
+            'tcs_rate': tds.tcs_rate if tds else None,
+            'penalty_rate': tds.penalty_rate if tds else None,
+            'enable_automatic_tds_posting': tds.enable_automatic_tds_posting if tds else False,
+            'pan_number': tds.pan_number if tds else None,
+            'tan_number': tds.tan_number if tds else None,
         })
         
         return data
