@@ -2371,23 +2371,21 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Customer Name <span className="text-red-500">*</span>
                                 </label>
-                                <div className="flex gap-2 items-start">
-                                    <div className="flex-1">
-                                        <SearchableDropdown
-                                            value={customerName}
-                                            onChange={handleCustomerChange}
-                                            options={customerOptions}
-                                            placeholder="Search or select customer"
-                                            required
-                                        />
-                                    </div>
+                                <div className="flex flex-col gap-1.5">
+                                    <SearchableDropdown
+                                        value={customerName}
+                                        onChange={handleCustomerChange}
+                                        options={customerOptions}
+                                        placeholder="Search or select customer"
+                                        required
+                                    />
                                     <button
                                         type="button"
                                         onClick={() => setShowAddCustomerModal(true)}
-                                        className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white text-sm font-medium rounded hover:bg-indigo-700 transition-colors whitespace-nowrap"
+                                        className="flex items-center self-start gap-1.5 px-3 py-1.5 bg-indigo-600 text-white hover:bg-indigo-700 text-[13px] font-medium rounded-[4px] transition-all whitespace-nowrap shadow-sm"
                                         title="Add New Customer"
                                     >
-                                        <span className="text-base leading-none">+</span> Add New Customer
+                                        <span className="text-lg leading-none">+</span> Add New Customer
                                     </button>
                                 </div>
                             </div>

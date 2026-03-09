@@ -195,6 +195,7 @@ const UsersAndRolesPage: React.FC<UsersAndRolesPageProps> = ({ onNavigate }) => 
             }
             loadUsers();
             showSuccess(editingUser ? 'User updated successfully' : 'User created successfully');
+            setShowUserModal(false);
         } catch (error: any) {
             handleApiError(error, editingUser ? 'Update User' : 'Create User');
         }
