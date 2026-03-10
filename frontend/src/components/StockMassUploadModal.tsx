@@ -4,7 +4,7 @@ import type { StockItem, Unit, StockGroup } from '../types';
 import Icon from './Icon';
 import { apiService } from '../services';
 
-declare const XLSX: any;
+import { getXLSX } from '../utils/xlsx';
 
 interface StockMassUploadModalProps {
     onClose: () => void;
@@ -91,8 +91,9 @@ const StockMassUploadModal: React.FC<StockMassUploadModalProps> = ({ onClose, on
                 if (fileType.includes('spreadsheetml') || fileType.includes('excel')) {
                     items = await new Promise<StockItem[]>((resolve, reject) => {
                         const reader = new FileReader();
-                        reader.onload = (e) => {
+                        reader.onload = async (e) => {
                             try {
+                                const XLSX = await getXLSX();
                                 const data = e.target?.result;
                                 const workbook = XLSX.read(data, { type: 'array' });
                                 const sheetName = workbook.SheetNames[0];
@@ -145,7 +146,8 @@ const StockMassUploadModal: React.FC<StockMassUploadModalProps> = ({ onClose, on
         }
     };
 
-    const handleDownloadTemplate = () => {
+    const handleDownloadTemplate = async () => {
+        const XLSX = await getXLSX();
         const headers = [["name", "group", "unit", "hsn", "gstRate", "quantity"]];
         const exampleData = [["Sample Laptop", "Electronics", "Nos", "847130", 18, 10]];
         const worksheet = XLSX.utils.aoa_to_sheet([...headers, ...exampleData]);

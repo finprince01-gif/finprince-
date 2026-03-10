@@ -20,7 +20,7 @@ import {
 } from '../services/mappingEngine';
 import CreateVendorModal from './CreateVendorModal';
 
-declare const XLSX: any;
+import { getXLSX } from '../utils/xlsx';
 
 // ────────────────────────────────────────────────────────────────────────────────
 // Types
@@ -858,7 +858,8 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         }
     };
 
-    const handleDownloadExcel = () => {
+    const handleDownloadExcel = async () => {
+        const XLSX = await getXLSX();
         if (invoiceResults.length === 0) return;
 
         // Build full rows using same logic as the display table

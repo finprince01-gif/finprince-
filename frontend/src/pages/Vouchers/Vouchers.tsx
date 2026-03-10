@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useSubscriptionUsage } from '../../hooks/useSubscriptionUsage';
@@ -23,10 +23,17 @@ import { ChevronDown } from 'lucide-react';
 import SearchableDropdown from '../../components/SearchableDropdown';
 import SalesExcelUploadWorkflow from '../../components/SalesExcelUploadWorkflow';
 
+const PurchaseVoucher = React.lazy(() => import('./PurchaseVoucher'));
+const PageLoader = () => (
+  <div className="flex flex-col items-center justify-center min-h-[400px]">
+    <div className="w-10 h-10 border-4 border-slate-200 border-t-indigo-500 rounded-full animate-spin mb-4"></div>
+    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest animate-pulse">Loading Voucher Form...</p>
+  </div>
+);
+
 const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5003';
 
-// Let TypeScript know that the XLSX library is available globally
-declare const XLSX: any;
+import { getXLSX } from '../../utils/xlsx';
 
 interface VouchersPageProps {
   vouchers: Voucher[];
@@ -1251,9 +1258,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     event.target.value = '';
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const data = e.target?.result;
+        const XLSX = await getXLSX();
         const workbook = XLSX.read(data, { type: 'array' });
         const allVouchers: Voucher[] = [];
         let failed = 0;
@@ -1340,15 +1348,16 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           creditLedger: ['Ledger (Credit)', 'Credit Ledger', 'Cr Ledger'],
         };
 
-        const getWorksheetRows = (preferredSheetNames: string[]) => {
+        const getWorksheetRows = async (preferredSheetNames: string[]) => {
           const sheetName = preferredSheetNames.find(name => workbook.Sheets[name]) || workbook.SheetNames[0];
           if (!sheetName) return [];
           const sheet = workbook.Sheets[sheetName];
+          const XLSX = await getXLSX();
           return XLSX.utils.sheet_to_json(sheet, { defval: '' }) as Record<string, any>[];
         };
 
         if (voucherType === 'Purchase' || voucherType === 'Sales') {
-          const rows = getWorksheetRows(['SalesPurchases', 'Invoices']);
+          const rows = await getWorksheetRows(['SalesPurchases', 'Invoices']);
           const groups: Record<string, {
             date: string;
             narration: string;
@@ -1504,7 +1513,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             else failed++;
           });
         } else if (voucherType === 'Payment' || voucherType === 'Receipt') {
-          const rows = getWorksheetRows(['PaymentsReceipts', 'Invoices']);
+          const rows = await getWorksheetRows(['PaymentsReceipts', 'Cash Receipts']);
           rows.forEach((row) => {
             try {
               const voucher = {
@@ -1525,7 +1534,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             }
           });
         } else if (voucherType === 'Contra') {
-          const rows = getWorksheetRows(['Contra', 'Invoices']);
+          const rows = await getWorksheetRows(['Contra', 'Invoices']);
           rows.forEach((row) => {
             try {
               const voucher = {
@@ -1546,7 +1555,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             }
           });
         } else if (voucherType === 'Journal') {
-          const rows = getWorksheetRows(['Journal', 'Invoices']);
+          const rows = await getWorksheetRows(['Journal', 'Invoices']);
           rows.forEach((row) => {
             try {
               let entries: JournalEntry[] = [];
@@ -1673,7 +1682,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     reader.readAsArrayBuffer(file);
   };
 
-  const handleDownloadTemplate = () => {
+  const handleDownloadTemplate = async () => {
+    const XLSX = await getXLSX();
     const wb = XLSX.utils.book_new();
 
     // Define headers (same as respective voucher upload expectations)
@@ -7004,7 +7014,18 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             {voucherType === 'Sales' && <SalesVoucher prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} customers={richCustomers} companyDetails={companyDetails} />}
             {voucherType === 'Payment' && <PaymentVoucherSingle prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} />}
             {voucherType === 'Receipt' && <ReceiptVoucher prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} />}
-            {voucherType === 'Purchase' && renderSalesPurchaseForm()}
+            {voucherType === 'Purchase' && (
+              <Suspense fallback={<PageLoader />}>
+                <PurchaseVoucher
+                  prefilledData={localPrefilledData}
+                  clearPrefilledData={handleClearPrefilledData}
+                  isLimitReached={isLimitReached}
+                  onLimitReached={handleLimitReached}
+                  onAddVouchers={onAddVouchers}
+                  companyDetails={companyDetails}
+                />
+              </Suspense>
+            )}
             {voucherType === 'Contra' && renderSimpleForm(voucherType)}
             {voucherType === 'Journal' && renderJournalForm()}
             {voucherType === 'Expenses' && renderExpensesForm()}

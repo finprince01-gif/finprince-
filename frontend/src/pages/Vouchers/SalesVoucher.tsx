@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useRef } from 'react';
-import * as XLSX from 'xlsx';
 import { apiService } from '../../services/api';
 import { httpClient } from '../../services/httpClient';
 import { showError, showSuccess } from '../../utils/toast';
