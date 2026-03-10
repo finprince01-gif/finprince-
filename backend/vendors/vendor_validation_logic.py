@@ -1,6 +1,6 @@
 from .models import VendorMasterBasicDetail, VendorMasterGSTDetails
 
-def validate_vendor(tenant_id, vendor_name, gstin, branch='', address='', state=''):
+def validate_vendor(tenant_id, vendor_name, gstin, branch='', address='', state='', supplier_invoice_no=''):
     """
     Core vendor validation logic following branch-based rules.
     Rules:
@@ -13,6 +13,36 @@ def validate_vendor(tenant_id, vendor_name, gstin, branch='', address='', state=
     if gstin: gstin = gstin.strip().upper()
     if branch: branch = branch.strip()
     if not branch: branch = "Main Branch" # Default as per creation logic
+
+    def _check_duplicate_invoice(res_dict):
+        if supplier_invoice_no:
+            from accounting.models_voucher_purchase import VoucherPurchaseSupplierDetails
+            
+            # Start query with mandatory fields
+            query = VoucherPurchaseSupplierDetails.objects.filter(
+                tenant_id=tenant_id,
+                vendor_basic_detail_id=res_dict["vendor_id"],
+                supplier_invoice_no__iexact=supplier_invoice_no.strip()
+            )
+            
+            # Refine with branch and gstin as per user request
+            mapped_branch = res_dict.get("branch", branch)
+            mapped_gstin = res_dict.get("gstin", gstin)
+            
+            if mapped_branch:
+                query = query.filter(branch__iexact=mapped_branch.strip())
+            
+            if mapped_gstin:
+                query = query.filter(gstin__iexact=mapped_gstin.strip())
+
+            if query.exists():
+                return {
+                    "status": "DUPLICATE_INVOICE",
+                    "message": f"Duplicate Invoice: Invoice number '{supplier_invoice_no}' already exists for vendor '{res_dict.get('vendor_name', vendor_name)}' under this branch/GSTIN.",
+                    "vendor_id": res_dict["vendor_id"],
+                    "vendor_name": res_dict.get('vendor_name', vendor_name),
+                }
+        return res_dict
 
     # Rule 1, 3, 4: Match primarily by GSTIN
     if gstin:
@@ -30,7 +60,7 @@ def validate_vendor(tenant_id, vendor_name, gstin, branch='', address='', state=
                 branch_match = (db_branch.lower() == branch.lower())
                 
                 if name_match and branch_match:
-                    return {
+                    res = {
                         "status": "FOUND",
                         "matched_by": "GSTIN_Branch",
                         "message": "Duplicate Vendor: Name, GSTIN and Branch all match an existing record.",
@@ -39,6 +69,7 @@ def validate_vendor(tenant_id, vendor_name, gstin, branch='', address='', state=
                         "gstin": gstin,
                         "branch": db_branch
                     }
+                    return _check_duplicate_invoice(res)
             
             # Check for Rule 3 (Name/GSTIN match, different branch)
             for rec in gst_records:
@@ -72,7 +103,7 @@ def validate_vendor(tenant_id, vendor_name, gstin, branch='', address='', state=
             if not gstin:
                 # The invoice lacks a GSTIN, but the name perfectly matches a master vendor.
                 # Don't force them to create it again; link to the existing match.
-                return {
+                res = {
                     "status": "FOUND",
                     "matched_by": "Name_Only",
                     "message": "Matched unconditionally by exact Vendor Name (no GSTIN on invoice).",
@@ -81,6 +112,7 @@ def validate_vendor(tenant_id, vendor_name, gstin, branch='', address='', state=
                     "gstin": "",
                     "branch": branch
                 }
+                return _check_duplicate_invoice(res)
             else:
                 # The invoice has a GSTIN, but the user's master vendor details lack that specific GSTIN record. 
                 # (Or it's an unregistered vendor in the DB). Allow creating a new master/branch record.
@@ -91,3 +123,4 @@ def validate_vendor(tenant_id, vendor_name, gstin, branch='', address='', state=
 
     # NOT FOUND
     return {"status": "NOT_FOUND"}
+

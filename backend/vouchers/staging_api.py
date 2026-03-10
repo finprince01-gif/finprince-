@@ -334,18 +334,19 @@ class OCRStagingView(views.APIView):
             print("Purchase Vendor Validation API Hit (via Staging Patch)")
             print(f"Revalidating with credentials - Name: {v_name}, GSTIN: {v_gstin}, Branch: {v_branch}")
 
+            # Field validation - support multiple variants of keys
+            inv_no = invoice_header.get('Supplier Invoice No') or invoice_header.get('Supplier Invoice No.') or \
+                     invoice_header.get('invoice_number') or ''
+
             val_result = validate_vendor(
                 tenant_id=tenant_id,
                 vendor_name=v_name,
                 gstin=v_gstin,
                 branch=v_branch,
                 address=v_address,
-                state=v_state
+                state=v_state,
+                supplier_invoice_no=inv_no
             )
-
-            # Field validation - support multiple variants of keys
-            inv_no = invoice_header.get('Supplier Invoice No') or invoice_header.get('Supplier Invoice No.') or \
-                     invoice_header.get('invoice_number') or ''
                      
             taxable_val = invoice_header.get('Total Taxable Value') or invoice_header.get('Taxable Value') or \
                           invoice_header.get('taxable_value') or ''
@@ -356,7 +357,10 @@ class OCRStagingView(views.APIView):
             fields_valid = bool(v_name and v_gstin and inv_no and taxable_val and grand_total)
             vendor_status_raw = val_result.get('status')
             
-            if vendor_status_raw == 'GSTIN_CONFLICT':
+            if vendor_status_raw == 'DUPLICATE_INVOICE':
+                final_status = 'DUPLICATE'
+                conflict_msg = val_result.get('message', 'Duplicate invoice detected.')
+            elif vendor_status_raw == 'GSTIN_CONFLICT':
                 final_status = 'GSTIN_CONFLICT'
                 conflict_msg = val_result.get('message', 'GSTIN Conflict detected.')
             elif vendor_status_raw != 'FOUND':
@@ -470,6 +474,7 @@ class OCRStagingFinalizeView(views.APIView):
                 v_branch = invoice_data.get('Branch') or invoice_data.get('branch_name') or ''
                 v_address = invoice_data.get('Bill From - Address Line 1') or invoice_data.get('vendor_address') or ''
                 v_state = invoice_data.get('Bill From - State') or ''
+                v_inv_no = invoice_data.get('Supplier Invoice No') or invoice_data.get('invoice_number') or ''
 
                 val_result = validate_vendor(
                     tenant_id=tenant_id,
@@ -477,7 +482,8 @@ class OCRStagingFinalizeView(views.APIView):
                     gstin=v_gstin,
                     branch=v_branch,
                     address=v_address,
-                    state=v_state
+                    state=v_state,
+                    supplier_invoice_no=v_inv_no
                 )
                 
                 vendor_id = val_result.get('vendor_id')

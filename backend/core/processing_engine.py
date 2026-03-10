@@ -191,6 +191,8 @@ def run_invoice_processing_pipeline(file_hash, tenant_id, voucher_type='Purchase
             c_gstin = invoice_header.get('GSTIN') or invoice_header.get('customer_gstin') or ''
             c_branch = invoice_header.get('Branch') or invoice_header.get('branch_name') or ''
             v_no = invoice_header.get('Sales Invoice No') or invoice_header.get('invoice_number') or ''
+            party_name = c_name
+            inv_no = v_no
             
             val_result = validate_sales_customer_and_invoice(
                 tenant_id=tenant_id,
@@ -207,6 +209,9 @@ def run_invoice_processing_pipeline(file_hash, tenant_id, voucher_type='Purchase
             v_branch = invoice_header.get('Branch') or invoice_header.get('branch_name') or ''
             v_address = invoice_header.get('Bill From - Address Line 1') or invoice_header.get('vendor_address') or ''
             v_state = invoice_header.get('Bill From - State') or ''
+            v_inv_no = invoice_header.get('Supplier Invoice No') or invoice_header.get('invoice_number') or ''
+            party_name = v_name
+            inv_no = v_inv_no
 
             val_result = validate_vendor(
                 tenant_id=tenant_id,
@@ -214,19 +219,11 @@ def run_invoice_processing_pipeline(file_hash, tenant_id, voucher_type='Purchase
                 gstin=v_gstin,
                 branch=v_branch,
                 address=v_address,
-                state=v_state
+                state=v_state,
+                supplier_invoice_no=v_inv_no
             )
             matched_id = val_result.get('vendor_id')
             matched_by = val_result.get('matched_by')
-
-        # Field validation
-        if voucher_type.lower() == 'sales':
-            inv_no = invoice_header.get('Sales Invoice No') or invoice_header.get('invoice_number') or ''
-            party_name = c_name
-        else:
-            inv_no = invoice_header.get('Supplier Invoice No') or invoice_header.get('invoice_number') or ''
-            party_name = v_name
-            
         taxable_val = invoice_header.get('Total Taxable Value') or invoice_header.get('taxable_value') or ''
         grand_total = invoice_header.get('Total Invoice Value') or invoice_header.get('Grand Total') or invoice_header.get('total_amount') or ''
         

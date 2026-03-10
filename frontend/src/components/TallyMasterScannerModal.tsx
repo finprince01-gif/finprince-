@@ -4,15 +4,7 @@ import { showError, showSuccess } from '../utils/toast';
 import { useSubscriptionUsage } from '../hooks/useSubscriptionUsage';
 import { EXACT_TALLY_MASTER_HEADERS } from '../services/mappingEngine';
 
-// Improved type declaration for global XLSX library
-declare const XLSX: {
-    utils: {
-        json_to_sheet: (data: Record<string, unknown>[], opts?: { header: string[] }) => unknown;
-        book_new: () => unknown;
-        book_append_sheet: (wb: unknown, ws: unknown, name: string) => void;
-    };
-    writeFile: (wb: unknown, filename: string) => void;
-};
+import { getXLSX } from '../utils/xlsx';
 
 // ────────────────────────────────────────────────────────────────────────────────
 // Types
@@ -196,7 +188,8 @@ const TallyMasterScannerModal: React.FC<TallyMasterScannerModalProps> = ({ onClo
         onClose();
     };
 
-    const handleDownloadExcel = () => {
+    const handleDownloadExcel = async () => {
+        const XLSX = await getXLSX();
         if (masterResults.length === 0) return;
         const allRows = masterResults.map(res => {
             const row: Record<string, string> = {};

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useSubscriptionUsage } from '../../hooks/useSubscriptionUsage';
@@ -22,11 +22,19 @@ import SearchableSelect from '../../components/SearchableSelect';
 import CreateVendorModal from '../../components/CreateVendorModal';
 import { ChevronDown } from 'lucide-react';
 import SearchableDropdown from '../../components/SearchableDropdown';
+import SalesExcelUploadWorkflow from '../../components/SalesExcelUploadWorkflow';
+
+const PurchaseVoucher = React.lazy(() => import('./PurchaseVoucher'));
+const PageLoader = () => (
+  <div className="flex flex-col items-center justify-center min-h-[400px]">
+    <div className="w-10 h-10 border-4 border-slate-200 border-t-indigo-500 rounded-full animate-spin mb-4"></div>
+    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest animate-pulse">Loading Voucher Form...</p>
+  </div>
+);
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5003';
 
-// Let TypeScript know that the XLSX library is available globally
-declare const XLSX: any;
+import { getXLSX } from '../../utils/xlsx';
 
 interface VouchersPageProps {
   vouchers: Voucher[];
@@ -192,6 +200,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   // Invoice Scanner Modal state
   const [isInvoiceScannerOpen, setIsInvoiceScannerOpen] = useState(false);
   const [scannerFiles, setScannerFiles] = useState<FileList | null>(null);
+  const [scanType, setScanType] = useState<'single' | 'bulk'>('single');
   const scannerInputRef = useRef<HTMLInputElement>(null);
   const [extractionMode, setExtractionMode] = useState<'finpixe' | 'tally'>('finpixe');
 
@@ -206,8 +215,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
   const bulkScannerInputRef = useRef<HTMLInputElement>(null);
 
-  // Scan type: 'single' (Finpixe Single Scan) or 'bulk' handled via BulkInvoiceUploadModal
-  const [scanType, setScanType] = useState<'single' | 'bulk'>('single');
+  // Vendor Validation and Creation State
   const singleScanInputRef = useRef<HTMLInputElement>(null);
 
   // Vendor Validation and Creation State
@@ -251,6 +259,148 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     if (files && files.length > 0) {
       setMasterScannerFiles(files);
       setIsTallyMasterScannerOpen(true);
+    }
+  };
+
+  const handleInvoiceUploadResults = (results: any[]) => {
+    if (!results || results.length === 0) return;
+    const firstRow = results[0].invoice;
+    const data = results[0].items;
+
+    if (voucherType === 'Purchase') {
+      const foreignCurrVal = firstRow['Foreign Currency'] || '';
+      if (foreignCurrVal) {
+        setInvoiceInForeignCurrency(foreignCurrVal.toLowerCase() === 'yes' ? 'Yes' : 'No');
+      }
+
+      const conversionRateVal = firstRow['Conversion Rate'] || '';
+      if (conversionRateVal) setExchangeRate(conversionRateVal);
+
+      const currencyVal = firstRow['Currency'] || '';
+      if (currencyVal) setVendorBillingCurrency(currencyVal);
+
+      const posVal = firstRow['Place of Supply'] || '';
+      if (posVal) setBillFromState(posVal);
+
+      // Summary / Due Details
+      if (firstRow['TDS/TCS under Income Tax']) setPurchaseTdsIt(firstRow['TDS/TCS under Income Tax']);
+      if (firstRow['Advance Paid']) setPurchaseAdvancePaid(firstRow['Advance Paid']);
+      if (firstRow['Amount Due']) setPurchaseToPay(firstRow['Amount Due']);
+      if (firstRow['Posting Note']) setPurchasePostingNote(firstRow['Posting Note']);
+
+      // Transit Details
+      if (firstRow['Received In']) setPurchaseTransitReceivedIn(firstRow['Received In']);
+      if (firstRow['Mode of Transport']) setPurchaseTransitMode(firstRow['Mode of Transport']);
+      if (firstRow['Received Date']) setPurchaseTransitReceiptDate(formatDateForInput(firstRow['Received Date']) || getTodayDate());
+      if (firstRow['Received Time']) setPurchaseTransitReceiptTime(firstRow['Received Time']);
+      if (firstRow['Received Quantity']) setPurchaseTransitReceivedQty(firstRow['Received Quantity']);
+      if (firstRow['Delivery Type']) setPurchaseTransitDeliveryType(firstRow['Delivery Type']);
+      if (firstRow['Transporter ID/GSTIN']) setPurchaseTransitTransporterId(firstRow['Transporter ID/GSTIN']);
+      if (firstRow['Transporter Name']) setPurchaseTransitTransporterName(firstRow['Transporter Name']);
+      if (firstRow['Vehicle No.']) setPurchaseTransitVehicleNo(firstRow['Vehicle No.']);
+      if (firstRow['LR/GR/Consignment No']) setPurchaseTransitLrGrConsignment(firstRow['LR/GR/Consignment No']);
+
+      const mappedItems = data.map((row: any, idx: number) => {
+        const igst = parseFloat(row['IGST'] || row['Integrated Tax (IGST)'] || '0') || 0;
+        const cgst = parseFloat(row['CGST'] || row['Central Tax (CGST)'] || '0') || 0;
+        const sgst = parseFloat(row['SGST/UTGST'] || row['SGST'] || row['State Tax (SGST)'] || '0') || 0;
+        const cess = parseFloat(row['Cess'] || '0') || 0;
+        const taxable = parseFloat(row['Taxable Value'] || '0') || 0;
+        // If Invoice Value not extracted directly, derive it
+        const rawInv = parseFloat(row['Invoice Value'] || row['Item Amount'] || '0') || 0;
+        const invoiceValue = rawInv > 0 ? rawInv : (taxable + igst + cgst + sgst + cess) || taxable;
+
+        return {
+          id: (Date.now() + idx).toString(),
+          itemCode: row['Item Code'] || '',
+          itemName: row['Item Name'] || '',
+          hsnSac: row['HSN/SAC'] || '',
+          qty: parseFloat(row['Qty'] || row['Quantity'] || '0') || 0,
+          uom: row['UOM'] || '',
+          rate: parseFloat(row['Item Rate'] || row['Rate'] || '0') || 0,
+          taxableValue: taxable,
+          foreignRate: parseFloat(row['Rate (FC)'] || '0') || 0,
+          foreignAmount: parseFloat(row['Amount (FC)'] || '0') || 0,
+          igst,
+          cgst,
+          sgst,
+          cess,
+          invoiceValue,
+          description: row['Description'] || '',
+          poRate: null,
+          invoiceRate: parseFloat(row['Item Rate'] || row['Rate'] || '0') || null,
+          rateMismatch: false,
+          poQty: null,
+          invoiceQty: parseFloat(row['Qty'] || row['Quantity'] || '0') || null,
+          qtyMismatch: false,
+          grnQty: null,
+          sourcePoNo: null
+        };
+      });
+      console.log('[VouchersPage] Mapped Purchase Items:', mappedItems);
+      setPurchaseItems(mappedItems);
+    } else {
+      // For Sales, Payment, Receipt: use reconstructed ExtractedInvoiceData for sub-components
+      const lineItems = data.map((row: any) => ({
+        itemDescription: row['Item Name'] || '',
+        hsnCode: row['HSN/SAC'] || '',
+        quantity: parseFloat(row['Qty'] || row['Quantity'] || '0') || 0,
+        rate: parseFloat(row['Item Rate'] || row['Rate'] || '0') || 0,
+        amount: parseFloat(row['Invoice Value'] || row['Item Amount'] || '0') || 0,
+        cgst: parseFloat(row['CGST'] || '0') || 0,
+        sgst: parseFloat(row['SGST/UTGST'] || row['SGST'] || '0') || 0,
+        igst: parseFloat(row['IGST'] || '0') || 0,
+        cess: parseFloat(row['Cess'] || '0') || 0,
+        taxableValue: parseFloat(row['Taxable Value'] || '0') || 0
+      }));
+
+      const computedTaxableValue = data.reduce((s: number, r: any) => s + (parseFloat(r['Taxable Value'] || '0') || 0), 0);
+      const computedCgst = data.reduce((s: number, r: any) => s + (parseFloat(r['CGST'] || '0') || 0), 0);
+      const computedSgst = data.reduce((s: number, r: any) => s + (parseFloat(r['SGST/UTGST'] || r['SGST'] || '0') || 0), 0);
+      const computedIgst = data.reduce((s: number, r: any) => s + (parseFloat(r['IGST'] || '0') || 0), 0);
+      const computedCess = data.reduce((s: number, r: any) => s + (parseFloat(r['Cess'] || '0') || 0), 0);
+      const computedInvoiceValue = data.reduce((s: number, r: any) => s + (parseFloat(r['Invoice Value'] || r['Item Amount'] || '0') || 0), 0);
+
+      const reconstructed: any = {
+        sellerName: firstRow['Customer Name'] || firstRow['Vendor Name'] || firstRow['Buyer/Supplier - Mailing Name'] || '',
+        invoiceNumber: firstRow['Sales Invoice No.'] || firstRow['Sales Invoice No'] || firstRow['Supplier Invoice No.'] || firstRow['Supplier Invoice No'] || '',
+        invoiceDate: formatDateForInput(firstRow['Date'] || firstRow['Voucher Date'] || '') || getTodayDate(),
+        subtotal: computedTaxableValue,
+        cgstAmount: computedCgst,
+        sgstAmount: computedSgst,
+        igstAmount: computedIgst,
+        cessAmount: computedCess,
+        totalAmount: computedInvoiceValue,
+        lineItems,
+        gstin: firstRow['GSTIN'] || '',
+        placeOfSupply: firstRow['Place of Supply'] || '',
+        stateType: (firstRow['State Type'] || 'within').toLowerCase(),
+        invoiceType: firstRow['Invoice Type'] || 'Regular',
+        currency: firstRow['Currency'] || '',
+        exchangeRate: parseFloat(firstRow['Conversion Rate'] || '0') || 0,
+        billToAddress1: firstRow['Bill To - Address Line 1'] || '',
+        billToAddress2: firstRow['Bill To - Address Line 2'] || '',
+        billToCity: firstRow['Bill To - City'] || '',
+        billToState: firstRow['Bill To - State'] || '',
+        billToPincode: firstRow['Bill To - Pincode'] || '',
+        billToCountry: firstRow['Bill To - Country'] || '',
+        stateCess: firstRow['State Cess'] || '',
+        tdsIncomeTax: firstRow['TDS/TCS under Income Tax'] || '',
+        tdsGst: firstRow['TDS/TCS under GST'] || '',
+        advanceAmount: firstRow['Advance'] || '',
+        payable: firstRow['Payable'] || '',
+        postingNote: firstRow['Posting Note:'] || '',
+        dispatchFrom: firstRow['Dispatch From'] || '',
+        modeOfTransport: firstRow['Mode of Transport'] || '',
+        dispatchDate: firstRow['Dispatch Date'] || '',
+        dispatchTime: firstRow['Dispatch Time'] || '',
+        transporterId: firstRow['Transporter ID/GSTIN'] || '',
+        transporterName: firstRow['Transporter Name'] || '',
+        vehicleNo: firstRow['Vehicle No.'] || '',
+        lrGrConsignment: firstRow['LR/GR/Consignment No'] || ''
+      };
+      console.log('[VouchersPage] Reconstructed PrefilledData:', reconstructed);
+      setLocalPrefilledData(reconstructed);
     }
   };
 
@@ -1109,9 +1259,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     event.target.value = '';
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const data = e.target?.result;
+        const XLSX = await getXLSX();
         const workbook = XLSX.read(data, { type: 'array' });
         const allVouchers: Voucher[] = [];
         let failed = 0;
@@ -1198,15 +1349,16 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           creditLedger: ['Ledger (Credit)', 'Credit Ledger', 'Cr Ledger'],
         };
 
-        const getWorksheetRows = (preferredSheetNames: string[]) => {
+        const getWorksheetRows = async (preferredSheetNames: string[]) => {
           const sheetName = preferredSheetNames.find(name => workbook.Sheets[name]) || workbook.SheetNames[0];
           if (!sheetName) return [];
           const sheet = workbook.Sheets[sheetName];
+          const XLSX = await getXLSX();
           return XLSX.utils.sheet_to_json(sheet, { defval: '' }) as Record<string, any>[];
         };
 
         if (voucherType === 'Purchase' || voucherType === 'Sales') {
-          const rows = getWorksheetRows(['SalesPurchases', 'Invoices']);
+          const rows = await getWorksheetRows(['SalesPurchases', 'Invoices']);
           const groups: Record<string, {
             date: string;
             narration: string;
@@ -1362,7 +1514,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             else failed++;
           });
         } else if (voucherType === 'Payment' || voucherType === 'Receipt') {
-          const rows = getWorksheetRows(['PaymentsReceipts', 'Invoices']);
+          const rows = await getWorksheetRows(['PaymentsReceipts', 'Cash Receipts']);
           rows.forEach((row) => {
             try {
               const voucher = {
@@ -1383,7 +1535,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             }
           });
         } else if (voucherType === 'Contra') {
-          const rows = getWorksheetRows(['Contra', 'Invoices']);
+          const rows = await getWorksheetRows(['Contra', 'Invoices']);
           rows.forEach((row) => {
             try {
               const voucher = {
@@ -1404,7 +1556,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             }
           });
         } else if (voucherType === 'Journal') {
-          const rows = getWorksheetRows(['Journal', 'Invoices']);
+          const rows = await getWorksheetRows(['Journal', 'Invoices']);
           rows.forEach((row) => {
             try {
               let entries: JournalEntry[] = [];
@@ -1531,7 +1683,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     reader.readAsArrayBuffer(file);
   };
 
-  const handleDownloadTemplate = () => {
+  const handleDownloadTemplate = async () => {
+    const XLSX = await getXLSX();
     const wb = XLSX.utils.book_new();
 
     // Define headers (same as respective voucher upload expectations)
@@ -6677,21 +6830,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   {isScannerMenuOpen && (
                     <div className="origin-top-right absolute right-0 mt-2 w-56 rounded shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-[60]">
                       <div className="py-1" role="menu">
-                        <button
-                          onClick={() => { openScanner('finpixe', 'single'); setIsScannerMenuOpen(false); }}
-                          className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                          role="menuitem"
-                        >
-                          <Icon name="sparkles" className="w-4 h-4 mr-3 text-indigo-500" />
-                          Finpixe Single Scan
-                        </button>
+
                         <button
                           onClick={() => { setIsBulkUploadOpen(true); setIsScannerMenuOpen(false); }}
                           className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 border-t border-gray-50"
                           role="menuitem"
                         >
                           <Icon name="scanner" className="w-4 h-4 mr-3 text-emerald-500" />
-                          Finpixe Bulk Scan
+                          Finpixe AI Scan
                         </button>
                         <button
                           onClick={() => setIsOthersSubmenuOpen(prev => !prev)}
@@ -6760,83 +6906,127 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
                         <div className="border-t border-gray-100 my-1"></div>
                         <button
-                          onClick={() => { excelInputRef.current?.click(); setIsScannerMenuOpen(false); }}
-                          className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                          role="menuitem"
-                        >
-                          <Icon name="receipt" className="w-4 h-4 mr-3 text-green-500" />
-                          From Excel
-                        </button>
-
-                        <button
                           onClick={() => { setIsSalesExcelWorkflowOpen(true); setIsScannerMenuOpen(false); }}
                           className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                           role="menuitem"
                         >
                           <Icon name="file-spreadsheet" className="w-4 h-4 mr-3 text-blue-500" />
-                          {voucherType === 'Sales' ? 'Sales Excel Workflow (Upload)' : 'Sales Excel Workflow'}
+                          Sales Excel Upload
                         </button>
-                        <button
-                          onClick={() => { jsonInputRef.current?.click(); setIsScannerMenuOpen(false); }}
-                          className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                          role="menuitem"
-                        >
-                          <Icon name="tag" className="w-4 h-4 mr-3 text-amber-500" />
-                          From JSON
-                        </button>
+
                       </div>
                     </div>
                   )}
                 </div>
 
 
-                {/* Single scan input – NO multiple attribute */}
-                <input type="file" ref={singleScanInputRef} onClick={(e) => { (e.target as any).value = null; }} onChange={handleSingleScanFileChange} accept=".pdf,.jpg,.jpeg,.png" className="hidden" />
+                {/* Single scan input */}
+                <input
+                  type="file"
+                  ref={singleScanInputRef}
+                  onClick={(e) => { if (e.target) (e.target as any).value = null; }}
+                  onChange={handleSingleScanFileChange}
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  className="hidden"
+                />
+
                 {/* Multi-file scanner input for tally/other modes */}
-                <input type="file" ref={scannerInputRef} onClick={(e) => { (e.target as any).value = null; }} onChange={handleScannerFileChange} accept="image/*,.pdf" multiple className="hidden" />
-                <input type="file" ref={masterScannerInputRef} onClick={(e) => { (e.target as any).value = null; }} onChange={handleMasterScannerFileChange} accept="image/*,.pdf" multiple className="hidden" />
-                <input type="file" ref={excelInputRef} onChange={handleExcelFileChange} accept=".xlsx, .xls" className="hidden" />
-                <input type="file" ref={jsonInputRef} onChange={handleJsonFileChange} accept=".json" className="hidden" />
-                <input type="file" ref={imageInputRef} onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    if (voucherType === 'Purchase') setPurchaseSupportingDocument(file);
-                    showInfo(`File "${file.name}" attached for manual entry.`);
-                  }
-                }} accept="image/*,.pdf" className="hidden" />
+                <input
+                  type="file"
+                  ref={scannerInputRef}
+                  onClick={(e) => { if (e.target) (e.target as any).value = null; }}
+                  onChange={handleScannerFileChange}
+                  accept="image/*,.pdf"
+                  multiple
+                  className="hidden"
+                />
+
+                <input
+                  type="file"
+                  ref={masterScannerInputRef}
+                  onClick={(e) => { if (e.target) (e.target as any).value = null; }}
+                  onChange={handleMasterScannerFileChange}
+                  accept="image/*,.pdf"
+                  multiple
+                  className="hidden"
+                />
+
+                <input
+                  type="file"
+                  ref={excelInputRef}
+                  onChange={handleExcelFileChange}
+                  accept=".xlsx, .xls"
+                  className="hidden"
+                />
+
+                <input
+                  type="file"
+                  ref={jsonInputRef}
+                  onChange={handleJsonFileChange}
+                  accept=".json"
+                  className="hidden"
+                />
+
+                <input
+                  type="file"
+                  ref={imageInputRef}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      if (voucherType === 'Purchase') setPurchaseSupportingDocument(file);
+                      showInfo(`File "${file.name}" attached for manual entry.`);
+                    }
+                  }}
+                  accept="image/*,.pdf"
+                  className="hidden"
+                />
               </div>
             </div>
-            <style>{`
-          .form-label { display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.25rem; }
-          .form-input { display: block; width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); outline: none; transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out; }
-          .form-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 1px #3b82f6; }
-          .table-input {
-            width: 100%;
-            border: 1px solid transparent;
-            padding: 0.5rem 0.75rem;
-            background-color: transparent;
-            outline: none;
-            border-radius: 0.375rem;
-            transition: all 0.2s;
-            color: #1e293b;
-          }
-           .table-input:focus {
-            background-color: white;
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 1px #3b82f6;
-          }
-          .table-input[readOnly] {
-            background-color: #f9fafb;
-            color: #4b5563;
-            cursor: not-allowed;
-          }
-          .table-header { padding: 0.75rem 1rem; text-align: center; font-size: 0.75rem; font-weight: 600; color: #4b5563; text-transform: uppercase; letter-spacing: 0.05em; background-color: #f9fafb; }
-        `}
-            </style>
+
+            <style dangerouslySetInnerHTML={{
+              __html: `
+                .form-label { display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.25rem; }
+                .form-input { display: block; width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); outline: none; transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out; }
+                .form-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 1px #3b82f6; }
+                .table-input {
+                  width: 100%;
+                  border: 1px solid transparent;
+                  padding: 0.5rem 0.75rem;
+                  background-color: transparent;
+                  outline: none;
+                  border-radius: 0.375rem;
+                  transition: all 0.2s;
+                  color: #1e293b;
+                }
+                .table-input:focus {
+                  background-color: white;
+                  border-color: #3b82f6;
+                  box-shadow: 0 0 0 1px #3b82f6;
+                }
+                .table-input[readOnly] {
+                  background-color: #f9fafb;
+                  color: #4b5563;
+                  cursor: not-allowed;
+                }
+                .table-header { padding: 0.75rem 1rem; text-align: center; font-size: 0.75rem; font-weight: 600; color: #4b5563; text-transform: uppercase; letter-spacing: 0.05em; background-color: #f9fafb; }
+              `
+            }} />
+
             {voucherType === 'Sales' && <SalesVoucher prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} customers={richCustomers} companyDetails={companyDetails} />}
             {voucherType === 'Payment' && <PaymentVoucherSingle prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} />}
             {voucherType === 'Receipt' && <ReceiptVoucher prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} />}
-            {voucherType === 'Purchase' && renderSalesPurchaseForm()}
+            {voucherType === 'Purchase' && (
+              <Suspense fallback={<PageLoader />}>
+                <PurchaseVoucher
+                  prefilledData={localPrefilledData}
+                  clearPrefilledData={handleClearPrefilledData}
+                  isLimitReached={isLimitReached}
+                  onLimitReached={handleLimitReached}
+                  onAddVouchers={onAddVouchers}
+                  companyDetails={companyDetails}
+                />
+              </Suspense>
+            )}
             {voucherType === 'Contra' && renderSimpleForm(voucherType)}
             {voucherType === 'Journal' && renderJournalForm()}
             {voucherType === 'Expenses' && renderExpensesForm()}
@@ -6853,84 +7043,77 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               </div>
             )}
 
-            {voucherType === 'Purchase' && purchaseActiveTab !== 'transit' ? (
-              <button
-                onClick={() => {
-                  // Trigger validation display
-                  setShowPurchaseMismatches(true);
-
-                  // Mismatch Validation before proceeding
-                  const hasMismatch = purchaseItems.some(item => item.rateMismatch || item.qtyMismatch);
-                  if (hasMismatch) {
-                    showError("Please resolve Quantity or Rate mismatches before proceeding.");
-                    return;
-                  }
-
-                  if (purchaseActiveTab === 'supplier') {
-                    if (invoiceInForeignCurrency === 'Yes') setPurchaseActiveTab('supply_foreign');
-                    else setPurchaseActiveTab('supply');
-                  }
-                  else if (purchaseActiveTab === 'supply_foreign') setPurchaseActiveTab('supply_inr');
-                  else if (purchaseActiveTab === 'supply_inr') setPurchaseActiveTab('due');
-                  else if (purchaseActiveTab === 'supply') setPurchaseActiveTab('due');
-                  else if (purchaseActiveTab === 'due') setPurchaseActiveTab('transit');
-                }}
-                className="erp-button-primary"
-              >
-                Next
-              </button>
-            ) : (
-              <div className="flex space-x-3">
+            {voucherType === 'Purchase' && (
+              purchaseActiveTab !== 'transit' ? (
                 <button
-                  onClick={handleSaveVoucher}
+                  onClick={() => {
+                    setShowPurchaseMismatches(true);
+                    const hasMismatch = purchaseItems.some(item => item.rateMismatch || item.qtyMismatch);
+                    if (hasMismatch) {
+                      showError("Please resolve Quantity or Rate mismatches before proceeding.");
+                      return;
+                    }
+
+                    if (purchaseActiveTab === 'supplier') {
+                      if (invoiceInForeignCurrency === 'Yes') setPurchaseActiveTab('supply_foreign');
+                      else setPurchaseActiveTab('supply');
+                    }
+                    else if (purchaseActiveTab === 'supply_foreign') setPurchaseActiveTab('supply_inr');
+                    else if (purchaseActiveTab === 'supply_inr') setPurchaseActiveTab('due');
+                    else if (purchaseActiveTab === 'supply') setPurchaseActiveTab('due');
+                    else if (purchaseActiveTab === 'due') setPurchaseActiveTab('transit');
+                  }}
                   className="erp-button-primary"
                 >
-                  Post & Close
+                  Next
                 </button>
-                <button
-                  onClick={resetForm}
-                  className="erp-button-secondary"
-                >
-                  Cancel
-                </button>
+              ) : (
+                <div className="flex space-x-3">
+                  <button onClick={handleSaveVoucher} className="erp-button-primary">Post & Close</button>
+                  <button onClick={handleSaveVoucher} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
+                  <button onClick={resetForm} className="erp-button-secondary">Cancel</button>
+                </div>
+              )
+            )}
 
-                {voucherType === 'Purchase' && purchaseActiveTab !== 'transit' ? (
-                  <button
-                    onClick={() => {
-                      if (purchaseActiveTab === 'supplier') {
-                        if (invoiceInForeignCurrency === 'Yes') setPurchaseActiveTab('supply_foreign');
-                        else setPurchaseActiveTab('supply');
-                      }
-                      else if (purchaseActiveTab === 'supply_foreign') setPurchaseActiveTab('supply_inr');
-                      else if (purchaseActiveTab === 'supply_inr') setPurchaseActiveTab('due');
-                      else if (purchaseActiveTab === 'supply') setPurchaseActiveTab('due');
-                      else if (purchaseActiveTab === 'due') setPurchaseActiveTab('transit');
-                    }}
-                    className="erp-button-primary"
-                  >
-                    Next
-                  </button>
-                ) : (
-                  <div className="flex space-x-3">
-                    <button
-                      onClick={handleSaveVoucher}
-                      className="erp-button-primary"
-                    >
-                      Post & Close
-                    </button>
-                    <button
-                      onClick={handleSaveVoucher}
-                      className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50"
-                    >
-                      Post & Print/Email
-                    </button>
-                  </div>
-                )}
+            {!['Sales', 'Payment', 'Receipt', 'Purchase'].includes(voucherType) && (
+              <div className="flex space-x-3">
+                <button onClick={handleSaveVoucher} className="erp-button-primary">Post & Close</button>
+                <button onClick={handleSaveVoucher} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
+                <button onClick={resetForm} className="erp-button-secondary">Cancel</button>
               </div>
             )}
           </div>
 
+          {isInvoiceScannerOpen && (
+            <InvoiceScannerModal
+              initialFiles={scannerFiles}
+              extractionMode={extractionMode}
+              scanType={scanType}
+              voucherType={voucherType}
+              onClose={() => {
+                setIsInvoiceScannerOpen(false);
+                setScannerFiles(null);
+                if (singleScanInputRef.current) singleScanInputRef.current.value = '';
+                if (scannerInputRef.current) scannerInputRef.current.value = '';
+              }}
+              onUpload={handleInvoiceUploadResults}
+            />
+          )}
 
+          {isTallyMasterScannerOpen && (
+            <TallyMasterScannerModal
+              initialFiles={masterScannerFiles}
+              onClose={() => {
+                setIsTallyMasterScannerOpen(false);
+                setMasterScannerFiles(null);
+                if (masterScannerInputRef.current) masterScannerInputRef.current.value = '';
+              }}
+              onUpload={(data) => {
+                console.log('[VouchersPage] Tally Master records received:', data.length);
+              }}
+            />
+          )}
 
           {/* Invoice Scanner Modal */}
           {
@@ -7189,76 +7372,65 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           )}
 
           {/* Create GRN Modal */}
-          {
-            isCreateGRNModalOpen && (
-              <CreateGRNModal
-                onClose={() => setIsCreateGRNModalOpen(false)}
-                onSave={async (data) => {
-                  try {
+          {isCreateGRNModalOpen && (
+            <CreateGRNModal
+              onClose={() => setIsCreateGRNModalOpen(false)}
+              onSave={async (data) => {
+                try {
+                  const response = await apiService.createInventoryOperationGRN(data);
+                  setGrnRefNo(response.grn_no);
+                  showSuccess('GRN Created Successfully!');
 
-                    const response = await apiService.createInventoryOperationGRN(data);
+                  if (data.items && data.items.length > 0) {
+                    const mappedItems = data.items.map((item: any, index: number) => {
+                      const stockItem = stockItems.find((s: any) =>
+                        (s.item_code || s.code) === item.item_code || (s.item_name || s.name) === item.item_name
+                      );
 
-                    setGrnRefNo(response.grn_no);
-                    showSuccess('GRN Created Successfully!');
+                      const qty = item.accepted_qty || item.received_qty || 0;
+                      const rate = stockItem?.standard_rate || stockItem?.rate || 0;
+                      const taxableValue = qty * rate;
 
-                    // Sync items to Supply Details table
-                    if (data.items && data.items.length > 0) {
-                      const mappedItems = data.items.map((item: any, index: number) => {
-                        // Try to find full item details from stockItems
-                        const stockItem = stockItems.find((s: any) =>
-                          (s.item_code || s.code) === item.item_code || (s.item_name || s.name) === item.item_name
-                        );
-
-                        const qty = item.accepted_qty || item.received_qty || 0;
-                        const rate = stockItem?.standard_rate || stockItem?.rate || 0;
-                        const taxableValue = qty * rate;
-
-                        return {
-                          id: (index + 1).toString(),
-                          itemCode: item.item_code || stockItem?.item_code || stockItem?.code || '',
-                          itemName: item.item_name || stockItem?.item_name || stockItem?.name || '',
-                          hsnSac: stockItem?.hsn_sac || '',
-                          qty: qty,
-                          uom: item.uom || stockItem?.uom || '',
-                          rate: rate,
-                          taxableValue: taxableValue,
-                          foreignRate: 0,
-                          foreignAmount: 0,
-                          igst: 0,
-                          cgst: 0,
-                          sgst: 0,
-                          cess: 0,
-                          invoiceValue: taxableValue,
-                          description: item.remarks || ''
-                        };
-                      });
-                      setPurchaseItems(mappedItems);
-                    }
-
-                    // Sync other relevant fields
-                    if (data.vendor_name) setParty(data.vendor_name);
-                    if (data.gstin) setGstin(data.gstin);
-                    if (data.address) {
-                      setAddressFields(data.address);
-                    }
-                    if (data.secondary_ref_no) setInvoiceNo(data.secondary_ref_no);
-                    if (data.reference_no) setPurchaseOrderNo(data.reference_no);
-
-                    // Add to pending list and select it
-                    if (response.grn_no) {
-                      setPendingGRNs(prev => [...prev, response]);
-                    }
-
-                    setIsCreateGRNModalOpen(false);
-                  } catch (error) {
-                    console.error("Failed to create GRN");
-                    showError("Failed to create GRN. Please check inputs.");
+                      return {
+                        id: (index + 1).toString(),
+                        itemCode: item.item_code || stockItem?.item_code || stockItem?.code || '',
+                        itemName: item.item_name || stockItem?.item_name || stockItem?.name || '',
+                        hsnSac: stockItem?.hsn_sac || '',
+                        qty: qty,
+                        uom: item.uom || stockItem?.uom || '',
+                        rate: rate,
+                        taxableValue: taxableValue,
+                        foreignRate: 0,
+                        foreignAmount: 0,
+                        igst: 0,
+                        cgst: 0,
+                        sgst: 0,
+                        cess: 0,
+                        invoiceValue: taxableValue,
+                        description: item.remarks || ''
+                      };
+                    });
+                    setPurchaseItems(mappedItems);
                   }
 
-                }}
-              />
-            )
-          }
+                  if (data.vendor_name) setParty(data.vendor_name);
+                  if (data.gstin) setGstin(data.gstin);
+                  if (data.address) setAddressFields(data.address);
+                  if (data.secondary_ref_no) setInvoiceNo(data.secondary_ref_no);
+                  if (data.reference_no) setPurchaseOrderNo(data.reference_no);
+
+                  if (response.grn_no) {
+                    setPendingGRNs(prev => [...prev, response]);
+                  }
+
+                  setIsCreateGRNModalOpen(false);
+                } catch (error) {
+                  console.error("Failed to create GRN");
+                  showError("Failed to create GRN. Please check inputs.");
+                }
+              }}
+            />
+          )}
           {/* Upgrade Modal */}
           {
             isUpgradeModalOpen && (
