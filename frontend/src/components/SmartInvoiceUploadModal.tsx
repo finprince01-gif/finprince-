@@ -461,6 +461,7 @@ interface BulkInvoiceUploadModalProps {
     onClose: () => void;
     onFinalized?: (result: FinalizeResult) => void;
     voucherType: string;
+    isLimitReached?: boolean;
 }
 
 type ModalStep = 'upload' | 'scanning' | 'review' | 'finalizing' | 'done';
@@ -469,6 +470,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     onClose,
     onFinalized,
     voucherType = 'Purchase',
+    isLimitReached = false,
 }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const folderInputRef = useRef<HTMLInputElement>(null);
@@ -666,6 +668,13 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                     else if (backendStatus === 'Voucher Created' || backendStatus === 'VOUCHER_CREATED') vStatus = 'VOUCHER_CREATED';
                     else if (backendStatus === 'ERROR') vStatus = 'EXTRACTION_FAILED';
 
+                    // ✅ KEY FIX: A row can NEVER be "Ready" if there is no vendor_id.
+                    // The backend sometimes returns stale FOUND/READY with vendor_id=null.
+                    // Catch it here so "Create Vendor" shows immediately without needing to edit.
+                    if (vStatus === 'READY' && !r.vendor_id) {
+                        vStatus = 'VENDOR_MISSING';
+                    }
+
                     return {
                         ...r,
                         extracted_data: r.extracted_data || {},
@@ -676,11 +685,45 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 });
                 setScanResults(seeded);
 
-                // We only re-validate PENDING rows or if we want to refresh everything
-                seeded.filter(r => r.validationStatus === 'PENDING').forEach(async (row) => {
-                    // ... (existing validation loop logic if needed, but backend already did it)
-                });
-            }
+                // If there are any PENDING rows, schedule a re-fetch to catch when backend finishes validation
+                const hasPending = seeded.some(r => r.validationStatus === 'PENDING');
+                if (hasPending) {
+                    setTimeout(() => fetchStagedInvoices(), 3000);
+                }
+
+                // Auto-revalidate rows that are VENDOR_MISSING with no vendor_id via PATCH
+                // so the backend does a fresh lookup — status will update to correct value immediately.
+                const needsRevalidation = seeded.filter(r => r.validationStatus === 'VENDOR_MISSING' && !r.vendor_id);
+                if (needsRevalidation.length > 0) {
+                    setTimeout(async () => {
+                        for (const row of needsRevalidation) {
+                            try {
+                                const result: any = await httpClient.patch(
+                                    `/api/ocr-staging/${row.file_hash}/`,
+                                    { extracted_data: row.extracted_data }
+                                );
+                                setScanResults(prev => prev.map(r => {
+                                    if (r.file_hash !== row.file_hash) return r;
+                                    const s = result.status || '';
+                                    let newStatus: ValidationStatus = 'VENDOR_MISSING';
+                                    if (s === 'READY' || s === 'found' || s === 'FOUND') newStatus = 'READY';
+                                    else if (s === 'VENDOR_MISSING' || s === 'NOT_FOUND' || s === 'not_found') newStatus = 'VENDOR_MISSING';
+                                    else if (s === 'GSTIN_CONFLICT' || s === 'gstin_conflict') newStatus = 'GSTIN_CONFLICT';
+                                    return {
+                                        ...r,
+                                        validationStatus: newStatus,
+                                        vendor_id: result.vendor_id ?? r.vendor_id,
+                                        vendor_name: result.vendor_name || r.vendor_name,
+                                        matchedBy: result.matched_by || r.matchedBy,
+                                    };
+                                }));
+                            } catch {
+                                // Silently ignore — row stays VENDOR_MISSING showing Create Vendor button
+                            }
+                        }
+                    }, 400);
+                }
+            } // end if (Array.isArray(res))
         } catch (err) {
             console.error("Failed to fetch staged invoices", err);
         }
@@ -697,6 +740,11 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     const handleScan = async () => {
         if (selectedFiles.length === 0) {
             showError('Please select at least one invoice file.');
+            return;
+        }
+
+        if (isLimitReached) {
+            showError('❌ AI Extraction limit reached. Please upgrade your subscription.');
             return;
         }
 
@@ -1017,6 +1065,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                     voucherType={voucherType}
                     onClose={() => setEditingRow(null)}
                     onSave={(newData, revalidation) => {
+                        let updatedRow: ScanResult | null = null;
                         setScanResults(prev => prev.map(r => {
                             if (r.id !== editingRow.id) return r;
                             // Map revalidation.status
@@ -1037,7 +1086,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                             const newGstin = invoicePart['GSTIN'] || invoicePart.vendor_gstin || r.vendor_gstin;
                             const newAmount = invoicePart['Total Invoice Value'] || invoicePart['Grand Total'] || invoicePart['Total Amount'] || invoicePart.total_amount || r.total_amount;
 
-                            return {
+                            const updated = {
                                 ...r,
                                 extracted_data: newData,
                                 validationStatus: newValidationStatus,
@@ -1049,7 +1098,14 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                 vendor_name: revalidation?.vendor_name || r.vendor_name,
                                 vendor_status: (revalidation?.status === 'READY' || revalidation?.status === 'found' || revalidation?.status === 'FOUND') ? 'FOUND' : r.vendor_status,
                             };
+                            if (newValidationStatus === 'VENDOR_MISSING') updatedRow = updated;
+                            return updated;
                         }));
+                        // ✅ Auto-open Create Vendor immediately if revalidation says vendor is missing
+                        // so user doesn't need to click "Create Vendor" as a separate step
+                        if (updatedRow) {
+                            setTimeout(() => setResolvingRow(updatedRow), 150);
+                        }
                     }}
                 />
             )}
@@ -1426,6 +1482,32 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                                     <div className="w-5 h-5 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center">
                                                                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                                                                     </div>
+                                                                )}
+                                                                {/* Revalidate button — triggers a fresh vendor check without opening edit modal */}
+                                                                {!['PENDING', 'VOUCHER_CREATED'].includes(row.validationStatus) && (
+                                                                    <button
+                                                                        onClick={async () => {
+                                                                            setScanResults(prev => prev.map(r => r.file_hash === row.file_hash ? { ...r, validationStatus: 'PENDING' } : r));
+                                                                            try {
+                                                                                const result: any = await httpClient.patch(`/api/ocr-staging/${row.file_hash}/`, { extracted_data: row.extracted_data });
+                                                                                setScanResults(prev => prev.map(r => {
+                                                                                    if (r.file_hash !== row.file_hash) return r;
+                                                                                    let newStatus: ValidationStatus = 'VENDOR_MISSING';
+                                                                                    const s = result.status || '';
+                                                                                    if (s === 'READY' || s === 'found' || s === 'FOUND') newStatus = 'READY';
+                                                                                    else if (s === 'VENDOR_MISSING' || s === 'NOT_FOUND' || s === 'not_found') newStatus = 'VENDOR_MISSING';
+                                                                                    else if (s === 'GSTIN_CONFLICT' || s === 'gstin_conflict') newStatus = 'GSTIN_CONFLICT';
+                                                                                    const updated = { ...r, validationStatus: newStatus, vendor_id: result.vendor_id ?? r.vendor_id, vendor_name: result.vendor_name || r.vendor_name };
+                                                                                    if (newStatus === 'VENDOR_MISSING') setTimeout(() => setResolvingRow(updated), 150);
+                                                                                    return updated;
+                                                                                }));
+                                                                            } catch { fetchStagedInvoices(); }
+                                                                        }}
+                                                                        className="p-1 hover:bg-indigo-100 rounded text-indigo-400 hover:text-indigo-700 transition-colors"
+                                                                        title="Revalidate vendor"
+                                                                    >
+                                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                                                                    </button>
                                                                 )}
                                                                 <button onClick={() => setEditingRow(row)} className="p-1 hover:bg-indigo-100 rounded text-indigo-600" title="Edit Data">
                                                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

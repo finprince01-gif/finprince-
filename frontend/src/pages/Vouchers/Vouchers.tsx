@@ -400,7 +400,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const openScanner = (mode: 'finpixe' | 'tally' = 'finpixe', type: 'single' | 'bulk' = 'single') => {
     setExtractionMode(mode);
     setScanType(type);
-    if (isLimitReached) {
+    if (isLimitReached && mode === 'finpixe') {
       handleLimitReached();
     } else if (mode === 'finpixe' && type === 'single') {
       singleScanInputRef.current?.click();
@@ -6811,9 +6811,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               <div className="flex items-center space-x-2">
                 <div className="relative" ref={scannerMenuRef}>
                   <button
-                    onClick={() => isLimitReached ? handleLimitReached() : setIsScannerMenuOpen(prev => !prev)}
-                    className={`erp-button-primary ${isLimitReached ? 'opacity-50 cursor-not-allowed !bg-gray-400 !shadow-none' : ''}`}
-                    title={isLimitReached ? "Limit Reached" : "Upload Invoices"}
+                    onClick={() => setIsScannerMenuOpen(prev => !prev)}
+                    className="erp-button-primary"
+                    title="Upload Invoices"
                   >
                     <Icon name="upload" className="w-4 h-4 mr-2" />
                     Upload Invoices
@@ -6825,12 +6825,12 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       <div className="py-1" role="menu">
 
                         <button
-                          onClick={() => { setIsBulkUploadOpen(true); setIsScannerMenuOpen(false); }}
-                          className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 border-t border-gray-50"
+                          onClick={() => { if (isLimitReached) { handleLimitReached(); } else { setIsBulkUploadOpen(true); } setIsScannerMenuOpen(false); }}
+                          className={`flex items-center w-full text-left px-4 py-2 text-sm ${isLimitReached ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'text-gray-700 hover:bg-gray-100'} border-t border-gray-50`}
                           role="menuitem"
                         >
-                          <Icon name="scanner" className="w-4 h-4 mr-3 text-emerald-500" />
-                          Finpixe AI Scan
+                          <Icon name="scanner" className={`w-4 h-4 mr-3 ${isLimitReached ? 'text-red-500' : 'text-emerald-500'}`} />
+                          Finpixe AI Scan {isLimitReached && <span className="ml-auto text-[10px] font-bold uppercase tracking-wider bg-red-100 px-1.5 py-0.5 rounded">Limit Reached</span>}
                         </button>
                         <button
                           onClick={() => setIsOthersSubmenuOpen(prev => !prev)}
@@ -7664,6 +7664,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           {isBulkUploadOpen && (
             <BulkInvoiceUploadModal
               voucherType={voucherType}
+              isLimitReached={isLimitReached}
               onClose={() => {
                 setIsBulkUploadOpen(false);
                 refetch(); // Refresh usage

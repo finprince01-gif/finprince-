@@ -1,4 +1,3 @@
-
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -9,6 +8,9 @@ class SubscriptionUsageView(APIView):
 
     def get(self, request):
         user = request.user
+        tenant_id = getattr(user, 'tenant_id', None)
+        with open('c:/108/muthu/AI-accounting-0.03/debug_usage.log', 'a') as f:
+            f.write(f"DEBUG: SubscriptionUsageView FOR user={user.username}, tenant_id={tenant_id}\n")
         plan = (user.selected_plan or 'FREE').upper()
         
         LIMITS = {

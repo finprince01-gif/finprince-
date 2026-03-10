@@ -9,7 +9,38 @@
     `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
     PRIMARY KEY (`id`)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+  -- Table: ai_usage
+  -- Tracks monthly AI invoice extraction usage per tenant for subscription enforcement.
+
+  CREATE TABLE IF NOT EXISTS `ai_usage` (
+    `id` bigint NOT NULL AUTO_INCREMENT,
+    `tenant_id` char(36) NOT NULL,
+    `year` int NOT NULL,
+    `month` int NOT NULL,
+    `used_count` int NOT NULL DEFAULT '0',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `ai_usage_tenant_year_month_uniq` (`tenant_id`, `year`, `month`),
+    KEY `ai_usage_tenant_id_idx` (`tenant_id`),
+    CONSTRAINT `ai_usage_tenant_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Monthly AI invoice extraction usage tracker per tenant';
+
+  -- Table: extraction_performance
+  -- Stores historical OCR extraction timings for estimating scan duration.
+
+  CREATE TABLE IF NOT EXISTS `extraction_performance` (
+    `id` bigint NOT NULL AUTO_INCREMENT,
+    `file_count` int NOT NULL DEFAULT '1',
+    `processing_time_seconds` double NOT NULL,
+    `timestamp` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (`id`),
+    KEY `extraction_performance_timestamp_idx` (`timestamp`)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='OCR extraction performance timings for scan duration estimation';
+
   -- Table: amount_transactions
+
 
   CREATE TABLE `amount_transactions` (
     `id` bigint NOT NULL AUTO_INCREMENT,
@@ -2540,18 +2571,6 @@ CREATE TABLE IF NOT EXISTS `rbac_user_roles` (
 
 
 -- ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
--- Table structure for table `ai_usage`
-CREATE TABLE `ai_usage` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `tenant_id` varchar(50) NOT NULL,
-  `year` int NOT NULL,
-  `month` int NOT NULL,
-  `used_count` int DEFAULT '0',
-  `plan` varchar(50) DEFAULT 'FREE',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `tenant_year_month` (`tenant_id`,`year`,`month`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Updates for Customer Master Schema (2026-02-20)
 -- Add TDS Applicable field to customer_master_customer_basicdetails
