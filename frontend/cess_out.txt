@@ -1,0 +1,53 @@
+8: import { showError, showSuccess, showInfo, confirm } from '../../utils/toast';
+50: const { hasTabAccess, isSuperuser } = usePermissions();
+67: : allVoucherTypes.filter(v => hasTabAccess('Vouchers', v.perm));
+381: { id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', poRate: null as number | null, invoiceRate: null as number | null, rateMismatch: false, poQty: null as number | null, invoiceQty: null as number | null, qtyMismatch: false, grnQty: null as number | null, sourcePoNo: null as string | null }
+584: if (res.success && res.data?.items) {
+621: cess: 0,
+703: cess: 0,
+727: const [importSummary, setImportSummary] = useState<{ success: number, failed: number } | null>(null);
+1081: }, [paymentTransactions, focusedRowIndex]); // Removed bulkRows dependency to avoid loop, relies on index access
+1132: setImportSummary({ success: validVouchers.length, failed });
+1134: setImportSummary({ success: 0, failed: 1 });
+1139: setImportSummary({ success: 0, failed: file.size > 0 ? 1 : 0 });
+1555: setImportSummary({ success: 1, failed });
+1561: setImportSummary({ success: allVouchers.length, failed });
+1563: setImportSummary({ success: 0, failed });
+1569: setImportSummary({ success: 0, failed: 1 });
+1824: cess: 0,
+1843: setPurchaseItems([{ id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', poRate: null as number | null, invoiceRate: null as number | null, rateMismatch: false, poQty: null as number | null, invoiceQty: null as number | null, qtyMismatch: false, grnQty: null as number | null, sourcePoNo: null as string | null }]);
+2102: showSuccess('Vendor Created Successfully!');
+2298: showSuccess('Purchase Voucher Saved Successfully!');
+2394: if (['qty', 'rate', 'foreignRate', 'igst', 'cgst', 'sgst', 'cess'].includes(field)) {
+2592: const cess = parseFloat(item.cess.toString()) || 0;
+2594: item.invoiceValue = taxable + igst + cgst + sgst + cess;
+2632: cess: 0,
+2674: cess: 0,
+3142: Cess
+3308: invoiceValue: newTaxable + igst + cgst + sgst + (parseFloat(item.cess.toString()) || 0)
+3596: <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">CESS</th>
+3760: value={row.cess}
+3761: onChange={(e) => handlePurchaseItemChange(index, 'cess', e.target.value)}
+3858: <th className="px-4 py-2 text-sm font-semibold text-gray-700 border-r border-gray-300">Cess</th>
+3859: <th className="px-4 py-2 text-sm font-semibold text-gray-700">State Cess</th>
+3877: {(purchaseItems.reduce((sum, item) => sum + (Number(item.cess) || 0), 0)).toFixed(2)}
+5917: cess: number;
+5934: cess: 0,
+6045: cess: 0,
+6115: cess: row.cess,
+6125: showSuccess('Expense voucher saved successfully!');
+6140: cess: 0,
+6345: <label className="erp-label">CESS</label>
+6348: value={row.cess || ''}
+6349: onChange={e => handleExpenseRowChange(row.id, 'cess', parseFloat(e.target.value) || 0)}
+6912: onExtractionSuccess={(extractedData) => {
+7015: const cess = parseFloat(row['Cess'] || '0') || 0;
+7019: const invoiceValue = rawInv > 0 ? rawInv : (taxable + igst + cgst + sgst + cess) || taxable;
+7035: cess,
+7064: cess: parseFloat(row['Cess'] || '0') || 0,
+7074: const computedCess = data.reduce((s, r) => s + (parseFloat(r['Cess'] || '0') || 0), 0);
+7087: cessAmount: computedCess,
+7104: stateCess: firstRow['State Cess'] || '',
+7166: showSuccess('GRN Created Successfully!');
+7194: cess: 0,
+7483: showSuccess(`Successfully processed ${summary.created} invoices!`);

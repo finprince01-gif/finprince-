@@ -1,0 +1,8 @@
+1351:               const gstRate = stockItem?.gstRate || 0;
+1723:       const gstRate = stockItem.gstRate || 0;
+1786:             const gstRate = stockItem?.gstRate || 18;
+1806:             const gstRate = stockItem?.gstRate || 0;
+2180:     const gstRate = stockItem?.gstRate || 0;
+2542:       const gstRate = selectedStockItem?.gstRate || 0;
+2572:         const gstRate = selectedStockItem?.gstRate || 0;
+3290:                           const gstRate = selectedStockItem?.gstRate || 0;
