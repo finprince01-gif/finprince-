@@ -121,6 +121,7 @@ class InventoryItem(BaseModel):
     rate_unit = models.CharField(max_length=50, null=True, blank=True)
     hsn_code = models.CharField(max_length=20, null=True, blank=True)
     gst_rate = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    cess_rate = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     
     # Other
     reorder_level = models.CharField(max_length=255, null=True, blank=True)
