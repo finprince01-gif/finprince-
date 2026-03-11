@@ -4,8 +4,7 @@ import Icon from './Icon';
 import { apiService } from '../services';
 import { extractInvoiceDataWithRetry } from '../services/geminiService';
 
-// Let TypeScript know that the XLSX library is available globally
-declare const XLSX: any;
+import { getXLSX } from '../utils/xlsx';
 
 const isVoucher = (obj: any): obj is Voucher => {
     return obj && typeof obj.type === 'string' && typeof obj.date === 'string';
@@ -152,8 +151,9 @@ const MassUploadModal: React.FC<MassUploadModalProps> = ({ onClose, onComplete, 
     const processExcel = async (file: File): Promise<Voucher[]> => {
         return new Promise((resolve) => {
             const reader = new FileReader();
-            reader.onload = (e) => {
+            reader.onload = async (e) => {
                 try {
+                    const XLSX = await getXLSX();
                     const data = e.target?.result;
                     const workbook = XLSX.read(data, { type: 'array' });
                     let allVouchers: Voucher[] = [];

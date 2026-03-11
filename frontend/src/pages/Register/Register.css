@@ -114,13 +114,19 @@
 
 .input-with-icon {
     position: relative;
-    display: flex;
-    align-items: center;
+    width: 100%;
+}
+
+.input-with-icon .form-input {
+    width: 100%;
+    padding-right: 48px;
 }
 
 .input-icon-button {
     position: absolute;
     right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
     background: none;
     border: none;
     padding: 8px;
@@ -129,11 +135,17 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: color 0.2s;
+    transition: all 0.2s ease;
+    z-index: 10;
 }
 
 .input-icon-button:hover {
     color: #6366F1;
+}
+
+.input-icon-button svg {
+    width: 20px;
+    height: 20px;
 }
 
 .logo-upload-container {

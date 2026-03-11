@@ -1,4 +1,4 @@
-  create database Finpixe_AI_Accounting;
+  -- create database Finpixe_AI_Accounting;
 
   -- Table: tenants
 
@@ -9,7 +9,38 @@
     `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
     PRIMARY KEY (`id`)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+  -- Table: ai_usage
+  -- Tracks monthly AI invoice extraction usage per tenant for subscription enforcement.
+
+  CREATE TABLE IF NOT EXISTS `ai_usage` (
+    `id` bigint NOT NULL AUTO_INCREMENT,
+    `tenant_id` char(36) NOT NULL,
+    `year` int NOT NULL,
+    `month` int NOT NULL,
+    `used_count` int NOT NULL DEFAULT '0',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `ai_usage_tenant_year_month_uniq` (`tenant_id`, `year`, `month`),
+    KEY `ai_usage_tenant_id_idx` (`tenant_id`),
+    CONSTRAINT `ai_usage_tenant_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Monthly AI invoice extraction usage tracker per tenant';
+
+  -- Table: extraction_performance
+  -- Stores historical OCR extraction timings for estimating scan duration.
+
+  CREATE TABLE IF NOT EXISTS `extraction_performance` (
+    `id` bigint NOT NULL AUTO_INCREMENT,
+    `file_count` int NOT NULL DEFAULT '1',
+    `processing_time_seconds` double NOT NULL,
+    `timestamp` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (`id`),
+    KEY `extraction_performance_timestamp_idx` (`timestamp`)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='OCR extraction performance timings for scan duration estimation';
+
   -- Table: amount_transactions
+
 
   CREATE TABLE `amount_transactions` (
     `id` bigint NOT NULL AUTO_INCREMENT,
@@ -249,6 +280,7 @@ CREATE TABLE `company_informations` (
     `email_verified` tinyint(1) NOT NULL DEFAULT '0',
     `tenant_id` char(36) NOT NULL,
     `company_name` varchar(255) DEFAULT NULL,
+    `state` varchar(100) DEFAULT NULL,
     `selected_plan` varchar(50) DEFAULT NULL,
     `logo_path` varchar(500) DEFAULT NULL,
     `login_status` varchar(20) DEFAULT 'Offline',
@@ -428,6 +460,8 @@ CREATE TABLE `company_informations` (
     `import_export_code` varchar(50) DEFAULT NULL COMMENT 'Import Export Code (IEC)',
     `eou_status` varchar(100) DEFAULT NULL COMMENT 'Export Oriented Unit Status',
     `cin_number` varchar(21) DEFAULT NULL COMMENT 'CIN Number',
+    `tcs_section_applicable` varchar(200) DEFAULT NULL COMMENT 'TCS Section Applicable',
+    `tcs_rate` varchar(50) DEFAULT NULL COMMENT 'TCS Rate',
     `msme_file` varchar(255) DEFAULT NULL COMMENT 'MSME Certificate',
     `fssai_file` varchar(255) DEFAULT NULL COMMENT 'FSSAI License',
     `import_export_file` varchar(255) DEFAULT NULL COMMENT 'IEC Certificate',
@@ -1628,7 +1662,7 @@ CREATE TABLE `voucher_sales_invoicedetails` (
   KEY `idx_sales_invoice_no` (`sales_invoice_no`),
   KEY `idx_sales_tenant_customer` (`tenant_id`, `customer_id`),
   CONSTRAINT `fk_sales_invoice_customer` 
-    FOREIGN KEY (`tenant_id`, `customer_id`) 
+    FOREIGN KEY (`customer_id`) 
     REFERENCES `customer_master_customer_basicdetails` (`id`)
     ON DELETE RESTRICT
     ON UPDATE CASCADE
@@ -2536,21 +2570,7 @@ CREATE TABLE IF NOT EXISTS `rbac_user_roles` (
 
 
 
-
---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-
--- Table structure for table `ai_usage`
-CREATE TABLE `ai_usage` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `tenant_id` varchar(50) NOT NULL,
-  `year` int NOT NULL,
-  `month` int NOT NULL,
-  `used_count` int DEFAULT '0',
-  `plan` varchar(50) DEFAULT 'FREE',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `tenant_year_month` (`tenant_id`,`year`,`month`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+-- ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 -- Updates for Customer Master Schema (2026-02-20)
 -- Add TDS Applicable field to customer_master_customer_basicdetails
@@ -2606,9 +2626,7 @@ DELETE FROM `customer_master_category`  WHERE `group` = '' AND `subgroup` = '';
 DELETE FROM `service_group`             WHERE `group` = '' AND `subgroup` = '';
 
 -----------------------------------------------------
-ALTER TABLE vendor_master_vendorcreation_basicdetail 
-ADD COLUMN billing_currency VARCHAR(10) DEFAULT NULL COMMENT 'Billing currency' 
-AFTER vendor_category;
+
 
 CREATE TABLE IF NOT EXISTS `gst_apiusagelog` (
   `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -2650,51 +2668,9 @@ ALTER TABLE `voucher_purchase_supply_foreign_details` ADD COLUMN `purchase_ledge
 ALTER TABLE `voucher_purchase_supplier_details` ADD COLUMN `vendor_basic_detail_id` BIGINT NOT NULL, ADD COLUMN `creation_source` VARCHAR(50) DEFAULT 'manual';
 ALTER TABLE `voucher_purchase_supplier_details` ADD COLUMN `purchase_voucher_series` VARCHAR(100) NULL AFTER `supplier_invoice_no`;
 ALTER TABLE `voucher_purchase_supplier_details` ADD COLUMN `branch` VARCHAR(255) NULL AFTER `gstin`;
-ALTER TABLE `voucher_purchase_supplier_details` DROP COLUMN IF EXISTS `customer_id`;
 ALTER TABLE `voucher_purchase_supplier_details` ADD CONSTRAINT `fk_vpsd_vendor` FOREIGN KEY (`vendor_basic_detail_id`) REFERENCES `vendor_master_vendorcreation_basicdetail` (`id`) ON DELETE CASCADE;
-ALTER TABLE `voucher_purchase_supplier_details` RENAME INDEX idx_vpsd_tenant TO idx_vpsd_vendor_relation;
 
 
--- ============================================================================
--- Schema Update: One-to-Many Relationship — Customer → Sales (2026-03-02)
--- ============================================================================
-
--- STEP 1: Composite unique key on customer root table.
---         Required so (tenant_id, id) can be referenced as a composite FK
---         target by the sales header table.
-ALTER TABLE `customer_master_customer_basicdetails`
-  ADD UNIQUE KEY `customer_basic_tenant_id_uniq` (`tenant_id`, `id`);
-
--- STEP 2: Add customer_id column to sales header (nullable during migration).
---         Run migrations/customer_sales_fk_migration.sql to backfill data and
---         enforce NOT NULL once all orphans are resolved.
-ALTER TABLE `voucher_sales_invoicedetails`
-  ADD COLUMN `customer_id` BIGINT NULL
-    COMMENT 'FK to customer_master_customer_basicdetails.id (tenant-scoped)'
-  AFTER `customer_name`;
-
--- STEP 6 (execute after running the migration script and confirming no orphans):
--- ALTER TABLE `voucher_sales_invoicedetails`
---   MODIFY COLUMN `customer_id` BIGINT NOT NULL
---     COMMENT 'FK to customer_master_customer_basicdetails.id (tenant-scoped)';
-
--- STEP 7: Composite foreign key — enforces strict one-to-many with tenant isolation.
---         ON DELETE RESTRICT : cannot delete a customer that has sales records.
---         ON UPDATE CASCADE  : if customer id changes, sales rows follow safely.
-ALTER TABLE `voucher_sales_invoicedetails`
-  ADD CONSTRAINT `fk_sales_invoice_customer`
-    FOREIGN KEY (`tenant_id`, `customer_id`)
-    REFERENCES `customer_master_customer_basicdetails` (`tenant_id`, `id`)
-    ON DELETE RESTRICT
-    ON UPDATE CASCADE;
-
--- STEP 8: Composite index on sales header for fast tenant-scoped customer lookups.
-ALTER TABLE `voucher_sales_invoicedetails`
-  ADD INDEX `idx_sales_tenant_customer` (`tenant_id`, `customer_id`);
-
--- NOTE: Child/detail tables (voucher_sales_items, voucher_sales_dispatchdetails,
---       voucher_sales_ewaybill, voucher_sales_paymentdetails, voucher_sales_items_foreign)
---       are intentionally NOT modified — they link to the header via invoice_id.
 
 ALTER TABLE voucher_purchase_transit_details
 
@@ -2770,11 +2746,4 @@ ALTER TABLE `invoice_ocr_temp`
     ADD COLUMN `conflict_message` TEXT DEFAULT NULL,
     ADD COLUMN `vendor_id` BIGINT DEFAULT NULL,
     ADD COLUMN `voucher_id` BIGINT DEFAULT NULL;
-
--- Updates for Sales Voucher Invoice Details
-ALTER TABLE `voucher_sales_invoicedetails` 
-    ADD COLUMN `customer_id` BIGINT DEFAULT NULL,
-    ADD COLUMN `customer_branch` VARCHAR(100) DEFAULT NULL,
-    ADD COLUMN `irn` VARCHAR(255) DEFAULT NULL,
-    ADD COLUMN `ack_no` VARCHAR(100) DEFAULT NULL;
 

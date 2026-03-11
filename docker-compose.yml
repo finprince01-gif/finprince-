@@ -3,27 +3,60 @@ version: '3.8'
 services:
   db:
     image: mysql:8.0
-    command: --default-authentication-plugin=mysql_native_password
     restart: always
     environment:
-      MYSQL_DATABASE: ${DB_NAME:-ai_accounting}
-      MYSQL_USER: ${DB_USER:-user}
-      MYSQL_PASSWORD: ${DB_PASSWORD:-password}
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
     volumes:
-      - db_data:/var/lib/mysql
+      - mysql_data:/var/lib/mysql
 
-  proxysql:
-    image: proxysql/proxysql:2.5.5
-    container_name: proxysql
+  backend:
+    build: ./backend
     restart: always
-    ports:
-      - "6033:6033"  # Traffic port
-      - "6032:6032"  # Admin port
-    volumes:
-      - ./proxysql.cnf:/etc/proxysql.cnf
+    environment:
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_HOST: db
+      DB_PORT: 3306
+      DJANGO_SECRET: ${DJANGO_SECRET}
+      JWT_SECRET: ${JWT_SECRET}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD}
+      EMAIL_HOST: ${EMAIL_HOST}
+      EMAIL_PORT: ${EMAIL_PORT}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS}
     depends_on:
       - db
 
+  frontend:
+    build: ./frontend
+    restart: always
+
+  admin-panel:
+    build: ./admin-subscription-panel
+    restart: always
+
+  landing-page:
+    build: ./finpixe landing page
+    restart: always
+
+  nginx:
+    image: nginx:stable-alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/production.conf:/etc/nginx/conf.d/default.conf
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    depends_on:
+      - backend
+      - frontend
+      - admin-panel
+      - landing-page
+
 volumes:
-  db_data:
+  mysql_data:

@@ -25,7 +25,7 @@
 // REACT IMPORTS
 // ============================================================================
 // Import core React functionality
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, Suspense } from 'react';
 // Import TypeScript types for type safety
 // These define the shape of our data structures (see ../types/types.ts)
 import type { Page, Ledger, Voucher, ExtractedInvoiceData, CompanyDetails, LedgerGroupMaster, AgentMessage, SalesPurchaseVoucher, StockItem } from '../types';
@@ -33,32 +33,34 @@ import type { Page, Ledger, Voucher, ExtractedInvoiceData, CompanyDetails, Ledge
 // ============================================================================
 // COMPONENT IMPORTS
 // ============================================================================
+
+// Page Components - Lazy loaded to optimize initial bundle size
+const DashboardPage = React.lazy(() => import('../pages/Dashboard'));
+const MastersPage = React.lazy(() => import('../pages/Masters'));
+const InventoryPage = React.lazy(() => import('../pages/Inventory'));
+const VouchersPage = React.lazy(() => import('../pages/Vouchers'));
+const ReportsPage = React.lazy(() => import('../pages/Reports'));
+const SettingsPage = React.lazy(() => import('../pages/Settings'));
+const UsersAndRolesPage = React.lazy(() => import('../pages/UsersAndRoles'));
+const VendorPortalPage = React.lazy(() => import('../pages/VendorPortal'));
+const CustomerPortalPage = React.lazy(() => import('../pages/CustomerPortal'));
+const PayrollPage = React.lazy(() => import('../pages/Payroll'));
+const ServicePage = React.lazy(() => import('../pages/Service'));
+const GSTPage = React.lazy(() => import('../pages/GST'));
+const DashboardBuilderPage = React.lazy(() => import('../pages/DashboardBuilder'));
+const LoginPage = React.lazy(() => import('../pages/Login').then(m => ({ default: m.default })));
+const ForgotPasswordPage = React.lazy(() => import('../pages/Login').then(m => ({ default: m.ForgotPassword })));
+const SignupPage = React.lazy(() => import('../pages/Register'));
+const MassUploadResultPage = React.lazy(() => import('../pages/MassUploadResult'));
+
 // Shared UI Components
 import Sidebar from '../components/Sidebar';  // Left navigation sidebar
-// Page Components - Each represents a different section of the app
-import DashboardPage from '../pages/Dashboard';           // Main dashboard with overview
-import MastersPage from '../pages/Masters';               // Ledger and account management
-import InventoryPage from '../pages/Inventory';           // Stock items and inventory
-import VouchersPage from '../pages/Vouchers';             // Transaction vouchers (sales, purchase, etc.)
-import ReportsPage from '../pages/Reports';               // Financial reports
-import SettingsPage from '../pages/Settings';             // Company settings
-import UsersAndRolesPage from '../pages/UsersAndRoles';   // User and role management (RBAC)
-// UsersAndRolesPage removed
-import VendorPortalPage from '../pages/VendorPortal';     // Vendor management portal
-import CustomerPortalPage from '../pages/CustomerPortal'; // Customer management portal
-import PayrollPage from '../pages/Payroll';               // Employee payroll management
-import ServicePage from '../pages/Service';               // Service management page
-import GSTPage from '../pages/GST';                        // GST Returns module
-import DashboardBuilderPage from '../pages/DashboardBuilder'; // Dashboard Builder page
-import LoginPage, { ForgotPassword as ForgotPasswordPage } from '../pages/Login'; // User login page
-import SignupPage from '../pages/Register';               // New user registration
-// Additional UI Components
 import Modal from '../components/Modal';                  // Reusable modal dialog
 import AIAgent from '../components/AIAgent';              // AI Agent (Kiki)
 import Icon from '../components/Icon';                    // Icon component
 import ErrorBoundary from '../components/ErrorBoundary';  // Error handling wrapper
-import MassUploadResultPage from '../pages/MassUploadResult'; // Bulk upload results page
 import { showError, showSuccess } from '../utils/toast';
+
 
 // Import assets
 import kikiLogo from '../assets/fox-logo-transparent.png';
@@ -163,23 +165,15 @@ const App: React.FC = () => {
 
   // Authentication state - tracks if user is logged in
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
-  // Authentication loading state - prevents UI jump while verifying token
   const [isAuthenticating, setIsAuthenticating] = useState<boolean>(() => hasStoredSession());
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
 
-  // Current path state for routing
+  // Router state
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
-
-  // View state - determines whether to show login or signup page
   const [view, setView] = useState<'login' | 'signup' | 'forgot-password'>('login');
-
-  // Current page - which section of the app is being displayed
   const [currentPage, setCurrentPage] = useState<Page>('Dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
-
-  // Data loading state - prevents rendering before data is loaded
-  const [isDataLoaded, setIsDataLoaded] = useState(false);
 
   // User permissions - No longer used (RBAC removed)
   // const [permissions, setPermissions] = useState<string[]>([]);
@@ -191,7 +185,10 @@ const App: React.FC = () => {
   // All data is tenant-specific (isolated per company)
 
   // Company information (name, address, GST, etc.)
-  const [companyDetails, setCompanyDetails] = useState<CompanyDetails>(defaultCompanyDetails);
+  const [companyDetails, setCompanyDetails] = useState<CompanyDetails>(() => {
+    const saved = sessionStorage.getItem('companyName') || localStorage.getItem('companyName');
+    return saved ? { ...defaultCompanyDetails, name: saved } : defaultCompanyDetails;
+  });
 
   // Chart of Accounts - individual ledger accounts (Cash, Bank, Sales, etc.)
   const [ledgers, setLedgers] = useState<Ledger[]>([]);
@@ -262,6 +259,34 @@ const App: React.FC = () => {
    */
   const handleNavigate = (page: Page) => setCurrentPage(page);
 
+  // Handle logout: clear all session data and redirect to login
+  const handleLogout = useCallback(async () => {
+    try {
+      await apiService.logout();
+    } catch (error) {
+      console.error('Error during logout:', error);
+    } finally {
+      // Clear all session and local storage related to auth and tenant data
+      sessionStorage.clear();
+      localStorage.clear(); // Also clear legacy localStorage
+      httpClient.clearAuthData(); // Clear tokens from in-memory client
+      setIsLoggedIn(false);
+      setIsDataLoaded(false);
+      setLedgers([]);
+      setLedgerGroups([]);
+      setVouchers([]);
+      setStockItems([]);
+      setRichVendors([]);
+      setRichCustomers([]);
+      setCompanyDetails(defaultCompanyDetails);
+      // clearTenantCache(); // Clear any remaining tenant-specific cache
+      window.history.pushState({}, '', '/login');
+      setCurrentPath('/login');
+      setView('login');
+      showSuccess('You have been successfully logged out.');
+    }
+  }, []); // Removed clearTenantCache from dependency array as it's not defined here
+
   // Load cached tenant data - DATA CACHING DISABLED FOR PRODUCTION
   const loadCachedData = useCallback((tenantId: string) => {
     // We intentionally return false to force loading from the API.
@@ -300,19 +325,22 @@ const App: React.FC = () => {
       // Try to load from cache first
       const hasCachedData = tenantId ? loadCachedData(tenantId) : false;
 
-      // Load data using apiService (which includes JWT tokens)
       const [
         backendCompanyDetails,
         backendLedgers,
         backendLedgerGroups,
         backendVouchers,
-        backendStockItems
+        backendStockItems,
+        backendRichVendors,
+        backendRichCustomers
       ] = await Promise.all([
         apiService.getCompanyDetails().catch(() => defaultCompanyDetails),
         apiService.getLedgers().catch(() => []),
         apiService.getLedgerGroups().catch(() => []),
         apiService.getVouchers().catch(() => []),
-        apiService.getStockItems().catch(() => [])
+        apiService.getStockItems().catch(() => []),
+        apiService.getRichVendors().catch(() => []),
+        apiService.getRichCustomers().catch(() => [])
       ]);
 
       // Update state with tenant data
@@ -321,7 +349,9 @@ const App: React.FC = () => {
         ledgers: Array.isArray(backendLedgers) ? backendLedgers : [],
         ledgerGroups: Array.isArray(backendLedgerGroups) ? backendLedgerGroups : [],
         vouchers: Array.isArray(backendVouchers) ? backendVouchers : [],
-        stockItems: Array.isArray(backendStockItems) ? backendStockItems : []
+        stockItems: Array.isArray(backendStockItems) ? backendStockItems : [],
+        richVendors: Array.isArray(backendRichVendors) ? backendRichVendors : [],
+        richCustomers: Array.isArray(backendRichCustomers) ? backendRichCustomers : []
       };
 
       if (newData.companyDetails) {
@@ -331,6 +361,8 @@ const App: React.FC = () => {
       setLedgerGroups(newData.ledgerGroups);
       setVouchers(newData.vouchers);
       setStockItems(newData.stockItems);
+      setRichVendors(newData.richVendors);
+      setRichCustomers(newData.richCustomers);
 
       // Cache the data if we have a tenant ID
       if (tenantId) {
@@ -382,106 +414,45 @@ const App: React.FC = () => {
 
 
 
-  // AUTH VALIDATION: On startup, if a session exists, validate it with the backend
+  // MAIN INITIALIZATION: Handle Auth & Data Loading in Parallel
   useEffect(() => {
-    const validateToken = async () => {
-      // If we don't even have a refresh token, we're definitely not logged in
+    const initializeApp = async () => {
       if (!hasStoredSession()) {
         setIsAuthenticating(false);
+        setIsDataLoaded(true);
         return;
       }
 
       try {
-        // Attempt to call a protected endpoint to validate the session.
-        // This will trigger a token refresh if the access token is missing/expired.
-        await apiService.getMyPermissions();
+        // 1. Storage Migration & Setup
+        let savedCompanyName = sessionStorage.getItem('companyName') || localStorage.getItem('companyName');
+        let savedTenantId = sessionStorage.getItem('tenantId') || localStorage.getItem('tenantId');
+
+        if (savedCompanyName) sessionStorage.setItem('companyName', savedCompanyName);
+        if (savedTenantId) sessionStorage.setItem('tenantId', savedTenantId);
+
+        // 2. Parallel Load: Validate Token (Permissions) + Fetch All Tenant Data
+        // This ensures the shortest possible time to a fully loaded state
+        const [permissions] = await Promise.all([
+          apiService.getMyPermissions(),
+          savedTenantId ? loadTenantData(savedTenantId as string) : Promise.resolve()
+        ]);
+
         setIsLoggedIn(true);
+        // We could set permissions here if we had a dedicated state, 
+        // but usePermissions hook handles its own state for now.
       } catch (err: any) {
-        console.warn('⚠️ Authentication validation failed:', err.message || 'Unknown error');
-        // Clear all tokens and push to login if validation fails (401, network error, etc.)
-        handleLogout();
+        console.warn('⚠️ App initialization failed:', err.message || 'Unknown error');
+        // If critical auth fails, send to login
+        if (err.status === 401) handleLogout();
       } finally {
         setIsAuthenticating(false);
-      }
-    };
-
-    validateToken();
-  }, []);
-
-  // Load data on initial mount and login state changes
-  useEffect(() => {
-    const loadInitialData = async () => {
-      try {
-        // Try to get from sessionStorage first
-        let savedCompanyName = sessionStorage.getItem('companyName');
-        let savedTenantId = sessionStorage.getItem('tenantId');
-
-        // Migration/Cleanup: If not in sessionStorage but in localStorage, move it and clear from localStorage
-        if (!savedCompanyName) {
-          savedCompanyName = localStorage.getItem('companyName');
-          if (savedCompanyName) {
-            sessionStorage.setItem('companyName', savedCompanyName);
-            localStorage.removeItem('companyName');
-          }
-        }
-        if (!savedTenantId) {
-          savedTenantId = localStorage.getItem('tenantId');
-          if (savedTenantId) {
-            sessionStorage.setItem('tenantId', savedTenantId);
-            localStorage.removeItem('tenantId');
-          }
-        }
-
-        // Migrate userPlan
-        if (!sessionStorage.getItem('userPlan')) {
-          const legacyPlan = localStorage.getItem('userPlan');
-          if (legacyPlan) {
-            sessionStorage.setItem('userPlan', legacyPlan);
-            localStorage.removeItem('userPlan');
-          }
-        }
-
-        // Set initial company details
-        const initialCompanyDetails = { ...defaultCompanyDetails, name: savedCompanyName || 'Your Company Name' };
-        setCompanyDetails(initialCompanyDetails);
-
-        if (isLoggedIn && savedTenantId) {
-          const hasCachedData = loadCachedData(savedTenantId);
-
-          if (hasCachedData) {
-            // Cached data loaded, now refresh from backend in background
-            setIsDataLoaded(true);
-            try {
-              await loadTenantData(savedTenantId);
-            } catch (err) {
-              console.error('Failed to refresh tenant data:', err);
-            }
-          } else {
-            // No cached data, load from backend
-            await loadTenantData(savedTenantId);
-          }
-        } else {
-          // Not logged in or no tenant ID, just show empty state
-          // Fallback to empty state
-          // Fallback to empty state
-          setLedgers([]);
-          setLedgerGroups([]);
-          setVouchers([]);
-          setIsDataLoaded(true);
-        }
-      } catch (err) {
-        console.error('❌ Failed to initialize app data:', err);
-        // Fallback to empty state
-        setLedgers([]);
-        setLedgerGroups([]);
-        setVouchers([]);
-        setStockItems([]);
         setIsDataLoaded(true);
       }
     };
 
-    loadInitialData();
-  }, [isLoggedIn, loadTenantData, loadCachedData]);
+    initializeApp();
+  }, [loadTenantData, handleLogout]);
 
 
 
@@ -541,48 +512,6 @@ const App: React.FC = () => {
     }
   }, [loadTenantData]);
 
-  const handleLogout = useCallback(async () => {
-    try {
-      // Update server login status to Offline before clearing local data
-      await httpClient.post('/api/auth/logout/');
-    } catch (error) {
-
-    }
-
-    // Clear authentication data
-    httpClient.clearAuthData();
-    sessionStorage.removeItem('companyName');
-    sessionStorage.removeItem('tenantId');
-    sessionStorage.removeItem('userPlan');
-
-    // Also clear from legacy localStorage
-    localStorage.removeItem('companyName');
-    localStorage.removeItem('tenantId');
-    localStorage.removeItem('userPlan');
-
-    // Set logout flag to prevent auto-login
-    sessionStorage.setItem('loggedOut', 'true');
-    localStorage.removeItem('loggedOut'); // No need to keep it in localStorage anymore
-
-    // Clear all tenant cache data
-    clearTenantCache();
-
-    // Reset login state
-    setIsLoggedIn(false);
-    setCurrentPage('Dashboard');
-    setView('login'); // Show login page after logout
-
-    // Update URL to login
-    window.history.pushState({}, '', '/login');
-    setCurrentPath('/login');
-
-    // Clear in-memory state
-    setLedgers([]);
-    setLedgerGroups([]);
-    setVouchers([]);
-    setCompanyDetails({ ...defaultCompanyDetails, name: 'Your Company Name' });
-    setStockItems([]);
-  }, [clearTenantCache]);
 
   // Check user active status frequently when logged in (exclude admin users)
   // DISABLED: This was causing 401 errors when cookies expired
@@ -591,42 +520,41 @@ const App: React.FC = () => {
     // Disabled for now to prevent 401 errors
     return;
 
-    /* Original code - disabled
+    /* Original code - disabled */
     if (!isLoggedIn) return;
-  
+
     const tenantId = sessionStorage.getItem('tenantId') || localStorage.getItem('tenantId');
-  
+
     // Don't check status for admin users (they can't be deactivated)
     if (!tenantId) return;
-  
+
+    /* Original code - disabled
+    if (!isLoggedIn) return;
+
+    const tenantId = sessionStorage.getItem('tenantId') || localStorage.getItem('tenantId');
+
+    // Don't check status for admin users (they can't be deactivated)
+    if (!tenantId) return;
+
     const checkUserStatus = async () => {
       try {
         // Only check if we have authentication cookies
         const statusResponse = await apiService.checkUserStatus();
         if (!statusResponse.isActive) {
           // User has been deactivated
-          
           setShowDeactivationModal(true);
           setTimeout(() => {
             handleLogout();
             setShowDeactivationModal(false);
           }, 3000); // Show modal for 3 seconds then logout (faster)
         }
-      } catch (error: any) {
-        // Silently ignore 401 errors (user not authenticated)
-        if (error?.message?.includes('401') || error?.message?.includes('Authentication')) {
-          
-          return;
-        }
-        
-        // Don't logout on API errors, just log the warning
-      }
+      } catch (error: any) {}
     };
-  
+
     // Check immediately, then every 5 seconds when online
     checkUserStatus();
     const statusInterval = setInterval(checkUserStatus, 5000); // More frequent checks
-  
+
     return () => clearInterval(statusInterval);
     */
   }, [isLoggedIn, handleLogout]);
@@ -1241,72 +1169,68 @@ const App: React.FC = () => {
     }
   };
 
+  // --- RENDER HELPERS ---
+  const PageLoader = () => (
+    <div className="flex flex-col items-center justify-center min-h-[400px]">
+      <div className="w-10 h-10 border-4 border-slate-200 border-t-indigo-500 rounded-full animate-spin mb-4"></div>
+      <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest animate-pulse">Syncing Workspace Data...</p>
+    </div>
+  );
+
   const isAuthPath = currentPath === '/login' || currentPath === '/signup' || currentPath === '/forgot-password';
 
-  // 1. Show global loader while verifying session on startup
-  if (isAuthenticating) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen erp-main-bg">
-        <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-6 shadow-xl shadow-indigo-100"></div>
-        <div className="flex flex-col items-center gap-2">
-          <p className="text-indigo-600 font-bold tracking-[0.2em] uppercase text-[11px]">Secure Authentication</p>
-          <p className="text-slate-400 font-medium animate-pulse text-[10px] uppercase tracking-widest">Verifying session with server...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // 2. Auth Flow (Login/Signup)
-  if (!isLoggedIn || isAuthPath) {
-    // Determine which view to show based on path first, then fallback to view state
+  // 1. Auth Flow (Login/Signup/Forgot Password) - Shown if not authenticating and not logged in
+  if (!isAuthenticating && (!isLoggedIn || isAuthPath)) {
     let activeAuthView = view;
     if (currentPath === '/signup') activeAuthView = 'signup';
     else if (currentPath === '/forgot-password') activeAuthView = 'forgot-password';
     else if (currentPath === '/login') activeAuthView = 'login';
 
-    if (activeAuthView === "signup") {
-      return (
-        <SignupPage
-          onSwitchToLogin={() => {
-            window.history.pushState({}, '', '/login');
-            setCurrentPath('/login');
-            setView("login");
-          }}
-          onBack={() => window.location.href = (import.meta as any).env.VITE_LANDING_URL || 'http://localhost:3000'}
-        />
-      );
-    }
-    if (activeAuthView === "forgot-password") {
-      return (
-        <ForgotPasswordPage
-          onBackToLogin={() => {
-            window.history.pushState({}, '', '/login');
-            setCurrentPath('/login');
-            setView("login");
-          }}
-        />
-      );
-    }
     return (
-      <LoginPage
-        onLogin={handleLogin}
-        onSwitchToSignup={() => {
-          window.history.pushState({}, '', '/signup');
-          setCurrentPath('/signup');
-          setView("signup");
-        }}
-        onForgotPassword={() => {
-          window.history.pushState({}, '', '/forgot-password');
-          setCurrentPath('/forgot-password');
-          setView("forgot-password");
-        }}
-        onBack={() => window.location.href = (import.meta as any).env.VITE_LANDING_URL || 'http://localhost:3000'}
-      />
+      <Suspense fallback={<div className="flex items-center justify-center h-screen erp-main-bg"><div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div></div>}>
+        {activeAuthView === "signup" ? (
+          <SignupPage
+            onSwitchToLogin={() => {
+              window.history.pushState({}, '', '/login');
+              setCurrentPath('/login');
+              setView("login");
+            }}
+            onBack={() => window.location.href = (import.meta as any).env.VITE_LANDING_URL || 'http://localhost:3000'}
+          />
+        ) : activeAuthView === "forgot-password" ? (
+          <ForgotPasswordPage
+            onBackToLogin={() => {
+              window.history.pushState({}, '', '/login');
+              setCurrentPath('/login');
+              setView("login");
+            }}
+          />
+        ) : (
+          <LoginPage
+            onLogin={handleLogin}
+            onSwitchToSignup={() => {
+              window.history.pushState({}, '', '/signup');
+              setCurrentPath('/signup');
+              setView("signup");
+            }}
+            onForgotPassword={() => {
+              window.history.pushState({}, '', '/forgot-password');
+              setCurrentPath('/forgot-password');
+              setView("forgot-password");
+            }}
+            onBack={() => window.location.href = (import.meta as any).env.VITE_LANDING_URL || 'http://localhost:3000'}
+          />
+        )}
+      </Suspense>
     );
   }
+
+  // 2. Main Application Layout (Sidebar + Header + Content)
+  // Renders immediately if hasStoredSession() is true, even during authentication
   return (
     <div className="flex min-h-screen font-sans erp-main-bg">
-      {isSidebarOpen && (
+      {/* Sidebar rendered ifLoggedIn OR while authenticating (to prevent layout shift) */}
+      {(isLoggedIn || isAuthenticating) && (
         <Sidebar
           currentPage={currentPage}
           onNavigate={handleNavigate}
@@ -1314,25 +1238,19 @@ const App: React.FC = () => {
           companyName={companyDetails.name}
         />
       )}
-      <main
-        className={`flex-1 ${isSidebarOpen ? 'ml-[260px]' : 'ml-0'} min-h-screen transition-all duration-300 erp-main-bg`}
-      >
+
+      <main className={`flex-1 ${isLoggedIn || isAuthenticating ? 'ml-[260px]' : 'ml-0'} min-h-screen transition-all duration-300 erp-main-bg`}>
         {/* ── Sticky Header ─────────────────────────────────── */}
         <div className="sticky top-0 z-30 backdrop-blur-md flex items-center justify-between erp-header">
           <div className="flex items-center gap-6">
-            {/* Sidebar Toggle */}
             <button
               onClick={toggleSidebar}
               className="flex items-center justify-center w-10 h-10 rounded-[10px] bg-white border border-[#E2E8F0] shadow-[0_2px_6px_rgba(0,0,0,0.05)] hover:bg-[#F8FAFC] transition-all duration-200 active:scale-95"
               title={isSidebarOpen ? 'Hide Sidebar' : 'Show Sidebar'}
             >
-              <Icon
-                name="menu"
-                className="w-[18px] h-[18px] text-[#475569]"
-              />
+              <Icon name="menu" className="w-[18px] h-[18px] text-[#475569]" />
             </button>
 
-            {/* Page Title */}
             <div className="flex flex-col">
               <h2 className="text-[13px] font-bold text-slate-900 uppercase tracking-widest leading-none">
                 {currentPage}
@@ -1342,17 +1260,23 @@ const App: React.FC = () => {
               </span>
             </div>
           </div>
-
           <div className="flex items-center gap-3" />
         </div>
 
         {/* ── Page Content ──────────────────────────────────── */}
         <div style={{ padding: '24px' }}>
           <div className="max-w-[1600px] mx-auto">
-            {renderPage()}
+            {(!isLoggedIn && isAuthenticating) || !isDataLoaded ? (
+              <PageLoader />
+            ) : (
+              <Suspense fallback={<PageLoader />}>
+                {renderPage()}
+              </Suspense>
+            )}
           </div>
         </div>
       </main>
+
       <Modal isOpen={isLoading} title="AI Processing" type="loading">
         <p>Extracting invoice data with Gemini AI. This may take a moment...</p>
       </Modal>

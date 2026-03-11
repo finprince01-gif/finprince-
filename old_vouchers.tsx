@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+﻿import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useSubscriptionUsage } from '../../hooks/useSubscriptionUsage';
@@ -11,7 +11,6 @@ import MassUploadModal from '../../components/MassUploadModal';
 import InvoiceScannerModal from '../../components/InvoiceScannerModal';
 import BulkInvoiceUploadModal from '../../components/SmartInvoiceUploadModal';
 import TallyMasterScannerModal from '../../components/TallyMasterScannerModal';
-import SalesExcelUploadWorkflow from '../../components/SalesExcelUploadWorkflow';
 import ErrorBoundary from '../../components/ErrorBoundary';
 import SalesVoucher from './SalesVoucher';
 import PaymentVoucherSingle from './PaymentVoucherSingle';
@@ -23,11 +22,10 @@ import CreateVendorModal from '../../components/CreateVendorModal';
 import { ChevronDown } from 'lucide-react';
 import SearchableDropdown from '../../components/SearchableDropdown';
 
-
-
 const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5003';
 
-import { getXLSX } from '../../utils/xlsx';
+// Let TypeScript know that the XLSX library is available globally
+declare const XLSX: any;
 
 interface VouchersPageProps {
   vouchers: Voucher[];
@@ -193,7 +191,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   // Invoice Scanner Modal state
   const [isInvoiceScannerOpen, setIsInvoiceScannerOpen] = useState(false);
   const [scannerFiles, setScannerFiles] = useState<FileList | null>(null);
-  const [scanType, setScanType] = useState<'single' | 'bulk'>('single');
   const scannerInputRef = useRef<HTMLInputElement>(null);
   const [extractionMode, setExtractionMode] = useState<'finpixe' | 'tally'>('finpixe');
 
@@ -208,7 +205,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
   const bulkScannerInputRef = useRef<HTMLInputElement>(null);
 
-  // Vendor Validation and Creation State
+  // Scan type: 'single' (Finpixe Single Scan) or 'bulk' handled via BulkInvoiceUploadModal
+  const [scanType, setScanType] = useState<'single' | 'bulk'>('single');
   const singleScanInputRef = useRef<HTMLInputElement>(null);
 
   // Vendor Validation and Creation State
@@ -233,7 +231,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     }
   };
 
-  // Single-scan file input handler — enforces exactly one file
+  // Single-scan file input handler ΓÇö enforces exactly one file
   const handleSingleScanFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -255,152 +253,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     }
   };
 
-  const handleInvoiceUploadResults = (results: any[]) => {
-    if (!results || results.length === 0) return;
-    const firstRow = results[0].invoice;
-    const data = results[0].items;
-
-    if (voucherType === 'Purchase') {
-      const foreignCurrVal = firstRow['Foreign Currency'] || '';
-      if (foreignCurrVal) {
-        setInvoiceInForeignCurrency(foreignCurrVal.toLowerCase() === 'yes' ? 'Yes' : 'No');
-      }
-
-      const conversionRateVal = firstRow['Conversion Rate'] || '';
-      if (conversionRateVal) setExchangeRate(conversionRateVal);
-
-      const currencyVal = firstRow['Currency'] || '';
-      if (currencyVal) setVendorBillingCurrency(currencyVal);
-
-      const posVal = firstRow['Place of Supply'] || '';
-      if (posVal) setBillFromState(posVal);
-
-      // Summary / Due Details
-      if (firstRow['TDS/TCS under Income Tax']) setPurchaseTdsIt(firstRow['TDS/TCS under Income Tax']);
-      if (firstRow['Advance Paid']) setPurchaseAdvancePaid(firstRow['Advance Paid']);
-      if (firstRow['Amount Due']) setPurchaseToPay(firstRow['Amount Due']);
-      if (firstRow['Posting Note']) setPurchasePostingNote(firstRow['Posting Note']);
-
-      // Transit Details
-      if (firstRow['Received In']) setPurchaseTransitReceivedIn(firstRow['Received In']);
-      if (firstRow['Mode of Transport']) setPurchaseTransitMode(firstRow['Mode of Transport']);
-      if (firstRow['Received Date']) setPurchaseTransitReceiptDate(formatDateForInput(firstRow['Received Date']) || getTodayDate());
-      if (firstRow['Received Time']) setPurchaseTransitReceiptTime(firstRow['Received Time']);
-      if (firstRow['Received Quantity']) setPurchaseTransitReceivedQty(firstRow['Received Quantity']);
-      if (firstRow['Delivery Type']) setPurchaseTransitDeliveryType(firstRow['Delivery Type']);
-      if (firstRow['Transporter ID/GSTIN']) setPurchaseTransitTransporterId(firstRow['Transporter ID/GSTIN']);
-      if (firstRow['Transporter Name']) setPurchaseTransitTransporterName(firstRow['Transporter Name']);
-      if (firstRow['Vehicle No.']) setPurchaseTransitVehicleNo(firstRow['Vehicle No.']);
-      if (firstRow['LR/GR/Consignment No']) setPurchaseTransitLrGrConsignment(firstRow['LR/GR/Consignment No']);
-
-      const mappedItems = data.map((row: any, idx: number) => {
-        const igst = parseFloat(row['IGST'] || row['Integrated Tax (IGST)'] || '0') || 0;
-        const cgst = parseFloat(row['CGST'] || row['Central Tax (CGST)'] || '0') || 0;
-        const sgst = parseFloat(row['SGST/UTGST'] || row['SGST'] || row['State Tax (SGST)'] || '0') || 0;
-        const cess = parseFloat(row['Cess'] || '0') || 0;
-        const taxable = parseFloat(row['Taxable Value'] || '0') || 0;
-        // If Invoice Value not extracted directly, derive it
-        const rawInv = parseFloat(row['Invoice Value'] || row['Item Amount'] || '0') || 0;
-        const invoiceValue = rawInv > 0 ? rawInv : (taxable + igst + cgst + sgst + cess) || taxable;
-
-        return {
-          id: (Date.now() + idx).toString(),
-          itemCode: row['Item Code'] || '',
-          itemName: row['Item Name'] || '',
-          hsnSac: row['HSN/SAC'] || '',
-          qty: parseFloat(row['Qty'] || row['Quantity'] || '0') || 0,
-          uom: row['UOM'] || '',
-          rate: parseFloat(row['Item Rate'] || row['Rate'] || '0') || 0,
-          taxableValue: taxable,
-          foreignRate: parseFloat(row['Rate (FC)'] || '0') || 0,
-          foreignAmount: parseFloat(row['Amount (FC)'] || '0') || 0,
-          igst,
-          cgst,
-          sgst,
-          cess,
-          invoiceValue,
-          description: row['Description'] || '',
-          poRate: null,
-          invoiceRate: parseFloat(row['Item Rate'] || row['Rate'] || '0') || null,
-          rateMismatch: false,
-          poQty: null,
-          invoiceQty: parseFloat(row['Qty'] || row['Quantity'] || '0') || null,
-          qtyMismatch: false,
-          grnQty: null,
-          sourcePoNo: null
-        };
-      });
-      console.log('[VouchersPage] Mapped Purchase Items:', mappedItems);
-      setPurchaseItems(mappedItems);
-    } else {
-      // For Sales, Payment, Receipt: use reconstructed ExtractedInvoiceData for sub-components
-      const lineItems = data.map((row: any) => ({
-        itemDescription: row['Item Name'] || '',
-        hsnCode: row['HSN/SAC'] || '',
-        quantity: parseFloat(row['Qty'] || row['Quantity'] || '0') || 0,
-        rate: parseFloat(row['Item Rate'] || row['Rate'] || '0') || 0,
-        amount: parseFloat(row['Invoice Value'] || row['Item Amount'] || '0') || 0,
-        cgst: parseFloat(row['CGST'] || '0') || 0,
-        sgst: parseFloat(row['SGST/UTGST'] || row['SGST'] || '0') || 0,
-        igst: parseFloat(row['IGST'] || '0') || 0,
-        cess: parseFloat(row['Cess'] || '0') || 0,
-        taxableValue: parseFloat(row['Taxable Value'] || '0') || 0
-      }));
-
-      const computedTaxableValue = data.reduce((s: number, r: any) => s + (parseFloat(r['Taxable Value'] || '0') || 0), 0);
-      const computedCgst = data.reduce((s: number, r: any) => s + (parseFloat(r['CGST'] || '0') || 0), 0);
-      const computedSgst = data.reduce((s: number, r: any) => s + (parseFloat(r['SGST/UTGST'] || r['SGST'] || '0') || 0), 0);
-      const computedIgst = data.reduce((s: number, r: any) => s + (parseFloat(r['IGST'] || '0') || 0), 0);
-      const computedCess = data.reduce((s: number, r: any) => s + (parseFloat(r['Cess'] || '0') || 0), 0);
-      const computedInvoiceValue = data.reduce((s: number, r: any) => s + (parseFloat(r['Invoice Value'] || r['Item Amount'] || '0') || 0), 0);
-
-      const reconstructed: any = {
-        sellerName: firstRow['Customer Name'] || firstRow['Vendor Name'] || firstRow['Buyer/Supplier - Mailing Name'] || '',
-        invoiceNumber: firstRow['Sales Invoice No.'] || firstRow['Sales Invoice No'] || firstRow['Supplier Invoice No.'] || firstRow['Supplier Invoice No'] || '',
-        invoiceDate: formatDateForInput(firstRow['Date'] || firstRow['Voucher Date'] || '') || getTodayDate(),
-        subtotal: computedTaxableValue,
-        cgstAmount: computedCgst,
-        sgstAmount: computedSgst,
-        igstAmount: computedIgst,
-        cessAmount: computedCess,
-        totalAmount: computedInvoiceValue,
-        lineItems,
-        gstin: firstRow['GSTIN'] || '',
-        placeOfSupply: firstRow['Place of Supply'] || '',
-        stateType: (firstRow['State Type'] || 'within').toLowerCase(),
-        invoiceType: firstRow['Invoice Type'] || 'Regular',
-        currency: firstRow['Currency'] || '',
-        exchangeRate: parseFloat(firstRow['Conversion Rate'] || '0') || 0,
-        billToAddress1: firstRow['Bill To - Address Line 1'] || '',
-        billToAddress2: firstRow['Bill To - Address Line 2'] || '',
-        billToCity: firstRow['Bill To - City'] || '',
-        billToState: firstRow['Bill To - State'] || '',
-        billToPincode: firstRow['Bill To - Pincode'] || '',
-        billToCountry: firstRow['Bill To - Country'] || '',
-        stateCess: firstRow['State Cess'] || '',
-        tdsIncomeTax: firstRow['TDS/TCS under Income Tax'] || '',
-        tdsGst: firstRow['TDS/TCS under GST'] || '',
-        advanceAmount: firstRow['Advance'] || '',
-        payable: firstRow['Payable'] || '',
-        postingNote: firstRow['Posting Note:'] || '',
-        dispatchFrom: firstRow['Dispatch From'] || '',
-        modeOfTransport: firstRow['Mode of Transport'] || '',
-        dispatchDate: firstRow['Dispatch Date'] || '',
-        dispatchTime: firstRow['Dispatch Time'] || '',
-        transporterId: firstRow['Transporter ID/GSTIN'] || '',
-        transporterName: firstRow['Transporter Name'] || '',
-        vehicleNo: firstRow['Vehicle No.'] || '',
-        lrGrConsignment: firstRow['LR/GR/Consignment No'] || ''
-      };
-      console.log('[VouchersPage] Reconstructed PrefilledData:', reconstructed);
-      setLocalPrefilledData(reconstructed);
-    }
-  };
-
   const openScanner = (mode: 'finpixe' | 'tally' = 'finpixe', type: 'single' | 'bulk' = 'single') => {
     setExtractionMode(mode);
     setScanType(type);
-    if (isLimitReached && mode === 'finpixe') {
+    if (isLimitReached) {
       handleLimitReached();
     } else if (mode === 'finpixe' && type === 'single') {
       singleScanInputRef.current?.click();
@@ -450,48 +306,36 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   // Purchase Voucher Tabs
   const [purchaseActiveTab, setPurchaseActiveTab] = useState<'supplier' | 'supply' | 'supply_foreign' | 'supply_inr' | 'due' | 'transit'>('supplier');
   const [grnRefNo, setGrnRefNo] = useState('');
-  // Unified full-address fields (single textarea per section)
-  const [billFromAddress, setBillFromAddress] = useState('');
-  const [shipFromAddress, setShipFromAddress] = useState('');
-  const [sameAsBillFrom, setSameAsBillFrom] = useState(false);
+  const [billFromAddress1, setBillFromAddress1] = useState('');
+  const [billFromAddress2, setBillFromAddress2] = useState('');
+  const [billFromAddress3, setBillFromAddress3] = useState('');
+  const [billFromCity, setBillFromCity] = useState('');
+  const [billFromPincode, setBillFromPincode] = useState('');
+  const [billFromState, setBillFromState] = useState('');
+  const [billFromCountry, setBillFromCountry] = useState('India');
 
-  // Legacy setters kept as no-ops to avoid breaking other code that may reference them
-  const setBillFromAddress1 = (v: string) => { };
-  const setBillFromAddress2 = (v: string) => { };
-  const setBillFromAddress3 = (v: string) => { };
-  const setBillFromCity = (v: string) => { };
-  const setBillFromPincode = (v: string) => { };
-  const setBillFromState = (v: string) => { };
-  const setBillFromCountry = (v: string) => { };
-  const setShipFromAddress1 = (v: string) => { };
-  const setShipFromAddress2 = (v: string) => { };
-  const setShipFromAddress3 = (v: string) => { };
-  const setShipFromCity = (v: string) => { };
-  const setShipFromPincode = (v: string) => { };
-  const setShipFromState = (v: string) => { };
-  const setShipFromCountry = (v: string) => { };
-  // Legacy read stubs
-  const billFromAddress1 = '';
-  const billFromAddress2 = '';
-  const billFromAddress3 = '';
-  const billFromCity = '';
-  const billFromPincode = '';
-  const billFromState = '';
-  const billFromCountry = 'India';
-  const shipFromAddress1 = '';
-  const shipFromAddress2 = '';
-  const shipFromAddress3 = '';
-  const shipFromCity = '';
-  const shipFromPincode = '';
-  const shipFromState = '';
-  const shipFromCountry = 'India';
+  const [shipFromAddress1, setShipFromAddress1] = useState('');
+  const [shipFromAddress2, setShipFromAddress2] = useState('');
+  const [shipFromAddress3, setShipFromAddress3] = useState('');
+  const [shipFromCity, setShipFromCity] = useState('');
+  const [shipFromPincode, setShipFromPincode] = useState('');
+  const [shipFromState, setShipFromState] = useState('');
+  const [shipFromCountry, setShipFromCountry] = useState('India');
+
+  const [sameAsBillFrom, setSameAsBillFrom] = useState(false);
 
   // Sync Ship From with Bill From when toggle is on
   useEffect(() => {
     if (sameAsBillFrom) {
-      setShipFromAddress(billFromAddress);
+      setShipFromAddress1(billFromAddress1);
+      setShipFromAddress2(billFromAddress2);
+      setShipFromAddress3(billFromAddress3);
+      setShipFromCity(billFromCity);
+      setShipFromPincode(billFromPincode);
+      setShipFromState(billFromState);
+      setShipFromCountry(billFromCountry);
     }
-  }, [sameAsBillFrom, billFromAddress]);
+  }, [sameAsBillFrom, billFromAddress1, billFromAddress2, billFromAddress3, billFromCity, billFromPincode, billFromState, billFromCountry]);
 
 
   const [purchaseInputTypes, setPurchaseInputTypes] = useState<string[]>(['Intrastate']); // Default to Same State
@@ -789,35 +633,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     fetchMultiplePODetails();
   }, [selectedPurchasePOs, availablePOs, isInterState, party, setParty, exchangeRate]);
 
-  // Fetch Pending GRNs based on selected vendor for Purchase Vouchers
-  useEffect(() => {
-    const fetchPendingGRNsForVendor = async () => {
-      if (voucherType !== 'Purchase') return;
-
-      const match = party?.match(/^(.*) \((.*)\)$/);
-      const entityName = match ? match[1] : party;
-
-      if (!entityName) {
-        setPendingGRNs([]);
-        return;
-      }
-
-      try {
-        const res = await apiService.getPendingGRNs(entityName);
-        if (res && Array.isArray(res)) {
-          setPendingGRNs(res);
-        } else {
-          setPendingGRNs([]);
-        }
-      } catch (error) {
-        console.error('Failed to fetch pending GRNs:', error);
-        setPendingGRNs([]);
-      }
-    };
-
-    fetchPendingGRNsForVendor();
-  }, [party, voucherType]);
-
   // Logic to auto-fill items from GRN when selected
   useEffect(() => {
     const fillFromGRN = () => {
@@ -828,10 +643,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           const qty = parseFloat(item.quantity) || 0;
           const rate = parseFloat(item.rate) || parseFloat(item.final_rate) || 0;
           const gstRate = parseFloat(item.gst_rate) || 0;
-          const cessRate = parseFloat(item.cess_rate) || 0;
           const taxable = qty * rate;
           const totalTax = taxable * (gstRate / 100);
-          const cessAmount = taxable * (cessRate / 100);
 
           return {
             id: (Date.now() + idx + Math.random()).toString(),
@@ -1295,10 +1108,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     event.target.value = '';
 
     const reader = new FileReader();
-    reader.onload = async (e) => {
+    reader.onload = (e) => {
       try {
         const data = e.target?.result;
-        const XLSX = await getXLSX();
         const workbook = XLSX.read(data, { type: 'array' });
         const allVouchers: Voucher[] = [];
         let failed = 0;
@@ -1385,16 +1197,15 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           creditLedger: ['Ledger (Credit)', 'Credit Ledger', 'Cr Ledger'],
         };
 
-        const getWorksheetRows = async (preferredSheetNames: string[]) => {
+        const getWorksheetRows = (preferredSheetNames: string[]) => {
           const sheetName = preferredSheetNames.find(name => workbook.Sheets[name]) || workbook.SheetNames[0];
           if (!sheetName) return [];
           const sheet = workbook.Sheets[sheetName];
-          const XLSX = await getXLSX();
           return XLSX.utils.sheet_to_json(sheet, { defval: '' }) as Record<string, any>[];
         };
 
         if (voucherType === 'Purchase' || voucherType === 'Sales') {
-          const rows = await getWorksheetRows(['SalesPurchases', 'Invoices']);
+          const rows = getWorksheetRows(['SalesPurchases', 'Invoices']);
           const groups: Record<string, {
             date: string;
             narration: string;
@@ -1495,7 +1306,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
             const normalizedItems = group.items.map(item => {
               const stockItem = stockItems.find(si => si.name?.toLowerCase() === (item.name || '').toLowerCase());
-              const gstRate = stockItem?.gstRate || (stockItem as any)?.gst_rate || 0;
+              const gstRate = stockItem?.gstRate || 0;
               const taxable = item.taxableAmount || (item.qty * item.rate);
               let cgst = item.cgstAmount || 0;
               let sgst = item.sgstAmount || 0;
@@ -1550,7 +1361,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             else failed++;
           });
         } else if (voucherType === 'Payment' || voucherType === 'Receipt') {
-          const rows = await getWorksheetRows(['PaymentsReceipts', 'Cash Receipts']);
+          const rows = getWorksheetRows(['PaymentsReceipts', 'Invoices']);
           rows.forEach((row) => {
             try {
               const voucher = {
@@ -1571,7 +1382,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             }
           });
         } else if (voucherType === 'Contra') {
-          const rows = await getWorksheetRows(['Contra', 'Invoices']);
+          const rows = getWorksheetRows(['Contra', 'Invoices']);
           rows.forEach((row) => {
             try {
               const voucher = {
@@ -1592,7 +1403,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             }
           });
         } else if (voucherType === 'Journal') {
-          const rows = await getWorksheetRows(['Journal', 'Invoices']);
+          const rows = getWorksheetRows(['Journal', 'Invoices']);
           rows.forEach((row) => {
             try {
               let entries: JournalEntry[] = [];
@@ -1719,8 +1530,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     reader.readAsArrayBuffer(file);
   };
 
-  const handleDownloadTemplate = async () => {
-    const XLSX = await getXLSX();
+  const handleDownloadTemplate = () => {
     const wb = XLSX.utils.book_new();
 
     // Define headers (same as respective voucher upload expectations)
@@ -1793,10 +1603,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     }
   }, [party, ledgers, companyDetails.state, voucherType]);
 
-  // ── TDS/TCS Auto-Calculation ─────────────────────────────────────────────────────
+  // ΓöÇΓöÇ TDS/TCS Auto-Calculation ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   // Runs whenever vendor, items, or rich vendor list changes.
   // Reads tds_rate or tcs_rate from the vendor's master record (flattened by the backend serializer)
-  // and computes: TDS/TCS Amount = Total Taxable Value × Rate
+  // and computes: TDS/TCS Amount = Total Taxable Value ├ù Rate
   useEffect(() => {
     if (voucherType !== 'Purchase') return;
 
@@ -1850,8 +1660,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     setPurchaseTdsIt(taxAmount);
     setPurchaseTaxIsTcs(isTcs);
   }, [party, vendorId, purchaseItems, richVendors, voucherType]);
-  // ─────────────────────────────────────────────────────────────────────────────
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  // ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
   // Recalculate all item taxes when transaction type (isInterState) changes
   useEffect(() => {
@@ -1868,7 +1678,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         return item;
       }
 
-      const gstRate = stockItem.gstRate || (stockItem as any).gst_rate || 0;
+      const gstRate = stockItem.gstRate || 0;
       const taxableAmount = item.qty * item.rate;
       const totalTax = taxableAmount * (gstRate / 100);
 
@@ -1931,7 +1741,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         if (prefilledData.lineItems && prefilledData.lineItems.length > 0) {
           const newSimpleItems = prefilledData.lineItems.map(item => {
             const stockItem = allItems.find(si => (si.name || si.item_name)?.toLowerCase() === (item.itemDescription || '').toLowerCase());
-            const gstRate = stockItem?.gstRate || (stockItem as any)?.gst_rate || 18;
+            const gstRate = stockItem?.gstRate || 18;
             const taxableAmount = item.quantity * item.rate;
             const tax = taxableAmount * (gstRate / 100);
 
@@ -1951,13 +1761,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           // Also populate the sophisticated purchaseItems grid
           const newPurchaseItems = prefilledData.lineItems.map((item, idx) => {
             const stockItem = allItems.find(si => (si.name || si.item_name)?.toLowerCase() === (item.itemDescription || '').toLowerCase());
-            const gstRate = stockItem?.gstRate || (stockItem as any)?.gst_rate || 0;
-            const cessRate = stockItem?.cessRate || (stockItem as any)?.cess_rate || 0;
+            const gstRate = stockItem?.gstRate || 0;
             const qty = item.quantity || 0;
             const rate = item.rate || 0;
             const taxable = qty * rate;
             const totalTax = taxable * (gstRate / 100);
-            const cessAmount = taxable * (cessRate / 100);
 
             return {
               id: (Date.now() + idx).toString(),
@@ -1971,12 +1779,12 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               igst: newIsInterState ? totalTax : 0,
               cgst: newIsInterState ? 0 : totalTax / 2,
               sgst: newIsInterState ? 0 : totalTax / 2,
-              cess: cessAmount,
-              invoiceValue: taxable + totalTax + cessAmount,
+              cess: 0,
+              invoiceValue: taxable + totalTax,
               description: item.itemDescription || '',
               foreignRate: 0,
               foreignAmount: 0,
-              poRate: null as number | null,     // no PO linked — invoice scan
+              poRate: null as number | null,     // no PO linked ΓÇö invoice scan
               invoiceRate: rate,                  // store scanned invoice rate
               rateMismatch: false,
               poQty: null as number | null,
@@ -2011,34 +1819,51 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   }, [prefilledData, clearPrefilledData, stockItems, ledgers, companyDetails.state, allItems]);
 
   const setAddressFields = useCallback((addressData: any) => {
-    // Build a full address string from whatever data we get
-    let fullAddr = '';
     if (typeof addressData === 'string') {
-      fullAddr = addressData;
+      // Fallback parsing for single string address
+      setBillFromAddress1(addressData);
+      setBillFromAddress2('');
+      setBillFromAddress3('');
+      setBillFromCity('');
+      setBillFromPincode('');
+      setBillFromState('');
+      setBillFromCountry('India');
+
+      if (!sameAsBillFrom) {
+        setShipFromAddress1(addressData);
+        setShipFromAddress2('');
+        setShipFromAddress3('');
+        setShipFromCity('');
+        setShipFromPincode('');
+        setShipFromState('');
+        setShipFromCountry('India');
+      }
     } else if (addressData) {
-      const parts: string[] = [];
       const a1 = addressData.addressLine1 || addressData.address_line_1 || '';
       const a2 = addressData.addressLine2 || addressData.address_line_2 || '';
       const a3 = addressData.addressLine3 || addressData.address_line_3 || '';
-      const city = addressData.city || '';
-      const pincode = addressData.pincode || '';
-      const state = addressData.state || '';
-      const country = addressData.country || 'India';
+      const c = addressData.city || '';
+      const p = addressData.pincode || '';
+      const s = addressData.state || '';
+      const co = addressData.country || 'India';
 
-      if (a1) parts.push(a1);
-      if (a2) parts.push(a2);
-      if (a3) parts.push(a3);
-      const cityPin = [city, pincode].filter(Boolean).join('- ');
-      if (cityPin) parts.push(cityPin);
-      if (state && state !== country) parts.push(state);
-      if (country && country !== 'India') parts.push(country);
+      setBillFromAddress1(a1);
+      setBillFromAddress2(a2);
+      setBillFromAddress3(a3);
+      setBillFromCity(c);
+      setBillFromPincode(p);
+      setBillFromState(s);
+      setBillFromCountry(co);
 
-      fullAddr = parts.join(', ');
-    }
-
-    setBillFromAddress(fullAddr);
-    if (!sameAsBillFrom) {
-      setShipFromAddress(fullAddr);
+      if (!sameAsBillFrom) {
+        setShipFromAddress1(a1);
+        setShipFromAddress2(a2);
+        setShipFromAddress3(a3);
+        setShipFromCity(c);
+        setShipFromPincode(p);
+        setShipFromState(s);
+        setShipFromCountry(co);
+      }
     }
   }, [sameAsBillFrom]);
 
@@ -2327,7 +2152,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     }
 
     const stockItem = stockItems.find(si => si.name.toLowerCase() === item.name.toLowerCase());
-    const gstRate = stockItem?.gstRate || (stockItem as any)?.gst_rate || 0;
+    const gstRate = stockItem?.gstRate || 0;
 
     item.taxableAmount = item.qty * item.rate;
     const totalTax = item.taxableAmount * (gstRate / 100);
@@ -2388,8 +2213,24 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         branch: selectedBranch,
         gstin: gstin,
         grn_reference: grnRefNo,
-        bill_from: billFromAddress,
-        ship_from: sameAsBillFrom ? billFromAddress : shipFromAddress,
+        bill_from: JSON.stringify({
+          address_line_1: billFromAddress1,
+          address_line_2: billFromAddress2,
+          address_line_3: billFromAddress3,
+          city: billFromCity,
+          pincode: billFromPincode,
+          state: billFromState,
+          country: billFromCountry
+        }),
+        ship_from: JSON.stringify({
+          address_line_1: shipFromAddress1,
+          address_line_2: shipFromAddress2,
+          address_line_3: shipFromAddress3,
+          city: shipFromCity,
+          pincode: shipFromPincode,
+          state: shipFromState,
+          country: shipFromCountry
+        }),
         input_type: purchaseInputTypes.join(', '),
         invoice_in_foreign_currency: invoiceInForeignCurrency,
 
@@ -2547,11 +2388,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       (item as any)[field] = value;
     }
 
-    // ── ITEM RATE VALIDATION ──────────────────────────────────────────────
+    // ΓöÇΓöÇ ITEM RATE VALIDATION ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
     if (field === 'rate') {
       const enteredRate = typeof value === 'string' ? parseFloat(value) || 0 : (value as number);
 
-      // Case 1: PO is selected → cross-check against PO rate
+      // Case 1: PO is selected ΓåÆ cross-check against PO rate
       if (selectedPurchasePOs.length > 0 && (item as any).poRate !== null && (item as any).poRate !== undefined) {
         const poRate = Number((item as any).poRate);
         if (poRate > 0 && Math.abs(enteredRate - poRate) > 0.001) {
@@ -2560,7 +2401,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           (item as any).rateMismatch = false;
         }
       }
-      // Case 2: No PO but invoice was scanned → compare against invoice rate (info only)
+      // Case 2: No PO but invoice was scanned ΓåÆ compare against invoice rate (info only)
       else if (selectedPurchasePOs.length === 0 && (item as any).invoiceRate !== null && (item as any).invoiceRate !== undefined) {
         const invRate = Number((item as any).invoiceRate);
         if (invRate > 0 && Math.abs(enteredRate - invRate) > 0.001) {
@@ -2573,11 +2414,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       }
     }
 
-    // ── ITEM QTY VALIDATION ──────────────────────────────────────────────
+    // ΓöÇΓöÇ ITEM QTY VALIDATION ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
     if (field === 'qty') {
       const enteredQty = typeof value === 'string' ? parseFloat(value) || 0 : (value as number);
 
-      // Case 1: PO is selected → cross-check against PO quantity
+      // Case 1: PO is selected ΓåÆ cross-check against PO quantity
       if (selectedPurchasePOs.length > 0 && (item as any).poQty !== null && (item as any).poQty !== undefined) {
         const poQty = Number((item as any).poQty);
         if (poQty > 0 && Math.abs(enteredQty - poQty) > 0.001) {
@@ -2586,7 +2427,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           (item as any).qtyMismatch = false;
         }
       }
-      // Case 2: No PO but invoice was scanned → compare against invoice quantity
+      // Case 2: No PO but invoice was scanned ΓåÆ compare against invoice quantity
       else if (selectedPurchasePOs.length === 0 && (item as any).invoiceQty !== null && (item as any).invoiceQty !== undefined) {
         const invQty = Number((item as any).invoiceQty);
         if (invQty > 0 && Math.abs(enteredQty - invQty) > 0.001) {
@@ -2614,7 +2455,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         item.uom = selectedItem.unit || selectedItem.uom || item.uom;
         item.hsnSac = selectedItem.hsn_code || selectedItem.hsn || selectedItem.hsn_sac || selectedItem.sac_code || item.hsnSac;
 
-        // ── RATE FETCHING LOGIC ──────────────────────────────────────────────
+        // ΓöÇΓöÇ RATE FETCHING LOGIC ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
         let fetchedRate: number | null = null;
         let isFromPO = false;
         let isFromInvoice = false;
@@ -2689,10 +2530,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         (si.item_code || si.code) === item.itemCode ||
         (si.name || si.item_name) === item.itemName
       );
-      const gstRate = selectedStockItem?.gstRate || selectedStockItem?.gst_rate || 0;
-      const cessRate = selectedStockItem?.cessRate || selectedStockItem?.cess_rate || 0;
+      const gstRate = selectedStockItem?.gstRate || 0;
       const totalTax = item.taxableValue * (gstRate / 100);
-      item.cess = item.taxableValue * (cessRate / 100);
 
       if (isInterState) {
         item.igst = totalTax;
@@ -2721,10 +2560,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           (si.item_code || si.code) === item.itemCode ||
           (si.name || si.item_name) === item.itemName
         );
-        const gstRate = selectedStockItem?.gstRate || selectedStockItem?.gst_rate || 0;
-        const cessRate = selectedStockItem?.cessRate || selectedStockItem?.cess_rate || 0;
+        const gstRate = selectedStockItem?.gstRate || 0;
         const totalTax = item.taxableValue * (gstRate / 100);
-        item.cess = item.taxableValue * (cessRate / 100);
 
         if (isInterState) {
           item.igst = totalTax;
@@ -3164,20 +3001,22 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
               {/* Row 3: Create GRN */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="flex flex-col gap-1">
-                  <label className="block text-sm font-semibold text-gray-800">GRN Reference No.</label>
+                <div className="flex gap-4 items-end">
+                  <button
+                    onClick={() => setIsCreateGRNModalOpen(true)}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm font-medium h-[42px]"
+                  >
+                    Create GRN
+                  </button>
                   <div className="flex-1">
                     <SearchableSelect
-                      value={grnRefNo === '+ Create GRN' ? '' : grnRefNo}
+                      value={grnRefNo}
                       onChange={(val) => {
-                        if (val === '+ Create GRN') {
-                          setIsCreateGRNModalOpen(true);
-                        } else {
-                          setGrnRefNo(val);
-                        }
+                        setGrnRefNo(val);
+                        // Auto-fill logic if needed
                       }}
-                      options={['+ Create GRN', ...pendingGRNs.map(g => g.grn_no).filter(Boolean)]}
-                      placeholder="Select Pending GRN or Create"
+                      options={pendingGRNs.map(g => g.grn_no).filter(Boolean)}
+                      placeholder="Select Pending GRN"
                       className="w-full"
                     />
                   </div>
@@ -3185,60 +3024,168 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               </div>
 
               {/* Row 4: Address Headers & Toggle */}
-              <div className="flex justify-between items-end mb-3 pt-4 border-t border-gray-100">
+              <div className="flex justify-between items-end mb-4 pt-4 border-t border-gray-100">
                 <label className="block text-sm font-semibold text-gray-800">Bill From (Full Address)</label>
-                <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-gray-600">
-                  <span className="font-semibold text-gray-700">Ship From</span>
-                  <input
-                    type="checkbox"
-                    checked={sameAsBillFrom}
-                    onChange={(e) => {
-                      setSameAsBillFrom(e.target.checked);
-                      if (e.target.checked) setShipFromAddress(billFromAddress);
-                    }}
-                    className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
-                  />
-                  Same as Bill From Address
-                </label>
+                <div className="flex items-center gap-4">
+                  <label className="block text-sm font-semibold text-gray-800">Ship From</label>
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-gray-600">
+                    <input
+                      type="checkbox"
+                      checked={sameAsBillFrom}
+                      onChange={(e) => setSameAsBillFrom(e.target.checked)}
+                      className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                    />
+                    SAME AS BILL FROM ADDRESS
+                  </label>
+                </div>
               </div>
 
-              {/* Row 5: Full-address textareas */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Bill From */}
-                <div className="flex flex-col gap-1">
-                  <textarea
-                    rows={4}
-                    value={billFromAddress}
-                    onChange={(e) => {
-                      setBillFromAddress(e.target.value);
-                      if (sameAsBillFrom) setShipFromAddress(e.target.value);
-                    }}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 resize-none text-sm leading-relaxed"
-                    placeholder=""
-                  />
-                  {vendorAddresses.length > 1 && (
-                    <div className="mt-1">
-                      <SearchableSelect
-                        value={''}
-                        onChange={(val) => { if (val) setAddressFields(val); }}
-                        options={vendorAddresses}
-                        placeholder="Select from saved vendor addresses..."
-                        className="w-full"
-                      />
-                    </div>
+              {/* Row 5: Granular Address Fields */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Bill From Section */}
+                <div className="space-y-3">
+                  {vendorAddresses.length > 1 ? (
+                    <SearchableSelect
+                      value={billFromAddress1}
+                      onChange={(val) => {
+                        if (vendorAddresses.includes(val)) {
+                          setAddressFields(val);
+                        } else {
+                          setBillFromAddress1(val);
+                        }
+                      }}
+                      options={vendorAddresses}
+                      placeholder="Address Line 1 / Select from existing"
+                      className="w-full"
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      value={billFromAddress1}
+                      onChange={(e) => setBillFromAddress1(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                      placeholder="Address Line 1"
+                    />
                   )}
+                  <input
+                    type="text"
+                    value={billFromAddress2}
+                    onChange={(e) => setBillFromAddress2(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                    placeholder="Address Line 2"
+                  />
+                  <input
+                    type="text"
+                    value={billFromAddress3}
+                    onChange={(e) => setBillFromAddress3(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                    placeholder="Address Line 3"
+                  />
+                  <div className="grid grid-cols-2 gap-4">
+                    <input
+                      type="text"
+                      value={billFromCity}
+                      onChange={(e) => setBillFromCity(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                      placeholder="City"
+                    />
+                    <input
+                      type="text"
+                      value={billFromPincode}
+                      onChange={(e) => setBillFromPincode(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                      placeholder="Pincode"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <input
+                      type="text"
+                      value={billFromState}
+                      onChange={(e) => setBillFromState(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                      placeholder="State"
+                    />
+                    <input
+                      type="text"
+                      value={billFromCountry}
+                      onChange={(e) => setBillFromCountry(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                      placeholder="Country"
+                    />
+                  </div>
                 </div>
 
-                {/* Ship From */}
-                <div className={`flex flex-col gap-1 ${sameAsBillFrom ? 'opacity-60 pointer-events-none' : ''}`}>
-                  <textarea
-                    rows={4}
-                    value={sameAsBillFrom ? billFromAddress : shipFromAddress}
-                    onChange={(e) => setShipFromAddress(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 resize-none text-sm leading-relaxed"
-                    placeholder=""
-                    disabled={sameAsBillFrom}
+                {/* Ship From Section */}
+                <div className={`space-y-3 ${sameAsBillFrom ? 'opacity-60 pointer-events-none' : ''}`}>
+                  {vendorAddresses.length > 1 ? (
+                    <SearchableSelect
+                      value={shipFromAddress1}
+                      onChange={(val) => {
+                        if (vendorAddresses.includes(val)) {
+                          setAddressFields(val);
+                        } else {
+                          setShipFromAddress1(val);
+                        }
+                      }}
+                      options={vendorAddresses}
+                      placeholder="Address Line 1 / Select from existing"
+                      className="w-full"
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      value={shipFromAddress1}
+                      onChange={(e) => setShipFromAddress1(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                      placeholder="Address Line 1"
+                    />
+                  )}
+                  <input
+                    type="text"
+                    value={shipFromAddress2}
+                    onChange={(e) => setShipFromAddress2(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                    placeholder="Address Line 2"
                   />
+                  <input
+                    type="text"
+                    value={shipFromAddress3}
+                    onChange={(e) => setShipFromAddress3(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                    placeholder="Address Line 3"
+                  />
+                  <div className="grid grid-cols-2 gap-4">
+                    <input
+                      type="text"
+                      value={shipFromCity}
+                      onChange={(e) => setShipFromCity(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                      placeholder="City"
+                    />
+                    <input
+                      type="text"
+                      value={shipFromPincode}
+                      onChange={(e) => setShipFromPincode(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                      placeholder="Pincode"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <input
+                      type="text"
+                      value={shipFromState}
+                      onChange={(e) => setShipFromState(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                      placeholder="State"
+                    />
+                    <input
+                      type="text"
+                      value={shipFromCountry}
+                      onChange={(e) => setShipFromCountry(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                      placeholder="Country"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -3250,14 +3197,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <button
                       type="button"
                       disabled={invoiceInForeignCurrency === 'Yes'}
-                      onClick={() => {
-                        setInvoiceInForeignCurrency('No');
-                        setPurchaseInputTypes(prev => {
-                          const rest = prev.filter(t => t !== 'Interstate' && t !== 'Intrastate');
-                          return [...rest, 'Intrastate'];
-                        });
-                        setIsInterState(false);
-                      }}
+                      onClick={() => setInvoiceInForeignCurrency('No')}
                       className={`flex-1 px-4 py-2 border rounded-[4px] transition-all duration-200 ${purchaseInputTypes.includes('Intrastate')
                         ? 'bg-indigo-600 border-indigo-600 text-white shadow-md font-semibold scale-105'
                         : 'bg-white border-gray-300 text-gray-600 hover:border-indigo-400 hover:text-indigo-600'
@@ -3267,13 +3207,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        setPurchaseInputTypes(prev => {
-                          const rest = prev.filter(t => t !== 'Interstate' && t !== 'Intrastate');
-                          return [...rest, 'Interstate'];
-                        });
-                        setIsInterState(true);
-                      }}
+                      onClick={() => setInvoiceInForeignCurrency('Yes')}
                       className={`flex-1 px-4 py-2 border rounded-[4px] transition-all duration-200 ${purchaseInputTypes.includes('Interstate')
                         ? 'bg-indigo-600 border-indigo-600 text-white shadow-md font-semibold scale-105'
                         : 'bg-white border-gray-300 text-gray-600 hover:border-indigo-400 hover:text-indigo-600'
@@ -3301,50 +3235,27 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 {/* Foreign Currency */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Invoice in Foreign Currency</label>
-                  <div className="flex gap-8 items-center h-[42px]">
-                    <label className="flex items-center gap-2 cursor-pointer group">
-                      <div className="relative flex items-center justify-center">
-                        <input
-                          type="radio"
-                          name="foreignCurrency"
-                          checked={invoiceInForeignCurrency === 'Yes'}
-                          onChange={() => setInvoiceInForeignCurrency('Yes')}
-                          className="sr-only"
-                        />
-                        <div className={`w-5 h-5 border-2 rounded-full flex items-center justify-center transition-all duration-200 ${invoiceInForeignCurrency === 'Yes'
-                          ? 'border-indigo-600 bg-white'
-                          : 'border-gray-300 group-hover:border-indigo-400'
-                          }`}>
-                          {invoiceInForeignCurrency === 'Yes' && (
-                            <div className="w-2.5 h-2.5 bg-indigo-600 rounded-full" />
-                          )}
-                        </div>
-                      </div>
-                      <span className={`text-sm font-medium transition-colors duration-200 ${invoiceInForeignCurrency === 'Yes' ? 'text-indigo-600 font-semibold' : 'text-gray-600'
-                        }`}>Yes</span>
-                    </label>
-
-                    <label className="flex items-center gap-2 cursor-pointer group">
-                      <div className="relative flex items-center justify-center">
-                        <input
-                          type="radio"
-                          name="foreignCurrency"
-                          checked={invoiceInForeignCurrency === 'No'}
-                          onChange={() => setInvoiceInForeignCurrency('No')}
-                          className="sr-only"
-                        />
-                        <div className={`w-5 h-5 border-2 rounded-full flex items-center justify-center transition-all duration-200 ${invoiceInForeignCurrency === 'No'
-                          ? 'border-indigo-600 bg-white'
-                          : 'border-gray-300 group-hover:border-indigo-400'
-                          }`}>
-                          {invoiceInForeignCurrency === 'No' && (
-                            <div className="w-2.5 h-2.5 bg-indigo-600 rounded-full" />
-                          )}
-                        </div>
-                      </div>
-                      <span className={`text-sm font-medium transition-colors duration-200 ${invoiceInForeignCurrency === 'No' ? 'text-indigo-600 font-semibold' : 'text-gray-600'
-                        }`}>No</span>
-                    </label>
+                  <div className="flex gap-4">
+                    <button
+                      type="button"
+                      onClick={() => setInvoiceInForeignCurrency('Yes')}
+                      className={`px-8 py-2 border rounded-[4px] transition-all duration-200 ${invoiceInForeignCurrency === 'Yes'
+                        ? 'bg-indigo-600 border-indigo-600 text-white shadow-md font-semibold scale-105'
+                        : 'bg-white border-gray-300 text-gray-600 hover:border-indigo-400 hover:text-indigo-600'
+                        }`}
+                    >
+                      Yes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInvoiceInForeignCurrency('No')}
+                      className={`px-8 py-2 border rounded-[4px] transition-all duration-200 ${invoiceInForeignCurrency === 'No'
+                        ? 'bg-indigo-600 border-indigo-600 text-white shadow-md font-semibold scale-105'
+                        : 'bg-white border-gray-300 text-gray-600 hover:border-indigo-400 hover:text-indigo-600'
+                        }`}
+                    >
+                      No
+                    </button>
                   </div>
                 </div>
               </div>
@@ -3441,10 +3352,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             (si.item_code || si.code) === item.itemCode ||
                             (si.name || si.item_name) === item.itemName
                           );
-                          const gstRate = selectedStockItem?.gstRate || selectedStockItem?.gst_rate || 0;
-                          const cessRate = selectedStockItem?.cessRate || selectedStockItem?.cess_rate || 0;
+                          const gstRate = selectedStockItem?.gstRate || 0;
                           const totalTax = newTaxable * (gstRate / 100);
-                          const newCess = newTaxable * (cessRate / 100);
 
                           let igst = 0, cgst = 0, sgst = 0;
                           if (isInterState) {
@@ -3461,8 +3370,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             igst,
                             cgst,
                             sgst,
-                            cess: newCess,
-                            invoiceValue: newTaxable + igst + cgst + sgst + newCess
+                            invoiceValue: newTaxable + igst + cgst + sgst + (parseFloat(item.cess.toString()) || 0)
                           };
                         });
                         setPurchaseItems(updatedItems);
@@ -3538,7 +3446,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               />
                               {showPurchaseMismatches && row.qtyMismatch && (
                                 <span className="text-[10px] text-red-600 font-bold whitespace-nowrap">
-                                  ⚠ Mismatch: {row.poQty || row.invoiceQty}
+                                  ΓÜá Mismatch: {row.poQty || row.invoiceQty}
                                 </span>
                               )}
                               {(!row.qtyMismatch || !showPurchaseMismatches) && (row.poQty || row.invoiceQty) != null && (
@@ -3742,14 +3650,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">UQC</th>
                         <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">Item Rate</th>
                         <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">Taxable Value</th>
-                        {purchaseInputTypes.includes('Intrastate') ? (
-                          <>
-                            <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">CGST</th>
-                            <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">SGST</th>
-                          </>
-                        ) : (
-                          <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">IGST</th>
-                        )}
+                        <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">IGST</th>
                         <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">CESS</th>
                         <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">Invoice Value</th>
                         <th className="px-3 py-3 text-xs font-semibold text-center">Delete</th>
@@ -3820,7 +3721,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                 />
                                 {showPurchaseMismatches && row.qtyMismatch && (
                                   <span className="text-[10px] text-red-600 font-bold whitespace-nowrap">
-                                    ⚠ {row.poQty || row.invoiceQty}
+                                    ΓÜá {row.poQty || row.invoiceQty}
                                   </span>
                                 )}
                                 {(!row.qtyMismatch || !showPurchaseMismatches) && (row.poQty || row.invoiceQty) != null && (
@@ -3861,12 +3762,12 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                 />
                                 {(row as any).rateMismatch && (
                                   <span className="text-[10px] text-red-600 font-semibold leading-tight whitespace-nowrap">
-                                    ⚠ Rate mismatch
+                                    ΓÜá Rate mismatch
                                   </span>
                                 )}
                                 {!((row as any).rateMismatch) && (row as any).poRate != null && selectedPurchasePOs.length > 0 && (
                                   <span className="text-[10px] text-green-600 leading-tight whitespace-nowrap">
-                                    PO: ₹{Number((row as any).poRate).toFixed(2)}
+                                    PO: Γé╣{Number((row as any).poRate).toFixed(2)}
                                   </span>
                                 )}
                               </div>
@@ -3876,47 +3777,25 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                 {((parseFloat(row.qty?.toString() || '0') || 0) * (parseFloat(row.rate?.toString() || '0') || 0)).toFixed(2)}
                               </div>
                             </td>
-                            {purchaseInputTypes.includes('Intrastate') ? (
-                              <>
-                                {/* CGST = Taxable × GST Rate × 0.5 — Read-Only */}
-                                <td className="px-2 py-2 border-r border-gray-200">
-                                  <div
-                                    className="w-24 px-2 py-1 bg-blue-50 rounded text-right text-sm font-semibold text-blue-700 select-none"
-                                    title="CGST = Taxable Value × GST Rate × ½ (auto-calculated)"
-                                  >
-                                    {row.cgst?.toFixed(2) ?? '0.00'}
-                                  </div>
-                                </td>
-                                {/* SGST = Taxable × GST Rate × 0.5 — Read-Only */}
-                                <td className="px-2 py-2 border-r border-gray-200">
-                                  <div
-                                    className="w-24 px-2 py-1 bg-green-50 rounded text-right text-sm font-semibold text-green-700 select-none"
-                                    title="SGST = Taxable Value × GST Rate × ½ (auto-calculated)"
-                                  >
-                                    {row.sgst?.toFixed(2) ?? '0.00'}
-                                  </div>
-                                </td>
-                              </>
-                            ) : (
-                              /* IGST — Read-Only */
-                              <td className="px-2 py-2 border-r border-gray-200">
-                                <div
-                                  className="w-24 px-2 py-1 bg-purple-50 rounded text-right text-sm font-semibold text-purple-700 select-none"
-                                  title="IGST = Taxable Value × GST Rate (auto-calculated)"
-                                >
-                                  {row.igst?.toFixed(2) ?? '0.00'}
-                                </div>
-                              </td>
-                            )}
+                            <td className="px-2 py-2 border-r border-gray-200">
+                              <input
+                                type="number"
+                                min="0"
+                                value={row.igst}
+                                onChange={(e) => handlePurchaseItemChange(index, 'igst', e.target.value)}
+                                className="w-20 px-2 py-1 border border-gray-300 rounded text-right text-sm"
+                              />
+                            </td>
 
 
                             <td className="px-2 py-2 border-r border-gray-200">
-                              <div
-                                className="w-20 px-2 py-1 bg-purple-50 rounded text-right text-sm font-semibold text-purple-700 select-none"
-                                title="CESS = Taxable Value × Cess Rate (auto-calculated)"
-                              >
-                                {row.cess?.toFixed(2) ?? '0.00'}
-                              </div>
+                              <input
+                                type="number"
+                                min="0"
+                                value={row.cess}
+                                onChange={(e) => handlePurchaseItemChange(index, 'cess', e.target.value)}
+                                className="w-20 px-2 py-1 border border-gray-300 rounded text-right text-sm"
+                              />
                             </td>
                             <td className="px-2 py-2 border-r border-gray-200">
                               <div className="text-right text-sm font-bold">{row.invoiceValue.toFixed(2)}</div>
@@ -3939,7 +3818,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     {/* Purchase Ledger and Description Row */}
                     <tfoot>
                       <tr className="border-t border-gray-200 bg-gray-50">
-                        <td colSpan={purchaseInputTypes.includes('Intrastate') ? 13 : 12} className="px-3 py-2">
+                        <td colSpan={12} className="px-3 py-2">
                           <div className="flex items-center gap-4 flex-wrap">
                             {/* Purchase Ledger Dropdown */}
                             <div className="flex items-center gap-2 min-w-[260px]">
@@ -4068,32 +3947,16 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         type="text"
                         readOnly
                         value={purchaseAdvancePaid}
-                        title="Sum of Applied Now column from the Advance grid (auto-calculated)"
                         className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-semibold"
                         placeholder="0.00"
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Gross Amount Due
+                        Amount Due
                         {purchaseTaxIsTcs && Number(purchaseTdsIt) > 0 && (
-                          <span className="ml-2 text-xs text-orange-600 font-normal">(TCS added)</span>
+                          <span className="ml-2 text-xs text-orange-600 font-normal">(TCS added to payable)</span>
                         )}
-                      </label>
-                      <input
-                        type="text"
-                        readOnly
-                        value={(
-                          purchaseItems.reduce((sum, item) => sum + (Number(item.invoiceValue) || 0), 0)
-                          + (purchaseTaxIsTcs ? (Number(purchaseTdsIt) || 0) : -(Number(purchaseTdsIt) || 0))
-                        ).toFixed(2)}
-                        title="Invoice Value ± TDS/TCS (before advance deduction)"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-semibold"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Net Amount Due
                       </label>
                       <input
                         type="text"
@@ -4103,7 +3966,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           + (purchaseTaxIsTcs ? (Number(purchaseTdsIt) || 0) : -(Number(purchaseTdsIt) || 0))
                           - (Number(purchaseAdvancePaid) || 0)
                         ).toFixed(2)}
-                        title="Net Amount Due = Gross Amount Due − Advance Paid (auto-calculated)"
                         className="w-full px-4 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-right font-bold text-lg"
                       />
                     </div>
@@ -4385,7 +4247,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               </svg>
                               <span className="text-sm font-medium">UPLOAD DOCUMENT</span>
                               {purchaseTransitDocument && (
-                                <span className="text-xs mt-2 text-indigo-600 font-medium">✓ {purchaseTransitDocument.name}</span>
+                                <span className="text-xs mt-2 text-indigo-600 font-medium">Γ£ô {purchaseTransitDocument.name}</span>
                               )}
                             </button>
                           </div>
@@ -4724,7 +4586,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           </svg>
                           <span className="text-sm font-medium">UPLOAD DOCUMENT</span>
                           {purchaseTransitDocument && (
-                            <span className="text-xs mt-2 text-indigo-600 font-medium">✓ {purchaseTransitDocument.name}</span>
+                            <span className="text-xs mt-2 text-indigo-600 font-medium">Γ£ô {purchaseTransitDocument.name}</span>
                           )}
                         </button>
                       </div>
@@ -4884,7 +4746,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     />
                   </div>
                   <span className="text-sm font-medium text-gray-600 whitespace-nowrap">
-                    ₹{Math.abs(receiveInBal).toLocaleString('en-IN')} Cr
+                    Γé╣{Math.abs(receiveInBal).toLocaleString('en-IN')} Cr
                   </span>
                 </div>
               </div>
@@ -4901,7 +4763,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       />
                     </div>
                     <span className="text-sm font-medium text-gray-600 whitespace-nowrap">
-                      ₹{Math.abs(receiveFromBal).toLocaleString('en-IN')} Dr
+                      Γé╣{Math.abs(receiveFromBal).toLocaleString('en-IN')} Dr
                     </span>
                   </div>
                 </div>
@@ -4968,7 +4830,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           <td className="px-4 py-3 text-sm text-gray-700">{transaction.date}</td>
                           <td className="px-4 py-3 text-sm text-gray-700">{transaction.referenceNumber}</td>
                           <td className="px-4 py-3 text-sm text-gray-700 text-right">
-                            ₹{transaction.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            Γé╣{transaction.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                           </td>
                           <td className="px-4 py-3 text-center">
                             <button
@@ -5680,7 +5542,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       onClick={() => setShowBulkAdvance(false)}
                       className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-[4px] hover:bg-gray-200 text-sm font-medium"
                     >
-                      ← Back
+                      ΓåÉ Back
                     </button>
                   </div>
 
@@ -5743,7 +5605,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               type="button"
                               className="text-red-500 hover:text-red-700"
                             >
-                              🗑️
+                              ≡ƒùæ∩╕Å
                             </button>
                           </td>
                         </tr>
@@ -6721,8 +6583,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             <tfoot className="bg-slate-50 font-bold border-t border-slate-200">
               <tr>
                 <td colSpan={3} className="px-6 py-4 text-right text-xs uppercase tracking-wider text-slate-500">Total</td>
-                <td className="px-6 py-4 text-right text-sm font-mono text-slate-900 border-l border-slate-100">₹{totalDebit.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                <td className="px-6 py-4 text-right text-sm font-mono text-slate-900 border-l border-slate-100">₹{totalCredit.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                <td className="px-6 py-4 text-right text-sm font-mono text-slate-900 border-l border-slate-100">Γé╣{totalDebit.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                <td className="px-6 py-4 text-right text-sm font-mono text-slate-900 border-l border-slate-100">Γé╣{totalCredit.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                 <td></td>
               </tr>
             </tfoot>
@@ -6751,7 +6613,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         {!isJournalBalanced && totalDebit > 0 && (
           <div className="mt-3 flex items-center text-red-600 bg-red-50 p-3 rounded-lg border border-red-100">
             <Icon name="warning" className="w-4 h-4 mr-2" />
-            <span className="text-sm font-medium">Out of Balance: Difference of ₹{Math.abs(totalDebit - totalCredit).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+            <span className="text-sm font-medium">Out of Balance: Difference of Γé╣{Math.abs(totalDebit - totalCredit).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
           </div>
         )}
       </div>
@@ -6765,7 +6627,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         <div>
           <h1 className="page-title">Voucher Entry</h1>
           <p className="helper-text mb-0">
-            Record transactions — sales, purchases, payments, and more
+            Record transactions ΓÇö sales, purchases, payments, and more
           </p>
         </div>
       </div>
@@ -6802,9 +6664,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               <div className="flex items-center space-x-2">
                 <div className="relative" ref={scannerMenuRef}>
                   <button
-                    onClick={() => setIsScannerMenuOpen(prev => !prev)}
-                    className="erp-button-primary"
-                    title="Upload Invoices"
+                    onClick={() => isLimitReached ? handleLimitReached() : setIsScannerMenuOpen(prev => !prev)}
+                    className={`erp-button-primary ${isLimitReached ? 'opacity-50 cursor-not-allowed !bg-gray-400 !shadow-none' : ''}`}
+                    title={isLimitReached ? "Limit Reached" : "Upload Invoices"}
                   >
                     <Icon name="upload" className="w-4 h-4 mr-2" />
                     Upload Invoices
@@ -6814,14 +6676,21 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   {isScannerMenuOpen && (
                     <div className="origin-top-right absolute right-0 mt-2 w-56 rounded shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-[60]">
                       <div className="py-1" role="menu">
-
                         <button
-                          onClick={() => { if (isLimitReached) { handleLimitReached(); } else { setIsBulkUploadOpen(true); } setIsScannerMenuOpen(false); }}
-                          className={`flex items-center w-full text-left px-4 py-2 text-sm ${isLimitReached ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'text-gray-700 hover:bg-gray-100'} border-t border-gray-50`}
+                          onClick={() => { openScanner('finpixe', 'single'); setIsScannerMenuOpen(false); }}
+                          className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                           role="menuitem"
                         >
-                          <Icon name="scanner" className={`w-4 h-4 mr-3 ${isLimitReached ? 'text-red-500' : 'text-emerald-500'}`} />
-                          Finpixe AI Scan {isLimitReached && <span className="ml-auto text-[10px] font-bold uppercase tracking-wider bg-red-100 px-1.5 py-0.5 rounded">Limit Reached</span>}
+                          <Icon name="sparkles" className="w-4 h-4 mr-3 text-indigo-500" />
+                          Finpixe Single Scan
+                        </button>
+                        <button
+                          onClick={() => { setIsBulkUploadOpen(true); setIsScannerMenuOpen(false); }}
+                          className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 border-t border-gray-50"
+                          role="menuitem"
+                        >
+                          <Icon name="scanner" className="w-4 h-4 mr-3 text-emerald-500" />
+                          Finpixe Bulk Scan
                         </button>
                         <button
                           onClick={() => setIsOthersSubmenuOpen(prev => !prev)}
@@ -6890,116 +6759,83 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
                         <div className="border-t border-gray-100 my-1"></div>
                         <button
+                          onClick={() => { excelInputRef.current?.click(); setIsScannerMenuOpen(false); }}
+                          className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                          role="menuitem"
+                        >
+                          <Icon name="receipt" className="w-4 h-4 mr-3 text-green-500" />
+                          From Excel
+                        </button>
+
+                        <button
                           onClick={() => { setIsSalesExcelWorkflowOpen(true); setIsScannerMenuOpen(false); }}
                           className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                           role="menuitem"
                         >
                           <Icon name="file-spreadsheet" className="w-4 h-4 mr-3 text-blue-500" />
-                          Sales Excel Upload
+                          {voucherType === 'Sales' ? 'Sales Excel Workflow (Upload)' : 'Sales Excel Workflow'}
                         </button>
-
+                        <button
+                          onClick={() => { jsonInputRef.current?.click(); setIsScannerMenuOpen(false); }}
+                          className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                          role="menuitem"
+                        >
+                          <Icon name="tag" className="w-4 h-4 mr-3 text-amber-500" />
+                          From JSON
+                        </button>
                       </div>
                     </div>
                   )}
                 </div>
 
 
-                {/* Single scan input */}
-                <input
-                  type="file"
-                  ref={singleScanInputRef}
-                  onClick={(e) => { if (e.target) (e.target as any).value = null; }}
-                  onChange={handleSingleScanFileChange}
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  className="hidden"
-                />
-
+                {/* Single scan input ΓÇô NO multiple attribute */}
+                <input type="file" ref={singleScanInputRef} onClick={(e) => { (e.target as any).value = null; }} onChange={handleSingleScanFileChange} accept=".pdf,.jpg,.jpeg,.png" className="hidden" />
                 {/* Multi-file scanner input for tally/other modes */}
-                <input
-                  type="file"
-                  ref={scannerInputRef}
-                  onClick={(e) => { if (e.target) (e.target as any).value = null; }}
-                  onChange={handleScannerFileChange}
-                  accept="image/*,.pdf"
-                  multiple
-                  className="hidden"
-                />
-
-                <input
-                  type="file"
-                  ref={masterScannerInputRef}
-                  onClick={(e) => { if (e.target) (e.target as any).value = null; }}
-                  onChange={handleMasterScannerFileChange}
-                  accept="image/*,.pdf"
-                  multiple
-                  className="hidden"
-                />
-
-                <input
-                  type="file"
-                  ref={excelInputRef}
-                  onChange={handleExcelFileChange}
-                  accept=".xlsx, .xls"
-                  className="hidden"
-                />
-
-                <input
-                  type="file"
-                  ref={jsonInputRef}
-                  onChange={handleJsonFileChange}
-                  accept=".json"
-                  className="hidden"
-                />
-
-                <input
-                  type="file"
-                  ref={imageInputRef}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      if (voucherType === 'Purchase') setPurchaseSupportingDocument(file);
-                      showInfo(`File "${file.name}" attached for manual entry.`);
-                    }
-                  }}
-                  accept="image/*,.pdf"
-                  className="hidden"
-                />
+                <input type="file" ref={scannerInputRef} onClick={(e) => { (e.target as any).value = null; }} onChange={handleScannerFileChange} accept="image/*,.pdf" multiple className="hidden" />
+                <input type="file" ref={masterScannerInputRef} onClick={(e) => { (e.target as any).value = null; }} onChange={handleMasterScannerFileChange} accept="image/*,.pdf" multiple className="hidden" />
+                <input type="file" ref={excelInputRef} onChange={handleExcelFileChange} accept=".xlsx, .xls" className="hidden" />
+                <input type="file" ref={jsonInputRef} onChange={handleJsonFileChange} accept=".json" className="hidden" />
+                <input type="file" ref={imageInputRef} onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    if (voucherType === 'Purchase') setPurchaseSupportingDocument(file);
+                    showInfo(`File "${file.name}" attached for manual entry.`);
+                  }
+                }} accept="image/*,.pdf" className="hidden" />
               </div>
             </div>
-
-            <style dangerouslySetInnerHTML={{
-              __html: `
-                .form-label { display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.25rem; }
-                .form-input { display: block; width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); outline: none; transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out; }
-                .form-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 1px #3b82f6; }
-                .table-input {
-                  width: 100%;
-                  border: 1px solid transparent;
-                  padding: 0.5rem 0.75rem;
-                  background-color: transparent;
-                  outline: none;
-                  border-radius: 0.375rem;
-                  transition: all 0.2s;
-                  color: #1e293b;
-                }
-                .table-input:focus {
-                  background-color: white;
-                  border-color: #3b82f6;
-                  box-shadow: 0 0 0 1px #3b82f6;
-                }
-                .table-input[readOnly] {
-                  background-color: #f9fafb;
-                  color: #4b5563;
-                  cursor: not-allowed;
-                }
-                .table-header { padding: 0.75rem 1rem; text-align: center; font-size: 0.75rem; font-weight: 600; color: #4b5563; text-transform: uppercase; letter-spacing: 0.05em; background-color: #f9fafb; }
-              `
-            }} />
-
+            <style>{`
+          .form-label { display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.25rem; }
+          .form-input { display: block; width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); outline: none; transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out; }
+          .form-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 1px #3b82f6; }
+          .table-input {
+            width: 100%;
+            border: 1px solid transparent;
+            padding: 0.5rem 0.75rem;
+            background-color: transparent;
+            outline: none;
+            border-radius: 0.375rem;
+            transition: all 0.2s;
+            color: #1e293b;
+          }
+           .table-input:focus {
+            background-color: white;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 1px #3b82f6;
+          }
+          .table-input[readOnly] {
+            background-color: #f9fafb;
+            color: #4b5563;
+            cursor: not-allowed;
+          }
+          .table-header { padding: 0.75rem 1rem; text-align: center; font-size: 0.75rem; font-weight: 600; color: #4b5563; text-transform: uppercase; letter-spacing: 0.05em; background-color: #f9fafb; }
+        `}
+            </style>
             {voucherType === 'Sales' && <SalesVoucher prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} customers={richCustomers} companyDetails={companyDetails} />}
             {voucherType === 'Payment' && <PaymentVoucherSingle prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} />}
             {voucherType === 'Receipt' && <ReceiptVoucher prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} />}
-            {voucherType === 'Purchase' && renderPurchaseForm()}
+            {voucherType === 'Purchase' && renderSalesPurchaseForm()}
             {voucherType === 'Contra' && renderSimpleForm(voucherType)}
             {voucherType === 'Journal' && renderJournalForm()}
             {voucherType === 'Expenses' && renderExpensesForm()}
@@ -7016,306 +6852,233 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               </div>
             )}
 
-            {voucherType === 'Purchase' && (
-              purchaseActiveTab !== 'transit' ? (
-                <button
-                  onClick={() => {
-                    setShowPurchaseMismatches(true);
-                    const hasMismatch = purchaseItems.some(item => item.rateMismatch || item.qtyMismatch);
-                    if (hasMismatch) {
-                      showError("Please resolve Quantity or Rate mismatches before proceeding.");
-                      return;
-                    }
+            {voucherType === 'Purchase' && purchaseActiveTab !== 'transit' ? (
+              <button
+                onClick={() => {
+                  // Trigger validation display
+                  setShowPurchaseMismatches(true);
 
-                    if (purchaseActiveTab === 'supplier') {
-                      if (invoiceInForeignCurrency === 'Yes') setPurchaseActiveTab('supply_foreign');
-                      else setPurchaseActiveTab('supply');
-                    }
-                    else if (purchaseActiveTab === 'supply_foreign') setPurchaseActiveTab('supply_inr');
-                    else if (purchaseActiveTab === 'supply_inr') setPurchaseActiveTab('due');
-                    else if (purchaseActiveTab === 'supply') setPurchaseActiveTab('due');
-                    else if (purchaseActiveTab === 'due') setPurchaseActiveTab('transit');
-                  }}
+                  // Mismatch Validation before proceeding
+                  const hasMismatch = purchaseItems.some(item => item.rateMismatch || item.qtyMismatch);
+                  if (hasMismatch) {
+                    showError("Please resolve Quantity or Rate mismatches before proceeding.");
+                    return;
+                  }
+
+                  if (purchaseActiveTab === 'supplier') {
+                    if (invoiceInForeignCurrency === 'Yes') setPurchaseActiveTab('supply_foreign');
+                    else setPurchaseActiveTab('supply');
+                  }
+                  else if (purchaseActiveTab === 'supply_foreign') setPurchaseActiveTab('supply_inr');
+                  else if (purchaseActiveTab === 'supply_inr') setPurchaseActiveTab('due');
+                  else if (purchaseActiveTab === 'supply') setPurchaseActiveTab('due');
+                  else if (purchaseActiveTab === 'due') setPurchaseActiveTab('transit');
+                }}
+                className="erp-button-primary"
+              >
+                Next
+              </button>
+            ) : (
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleSaveVoucher}
                   className="erp-button-primary"
                 >
-                  Next
+                  Post & Close
                 </button>
-              ) : (
-                <div className="flex space-x-3">
-                  <button onClick={handleSaveVoucher} className="erp-button-primary">Post & Close</button>
-                  <button onClick={handleSaveVoucher} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
-                  <button onClick={resetForm} className="erp-button-secondary">Cancel</button>
-                </div>
-              )
-            )}
+                <button
+                  onClick={resetForm}
+                  className="erp-button-secondary"
+                >
+                  Cancel
+                </button>
 
-            {!['Sales', 'Payment', 'Receipt', 'Purchase'].includes(voucherType) && (
-              <div className="flex space-x-3">
-                <button onClick={handleSaveVoucher} className="erp-button-primary">Post & Close</button>
-                <button onClick={handleSaveVoucher} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
-                <button onClick={resetForm} className="erp-button-secondary">Cancel</button>
+                {voucherType === 'Purchase' && purchaseActiveTab !== 'transit' ? (
+                  <button
+                    onClick={() => {
+                      if (purchaseActiveTab === 'supplier') {
+                        if (invoiceInForeignCurrency === 'Yes') setPurchaseActiveTab('supply_foreign');
+                        else setPurchaseActiveTab('supply');
+                      }
+                      else if (purchaseActiveTab === 'supply_foreign') setPurchaseActiveTab('supply_inr');
+                      else if (purchaseActiveTab === 'supply_inr') setPurchaseActiveTab('due');
+                      else if (purchaseActiveTab === 'supply') setPurchaseActiveTab('due');
+                      else if (purchaseActiveTab === 'due') setPurchaseActiveTab('transit');
+                    }}
+                    className="erp-button-primary"
+                  >
+                    Next
+                  </button>
+                ) : (
+                  <div className="flex space-x-3">
+                    <button
+                      onClick={handleSaveVoucher}
+                      className="erp-button-primary"
+                    >
+                      Post & Close
+                    </button>
+                    <button
+                      onClick={handleSaveVoucher}
+                      className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                    >
+                      Post & Print/Email
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
 
-          {isInvoiceScannerOpen && (
-            <InvoiceScannerModal
-              initialFiles={scannerFiles}
-              extractionMode={extractionMode}
-              scanType={scanType}
-              voucherType={voucherType}
-              onClose={() => {
-                setIsInvoiceScannerOpen(false);
-                setScannerFiles(null);
-                if (singleScanInputRef.current) singleScanInputRef.current.value = '';
-                if (scannerInputRef.current) scannerInputRef.current.value = '';
-              }}
-              onUpload={handleInvoiceUploadResults}
-            />
-          )}
 
-          {isTallyMasterScannerOpen && (
-            <TallyMasterScannerModal
-              initialFiles={masterScannerFiles}
-              onClose={() => {
-                setIsTallyMasterScannerOpen(false);
-                setMasterScannerFiles(null);
-                if (masterScannerInputRef.current) masterScannerInputRef.current.value = '';
-              }}
-              onUpload={(data) => {
-                console.log('[VouchersPage] Tally Master records received:', data.length);
-              }}
-            />
-          )}
 
-          {/* Invoice Scanner Modal */}
-          {
-            isInvoiceScannerOpen && (
-              <InvoiceScannerModal
-                extractionMode={extractionMode}
-                scanType={scanType}
-                initialFiles={scannerFiles}
-                voucherType={voucherType}
-                onClose={() => {
-                  setIsInvoiceScannerOpen(false);
-                  setScannerFiles(null);
-                  refetch(); // Refresh usage after scan
-                }}
-                onExtractionSuccess={(extractedData) => {
-                  if (voucherType !== 'Purchase') return;
+                const foreignCurrVal = firstRow['Foreign Currency'] || '';
+                if (foreignCurrVal) {
+                  setInvoiceInForeignCurrency(foreignCurrVal.toLowerCase() === 'yes' ? 'Yes' : 'No');
+                }
 
-                  validateVendorFromInvoice(
-                    extractedData.vendor_name,
-                    extractedData.gstin,
-                    extractedData.state,
-                    extractedData.bill_from,
-                    extractedData.branch
-                  );
-                }}
-                onUpload={(data) => {
-                  console.log('[VouchersPage] Data received from InvoiceScannerModal:', data);
-                  const firstRow = data[0];
+                const conversionRateVal = firstRow['Conversion Rate'] || '';
+                if (conversionRateVal) setExchangeRate(conversionRateVal);
 
-                  if (voucherType === 'Purchase' || voucherType === 'Debit Note') {
-                    // Map flat "Finpixe schema" columns to Purchase form internal state
-                    // Column names exactly match VOUCHER_COLUMN_SCHEMAS['Purchase']
+                const currencyVal = firstRow['Currency'] || '';
+                if (currencyVal) setVendorBillingCurrency(currencyVal);
 
-                    // "Supplier Invoice No." (with dot) — also tolerate legacy name without dot
-                    const supplierInvNo = firstRow['Supplier Invoice No.'] || firstRow['Supplier Invoice No'] || '';
-                    if (supplierInvNo) setInvoiceNo(supplierInvNo);
+                const posVal = firstRow['Place of Supply'] || '';
+                if (posVal) setBillFromState(posVal);
 
-                    // Flexible mapping for Party/Vendor
-                    const partyVal = firstRow['Vendor Name'] || firstRow['Buyer/Supplier - Mailing Name'] || '';
-                    if (partyVal) handlePartyChange(partyVal);
+                // Summary / Due Details
+                if (firstRow['TDS/TCS under Income Tax']) setPurchaseTdsIt(firstRow['TDS/TCS under Income Tax']);
+                if (firstRow['Advance Paid']) setPurchaseAdvancePaid(firstRow['Advance Paid']);
+                if (firstRow['Amount Due']) setPurchaseToPay(firstRow['Amount Due']);
+                if (firstRow['Posting Note']) setPurchasePostingNote(firstRow['Posting Note']);
 
-                    if (firstRow['GSTIN']) setGstin(firstRow['GSTIN']);
+                // Transit Details
+                if (firstRow['Received In']) setPurchaseTransitReceivedIn(firstRow['Received In']);
+                if (firstRow['Mode of Transport']) setPurchaseTransitMode(firstRow['Mode of Transport']);
+                if (firstRow['Received Date']) setPurchaseTransitReceiptDate(formatDateForInput(firstRow['Received Date']) || getTodayDate());
+                if (firstRow['Received Time']) setPurchaseTransitReceiptTime(firstRow['Received Time']);
+                if (firstRow['Received Quantity']) setPurchaseTransitReceivedQty(firstRow['Received Quantity']);
+                if (firstRow['Delivery Type']) setPurchaseTransitDeliveryType(firstRow['Delivery Type']);
+                if (firstRow['Transporter ID/GSTIN']) setPurchaseTransitTransporterId(firstRow['Transporter ID/GSTIN']);
+                if (firstRow['Transporter Name']) setPurchaseTransitTransporterName(firstRow['Transporter Name']);
+                if (firstRow['Vehicle No.']) setPurchaseTransitVehicleNo(firstRow['Vehicle No.']);
+                if (firstRow['LR/GR/Consignment No']) setPurchaseTransitLrGrConsignment(firstRow['LR/GR/Consignment No']);
 
-                    // Branch
-                    const branchVal = firstRow['Branch'] || '';
-                    if (branchVal) setSelectedBranch(branchVal);
+                const mappedItems = data.map((row, idx) => {
+                  const igst = parseFloat(row['IGST'] || row['Integrated Tax (IGST)'] || '0') || 0;
+                  const cgst = parseFloat(row['CGST'] || row['Central Tax (CGST)'] || '0') || 0;
+                  const sgst = parseFloat(row['SGST/UTGST'] || row['SGST'] || row['State Tax (SGST)'] || '0') || 0;
+                  const cess = parseFloat(row['Cess'] || '0') || 0;
+                  const taxable = parseFloat(row['Taxable Value'] || '0') || 0;
+                  // If Invoice Value not extracted directly, derive it
+                  const rawInv = parseFloat(row['Invoice Value'] || row['Item Amount'] || '0') || 0;
+                  const invoiceValue = rawInv > 0 ? rawInv : (taxable + igst + cgst + sgst + cess) || taxable;
 
-                    // Date — new schema: "Date"; legacy Tally: "Voucher Date"
-                    if (firstRow['Date'] || firstRow['Voucher Date'])
-                      setDate(formatDateForInput(firstRow['Date'] || firstRow['Voucher Date']) || getTodayDate());
+                  return {
+                    id: (Date.now() + idx).toString(),
+                    itemCode: row['Item Code'] || '',
+                    itemName: row['Item Name'] || '',
+                    hsnSac: row['HSN/SAC'] || '',
+                    qty: parseFloat(row['Qty'] || row['Quantity'] || '0') || 0,
+                    uom: row['UOM'] || '',
+                    rate: parseFloat(row['Item Rate'] || row['Rate'] || '0') || 0,
+                    taxableValue: taxable,
+                    foreignRate: parseFloat(row['Rate (FC)'] || '0') || 0,
+                    foreignAmount: parseFloat(row['Amount (FC)'] || '0') || 0,
+                    igst,
+                    cgst,
+                    sgst,
+                    cess,
+                    invoiceValue,
+                    description: row['Description'] || '',
+                    poRate: null,
+                    invoiceRate: parseFloat(row['Item Rate'] || row['Rate'] || '0') || null,
+                    rateMismatch: false,
+                    poQty: null,
+                    invoiceQty: parseFloat(row['Qty'] || row['Quantity'] || '0') || null,
+                    qtyMismatch: false,
+                    grnQty: null,
+                    sourcePoNo: null
+                  };
+                });
+                console.log('[VouchersPage] Mapped Purchase Items:', mappedItems);
+                setPurchaseItems(mappedItems);
+              } else {
+                // For Sales, Payment, Receipt: use reconstructed ExtractedInvoiceData for sub-components
+                const lineItems = data.map(row => ({
+                  itemDescription: row['Item Name'] || '',
+                  hsnCode: row['HSN/SAC'] || '',
+                  // New schema: "Qty" ΓÇö also tolerate legacy "Quantity"
+                  quantity: parseFloat(row['Qty'] || row['Quantity'] || '0') || 0,
+                  // New schema: "Item Rate" ΓÇö also tolerate legacy "Rate"
+                  rate: parseFloat(row['Item Rate'] || row['Rate'] || '0') || 0,
+                  // New schema: "Invoice Value" per row ΓÇö also tolerate legacy "Item Amount"
+                  amount: parseFloat(row['Invoice Value'] || row['Item Amount'] || '0') || 0,
+                  cgst: parseFloat(row['CGST'] || '0') || 0,
+                  sgst: parseFloat(row['SGST/UTGST'] || row['SGST'] || '0') || 0,
+                  igst: parseFloat(row['IGST'] || '0') || 0,
+                  cess: parseFloat(row['Cess'] || '0') || 0,
+                  taxableValue: parseFloat(row['Taxable Value'] || '0') || 0
+                }));
 
-                    // Bill From address — new schema uses granular sub-fields
-                    if (firstRow['Bill From - Address Line 1']) setBillFromAddress1(firstRow['Bill From - Address Line 1']);
-                    if (firstRow['Bill From - Address Line 2']) setBillFromAddress2(firstRow['Bill From - Address Line 2']);
-                    if (firstRow['Bill From - City']) setBillFromCity(firstRow['Bill From - City']);
-                    if (firstRow['Bill From - State']) setBillFromState(firstRow['Bill From - State']);
-                    if (firstRow['Bill From - Pincode']) setBillFromPincode(firstRow['Bill From - Pincode']);
-                    if (firstRow['Bill From - Country']) setBillFromCountry(firstRow['Bill From - Country']);
+                // Compute totals by summing per-row values
+                const computedTaxableValue = data.reduce((s, r) => s + (parseFloat(r['Taxable Value'] || '0') || 0), 0);
+                const computedCgst = data.reduce((s, r) => s + (parseFloat(r['CGST'] || '0') || 0), 0);
+                // Schema uses "SGST/UTGST" as the unified key
+                const computedSgst = data.reduce((s, r) => s + (parseFloat(r['SGST/UTGST'] || r['SGST'] || '0') || 0), 0);
+                const computedIgst = data.reduce((s, r) => s + (parseFloat(r['IGST'] || '0') || 0), 0);
+                const computedCess = data.reduce((s, r) => s + (parseFloat(r['Cess'] || '0') || 0), 0);
+                const computedInvoiceValue = data.reduce((s, r) => s + (parseFloat(r['Invoice Value'] || r['Item Amount'] || '0') || 0), 0);
 
-                    // Ship From address
-                    if (firstRow['Ship From - Address Line 1']) setShipFromAddress1(firstRow['Ship From - Address Line 1']);
-                    if (firstRow['Ship From - Address Line 2']) setShipFromAddress2(firstRow['Ship From - Address Line 2']);
-                    if (firstRow['Ship From - City']) setShipFromCity(firstRow['Ship From - City']);
-                    if (firstRow['Ship From - State']) setShipFromState(firstRow['Ship From - State']);
-                    if (firstRow['Ship From - Pincode']) setShipFromPincode(firstRow['Ship From - Pincode']);
-                    if (firstRow['Ship From - Country']) setShipFromCountry(firstRow['Ship From - Country']);
-
-                    // Additional Purchase Header Fields
-                    const purchaseOrderNoVal = firstRow['Purchase Order No.'] || '';
-                    if (purchaseOrderNoVal) setPurchaseOrderNo(purchaseOrderNoVal);
-
-                    const voucherSeriesVal = firstRow['Purchase Voucher Series'] || '';
-                    if (voucherSeriesVal) setSelectedPurchaseConfig(voucherSeriesVal);
-
-                    const inputType = firstRow['Input Type'] || '';
-                    if (inputType) {
-                      if (inputType.toLowerCase().includes('interstate')) setPurchaseInputTypes(['Interstate']);
-                      else if (inputType.toLowerCase().includes('import')) setPurchaseInputTypes(['Import']);
-                      else setPurchaseInputTypes(['Intrastate']);
-                    }
-
-                    const foreignCurrVal = firstRow['Foreign Currency'] || '';
-                    if (foreignCurrVal) {
-                      setInvoiceInForeignCurrency(foreignCurrVal.toLowerCase() === 'yes' ? 'Yes' : 'No');
-                    }
-
-                    const conversionRateVal = firstRow['Conversion Rate'] || '';
-                    if (conversionRateVal) setExchangeRate(conversionRateVal);
-
-                    const currencyVal = firstRow['Currency'] || '';
-                    if (currencyVal) setVendorBillingCurrency(currencyVal);
-
-                    const posVal = firstRow['Place of Supply'] || '';
-                    if (posVal) setBillFromState(posVal);
-
-                    // Summary / Due Details
-                    if (firstRow['TDS/TCS under Income Tax']) setPurchaseTdsIt(firstRow['TDS/TCS under Income Tax']);
-                    if (firstRow['Advance Paid']) setPurchaseAdvancePaid(firstRow['Advance Paid']);
-                    if (firstRow['Amount Due']) setPurchaseToPay(firstRow['Amount Due']);
-                    if (firstRow['Posting Note']) setPurchasePostingNote(firstRow['Posting Note']);
-
-                    // Transit Details
-                    if (firstRow['Received In']) setPurchaseTransitReceivedIn(firstRow['Received In']);
-                    if (firstRow['Mode of Transport']) setPurchaseTransitMode(firstRow['Mode of Transport']);
-                    if (firstRow['Received Date']) setPurchaseTransitReceiptDate(formatDateForInput(firstRow['Received Date']) || getTodayDate());
-                    if (firstRow['Received Time']) setPurchaseTransitReceiptTime(firstRow['Received Time']);
-                    if (firstRow['Received Quantity']) setPurchaseTransitReceivedQty(firstRow['Received Quantity']);
-                    if (firstRow['Delivery Type']) setPurchaseTransitDeliveryType(firstRow['Delivery Type']);
-                    if (firstRow['Transporter ID/GSTIN']) setPurchaseTransitTransporterId(firstRow['Transporter ID/GSTIN']);
-                    if (firstRow['Transporter Name']) setPurchaseTransitTransporterName(firstRow['Transporter Name']);
-                    if (firstRow['Vehicle No.']) setPurchaseTransitVehicleNo(firstRow['Vehicle No.']);
-                    if (firstRow['LR/GR/Consignment No']) setPurchaseTransitLrGrConsignment(firstRow['LR/GR/Consignment No']);
-
-                    const mappedItems = data.map((row, idx) => {
-                      const igst = parseFloat(row['IGST'] || row['Integrated Tax (IGST)'] || '0') || 0;
-                      const cgst = parseFloat(row['CGST'] || row['Central Tax (CGST)'] || '0') || 0;
-                      const sgst = parseFloat(row['SGST/UTGST'] || row['SGST'] || row['State Tax (SGST)'] || '0') || 0;
-                      const cess = parseFloat(row['Cess'] || '0') || 0;
-                      const taxable = parseFloat(row['Taxable Value'] || '0') || 0;
-                      // If Invoice Value not extracted directly, derive it
-                      const rawInv = parseFloat(row['Invoice Value'] || row['Item Amount'] || '0') || 0;
-                      const invoiceValue = rawInv > 0 ? rawInv : (taxable + igst + cgst + sgst + cess) || taxable;
-
-                      return {
-                        id: (Date.now() + idx).toString(),
-                        itemCode: row['Item Code'] || '',
-                        itemName: row['Item Name'] || '',
-                        hsnSac: row['HSN/SAC'] || '',
-                        qty: parseFloat(row['Qty'] || row['Quantity'] || '0') || 0,
-                        uom: row['UOM'] || '',
-                        rate: parseFloat(row['Item Rate'] || row['Rate'] || '0') || 0,
-                        taxableValue: taxable,
-                        foreignRate: parseFloat(row['Rate (FC)'] || '0') || 0,
-                        foreignAmount: parseFloat(row['Amount (FC)'] || '0') || 0,
-                        igst,
-                        cgst,
-                        sgst,
-                        cess,
-                        invoiceValue,
-                        description: row['Description'] || '',
-                        poRate: null,
-                        invoiceRate: parseFloat(row['Item Rate'] || row['Rate'] || '0') || null,
-                        rateMismatch: false,
-                        poQty: null,
-                        invoiceQty: parseFloat(row['Qty'] || row['Quantity'] || '0') || null,
-                        qtyMismatch: false,
-                        grnQty: null,
-                        sourcePoNo: null
-                      };
-                    });
-                    console.log('[VouchersPage] Mapped Purchase Items:', mappedItems);
-                    setPurchaseItems(mappedItems);
-                  } else {
-                    // For Sales, Payment, Receipt: use reconstructed ExtractedInvoiceData for sub-components
-                    const lineItems = data.map(row => ({
-                      itemDescription: row['Item Name'] || '',
-                      hsnCode: row['HSN/SAC'] || '',
-                      // New schema: "Qty" — also tolerate legacy "Quantity"
-                      quantity: parseFloat(row['Qty'] || row['Quantity'] || '0') || 0,
-                      // New schema: "Item Rate" — also tolerate legacy "Rate"
-                      rate: parseFloat(row['Item Rate'] || row['Rate'] || '0') || 0,
-                      // New schema: "Invoice Value" per row — also tolerate legacy "Item Amount"
-                      amount: parseFloat(row['Invoice Value'] || row['Item Amount'] || '0') || 0,
-                      cgst: parseFloat(row['CGST'] || '0') || 0,
-                      sgst: parseFloat(row['SGST/UTGST'] || row['SGST'] || '0') || 0,
-                      igst: parseFloat(row['IGST'] || '0') || 0,
-                      cess: parseFloat(row['Cess'] || '0') || 0,
-                      taxableValue: parseFloat(row['Taxable Value'] || '0') || 0
-                    }));
-
-                    // Compute totals by summing per-row values
-                    const computedTaxableValue = data.reduce((s, r) => s + (parseFloat(r['Taxable Value'] || '0') || 0), 0);
-                    const computedCgst = data.reduce((s, r) => s + (parseFloat(r['CGST'] || '0') || 0), 0);
-                    // Schema uses "SGST/UTGST" as the unified key
-                    const computedSgst = data.reduce((s, r) => s + (parseFloat(r['SGST/UTGST'] || r['SGST'] || '0') || 0), 0);
-                    const computedIgst = data.reduce((s, r) => s + (parseFloat(r['IGST'] || '0') || 0), 0);
-                    const computedCess = data.reduce((s, r) => s + (parseFloat(r['Cess'] || '0') || 0), 0);
-                    const computedInvoiceValue = data.reduce((s, r) => s + (parseFloat(r['Invoice Value'] || r['Item Amount'] || '0') || 0), 0);
-
-                    const reconstructed: any = {
-                      sellerName: firstRow['Customer Name'] || firstRow['Vendor Name'] || firstRow['Buyer/Supplier - Mailing Name'] || '',
-                      // New schema: "Sales Invoice No." (with dot)
-                      invoiceNumber: firstRow['Sales Invoice No.'] || firstRow['Sales Invoice No'] || firstRow['Supplier Invoice No.'] || firstRow['Supplier Invoice No'] || '',
-                      // New schema: "Date" (was "Voucher Date")
-                      invoiceDate: formatDateForInput(firstRow['Date'] || firstRow['Voucher Date'] || '') || getTodayDate(),
-                      subtotal: computedTaxableValue,
-                      cgstAmount: computedCgst,
-                      sgstAmount: computedSgst,
-                      igstAmount: computedIgst,
-                      cessAmount: computedCess,
-                      totalAmount: computedInvoiceValue,
-                      lineItems,
-                      // Additional Sales Fields for direct sync
-                      gstin: firstRow['GSTIN'] || '',
-                      placeOfSupply: firstRow['Place of Supply'] || '',
-                      stateType: (firstRow['State Type'] || 'within').toLowerCase(),
-                      invoiceType: firstRow['Invoice Type'] || 'Regular',
-                      currency: firstRow['Currency'] || '',
-                      exchangeRate: parseFloat(firstRow['Conversion Rate'] || '0') || 0,
-                      billToAddress1: firstRow['Bill To - Address Line 1'] || '',
-                      billToAddress2: firstRow['Bill To - Address Line 2'] || '',
-                      billToCity: firstRow['Bill To - City'] || '',
-                      billToState: firstRow['Bill To - State'] || '',
-                      billToPincode: firstRow['Bill To - Pincode'] || '',
-                      billToCountry: firstRow['Bill To - Country'] || '',
-                      // Summary Fields
-                      stateCess: firstRow['State Cess'] || '',
-                      tdsIncomeTax: firstRow['TDS/TCS under Income Tax'] || '',
-                      tdsGst: firstRow['TDS/TCS under GST'] || '',
-                      advanceAmount: firstRow['Advance'] || '',
-                      payable: firstRow['Payable'] || '',
-                      postingNote: firstRow['Posting Note:'] || '',
-                      // Dispatch Fields
-                      dispatchFrom: firstRow['Dispatch From'] || '',
-                      modeOfTransport: firstRow['Mode of Transport'] || '',
-                      dispatchDate: firstRow['Dispatch Date'] || '',
-                      dispatchTime: firstRow['Dispatch Time'] || '',
-                      transporterId: firstRow['Transporter ID/GSTIN'] || '',
-                      transporterName: firstRow['Transporter Name'] || '',
-                      vehicleNo: firstRow['Vehicle No.'] || '',
-                      lrGrConsignment: firstRow['LR/GR/Consignment No'] || ''
-                    };
-                    console.log('[VouchersPage] Reconstructed PrefilledData:', reconstructed);
-                    setLocalPrefilledData(reconstructed);
-                  }
-                }}
-              />
-            )
-          }
+                const reconstructed: any = {
+                  sellerName: firstRow['Customer Name'] || firstRow['Vendor Name'] || firstRow['Buyer/Supplier - Mailing Name'] || '',
+                  // New schema: "Sales Invoice No." (with dot)
+                  invoiceNumber: firstRow['Sales Invoice No.'] || firstRow['Sales Invoice No'] || firstRow['Supplier Invoice No.'] || firstRow['Supplier Invoice No'] || '',
+                  // New schema: "Date" (was "Voucher Date")
+                  invoiceDate: formatDateForInput(firstRow['Date'] || firstRow['Voucher Date'] || '') || getTodayDate(),
+                  subtotal: computedTaxableValue,
+                  cgstAmount: computedCgst,
+                  sgstAmount: computedSgst,
+                  igstAmount: computedIgst,
+                  cessAmount: computedCess,
+                  totalAmount: computedInvoiceValue,
+                  lineItems,
+                  // Additional Sales Fields for direct sync
+                  gstin: firstRow['GSTIN'] || '',
+                  placeOfSupply: firstRow['Place of Supply'] || '',
+                  stateType: (firstRow['State Type'] || 'within').toLowerCase(),
+                  invoiceType: firstRow['Invoice Type'] || 'Regular',
+                  currency: firstRow['Currency'] || '',
+                  exchangeRate: parseFloat(firstRow['Conversion Rate'] || '0') || 0,
+                  billToAddress1: firstRow['Bill To - Address Line 1'] || '',
+                  billToAddress2: firstRow['Bill To - Address Line 2'] || '',
+                  billToCity: firstRow['Bill To - City'] || '',
+                  billToState: firstRow['Bill To - State'] || '',
+                  billToPincode: firstRow['Bill To - Pincode'] || '',
+                  billToCountry: firstRow['Bill To - Country'] || '',
+                  // Summary Fields
+                  stateCess: firstRow['State Cess'] || '',
+                  tdsIncomeTax: firstRow['TDS/TCS under Income Tax'] || '',
+                  tdsGst: firstRow['TDS/TCS under GST'] || '',
+                  advanceAmount: firstRow['Advance'] || '',
+                  payable: firstRow['Payable'] || '',
+                  postingNote: firstRow['Posting Note:'] || '',
+                  // Dispatch Fields
+                  dispatchFrom: firstRow['Dispatch From'] || '',
+                  modeOfTransport: firstRow['Mode of Transport'] || '',
+                  dispatchDate: firstRow['Dispatch Date'] || '',
+                  dispatchTime: firstRow['Dispatch Time'] || '',
+                  transporterId: firstRow['Transporter ID/GSTIN'] || '',
+                  transporterName: firstRow['Transporter Name'] || '',
+                  vehicleNo: firstRow['Vehicle No.'] || '',
+                  lrGrConsignment: firstRow['LR/GR/Consignment No'] || ''
+                };
+                console.log('[VouchersPage] Reconstructed PrefilledData:', reconstructed);
+                setLocalPrefilledData(reconstructed);
+              }
+            }}
+          />
+        )
+      }
 
 
           {/* Tally Master Scanner Modal */}
@@ -7335,6 +7098,57 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             )
           }
 
+                const response = await apiService.createInventoryOperationGRN(data);
+
+                setGrnRefNo(response.grn_no);
+                showSuccess('GRN Created Successfully!');
+
+                // Sync items to Supply Details table
+                if (data.items && data.items.length > 0) {
+                  const mappedItems = data.items.map((item: any, index: number) => {
+                    // Try to find full item details from stockItems
+                    const stockItem = allItems.find((s: any) =>
+                      (s.item_code || s.code) === item.item_code || (s.item_name || s.name) === item.item_name
+                    );
+
+                    const qty = item.accepted_qty || item.received_qty || 0;
+                    const rate = stockItem?.standard_rate || stockItem?.rate || 0;
+                    const taxableValue = qty * rate;
+
+                    return {
+                      id: (index + 1).toString(),
+                      itemCode: item.item_code || stockItem?.item_code || stockItem?.code || '',
+                      itemName: item.item_name || stockItem?.item_name || stockItem?.name || '',
+                      hsnSac: stockItem?.hsn_sac || '',
+                      qty: qty,
+                      uom: item.uom || stockItem?.uom || '',
+                      rate: rate,
+                      taxableValue: taxableValue,
+                      foreignRate: 0,
+                      foreignAmount: 0,
+                      igst: 0,
+                      cgst: 0,
+                      sgst: 0,
+                      cess: 0,
+                      invoiceValue: taxableValue,
+                      description: item.remarks || '',
+                      poRate: null,
+                      invoiceRate: null,
+                      rateMismatch: false,
+                      poQty: null,
+                      invoiceQty: qty,
+                      qtyMismatch: false,
+                      grnQty: item.accepted_qty || item.received_qty || null,
+                      sourcePoNo: null
+                    };
+                    console.log('[VouchersPage] Reconstructed PrefilledData:', reconstructed);
+                    setLocalPrefilledData(reconstructed);
+                  }
+                }}
+              />
+            )
+          }
+
           {/* Create Vendor Modal */}
           {isCreateVendorModalOpen && extractedVendorData && (
             <CreateVendorModal
@@ -7345,65 +7159,76 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           )}
 
           {/* Create GRN Modal */}
-          {isCreateGRNModalOpen && (
-            <CreateGRNModal
-              onClose={() => setIsCreateGRNModalOpen(false)}
-              onSave={async (data) => {
-                try {
-                  const response = await apiService.createInventoryOperationGRN(data);
-                  setGrnRefNo(response.grn_no);
-                  showSuccess('GRN Created Successfully!');
+          {
+            isCreateGRNModalOpen && (
+              <CreateGRNModal
+                onClose={() => setIsCreateGRNModalOpen(false)}
+                onSave={async (data) => {
+                  try {
 
-                  if (data.items && data.items.length > 0) {
-                    const mappedItems = data.items.map((item: any, index: number) => {
-                      const stockItem = stockItems.find((s: any) =>
-                        (s.item_code || s.code) === item.item_code || (s.item_name || s.name) === item.item_name
-                      );
+                    const response = await apiService.createInventoryOperationGRN(data);
 
-                      const qty = item.accepted_qty || item.received_qty || 0;
-                      const rate = stockItem?.standard_rate || stockItem?.rate || 0;
-                      const taxableValue = qty * rate;
+                    setGrnRefNo(response.grn_no);
+                    showSuccess('GRN Created Successfully!');
 
-                      return {
-                        id: (index + 1).toString(),
-                        itemCode: item.item_code || stockItem?.item_code || stockItem?.code || '',
-                        itemName: item.item_name || stockItem?.item_name || stockItem?.name || '',
-                        hsnSac: stockItem?.hsn_sac || '',
-                        qty: qty,
-                        uom: item.uom || stockItem?.uom || '',
-                        rate: rate,
-                        taxableValue: taxableValue,
-                        foreignRate: 0,
-                        foreignAmount: 0,
-                        igst: 0,
-                        cgst: 0,
-                        sgst: 0,
-                        cess: 0,
-                        invoiceValue: taxableValue,
-                        description: item.remarks || ''
-                      };
-                    });
-                    setPurchaseItems(mappedItems);
-                  }
+                    // Sync items to Supply Details table
+                    if (data.items && data.items.length > 0) {
+                      const mappedItems = data.items.map((item: any, index: number) => {
+                        // Try to find full item details from stockItems
+                        const stockItem = stockItems.find((s: any) =>
+                          (s.item_code || s.code) === item.item_code || (s.item_name || s.name) === item.item_name
+                        );
+
+                        const qty = item.accepted_qty || item.received_qty || 0;
+                        const rate = stockItem?.standard_rate || stockItem?.rate || 0;
+                        const taxableValue = qty * rate;
+
+                        return {
+                          id: (index + 1).toString(),
+                          itemCode: item.item_code || stockItem?.item_code || stockItem?.code || '',
+                          itemName: item.item_name || stockItem?.item_name || stockItem?.name || '',
+                          hsnSac: stockItem?.hsn_sac || '',
+                          qty: qty,
+                          uom: item.uom || stockItem?.uom || '',
+                          rate: rate,
+                          taxableValue: taxableValue,
+                          foreignRate: 0,
+                          foreignAmount: 0,
+                          igst: 0,
+                          cgst: 0,
+                          sgst: 0,
+                          cess: 0,
+                          invoiceValue: taxableValue,
+                          description: item.remarks || ''
+                        };
+                      });
+                      setPurchaseItems(mappedItems);
+                    }
+
+                    // Sync other relevant fields
+                    if (data.vendor_name) setParty(data.vendor_name);
+                    if (data.gstin) setGstin(data.gstin);
+                    if (data.address) {
+                      setAddressFields(data.address);
+                    }
+                    if (data.secondary_ref_no) setInvoiceNo(data.secondary_ref_no);
+                    if (data.reference_no) setPurchaseOrderNo(data.reference_no);
 
                     // Add to pending list and select it
                     if (response.grn_no) {
                       setPendingGRNs(prev => [...prev, response]);
-                      setGrnRefNo(response.grn_no);
                     }
 
-                  if (response.grn_no) {
-                    setPendingGRNs(prev => [...prev, response]);
+                    setIsCreateGRNModalOpen(false);
+                  } catch (error) {
+                    console.error("Failed to create GRN");
+                    showError("Failed to create GRN. Please check inputs.");
                   }
 
-                  setIsCreateGRNModalOpen(false);
-                } catch (error) {
-                  console.error("Failed to create GRN");
-                  showError("Failed to create GRN. Please check inputs.");
-                }
-              }}
-            />
-          )}
+                }}
+              />
+            )
+          }
           {/* Upgrade Modal */}
           {
             isUpgradeModalOpen && (
@@ -7655,7 +7480,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           {isBulkUploadOpen && (
             <BulkInvoiceUploadModal
               voucherType={voucherType}
-              isLimitReached={isLimitReached}
               onClose={() => {
                 setIsBulkUploadOpen(false);
                 refetch(); // Refresh usage
