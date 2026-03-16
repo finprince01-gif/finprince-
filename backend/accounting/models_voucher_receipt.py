@@ -14,12 +14,11 @@ class VoucherReceiptSingle(BaseModel):
     voucher_number = models.CharField(max_length=100)
     
     # Receive In (Bank/Cash Account)
-    receive_in = models.CharField(max_length=100, null=True, blank=True)
-    
-    # Receive From (Customer/Party)
-    receive_from = models.CharField(max_length=255, null=True, blank=True)
+    receive_in = models.ForeignKey('MasterLedger', on_delete=models.CASCADE, null=True, blank=True, related_name='receipt_single_in', db_column='receive_in_ledger_id')
+    receive_from = models.ForeignKey('MasterLedger', on_delete=models.CASCADE, null=True, blank=True, related_name='receipt_single_from', db_column='receive_from_ledger_id')
     
     total_receipt = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    source = models.CharField(max_length=100, default='manual')
 
     # Advance Receipt details
     advance_ref_no = models.CharField(max_length=100, null=True, blank=True)
@@ -31,6 +30,12 @@ class VoucherReceiptSingle(BaseModel):
         blank=True,
         help_text="List of transactions: [{date, referenceNumber, amount, receipt, pending, advance}]"
     )
+
+    # Reconciliation Fields
+    bank_reconciled = models.BooleanField(default=False)
+    bank_reconcile_date = models.DateField(null=True, blank=True)
+    bank_statement_id = models.BigIntegerField(null=True, blank=True)
+    bank_reference_number = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
         managed = False
@@ -48,7 +53,7 @@ class VoucherReceiptBulk(BaseModel):
     voucher_number = models.CharField(max_length=100)
     
     # Receive In (Bank/Cash Account)
-    receive_in = models.CharField(max_length=100, null=True, blank=True)
+    receive_in = models.ForeignKey('MasterLedger', on_delete=models.CASCADE, null=True, blank=True, related_name='receipt_bulk_in', db_column='receive_in_ledger_id')
     
     # List of {receiveFrom, amount}
     receipt_rows = models.JSONField(
@@ -69,6 +74,12 @@ class VoucherReceiptBulk(BaseModel):
         blank=True,
         help_text="List of transactions: [{date, invoiceNo, amount, receiveNow, pending, advance}]"
     )
+
+    # Reconciliation Fields
+    bank_reconciled = models.BooleanField(default=False)
+    bank_reconcile_date = models.DateField(null=True, blank=True)
+    bank_statement_id = models.BigIntegerField(null=True, blank=True)
+    bank_reference_number = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
         managed = False

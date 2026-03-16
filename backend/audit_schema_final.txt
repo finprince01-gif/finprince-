@@ -1,0 +1,160 @@
+﻿# This is an auto-generated Django model module.
+# You'll have to do the following manually to clean this up:
+#   * Rearrange models' order
+#   * Make sure each model has one field with primary_key=True
+#   * Make sure each ForeignKey and OneToOneField has `on_delete` set to the desired behavior
+#   * Remove `managed = False` lines if you wish to allow Django to create, modify, and delete the table
+# Feel free to rename the models, but don't rename db_table values or field names.
+from django.db import models
+
+
+class BankStatementTransactions(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    tenant = models.ForeignKey('Tenants', models.DO_NOTHING)
+    bank_ledger_id = models.BigIntegerField(db_comment='FK to master_ledgers (Bank/Cash ledger)')
+    transaction_date = models.DateField(db_comment='Date of bank transaction')
+    narration = models.TextField(blank=True, null=True, db_comment='Transaction description/narration')
+    debit = models.DecimalField(max_digits=15, decimal_places=2, db_comment='Debit amount (money out)')
+    credit = models.DecimalField(max_digits=15, decimal_places=2, db_comment='Credit amount (money in)')
+    reference_number = models.CharField(max_length=100, blank=True, null=True, db_comment='Cheque No / UTR / Transaction ID')
+    match_status = models.CharField(max_length=20, db_comment='Matched | Possible Match | Unmatched | Ignored')
+    matched_voucher_id = models.BigIntegerField(blank=True, null=True, db_comment='FK to vouchers.id when matched')
+    confidence_score = models.IntegerField(blank=True, null=True)
+    multi_voucher_ids = models.JSONField(blank=True, null=True)
+    suggested_party = models.CharField(max_length=255, blank=True, null=True)
+    suggested_invoice = models.CharField(max_length=100, blank=True, null=True)
+    suggested_voucher_type = models.CharField(max_length=20, blank=True, null=True)
+    is_ignored = models.IntegerField(db_comment='User explicitly ignored this transaction')
+    reconciled_at = models.DateTimeField(blank=True, null=True, db_comment='Timestamp when reconciled')
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+    cheque_number = models.CharField(max_length=100, blank=True, null=True)
+    running_balance = models.DecimalField(max_digits=15, decimal_places=2)
+    import_batch_id = models.CharField(max_length=100, blank=True, null=True)
+    source = models.CharField(max_length=50, blank=True, null=True)
+    match_method = models.CharField(max_length=50, blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'bank_statement_transactions'
+        unique_together = (('bank_ledger_id', 'transaction_date', 'reference_number', 'debit', 'credit'),)
+        db_table_comment = 'Staging table for bank statement transactions. Populated on upload; vouchers NOT created here.'
+
+
+class BankReconciliationLinks(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    tenant = models.ForeignKey('Tenants', models.DO_NOTHING)
+    bank_transaction = models.ForeignKey(BankStatementTransactions, models.DO_NOTHING, db_comment='FK to bank_statement_transactions')
+    voucher_id = models.BigIntegerField(db_comment='FK to vouchers.id')
+    reconciliation_date = models.DateField(blank=True, null=True, db_comment='Date when reconciled')
+    reconciliation_status = models.CharField(max_length=20, db_comment='Reconciled | Pending | Disputed')
+    reconciliation_type = models.CharField(max_length=50, db_comment='automatic | manual')
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+    voucher_type = models.CharField(max_length=50, blank=True, null=True)
+    confidence_score = models.IntegerField(blank=True, null=True)
+    match_method = models.CharField(max_length=50, blank=True, null=True)
+    cheque_number = models.CharField(max_length=100, blank=True, null=True)
+    reconciled_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'bank_reconciliation_links'
+        unique_together = (('bank_transaction', 'voucher_id'),)
+        db_table_comment = 'Stores bank transaction ΓåÆ voucher reconciliation mappings. Separate from voucher tables.'
+
+
+class Vouchers(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    tenant_id = models.CharField(max_length=36)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+    type = models.CharField(max_length=20)
+    voucher_number = models.CharField(max_length=50)
+    date = models.DateField()
+    party = models.CharField(max_length=255, blank=True, null=True)
+    account = models.CharField(max_length=255, blank=True, null=True)
+    amount = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
+    total = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
+    narration = models.TextField(blank=True, null=True)
+    invoice_no = models.CharField(max_length=50, blank=True, null=True)
+    is_inter_state = models.IntegerField(blank=True, null=True)
+    total_taxable_amount = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
+    total_cgst = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
+    total_sgst = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
+    total_igst = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
+    total_debit = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
+    total_credit = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
+    from_account = models.CharField(max_length=255, blank=True, null=True)
+    to_account = models.CharField(max_length=255, blank=True, null=True)
+    items_data = models.JSONField(blank=True, null=True)
+    dummy_force = models.IntegerField(blank=True, null=True)
+    source = models.CharField(max_length=50, blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'vouchers'
+        unique_together = (('voucher_number', 'tenant_id', 'type'),)
+
+
+class JournalEntries(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    tenant_id = models.CharField(max_length=36)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+    voucher = models.ForeignKey(Vouchers, models.DO_NOTHING)
+    ledger = models.CharField(max_length=255)
+    debit = models.DecimalField(max_digits=15, decimal_places=2)
+    credit = models.DecimalField(max_digits=15, decimal_places=2)
+
+    class Meta:
+        managed = False
+        db_table = 'journal_entries'
+
+
+class VoucherPaymentSingle(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    tenant = models.ForeignKey('Tenants', models.DO_NOTHING)
+    date = models.DateField()
+    voucher_type = models.CharField(max_length=100, blank=True, null=True)
+    voucher_number = models.CharField(max_length=100)
+    total_payment = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
+    advance_ref_no = models.CharField(max_length=100, blank=True, null=True)
+    advance_amount = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
+    transaction_details = models.JSONField(blank=True, null=True, db_comment='List: [{date, referenceNumber, amount, payment, pending, advance}]')
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+    pay_from_ledger = models.ForeignKey('MasterLedgers', models.DO_NOTHING)
+    pay_to_ledger = models.ForeignKey('MasterLedgers', models.DO_NOTHING, related_name='voucherpaymentsingle_pay_to_ledger_set')
+    bank_reconciled = models.IntegerField()
+    bank_reconcile_date = models.DateField(blank=True, null=True)
+    bank_statement_id = models.BigIntegerField(blank=True, null=True)
+    bank_reference_number = models.CharField(max_length=100, blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'voucher_payment_single'
+
+
+class VoucherReceiptSingle(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    tenant = models.ForeignKey('Tenants', models.DO_NOTHING)
+    date = models.DateField()
+    voucher_type = models.CharField(max_length=100, blank=True, null=True)
+    voucher_number = models.CharField(max_length=100)
+    total_receipt = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
+    advance_ref_no = models.CharField(max_length=100, blank=True, null=True)
+    advance_amount = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
+    transaction_details = models.JSONField(blank=True, null=True, db_comment='List: [{date, referenceNumber, amount, receipt, pending, advance}]')
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+    receive_in_ledger = models.ForeignKey('MasterLedgers', models.DO_NOTHING)
+    receive_from_ledger = models.ForeignKey('MasterLedgers', models.DO_NOTHING, related_name='voucherreceiptsingle_receive_from_ledger_set')
+    bank_reconciled = models.IntegerField()
+    bank_reconcile_date = models.DateField(blank=True, null=True)
+    bank_statement_id = models.BigIntegerField(blank=True, null=True)
+    bank_reference_number = models.CharField(max_length=100, blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'voucher_receipt_single'

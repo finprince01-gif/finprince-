@@ -1,4 +1,4 @@
-from .voucher_master_models import (
+from .voucher_master_models import (  # type: ignore
     MasterVoucherSales,
     MasterVoucherCreditNote,
     MasterVoucherReceipts,

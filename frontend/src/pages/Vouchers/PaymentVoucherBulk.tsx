@@ -221,8 +221,10 @@ const PaymentVoucherBulk: React.FC = () => {
   };
 
   // Handle Post
-  const handlePost = () => {
-    if (!payFrom) {
+  const handlePost = async () => {
+    const payFromId = allLedgers.find(l => l.name === payFrom)?.id;
+
+    if (!payFromId) {
       showError('Please select Pay From account');
 
       return;
@@ -242,18 +244,49 @@ const PaymentVoucherBulk: React.FC = () => {
       }
     }
 
-    console.log('Posting payment voucher:', {
-      date,
-      payFrom,
-      paymentRows,
-      totalPayment,
-      postingNote,
-      advance: showAdvanceSection ? { refNo: advanceRefNo, amount: advanceAmount } : null
+    // Map paymentRows to contain payTo IDs instead of names
+    const mappedPaymentRows = paymentRows.map(row => {
+        const rowPayToId = allLedgers.find(l => l.name === row.payTo)?.id;
+        return {
+            ...row,
+            payTo: rowPayToId || row.payTo
+        };
     });
 
-    showSuccess('Payment voucher posted successfully!');
+    const payload = {
+      date,
+      pay_from: payFromId,
+      payment_rows: mappedPaymentRows,
+      total_payment: totalPayment,
+      posting_note: postingNote,
+      advance_ref_no: showAdvanceSection ? advanceRefNo : null,
+      advance_amount: showAdvanceSection ? advanceAmount : 0
+    };
 
-    handleCancel();
+    console.log('Posting payment voucher:', payload);
+
+    try {
+        const token = httpClient.getToken();
+        const response = await fetch(`${API_BASE_URL}/api/vouchers/payment-bulk/`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+            showSuccess('Payment voucher posted successfully!');
+            handleCancel();
+        } else {
+            const err = await response.json();
+            showError(err.error || 'Failed to post payment voucher');
+        }
+    } catch (e) {
+        console.error(e);
+        showError('Failed to post payment voucher');
+    }
   };
 
   return (

@@ -3,8 +3,8 @@ Masters Serializers - Data Validation
 Handles serialization and validation for Masters module.
 """
 
-from rest_framework import serializers
-from .models import MasterVoucherSales as VoucherConfiguration
+from rest_framework import serializers  # type: ignore
+from .models import MasterVoucherSales as VoucherConfiguration  # type: ignore
 
 
 class VoucherConfigurationSerializer(serializers.ModelSerializer):
@@ -12,12 +12,14 @@ class VoucherConfigurationSerializer(serializers.ModelSerializer):
     Serializer for Voucher Configuration.
     Handles all voucher types with automatic numbering configuration.
     """
+    voucher_type = serializers.SerializerMethodField()
     
     class Meta:
         model = VoucherConfiguration
         fields = [
             'id',
             'voucher_name',
+            'voucher_type',
             'prefix',
             'suffix',
             'start_from',
@@ -30,6 +32,20 @@ class VoucherConfigurationSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
         read_only_fields = ['id', 'current_number', 'created_at', 'updated_at']
+
+    def get_voucher_type(self, obj):
+        # Infer type from table name or model class
+        table_name = obj._meta.db_table
+        if 'sales' in table_name: return 'sales'
+        if 'receipt' in table_name: return 'receipts'
+        if 'payment' in table_name: return 'payments'
+        if 'purchase' in table_name: return 'purchase'
+        if 'creditnote' in table_name: return 'creditnote'
+        if 'debitnote' in table_name: return 'debitnote'
+        if 'expense' in table_name: return 'expenses'
+        if 'journal' in table_name: return 'journal'
+        if 'contra' in table_name: return 'contra'
+        return 'unknown'
     
     def validate(self, data):
         """Custom validation for voucher configuration."""

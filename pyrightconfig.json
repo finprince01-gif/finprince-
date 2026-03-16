@@ -1,0 +1,10 @@
+{
+  "include": ["backend"],
+  "exclude": ["**/node_modules", "**/__pycache__", "**/migrations"],
+  "venvPath": ".",
+  "venv": "venv",
+  "pythonVersion": "3.11",
+  "reportMissingImports": false,
+  "reportMissingModuleSource": false,
+  "typeCheckingMode": "off"
+}

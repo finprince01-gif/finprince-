@@ -1,0 +1,12 @@
+{
+  "site_package_search_strategy": "pep561",
+  "source_directories": [
+    "."
+  ],
+  "search_path": [
+    "C:/Users/ulaganathan/AppData/Local/Programs/Python/Python312/Lib/site-packages"
+  ],
+  "python_version": "3.12",
+  "strict": false,
+  "ignore_all_errors": true
+}
