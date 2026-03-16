@@ -184,8 +184,10 @@ def create_purchase_order(
 
 def get_purchase_order_by_id(po_id: int) -> Optional[Dict[str, Any]]:
     """
-    Get purchase order by ID with items
-    
+    Get purchase order by ID with items.
+    Each item includes a 'pending_qty' = original qty minus qty already received
+    in Posted GRNs that reference this PO.
+
     Returns:
         Optional[Dict]: PO data with items or None if not found
     """
@@ -210,6 +212,8 @@ def get_purchase_order_by_id(po_id: int) -> Optional[Dict[str, Any]]:
         
         columns = [col[0] for col in cursor.description]
         po_data = dict(zip(columns, row))
+        po_number = po_data.get('po_number', '')
+        tenant_id = po_data.get('tenant_id', '')
         
         # Get items
         items_query = """
@@ -224,7 +228,41 @@ def get_purchase_order_by_id(po_id: int) -> Optional[Dict[str, Any]]:
         
         cursor.execute(items_query, [po_id])
         item_columns = [col[0] for col in cursor.description]
-        po_data['items'] = [dict(zip(item_columns, item_row)) for item_row in cursor.fetchall()]
+        po_items = [dict(zip(item_columns, item_row)) for item_row in cursor.fetchall()]
+        
+        # Calculate received qty for each item from GRNs linked to this PO
+        # GRNs store items as JSON; reference_no holds the PO number(s)
+        received_qty_map: Dict[str, float] = {}
+        try:
+            grn_query = """
+                SELECT items
+                FROM inventory_operation_new_grn
+                WHERE tenant_id = %s
+                  AND status = 'Posted'
+                  AND reference_no LIKE %s
+            """
+            cursor.execute(grn_query, [tenant_id, f'%{po_number}%'])
+            grn_rows = cursor.fetchall()
+            import json as _json
+            for (grn_items_raw,) in grn_rows:
+                if not grn_items_raw:
+                    continue
+                grn_items = grn_items_raw if isinstance(grn_items_raw, list) else _json.loads(grn_items_raw)
+                for gi in grn_items:
+                    code = gi.get('item_code', '')
+                    accepted = float(gi.get('accepted_qty', 0) or 0)
+                    received_qty_map[code] = received_qty_map.get(code, 0.0) + accepted
+        except Exception:
+            pass  # If GRN table missing or error, default received = 0
+
+        # Attach pending_qty to each item
+        for item in po_items:
+            code = item.get('item_code', '')
+            original_qty = float(item.get('quantity', 0) or 0)
+            received = received_qty_map.get(code, 0.0)
+            item['pending_qty'] = max(0.0, original_qty - received)
+        
+        po_data['items'] = po_items
         
         return po_data
 

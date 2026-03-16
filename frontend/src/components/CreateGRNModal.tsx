@@ -324,7 +324,8 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
                             itemName: item.item_name || '',
                             hsnCode: fullItem?.hsn_code || fullItem?.hsn_sac_code || fullItem?.sac_code || '',
                             uom: item.uom || fullItem?.uom || fullItem?.base_unit || '',
-                            refQty: item.quantity?.toString() || '',
+                            // Use pending_qty if available; fall back to full quantity
+                            refQty: (item.pending_qty !== undefined ? item.pending_qty : item.quantity)?.toString() || '',
                             secondaryQty: '',
                             receivedQty: '',
                             acceptedQty: '',
@@ -820,7 +821,15 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
                                                     className="w-full px-2 py-1 border border-gray-300 rounded text-xs bg-gray-50"
                                                 />
                                             </td>
-                                            <td className="p-2"><input type="number" value={item.refQty} onChange={(e) => handleItemChange(item.id, 'refQty', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-xs" /></td>
+                                            <td className="p-2">
+                                                <input
+                                                    type="number"
+                                                    value={item.refQty}
+                                                    readOnly
+                                                    title="Pending PO Quantity (auto-fetched from Purchase Order)"
+                                                    className="w-full px-2 py-1 border border-gray-200 rounded text-xs bg-amber-50 cursor-not-allowed text-gray-700 font-medium"
+                                                />
+                                            </td>
                                             <td className="p-2"><input type="number" value={item.secondaryQty} onChange={(e) => handleItemChange(item.id, 'secondaryQty', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-xs" /></td>
                                             <td className="p-2"><input type="number" value={item.receivedQty} onChange={(e) => handleItemChange(item.id, 'receivedQty', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-xs" /></td>
                                             <td className="p-2"><input type="number" value={item.acceptedQty} onChange={(e) => handleItemChange(item.id, 'acceptedQty', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-xs" /></td>

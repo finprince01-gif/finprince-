@@ -120,6 +120,9 @@ export interface StockItem {
   unit?: string;      // Unit of measurement
   hsn?: string;      // HSN/SAC code for GST
   gstRate?: number;  // GST rate (e.g., 18 for 18%)
+  gst_rate?: number; // Raw backend field (snake_case)
+  cessRate?: number; // Cess rate (percentage)
+  cess_rate?: number; // Raw backend field (snake_case)
   quantity?: number; // Current stock quantity
   // Additional fields returned by API or used in forms
   standard_rate?: number;

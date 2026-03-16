@@ -431,6 +431,7 @@ class PendingGRNListView(generics.ListAPIView):
 
     def get_queryset(self):
         tenant_id = get_tenant_from_request(self.request)
+        vendor_name = self.request.query_params.get('vendor_name')
         
         # 1. Get all Posted GRNs for this tenant
         qs = InventoryOperationNewGRN.objects.filter(
@@ -438,6 +439,9 @@ class PendingGRNListView(generics.ListAPIView):
             status='Posted',
             grn_type='purchases' # Explicitly fetch only Purchase-type GRNs
         )
+
+        if vendor_name:
+            qs = qs.filter(vendor_name=vendor_name)
         
         # 2. Get list of GRN numbers already used in Purchase Vouchers
         used_grns = VoucherPurchaseSupplierDetails.objects.filter(

@@ -732,6 +732,7 @@ const InventoryPage: React.FC = () => {
           categoryId: item.category,
           hsnCode: item.hsn_code,
           gstRate: item.gst_rate,
+          cessRate: item.cess_rate,
           uom: item.uom,
           rate: item.rate
         }));
@@ -858,6 +859,7 @@ const InventoryPage: React.FC = () => {
       rateUnit: item.rate_unit || item.rateUnit || item.uom,
       hsnCode: item.hsn_code || item.hsnCode,
       gstRate: item.gst_rate || item.gstRate,
+      cessRate: item.cess_rate || item.cessRate,
       reorderLevel: item.reorder_level || item.reorderLevel,
       isSaleable: item.is_saleable || item.isSaleable,
       vendorName: item.vendor_specific_name || item.vendorName,
@@ -896,6 +898,7 @@ const InventoryPage: React.FC = () => {
 
         hsn_code: editFormData.hsnCode || null,
         gst_rate: editFormData.gstRate || null,
+        cess_rate: editFormData.cessRate || null,
 
         reorder_level: editFormData.reorderLevel || null,
         is_saleable: editFormData.isSaleable || false
@@ -6365,7 +6368,7 @@ const InventoryPage: React.FC = () => {
               <button
                 onClick={() => {
                   setSelectedItemDetail({ isNew: true });
-                  setEditFormData({ isNew: true, itemCode: '', itemName: '', description: '', category: '', uom: '', rate: '', hsnCode: '', gstRate: '' });
+                  setEditFormData({ isNew: true, itemCode: '', itemName: '', description: '', category: '', uom: '', rate: '', hsnCode: '', gstRate: '', cessRate: '' });
                 }}
                 className="erp-button-primary"
               >
@@ -6628,8 +6631,8 @@ const InventoryPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* HSN & GST */}
-              <div className="border-t pt-4 grid grid-cols-2 gap-4">
+              {/* HSN & GST & CESS */}
+              <div className="border-t pt-4 grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">HSN Code</label>
                   <input
@@ -6649,6 +6652,17 @@ const InventoryPage: React.FC = () => {
                     onChange={(e) => handleFormChange('gstRate', e.target.value)}
                     disabled={!editFormData?.isNew && !editFormData?.isEditMode}
                     placeholder="Enter GST rate"
+                    className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Cess Rate</label>
+                  <input
+                    type="text"
+                    value={editFormData?.cessRate || ''}
+                    onChange={(e) => handleFormChange('cessRate', e.target.value)}
+                    disabled={!editFormData?.isNew && !editFormData?.isEditMode}
+                    placeholder="Enter Cess rate"
                     className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                   />
                 </div>

@@ -1,0 +1,48 @@
+379 to 385:   const [purchaseItems, setPurchaseItems] = useState([
+    { id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', poRate: null as number | null, invoiceRate: null as number | null, rateMismatch: false, poQty: null as number | null, invoiceQty: null as number | null, qtyMismatch: false, grnQty: null as number | null, sourcePoNo: null as string | null }
+  ]);
+
+  // Purchase Due Details State
+  const [purchaseTdsIt, setPurchaseTdsIt] = useState('0.00');
+  const [purchaseTaxIsTcs, setPurchaseTaxIsTcs] = useState(false); // true = TCS (add to amount due), false = TDS (subtract)
+
+1830 to 1836:               foreignRate: 0,
+              foreignAmount: 0,
+              poRate: null as number | null,     // no PO linked — invoice scan
+              invoiceRate: rate,                  // store scanned invoice rate
+              rateMismatch: false,
+              poQty: null as number | null,
+              invoiceQty: qty,
+
+1845 to 1851:           setItems([{ name: '', qty: 1, rate: 0, taxableAmount: 0, cgstAmount: 0, sgstAmount: 0, igstAmount: 0, totalAmount: 0 }]);
+          setPurchaseItems([{ id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', poRate: null as number | null, invoiceRate: null as number | null, rateMismatch: false, poQty: null as number | null, invoiceQty: null as number | null, qtyMismatch: false, grnQty: null as number | null, sourcePoNo: null as string | null }]);
+        }
+      } else if (voucherType === 'Contra') {
+        setDate(formatDateForInput(prefilledData.invoiceDate) || getTodayDate());
+        setFromAccount(prefilledData.sellerName || '');
+        setToAccount(prefilledData.invoiceNumber || ''); // Use invoice number as to account
+
+2634 to 2640:       foreignRate: 0,
+      foreignAmount: 0,
+      igst: 0,
+      cgst: 0,
+      sgst: 0,
+      cess: 0,
+      invoiceValue: 0,
+
+2676 to 2682:         foreignRate: 0,
+        foreignAmount: 0,
+        igst: 0,
+        cgst: 0,
+        sgst: 0,
+        cess: 0,
+        invoiceValue: 0,
+
+7198 to 7204:                           foreignRate: 0,
+                          foreignAmount: 0,
+                          igst: 0,
+                          cgst: 0,
+                          sgst: 0,
+                          cess: 0,
+                          invoiceValue: taxableValue,
+

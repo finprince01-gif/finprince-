@@ -284,8 +284,12 @@ class ApiService {
     /**
      * Get Pending GRNs for reference in Vouchers
      */
-    async getPendingGRNs() {
-        return httpClient.get<any[]>('/api/inventory/operations/pending-grns/');
+    async getPendingGRNs(vendorName?: string) {
+        let url = '/api/inventory/operations/pending-grns/';
+        if (vendorName) {
+            url += `?vendor_name=${encodeURIComponent(vendorName)}`;
+        }
+        return httpClient.get<any[]>(url);
     }
 
     /**
