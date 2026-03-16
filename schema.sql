@@ -2747,3 +2747,7 @@ ALTER TABLE `invoice_ocr_temp`
     ADD COLUMN `vendor_id` BIGINT DEFAULT NULL,
     ADD COLUMN `voucher_id` BIGINT DEFAULT NULL;
 
+
+--Alter the inventory_master_inventoryitems table by adding cess_rate column
+ALTER TABLE inventory_master_inventoryitems
+ADD COLUMN cess_rate DECIMAL(5,2) DEFAULT NULL COMMENT 'Cess Rate';

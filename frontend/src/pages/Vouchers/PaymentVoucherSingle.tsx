@@ -164,10 +164,8 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
         const fetchPaymentConfigs = async () => {
             try {
 
-                const data = await httpClient.get<any[]>('/api/masters/voucher-configurations/?voucher_type=payments');
-
-
-                const paymentConfigs = data?.filter(config => config.voucher_type === 'payments') || [];
+                const data = await httpClient.get<any[]>('/api/masters/master-voucher-payments/');
+                const paymentConfigs = data || [];
 
 
                 setPaymentVoucherConfigs(paymentConfigs);
@@ -434,13 +432,13 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                             <input
                                 type="date"
                                 value={date}
-                                min={getCurrentDate()}
+                                max={getCurrentDate()}
                                 onChange={(e) => setDate(e.target.value)}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Voucher Type</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Voucher Series</label>
                             <select
                                 value={selectedPaymentConfig}
                                 onChange={(e) => setSelectedPaymentConfig(e.target.value)}
@@ -549,7 +547,6 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                                             <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase">PENDING</th>
                                             <th className="px-6 py-3 text-center text-xs font-medium text-gray-600 uppercase">ACTION</th>
                                             <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase">PAYMENT</th>
-                                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase">ADVANCE</th>
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
@@ -579,9 +576,6 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                                                         placeholder="0"
                                                         className="w-24 px-3 py-1.5 text-right border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                                                     />
-                                                </td>
-                                                <td className="px-6 py-4 text-sm text-gray-700 text-right font-medium text-indigo-600">
-                                                    ₹{Math.max(0, txn.payment - txn.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                 </td>
                                             </tr>
                                         ))}
@@ -627,16 +621,31 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                         {/* Left Panel */}
                         <div className="space-y-6">
                             {/* Top Fields */}
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-3 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
                                     <input
                                         type="date"
                                         value={date}
-                                        min={getCurrentDate()}
+                                        max={getCurrentDate()}
                                         onChange={e => setDate(e.target.value)}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                     />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Voucher Series</label>
+                                    <select
+                                        value={selectedPaymentConfig}
+                                        onChange={(e) => setSelectedPaymentConfig(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    >
+                                        <option value="">Select</option>
+                                        {paymentVoucherConfigs.map((config) => (
+                                            <option key={config.id} value={config.voucher_name}>
+                                                {config.voucher_name}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Voucher Number</label>

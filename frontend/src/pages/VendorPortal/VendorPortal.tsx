@@ -9,10 +9,11 @@ import SearchableDropdown from '../../components/SearchableDropdown';
 import { showError, showSuccess, showInfo, showWarning, confirm } from '../../utils/toast';
 import { handleApiError } from '../../utils/errorHandler';
 import { BILLING_CURRENCIES } from '../../constants/customerPortalConstants';
+import VendorViewModal from '../../components/VendorViewModal';
 
 
 type VendorTab = 'Master' | 'Transaction';
-type MasterSubTab = 'Category' | 'PO Settings' | 'Vendor Creation' | 'Basic Details' | 'GST Details' | 'Products/Services' | 'TDS & Other Statutory' | 'Banking Info' | 'Terms & Conditions';
+type MasterSubTab = 'Category' | 'PO Settings' | 'Vendor Creation' | 'Basic Details' | 'Branch details' | 'Products/Services' | 'TDS & Other Statutory' | 'Banking Info' | 'Terms & Conditions';
 type TransactionSubTab = 'Purchase Orders' | 'Procurement' | 'Payment';
 type POSubTab = 'Dashboard' | 'Create PO' | 'Pending PO' | 'Executed PO';
 type CreatePOSubTab = 'Draft PO' | 'Pending for Approval' | 'Mail PO';
@@ -21,11 +22,23 @@ type ProcurementSubTab = 'Dashboard' | 'Raw Material' | 'Stock-in Trade' | 'Cons
 // Category Interface (Mirrors Inventory)
 const VENDOR_SYSTEM_CATEGORIES = [
     'Raw Material',
-    'Work in Progress',
-    'Finished Goods',
     'Stores and Spares',
     'Packing Material',
-    'Stock in Trade'
+    'Stock in Trade',
+    'Fixed Assets',
+    'Service',
+    'Jobwork'
+];
+
+const VENDOR_DEFAULT_GROUPS = [
+    {
+        name: 'Within Country (Indigenous)',
+        subgroups: ['Consumables', 'Machinery Spares', 'Others']
+    },
+    {
+        name: 'Import',
+        subgroups: ['Consumables', 'Machinery Spares', 'Others']
+    }
 ];
 
 // TDS Rates Master Data
@@ -192,6 +205,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const [vendorLedgerData, setVendorLedgerData] = useState<any[]>([]);
     const [loadingLedger, setLoadingLedger] = useState(false);
 
+    // View Modal State
+    const [viewVendorId, setViewVendorId] = useState<number | null>(null);
+
     // Fetch ledger data for a selected vendor, enriching Payment/Receipt entries with voucher numbers
     const fetchVendorLedger = async (vendorName: string) => {
         setLoadingLedger(true);
@@ -307,7 +323,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
     useEffect(() => {
         // Vendor creation inner tabs are valid states — don't reset them to availableMasterSubTabs[0]
-        const vendorFormTabs = ['Basic Details', 'GST Details', 'Products/Services', 'TDS & Other Statutory', 'Banking Info', 'Terms & Conditions'];
+        const vendorFormTabs = ['Basic Details', 'Branch details', 'Products/Services', 'TDS & Other Statutory', 'Banking Info', 'Terms & Conditions'];
         const isInsideVendorForm = vendorFormTabs.includes(activeMasterSubTab as string);
         if (!isSuperuser && availableMasterSubTabs.length > 0 && !availableMasterSubTabs.includes(activeMasterSubTab as string) && !isInsideVendorForm) {
             setActiveMasterSubTab(availableMasterSubTabs[0] as MasterSubTab);
@@ -504,19 +520,41 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             // 1. GST Details
             try {
                 const gstRes: any = await httpClient.get(`/api/vendors/gst-details/?vendor_basic_detail=${vendor.id}`);
-                const gstList = Array.isArray(gstRes) ? gstRes : (gstRes.results || []);
+                const gstList = Array.isArray(gstRes) ? gstRes : (gstRes.data || gstRes.results || []);
                 if (gstList.length > 0) {
-                    const mappedGst = gstList.map((g: any) => ({
-                        id: g.id.toString(),
-                        gstin: g.gstin || '',
-                        registrationType: g.registration_type || 'Regular',
-                        tradeName: g.trade_name || '',
-                        legalName: g.legal_name || '',
-                        placesOfBusiness: Array.isArray(g.places_of_business) ? g.places_of_business : [],
-                        isExpanded: false
-                    }));
-                    setGstRecords(mappedGst);
+                    const groupedGst: Record<string, GSTRecord> = {};
+                    gstList.forEach((g: any) => {
+                        const gstin = (g.gstin || '').trim();
+                        if (!groupedGst[gstin]) {
+                            groupedGst[gstin] = {
+                                id: gstin || g.id?.toString() || `gst-${Math.random().toString(36).substr(2, 9)}`,
+                                gstin: gstin,
+                                registrationType: g.registration_type || 'Regular',
+                                tradeName: g.trade_name || '',
+                                legalName: g.legal_name || '',
+                                placesOfBusiness: [],
+                                isExpanded: false
+                            };
+                        }
+                        if (g.reference_name) {
+                            groupedGst[gstin].placesOfBusiness.push({
+                                id: g.id.toString(),
+                                referenceName: g.reference_name,
+                                address: g.branch_address || '',
+                                contactPerson: g.branch_contact_person || '',
+                                email: g.branch_email || '',
+                                contactNumber: g.branch_contact_no || '',
+                                isExpanded: false
+                            });
+                        }
+                    });
+                    const finalGstRecords = Object.values(groupedGst);
+                    if (finalGstRecords.length > 0) {
+                        setGstRecords(finalGstRecords);
+                    }
                 }
+                // Also fetch and set availableBranches state for dual-sync
+                fetchVendorBranches(vendor.id);
             } catch (e) {
                 console.error('Error fetching existing GST details:', e);
             }
@@ -622,7 +660,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const fetchVendorBranches = async (vendorId: number) => {
         try {
             const response = await httpClient.get<any>(`/api/vendors/gst-details/?vendor_basic_detail=${vendorId}`);
-            const data = Array.isArray(response) ? response : (response.results || []);
+            // Robustly handle different response formats
+            const data = Array.isArray(response) ? response : (response.data || response.results || []);
             setAvailableBranches(data);
         } catch (error) {
             handleApiError(error, 'Fetch Vendor Branches');
@@ -1124,7 +1163,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const handleNextVendorTab = () => {
         const tabSequence: MasterSubTab[] = [
             'Basic Details',
-            'GST Details',
+            'Branch details',
             'Products/Services',
             'TDS & Other Statutory',
             'Banking Info',
@@ -1277,7 +1316,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             showError('Please fill in all required fields (Vendor Name, Email, Contact No, Vendor Category)');
             return;
         }
-        setActiveMasterSubTab('GST Details');
+        setActiveMasterSubTab('Branch details');
     };
 
 
@@ -2071,7 +2110,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                     .filter(subTab => isSuperuser || hasTabAccess('Vendor Portal', subTab))
                                     .map((subTab) => {
                                         const isVendorCreationActive = subTab === 'Vendor Creation' &&
-                                            ['Vendor Creation', 'Basic Details', 'GST Details', 'Products/Services', 'TDS & Other Statutory', 'Banking Info', 'Terms & Conditions'].includes(activeMasterSubTab);
+                                            ['Vendor Creation', 'Basic Details', 'Branch details', 'Products/Services', 'TDS & Other Statutory', 'Banking Info', 'Terms & Conditions'].includes(activeMasterSubTab);
                                         const isActive = activeMasterSubTab === subTab || isVendorCreationActive;
 
                                         return (
@@ -2092,6 +2131,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                 apiEndpoint="/api/vendors/categories/"
                                 allowCreateGroup={false}
                                 systemCategories={VENDOR_SYSTEM_CATEGORIES}
+                                defaultGroups={VENDOR_DEFAULT_GROUPS}
                                 onCreateCategory={async (data) => {
                                     try {
                                         await httpClient.post('/api/vendors/categories/', {
@@ -2262,9 +2302,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                                                 {series.category_path || series.category_name || '-'}
                                                             </td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                                {/* Show summary of config */}
-                                                                {series.prefix}...{series.suffix} ({series.digits} digits)
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-indigo-600">
+                                                                {/* Show sample preview */}
+                                                                {(series.prefix || '') + '0'.repeat(Math.max(0, series.digits - 1)) + '1' + (series.suffix || '')}
                                                             </td>
                                                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                                 <button
@@ -2405,7 +2445,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                         <button
                                                                             className="text-indigo-600 hover:text-indigo-900 transition-colors"
                                                                             title="View"
-                                                                            onClick={() => handleEditVendor(vendor)}
+                                                                            onClick={() => setViewVendorId(vendor.id)}
                                                                         >
                                                                             <Eye className="w-5 h-5" />
                                                                         </button>
@@ -2448,7 +2488,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                             {[
                                                 { id: 'Basic Details', title: 'BASIC DETAILS', desc: 'CONFIGURE BASIC DETAILS' },
-                                                { id: 'GST Details', title: 'GST DETAILS', desc: 'CONFIGURE GST DETAILS' },
+                                                { id: 'Branch details', title: 'BRANCH DETAILS', desc: 'CONFIGURE BRANCH DETAILS' },
                                                 { id: 'Products/Services', title: 'PRODUCTS/SERVICES', desc: 'CONFIGURE PRODUCTS/SERVICES' },
                                                 { id: 'TDS & Other Statutory', title: 'TDS & OTHER STATUTORY DETAILS', desc: 'CONFIGURE TDS & OTHER STATUTORY' },
                                                 { id: 'Banking Info', title: 'BANKING INFO', desc: 'CONFIGURE BANKING INFO' },
@@ -2652,36 +2692,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         </div>
                                     </div>
 
-                                    {/* TCS Applicable under GST */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                                        <div className="col-span-2">
-                                            <label className="label-text">
-                                                TCS Applicable under GST
-                                            </label>
-                                            <div className="flex gap-2">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setTcsApplicable(true)}
-                                                    className={`px-6 py-1.5 text-sm border-2 rounded focus:outline-none transition-colors ${tcsApplicable
-                                                        ? 'border-teal-500 bg-teal-50 text-teal-700 font-medium'
-                                                        : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                                                        }`}
-                                                >
-                                                    Yes
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setTcsApplicable(false)}
-                                                    className={`px-6 py-1.5 text-sm border-2 rounded focus:outline-none transition-colors ${!tcsApplicable
-                                                        ? 'border-teal-500 bg-teal-50 text-teal-700 font-medium'
-                                                        : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                                                        }`}
-                                                >
-                                                    No
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
+
 
 
                                     {/* Action Buttons */}
@@ -2707,7 +2718,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
 
 
-                        {activeMasterSubTab === 'GST Details' && (
+                        {activeMasterSubTab === 'Branch details' && (
                             <div className="p-6">
                                 <div className="mb-6">
                                     <button
@@ -2717,13 +2728,13 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         <ChevronDown className="w-4 h-4 rotate-90" /> BACK TO VENDOR CREATION HUB
                                     </button>
                                     <div className="flex justify-between items-center">
-                                        <h3 className="text-xl font-bold text-gray-900">GST Details</h3>
+                                        <h3 className="text-xl font-bold text-gray-900">Branch details</h3>
                                         <button
                                             type="button"
                                             onClick={handleAddGstRecord}
                                             className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-[4px] hover:bg-indigo-700 transition-colors flex items-center gap-2 shadow-none border border-slate-200"
                                         >
-                                            <Plus className="w-4 h-4" /> Add GST Record
+                                            <Plus className="w-4 h-4" /> Add Branch Record
                                         </button>
                                     </div>
                                 </div>
@@ -2873,11 +2884,26 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                     </div>
                                                                                     <div>
                                                                                         <label className="block text-xs font-medium text-gray-500 mb-1">Email Address</label>
-                                                                                        <input type="email" value={pob.email} onChange={(e) => updatePobField(record.id, pob.id, 'email', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" />
+                                                                                        <input
+                                                                                            type="text"
+                                                                                            value={pob.email}
+                                                                                            onChange={(e) => updatePobField(record.id, pob.id, 'email', e.target.value)}
+                                                                                            className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm"
+                                                                                            placeholder="branch@example.com"
+                                                                                        />
                                                                                     </div>
                                                                                     <div>
                                                                                         <label className="block text-xs font-medium text-gray-500 mb-1">Contact No</label>
-                                                                                        <input type="tel" value={pob.contactNumber} onChange={(e) => updatePobField(record.id, pob.id, 'contactNumber', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" />
+                                                                                        <input
+                                                                                            type="text"
+                                                                                            value={pob.contactNumber}
+                                                                                            onChange={(e) => {
+                                                                                                const val = e.target.value.replace(/\D/g, '');
+                                                                                                updatePobField(record.id, pob.id, 'contactNumber', val);
+                                                                                            }}
+                                                                                            className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm"
+                                                                                            placeholder="Numeric only"
+                                                                                        />
                                                                                     </div>
                                                                                 </div>
                                                                             )}
@@ -2941,9 +2967,11 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     <input
                                                         type="text"
                                                         value={msmeUdyamNo}
-                                                        onChange={(e) => setMsmeUdyamNo(e.target.value)}
+                                                        onChange={(e) => {
+                                                            const value = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '');
+                                                            setMsmeUdyamNo(value);
+                                                        }}
                                                         className="flex-1 px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                        placeholder="MSME Udyam Registration Number"
                                                     />
                                                     <input
                                                         type="file"
@@ -2975,9 +3003,13 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     <input
                                                         type="text"
                                                         value={fssaiLicenseNo}
-                                                        onChange={(e) => setFssaiLicenseNo(e.target.value)}
+                                                        onChange={(e) => {
+                                                            const value = e.target.value.replace(/[^0-9]/g, '');
+                                                            if (value.length <= 14) {
+                                                                setFssaiLicenseNo(value);
+                                                            }
+                                                        }}
                                                         className="flex-1 px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                        placeholder="FSSAI License Number"
                                                     />
                                                     <input
                                                         type="file"
@@ -2990,7 +3022,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         type="button"
                                                         onClick={() => document.getElementById('fssai-file-upload')?.click()}
                                                         className="px-4 py-2 bg-indigo-50/50 border border-indigo-300 rounded-[4px] hover:bg-indigo-50 transition-colors flex items-center gap-2 text-slate-700"
-                                                        title="Upload FSSAI License"
+                                                        title="Upload FSSAI License / Registration Certificate"
                                                     >
                                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
@@ -3009,9 +3041,13 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     <input
                                                         type="text"
                                                         value={importExportCode}
-                                                        onChange={(e) => setImportExportCode(e.target.value)}
+                                                        onChange={(e) => {
+                                                            const value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                                                            if (value.length <= 10) {
+                                                                setImportExportCode(value);
+                                                            }
+                                                        }}
                                                         className="flex-1 px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                        placeholder="Import Export Code"
                                                     />
                                                     <input
                                                         type="file"
@@ -3045,7 +3081,6 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         value={eouStatus}
                                                         onChange={(e) => setEouStatus(e.target.value)}
                                                         className="flex-1 px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                        placeholder="Export Oriented Unit Status"
                                                     />
                                                     <input
                                                         type="file"
@@ -3298,30 +3333,32 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                 />
                                                             </td>
                                                             <td className="px-4 py-3 border-r border-gray-200 min-w-[200px]">
-                                                                <input
-                                                                    type="text"
-                                                                    list={`item-code-list-${item.id}`}
-                                                                    className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                                                    placeholder="Item Code"
-                                                                    value={item.itemCode}
+                                                                <select
+                                                                    className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                                                                    value={item.itemCode || ''}
                                                                     onChange={(e) => handleItemChange(item.id, 'itemCode', e.target.value)}
-                                                                />
-                                                                <datalist id={`item-code-list-${item.id}`}>
-                                                                    {inventoryItems.map(i => <option key={i.id} value={i.item_code} />)}
-                                                                </datalist>
+                                                                >
+                                                                    <option value="">Select Item Code</option>
+                                                                    {inventoryItems.map(i => (
+                                                                        <option key={i.id} value={i.item_code}>
+                                                                            {i.item_code}
+                                                                        </option>
+                                                                    ))}
+                                                                </select>
                                                             </td>
                                                             <td className="px-4 py-3 border-r border-gray-200 min-w-[250px]">
-                                                                <input
-                                                                    type="text"
-                                                                    list={`item-name-list-${item.id}`}
-                                                                    className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                                                    placeholder="Item Name *"
-                                                                    value={item.itemName}
+                                                                <select
+                                                                    className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                                                                    value={item.itemName || ''}
                                                                     onChange={(e) => handleItemChange(item.id, 'itemName', e.target.value)}
-                                                                />
-                                                                <datalist id={`item-name-list-${item.id}`}>
-                                                                    {inventoryItems.map(i => <option key={i.id} value={i.item_name} />)}
-                                                                </datalist>
+                                                                >
+                                                                    <option value="">Select Item Name</option>
+                                                                    {inventoryItems.map(i => (
+                                                                        <option key={i.id} value={i.item_name}>
+                                                                            {i.item_name}
+                                                                        </option>
+                                                                    ))}
+                                                                </select>
                                                             </td>
                                                             <td className="px-4 py-3 border-r border-gray-200">
                                                                 <input
@@ -3437,9 +3474,11 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         <input
                                                             type="text"
                                                             className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                            placeholder="Enter bank account number"
                                                             value={bank.accountNumber}
-                                                            onChange={(e) => handleBankChange(bank.id, 'accountNumber', e.target.value)}
+                                                            onChange={(e) => {
+                                                                const value = e.target.value.replace(/[^0-9]/g, '');
+                                                                handleBankChange(bank.id, 'accountNumber', value);
+                                                            }}
                                                         />
                                                     </div>
 
@@ -3450,9 +3489,11 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         <input
                                                             type="text"
                                                             className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                            placeholder="Enter bank name"
                                                             value={bank.bankName}
-                                                            onChange={(e) => handleBankChange(bank.id, 'bankName', e.target.value)}
+                                                            onChange={(e) => {
+                                                                const value = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                                                                handleBankChange(bank.id, 'bankName', value);
+                                                            }}
                                                         />
                                                     </div>
 
@@ -3463,10 +3504,40 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         <input
                                                             type="text"
                                                             className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                            placeholder="Enter IFSC Code"
                                                             maxLength={11}
                                                             value={bank.ifscCode}
-                                                            onChange={(e) => handleBankChange(bank.id, 'ifscCode', e.target.value)}
+                                                            onChange={(e) => {
+                                                                const ifsc = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                                                                handleBankChange(bank.id, 'ifscCode', ifsc);
+                                                                if (ifsc.length === 11) {
+                                                                    fetch(`https://ifsc.razorpay.com/${ifsc}`)
+                                                                        .then(res => res.json())
+                                                                        .then(data => {
+                                                                            if (data && data.BANK) {
+                                                                                const fetchedBank = data.BANK.trim();
+                                                                                const fetchedBranch = data.BRANCH.trim();
+                                                                                let mismatch = false;
+
+                                                                                if (bank.bankName && bank.bankName.toUpperCase() !== fetchedBank.toUpperCase()) {
+                                                                                    mismatch = true;
+                                                                                }
+                                                                                if (bank.branchName && bank.branchName.toUpperCase() !== fetchedBranch.toUpperCase()) {
+                                                                                    mismatch = true;
+                                                                                }
+
+                                                                                if (mismatch) {
+                                                                                    showError(`Bank Name, Branch Name, & IFSC Code mismatch. Suggested Branch: ${fetchedBranch}`);
+                                                                                } else {
+                                                                                    if (!bank.bankName) handleBankChange(bank.id, 'bankName', fetchedBank);
+                                                                                    if (!bank.branchName) handleBankChange(bank.id, 'branchName', fetchedBranch);
+                                                                                }
+                                                                            } else {
+                                                                                showError("Invalid IFSC Code");
+                                                                            }
+                                                                        })
+                                                                        .catch(() => showError("Invalid IFSC Code"));
+                                                                }
+                                                            }}
                                                         />
                                                     </div>
 
@@ -3477,9 +3548,11 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         <input
                                                             type="text"
                                                             className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                            placeholder="Enter branch name"
                                                             value={bank.branchName}
-                                                            onChange={(e) => handleBankChange(bank.id, 'branchName', e.target.value)}
+                                                            onChange={(e) => {
+                                                                const value = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                                                                handleBankChange(bank.id, 'branchName', value);
+                                                            }}
                                                         />
                                                     </div>
 
@@ -3490,9 +3563,11 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         <input
                                                             type="text"
                                                             className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                            placeholder="Enter Swift Code (for international transactions)"
                                                             value={bank.swiftCode}
-                                                            onChange={(e) => handleBankChange(bank.id, 'swiftCode', e.target.value)}
+                                                            onChange={(e) => {
+                                                                const value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                                                                handleBankChange(bank.id, 'swiftCode', value);
+                                                            }}
                                                         />
                                                     </div>
 
@@ -3522,16 +3597,38 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                             {/* Dropdown Content */}
                                                             <div
                                                                 id={`vendor-branch-dropdown-${bank.id}`}
-                                                                className="hidden absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm"
+                                                                className="hidden absolute z-[100] mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm"
                                                             >
                                                                 {(() => {
-                                                                    // If gstRecords is not available or empty, show no branches
-                                                                    const allBranches = (gstRecords || []).flatMap(record =>
-                                                                        record.placesOfBusiness.map(pob => pob.referenceName).filter(Boolean)
+                                                                    // Combine all extracted reference names
+                                                                    const liveBranches = (gstRecords || []).flatMap(record =>
+                                                                        ((record && record.placesOfBusiness) || [])
+                                                                            .map(pob => {
+                                                                                const name = (pob.referenceName ||
+                                                                                    (pob as any).reference_name ||
+                                                                                    (pob as any).branch_name ||
+                                                                                    (pob as any).branchName ||
+                                                                                    (pob as any).branch_reference_name || '').trim();
+                                                                                return name;
+                                                                            })
+                                                                            .filter(name => name !== '')
                                                                     );
 
+                                                                    const dbBranches = (availableBranches || [])
+                                                                        .map(b => (b.reference_name || b.referenceName || (b as any).branch_name || (b as any).branchName || '').trim())
+                                                                        .filter(name => name !== '');
+
+                                                                    const allBranches = [...new Set([...liveBranches, ...dbBranches])];
+
                                                                     if (allBranches.length === 0) {
-                                                                        return <div className="px-4 py-2 text-gray-500 italic">No branches available</div>;
+                                                                        return (
+                                                                            <div className="px-4 py-2 text-gray-500 text-xs italic">
+                                                                                <div>No branch reference names found.</div>
+                                                                                <div className="mt-1 opacity-70">
+                                                                                    (Live: {liveBranches.length}, Saved: {dbBranches.length}, GST Recs: {(gstRecords || []).length})
+                                                                                </div>
+                                                                            </div>
+                                                                        );
                                                                     }
 
                                                                     return allBranches.map((branchName, idx) => (
@@ -5577,6 +5674,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
             {/* Toast notifications handled globally */}
 
+            {viewVendorId && (
+                <VendorViewModal
+                    vendorId={viewVendorId}
+                    onClose={() => setViewVendorId(null)}
+                />
+            )}
         </div >
     )
 };

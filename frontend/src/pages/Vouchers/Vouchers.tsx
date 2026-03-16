@@ -19,7 +19,7 @@ import PaymentVoucherBulk from './PaymentVoucherBulk';
 import ReceiptVoucher from './ReceiptVoucher';
 import CreateGRNModal from '../../components/CreateGRNModal';
 import SearchableSelect from '../../components/SearchableSelect';
-import CreateVendorModal from '../../components/CreateVendorModal';
+import CreateNewVendorFullModal from '../../components/CreateNewVendorFullModal';
 import { ChevronDown } from 'lucide-react';
 import SearchableDropdown from '../../components/SearchableDropdown';
 
@@ -3023,14 +3023,37 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Vendor Name <span className="text-red-500">*</span>
                   </label>
-                  <SearchableSelect
-                    value={party}
-                    onChange={handlePartyChange}
-                    options={partyOptions}
-                    placeholder="Select Vendor"
-                    className="w-full"
-                    disabled={isVendorDisabled}
-                  />
+                  <div className="flex flex-col gap-1.5">
+                    <SearchableSelect
+                      value={party}
+                      onChange={handlePartyChange}
+                      options={partyOptions}
+                      placeholder="Select Vendor"
+                      className="w-full"
+                      disabled={isVendorDisabled}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const itemsFromVoucher = purchaseItems
+                          .filter(pi => pi.itemName || pi.itemCode)
+                          .map(pi => ({
+                            supplierItemCode: pi.itemCode || '',
+                            supplierItemName: pi.itemName || '',
+                            hsnSac: pi.hsnSac || '',
+                          }));
+                        setExtractedVendorData((prev: any) => ({
+                          ...(prev || {}),
+                          supplier_items: itemsFromVoucher.length > 0 ? itemsFromVoucher : undefined,
+                        }));
+                        setIsCreateVendorModalOpen(true);
+                      }}
+                      className="flex items-center self-start gap-1.5 px-3 py-1.5 bg-indigo-600 text-white hover:bg-indigo-700 text-[13px] font-medium rounded-[4px] transition-all whitespace-nowrap shadow-sm uppercase"
+                      title="Add New Vendor"
+                    >
+                      <span className="text-lg leading-none">+</span> ADD NEW VENDOR
+                    </button>
+                  </div>
 
                   {vendorValidationStatus === 'NOT_FOUND' && (
                     <div className="mt-2 text-xs text-red-600 font-semibold flex items-center justify-between gap-2 p-2 bg-red-50 border border-red-200 rounded">
@@ -7336,11 +7359,20 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           }
 
           {/* Create Vendor Modal */}
-          {isCreateVendorModalOpen && extractedVendorData && (
-            <CreateVendorModal
+          {isCreateVendorModalOpen && (
+            <CreateNewVendorFullModal
               onClose={() => setIsCreateVendorModalOpen(false)}
-              onSave={handleCreateVendorFromInvoice}
-              initialData={extractedVendorData}
+              onVendorCreated={(vendorName, newId) => {
+                showSuccess('Vendor Created Successfully!');
+                setIsCreateVendorModalOpen(false);
+                setVendorValidationStatus('FOUND');
+                setVendorMatchedBy('Newly Created');
+                setIsVendorDisabled(true);
+                setParty(vendorName);
+                if (newId) setVendorId(newId);
+                handlePartyChange(vendorName, newId);
+                fetchRichData();
+              }}
             />
           )}
 
@@ -7386,11 +7418,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     setPurchaseItems(mappedItems);
                   }
 
-                    // Add to pending list and select it
-                    if (response.grn_no) {
-                      setPendingGRNs(prev => [...prev, response]);
-                      setGrnRefNo(response.grn_no);
-                    }
+                  // Add to pending list and select it
+                  if (response.grn_no) {
+                    setPendingGRNs(prev => [...prev, response]);
+                    setGrnRefNo(response.grn_no);
+                  }
 
                   if (response.grn_no) {
                     setPendingGRNs(prev => [...prev, response]);
