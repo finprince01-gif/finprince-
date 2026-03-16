@@ -42,6 +42,44 @@ const PaymentVoucherBulk: React.FC = () => {
     { id: '3', payTo: '', amount: 0 }
   ]);
 
+  // Payment Voucher Configuration state
+  const [paymentVoucherConfigs, setPaymentVoucherConfigs] = useState<any[]>([]);
+  const [selectedPaymentConfig, setSelectedPaymentConfig] = useState<string>('');
+
+  // Fetch payment voucher configurations on mount
+  useEffect(() => {
+    const fetchPaymentConfigs = async () => {
+      try {
+        const data = await httpClient.get<any[]>('/api/masters/master-voucher-payments/');
+        const paymentConfigs = data || [];
+        setPaymentVoucherConfigs(paymentConfigs);
+        if (paymentConfigs && paymentConfigs.length === 1) {
+          setSelectedPaymentConfig(paymentConfigs[0].voucher_name);
+        }
+      } catch (error) {
+        console.error('Error fetching payment voucher configurations:', error);
+        setPaymentVoucherConfigs([]);
+      }
+    };
+    fetchPaymentConfigs();
+  }, []);
+
+  // Generate voucher number when payment configuration is selected
+  useEffect(() => {
+    if (selectedPaymentConfig && paymentVoucherConfigs.length > 0) {
+      const config = paymentVoucherConfigs.find(c => c.voucher_name === selectedPaymentConfig);
+      if (config && config.enable_auto_numbering) {
+        const paddedNum = String(config.current_number).padStart(config.required_digits, '0');
+        const generatedNumber = `${config.prefix || ''}${paddedNum}${config.suffix || ''}`;
+        setVoucherNumber(generatedNumber);
+      } else {
+        setVoucherNumber('Manual Input');
+      }
+    } else {
+      setVoucherNumber('');
+    }
+  }, [selectedPaymentConfig, paymentVoucherConfigs]);
+
   // Transaction list state (right panel)
   const [selectedVendor, setSelectedVendor] = useState<string>('');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -225,15 +263,31 @@ const PaymentVoucherBulk: React.FC = () => {
         {/* Left Panel */}
         <div className="space-y-6">
           {/* Top Fields */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
               <input
                 type="date"
                 value={date}
+                max={getTodayDate()}
                 onChange={e => setDate(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Voucher Series</label>
+              <select
+                value={selectedPaymentConfig}
+                onChange={(e) => setSelectedPaymentConfig(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">Select</option>
+                {paymentVoucherConfigs.map((config) => (
+                  <option key={config.id} value={config.voucher_name}>
+                    {config.voucher_name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Voucher Number</label>
