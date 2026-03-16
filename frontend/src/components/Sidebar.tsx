@@ -9,9 +9,10 @@ interface SidebarProps {
   onNavigate: (page: Page) => void;
   onLogout: () => void;
   companyName: string;
+  isOpen?: boolean;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, companyName }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, companyName, isOpen = true }) => {
   const { hasPageAccess } = usePermissions();
   const { subscriptionUsage } = useSubscriptionUsage();
 
@@ -20,6 +21,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, co
     { name: 'Masters', icon: 'ledger' },
     { name: 'Inventory', icon: 'inventory' },
     { name: 'Vouchers', icon: 'vouchers' },
+    { name: 'Banking', icon: 'bank' },
     { name: 'Vendor Portal', icon: 'vendor-portal' },
     { name: 'Customer Portal', icon: 'customer-portal' },
     { name: 'Payroll', icon: 'payroll' },
@@ -45,7 +47,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, co
       : `${Math.round(usagePercent)}%`;
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-40 flex flex-col h-full transition-all duration-300 erp-sidebar w-[260px]">
+    <aside className={`fixed inset-y-0 left-0 z-40 flex flex-col h-full transition-all duration-300 erp-sidebar w-[260px] ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
       {/* ── Brand / Profile Section ──────────────────────────── */}
       <div className="p-6 pb-4">
         <div className="flex items-center gap-3">

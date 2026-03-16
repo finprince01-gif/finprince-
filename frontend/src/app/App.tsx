@@ -48,6 +48,7 @@ const PayrollPage = React.lazy(() => import('../pages/Payroll'));
 const ServicePage = React.lazy(() => import('../pages/Service'));
 const GSTPage = React.lazy(() => import('../pages/GST'));
 const DashboardBuilderPage = React.lazy(() => import('../pages/DashboardBuilder'));
+const BankingPage = React.lazy(() => import('../pages/Banking'));
 const LoginPage = React.lazy(() => import('../pages/Login').then(m => ({ default: m.default })));
 const ForgotPasswordPage = React.lazy(() => import('../pages/Login').then(m => ({ default: m.ForgotPassword })));
 const SignupPage = React.lazy(() => import('../pages/Register'));
@@ -172,7 +173,7 @@ const App: React.FC = () => {
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
   const [view, setView] = useState<'login' | 'signup' | 'forgot-password'>('login');
   const [currentPage, setCurrentPage] = useState<Page>('Dashboard');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
   // User permissions - No longer used (RBAC removed)
@@ -1146,6 +1147,7 @@ const App: React.FC = () => {
       case 'Payroll': return <PayrollPage />;
       case 'Service': return <ServicePage />;
       case 'GST': return <GSTPage />;
+      case 'Banking': return <BankingPage />;
       case 'Dashboard Builder': return <DashboardBuilderPage vouchers={vouchers} ledgers={ledgers} onNavigate={handleNavigate} />;
       case 'MassUploadResult': return <MassUploadResultPage
         results={massUploadResult || []}
@@ -1236,10 +1238,11 @@ const App: React.FC = () => {
           onNavigate={handleNavigate}
           onLogout={handleLogout}
           companyName={companyDetails.name}
+          isOpen={isSidebarOpen}
         />
       )}
 
-      <main className={`flex-1 ${isLoggedIn || isAuthenticating ? 'ml-[260px]' : 'ml-0'} min-h-screen transition-all duration-300 erp-main-bg`}>
+      <main className={`flex-1 ${(isLoggedIn || isAuthenticating) && isSidebarOpen ? 'ml-[260px]' : 'ml-0'} min-h-screen transition-all duration-300 erp-main-bg`}>
         {/* ── Sticky Header ─────────────────────────────────── */}
         <div className="sticky top-0 z-30 backdrop-blur-md flex items-center justify-between erp-header">
           <div className="flex items-center gap-6">

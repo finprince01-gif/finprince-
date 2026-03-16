@@ -1,4 +1,0 @@
-﻿automation-repo	https://github.com/finpixe01/finpixe-automation.git (fetch)
-automation-repo	https://github.com/finpixe01/finpixe-automation.git (push)
-origin	https://github.com/budstechconsultancy-svg/AI-accounting-0.03.git (fetch)
-origin	https://github.com/budstechconsultancy-svg/AI-accounting-0.03.git (push)

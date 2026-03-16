@@ -5,13 +5,32 @@ Only database queries accepting tenant_id as parameter.
 """
 
 import logging
-from django.db.models import Max
-from accounting.models import (
+from django.db.models import Max  # type: ignore
+from accounting.models import (  # type: ignore
     MasterLedgerGroup, MasterLedger, MasterHierarchyRaw,
     AmountTransaction
 )
-from .models import MasterVoucherSales as MasterVoucherConfig
-from .models import MasterVoucherSales as VoucherConfiguration
+from .models import (  # type: ignore
+    MasterVoucherSales, MasterVoucherCreditNote, MasterVoucherReceipts,
+    MasterVoucherPurchases, MasterVoucherDebitNote, MasterVoucherPayments,
+    MasterVoucherExpenses, MasterVoucherJournal, MasterVoucherContra
+)
+
+MODEL_MAP = {
+    'sales': MasterVoucherSales,
+    'creditnote': MasterVoucherCreditNote,
+    'receipts': MasterVoucherReceipts,
+    'purchase': MasterVoucherPurchases,
+    'debitnote': MasterVoucherDebitNote,
+    'payments': MasterVoucherPayments,
+    'expenses': MasterVoucherExpenses,
+    'journal': MasterVoucherJournal,
+    'contra': MasterVoucherContra,
+}
+
+# Default aliases
+MasterVoucherConfig = MasterVoucherSales
+VoucherConfiguration = MasterVoucherSales
 
 
 logger = logging.getLogger('masters.database')
@@ -163,9 +182,10 @@ def get_hierarchy_by_id(hierarchy_id):
 # VOUCHER CONFIGURATION QUERIES
 # ============================================================================
 
-def get_all_voucher_configurations(tenant_id):
-    """Get all voucher configurations for a tenant."""
-    return VoucherConfiguration.objects.filter(tenant_id=tenant_id)
+def get_all_voucher_configurations(tenant_id, voucher_type='sales'):
+    """Get all voucher configurations for a tenant and voucher type."""
+    model = MODEL_MAP.get(voucher_type, MasterVoucherSales)
+    return model.objects.filter(tenant_id=tenant_id)  # type: ignore
 
 
 def get_voucher_configuration_by_id(config_id, tenant_id):
@@ -175,9 +195,9 @@ def get_voucher_configuration_by_id(config_id, tenant_id):
 
 def get_voucher_configurations_by_type(voucher_type, tenant_id):
     """Get all voucher configurations for a specific voucher type."""
-    return VoucherConfiguration.objects.filter(
+    model = MODEL_MAP.get(voucher_type, MasterVoucherSales)
+    return model.objects.filter(  # type: ignore
         tenant_id=tenant_id,
-        voucher_type=voucher_type,
         is_active=True
     )
 

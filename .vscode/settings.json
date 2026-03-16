@@ -1,7 +1,17 @@
 {
     "python.defaultInterpreterPath": "backend/venv/Scripts/python.exe",
+    "python.pythonPath": "backend/venv/Scripts/python.exe",
     "python.languageServer": "Pylance",
     "css.lint.unknownAtRules": "ignore",
     "scss.lint.unknownAtRules": "ignore",
-    "less.lint.unknownAtRules": "ignore"
+    "less.lint.unknownAtRules": "ignore",
+
+    "pyre2.enablePyre2": false,
+
+    "python.analysis.extraPaths": [
+        "backend",
+        "backend/venv/Lib/site-packages"
+    ],
+    "python.analysis.typeCheckingMode": "off",
+    "python.analysis.diagnosticMode": "openFilesOnly"
 }

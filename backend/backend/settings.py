@@ -1,7 +1,7 @@
 
 import os
 from pathlib import Path
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # type: ignore[import]
 from datetime import timedelta
 
 load_dotenv(override=True)
@@ -407,3 +407,8 @@ MIGRATION_MODULES = {
     'rest_framework': None,
     'corsheaders': None,
 }
+
+# ============================================================================
+# BANK RECONCILIATION SETTINGS
+# ============================================================================
+BANK_MATCH_TOLERANCE = 1

@@ -1,7 +1,11 @@
-from rest_framework import viewsets, status
-from rest_framework.response import Response
-from .models_voucher_receipt import VoucherReceiptSingle, VoucherReceiptBulk
-from .serializers_receipt import VoucherReceiptSingleSerializer, VoucherReceiptBulkSerializer
+from rest_framework import viewsets, status  # type: ignore
+from rest_framework.response import Response  # type: ignore
+from .models_voucher_receipt import VoucherReceiptSingle, VoucherReceiptBulk  # type: ignore
+from .serializers_receipt import VoucherReceiptSingleSerializer, VoucherReceiptBulkSerializer  # type: ignore
+from .models_bank_reconciliation import BankStatementTransaction, BankReconciliationLink  # type: ignore
+from django.utils import timezone  # type: ignore
+from django.db import transaction as db_transaction  # type: ignore
+import datetime
 
 class VoucherReceiptSingleViewSet(viewsets.ModelViewSet):
     queryset = VoucherReceiptSingle.objects.all()
@@ -18,9 +22,82 @@ class VoucherReceiptSingleViewSet(viewsets.ModelViewSet):
         # Filter by receive_from (vendor/party name) for ledger view
         receive_from = self.request.query_params.get('receive_from')
         if receive_from:
-            queryset = queryset.filter(receive_from__icontains=receive_from)
+            queryset = queryset.filter(receive_from__name__icontains=receive_from)
 
         return queryset
+
+    def create(self, request, *args, **kwargs):
+        bank_transaction_id = request.data.get('bank_transaction_id')
+        
+        # Original create logic
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        with db_transaction.atomic():
+            self.perform_create(serializer)
+            voucher = serializer.instance
+            
+            # Link to bank transaction if ID provided
+            reconciliation_link_created = False
+            if bank_transaction_id:
+                try:
+                    tenant_id = self.request.user.tenant_id if hasattr(self.request.user, 'tenant_id') else None
+                    st_txn = BankStatementTransaction.objects.get(id=bank_transaction_id, tenant_id=tenant_id)
+
+                    # Upsert: create if missing, update if already linked
+                    link, created = BankReconciliationLink.objects.get_or_create(
+                        bank_transaction=st_txn,
+                        defaults=dict(
+                            tenant_id=tenant_id,
+                            voucher_id=voucher.id,
+                            voucher_type='receipt',
+                            reconciliation_type='manual',
+                            reconciliation_date=datetime.date.today(),
+                            reconciliation_status='Reconciled',
+                            match_method='manual_create',
+                            confidence_score=100,
+                            cheque_number=st_txn.cheque_number,
+                            reconciled_at=timezone.now()
+                        )
+                    )
+                    if not created:
+                        link.voucher_id = voucher.id
+                        link.voucher_type = 'receipt'
+                        link.reconciliation_type = 'manual'
+                        link.reconciliation_date = datetime.date.today()
+                        link.reconciliation_status = 'Reconciled'
+                        link.match_method = 'manual_create'
+                        link.confidence_score = 100
+                        link.cheque_number = st_txn.cheque_number
+                        link.reconciled_at = timezone.now()
+                        link.save()
+
+                    # Update staging transaction status to MANUAL_MATCHED
+                    st_txn.status = 'MANUAL_MATCHED'
+                    st_txn.matched_voucher_id = voucher.id
+                    st_txn.reconciled_at = timezone.now()
+                    st_txn.is_ignored = False
+                    st_txn.save(update_fields=['status', 'matched_voucher_id', 'reconciled_at', 'is_ignored'])
+
+                    # Mark voucher itself as bank-reconciled
+                    VoucherReceiptSingle.objects.filter(id=voucher.id).update(
+                        bank_reconciled=True,
+                        bank_reconcile_date=st_txn.transaction_date,
+                        bank_statement_id=st_txn.id,
+                        bank_reference_number=st_txn.reference_number
+                    )
+                    reconciliation_link_created = True
+                except BankStatementTransaction.DoesNotExist:
+                    pass  # bank_transaction_id was invalid – just save the voucher without linking
+
+            headers = self.get_success_headers(serializer.data)
+            response_data = serializer.data
+            response_data['voucher_created'] = True
+            response_data['reconciliation_link_created'] = reconciliation_link_created
+            if bank_transaction_id:
+                response_data['bank_transaction_id'] = bank_transaction_id
+                
+            return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
 
     def perform_create(self, serializer):
         user = self.request.user

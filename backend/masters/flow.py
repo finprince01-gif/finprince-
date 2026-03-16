@@ -5,12 +5,12 @@ Every function MUST start with tenant validation and permission checks.
 """
 
 import logging
-from django.db import IntegrityError, transaction
-from django.core.exceptions import ValidationError
-from rest_framework import serializers as drf_serializers
-from core.tenant import get_user_tenant_id
-from accounting.utils import generate_ledger_code
-from . import database as db
+from django.db import IntegrityError, transaction  # type: ignore
+from django.core.exceptions import ValidationError  # type: ignore
+from rest_framework import serializers as drf_serializers  # type: ignore
+from core.tenant import get_user_tenant_id  # type: ignore
+from accounting.utils import generate_ledger_code  # type: ignore
+from . import database as db  # type: ignore
 
 logger = logging.getLogger('masters.flow')
 
@@ -22,11 +22,11 @@ def get_tenant_id(user):
     
     # If not found, try to get from request context (JWT token)
     if not tenant_id and hasattr(user, '_request'):
-        from core.tenant import get_tenant_from_request
+        from core.tenant import get_tenant_from_request  # type: ignore
         tenant_id = get_tenant_from_request(user._request)
     
     if not tenant_id:
-        from rest_framework.exceptions import PermissionDenied
+        from rest_framework.exceptions import PermissionDenied  # type: ignore
         user_info = f"{user.username}" if hasattr(user, 'username') else 'Unknown'
         user_id = f"(ID: {user.id})" if hasattr(user, 'id') else ''
         is_authenticated = user.is_authenticated if hasattr(user, 'is_authenticated') else False
@@ -184,7 +184,7 @@ def create_ledger(user, validated_data):
                 
                 # Save answers to Answer table
                 if question_answers and isinstance(question_answers, dict):
-                    from accounting.models_question import Question, Answer
+                    from accounting.models_question import Question, Answer  # type: ignore
                     logger.info(f"💾 Saving {len(question_answers)} answers to answers table...")
                     
                     for q_id, ans_text in question_answers.items():
@@ -213,7 +213,7 @@ def create_ledger(user, validated_data):
                 # Auto-create AmountTransaction for Cash/Bank ledgers (even without opening balance)
                 if _is_cash_or_bank_ledger(ledger):
                     try:
-                        from accounting.models import AmountTransaction
+                        from accounting.models import AmountTransaction  # type: ignore
                         from datetime import date
                         
                         # Get opening balance from question_answers or default to 0
@@ -234,7 +234,7 @@ def create_ledger(user, validated_data):
                             transaction_date=date.today(),
                             transaction_type='opening_balance',
                             debit=opening_balance_value if opening_balance_value >= 0 else 0,
-                            credit=abs(opening_balance_value) if opening_balance_value < 0 else 0,
+                            credit=abs(opening_balance_value) if opening_balance_value < 0 else 0,  # type: ignore
                             balance=opening_balance_value,
                             narration='Opening Balance'
                         )
@@ -397,22 +397,22 @@ def list_hierarchy_data():
 # VOUCHER CONFIGURATION OPERATIONS
 # ============================================================================
 
-def list_voucher_configurations(user):
+def list_voucher_configurations(user, voucher_type='sales'):
     """
-    List all voucher configurations for the user's tenant.
+    List all voucher configurations for the user's tenant and type.
     
     Args:
         user: Authenticated user
+        voucher_type: Type of voucher (sales, receipts, payments, etc.)
     
     Returns:
         QuerySet of voucher configurations
     """
     # 1. Tenant validation
-    # 1. Tenant validation
     tenant_id = get_tenant_id(user)
     
     # 2. Business logic - fetch data
-    return db.get_all_voucher_configurations(tenant_id)
+    return db.get_all_voucher_configurations(tenant_id, voucher_type=voucher_type)
 
 
 def create_voucher_configuration(user, data):

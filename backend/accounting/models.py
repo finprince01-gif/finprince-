@@ -1,22 +1,23 @@
-from django.db import models
-from django.utils import timezone
-from core.models import BaseModel
+from django.db import models # pyre-fixme
+from django.utils import timezone # pyre-fixme
+from core.models import BaseModel # pyre-fixme
 
 # Import TransactionFile model
-from .models_transaction import TransactionFile
-from .models_voucher_payment import VoucherPaymentSingle, VoucherPaymentBulk
-from .models_voucher_receipt import VoucherReceiptSingle, VoucherReceiptBulk
-from .models_voucher_expense import VoucherExpense
-from .models_voucher_contra import VoucherContra
-from .models_voucher_journal import VoucherJournal
-from .models_voucher_purchase import (
+from .models_transaction import TransactionFile # pyre-fixme
+from .models_voucher_payment import VoucherPaymentSingle, VoucherPaymentBulk # pyre-fixme
+from .models_voucher_receipt import VoucherReceiptSingle, VoucherReceiptBulk # pyre-fixme
+from .models_voucher_expense import VoucherExpense # pyre-fixme
+from .models_voucher_contra import VoucherContra # pyre-fixme
+from .models_voucher_journal import VoucherJournal # pyre-fixme
+from .models_bank_reconciliation import BankStatementTransaction, BankReconciliationLink # pyre-fixme
+from .models_voucher_purchase import ( # pyre-fixme
     VoucherPurchaseSupplierDetails, 
     VoucherPurchaseSupplyForeignDetails, 
     VoucherPurchaseSupplyINRDetails,
     VoucherPurchaseDueDetails, 
     VoucherPurchaseTransitDetails
 )
-from .models_voucher_sales import (
+from .models_voucher_sales import ( # pyre-fixme
     VoucherSalesInvoiceDetails,
     VoucherSalesItems,
     VoucherSalesItemsForeign,
@@ -251,6 +252,7 @@ class Voucher(BaseModel):
     amount = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
     total = models.DecimalField(max_digits=15, decimal_places=2, default=0, null=True, blank=True)
     narration = models.TextField(null=True, blank=True)
+    source = models.CharField(max_length=100, default='manual', help_text="Source of voucher (e.g., manual, bank_reconciliation)")
     
     # Sales/Purchase specific
     invoice_no = models.CharField(max_length=50, null=True, blank=True)
@@ -420,7 +422,7 @@ class AmountTransaction(BaseModel):
                         is_valid = True
         
         if not is_valid:
-            from django.core.exceptions import ValidationError
+            from django.core.exceptions import ValidationError # pyre-fixme
             raise ValidationError({
                 'ledger_name': f"Invalid Ledger '{self.ledger.name}'. Transactions allowed only for 'Assets -> Cash and Bank Balances -> Cash or Bank'."
             })
@@ -533,7 +535,7 @@ class ExtractedInvoice(BaseModel):
 
 # Use the models that match the schema.sql (imported from models_voucher_sales.py)
 # ALIASES TO FIX BACKEND ERROR: Mapping Legacy Code to New Schema
-from .models_voucher_sales import (
+from .models_voucher_sales import ( # pyre-fixme
     VoucherSalesInvoiceDetails as SalesVoucher, # Alias SalesVoucher to VoucherSalesInvoiceDetails
     VoucherSalesItems as SalesVoucherItem, # Alias SalesVoucherItem to VoucherSalesItems
     VoucherSalesDispatchDetails,
@@ -704,8 +706,8 @@ class SalesInvoice(BaseModel):
     
     def clean(self):
         """Validate invoice date"""
-        from django.core.exceptions import ValidationError
-        from django.utils import timezone
+        from django.core.exceptions import ValidationError # pyre-fixme
+        from django.utils import timezone # pyre-fixme
         
         if self.invoice_date and self.invoice_date > timezone.now().date():
             raise ValidationError({

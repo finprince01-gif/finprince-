@@ -1,2 +1,0 @@
-mysql: [Warning] Using a password on the command line interface can be insecure.
-ERROR 1050 (42S01) at line 5: Table 'tenants' already exists

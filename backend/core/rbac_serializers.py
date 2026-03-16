@@ -4,9 +4,9 @@ RBAC Serializers
 Serializers for Role-Based Access Control API endpoints
 """
 
-from rest_framework import serializers
-from django.contrib.auth import get_user_model
-from .rbac_models import Role, UserRole #, PermissionLog
+from rest_framework import serializers  # type: ignore
+from django.contrib.auth import get_user_model  # type: ignore
+from .rbac_models import Role, UserRole # type: ignore
 
 User = get_user_model()
 
@@ -79,12 +79,35 @@ class UserRoleSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'assigned_at', 'assigned_by', 'tenant_id', 'username', 'email', 'phone']
     
+    def validate(self, data):
+        """Validate that user and role belong to the same tenant"""
+        request = self.context.get('request')
+        if not request or not hasattr(request, 'user'):
+            return data
+            
+        tenant_id = request.user.tenant_id
+        user = data.get('user')
+        role = data.get('role')
+        
+        if user and hasattr(user, 'tenant_id') and user.tenant_id != tenant_id:
+            raise serializers.ValidationError("Cannot assign role to a user from another organization")
+            
+        if role and role.tenant_id != tenant_id:
+            raise serializers.ValidationError("Cannot assign a role belonging to another organization")
+            
+        return data
+
     def create(self, validated_data):
-        """Create user role assignment with tenant_id and assigned_by"""
+        """Create user role assignment with tenant_id, assigned_by and denormalized fields"""
         request = self.context.get('request')
         if request and hasattr(request, 'user'):
+            user = validated_data['user']
             validated_data['tenant_id'] = request.user.tenant_id
             validated_data['assigned_by'] = request.user
+            # Populate denormalized fields for quick access
+            validated_data['username'] = user.username
+            validated_data['email'] = getattr(user, 'email', '')
+            validated_data['phone'] = getattr(user, 'phone', '')
         return super().create(validated_data)
 
 
@@ -140,12 +163,12 @@ class UserWithRolesSerializer(serializers.ModelSerializer):
                 
                 # Union: if any role grants access, user has access
                 if page_perms.get('view', False):
-                    combined_permissions[page_name]['view'] = True
+                    combined_permissions[page_name]['view'] = True  # type: ignore
                 
                 # Combine tab permissions
                 for tab_name, tab_access in page_perms.get('tabs', {}).items():
                     if tab_access:
-                        combined_permissions[page_name]['tabs'][tab_name] = True
+                        combined_permissions[page_name]['tabs'][tab_name] = True  # type: ignore
         
         return combined_permissions
 

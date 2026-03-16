@@ -25,6 +25,8 @@ import SearchableDropdown from '../../components/SearchableDropdown';
 
 
 
+
+
 const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5003';
 
 import { getXLSX } from '../../utils/xlsx';
@@ -224,6 +226,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const { subscriptionUsage, isLimitReached, refetch } = useSubscriptionUsage();
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [isSalesExcelWorkflowOpen, setIsSalesExcelWorkflowOpen] = useState(false);
+  const [isQuickVoucherModalOpen, setIsQuickVoucherModalOpen] = useState(false);
+  const [selectedStatementTransaction, setSelectedStatementTransaction] = useState<any>(null);
+  const [isCreatingVoucher, setIsCreatingVoucher] = useState(false);
 
   const handleScannerFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -597,7 +602,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     Array.from(new Set(allItems.map((item: any) => item.name || item.item_name).filter(Boolean) as string[])),
     [allItems]
   );
-  // From PORT (Local) - Renaming or reusing variables for clarity if needed, 
+
+
+
   // but keeping 'FromPort' prefix for consistency with older code if referenced, 
   // though UI uses the Right Column variables above for Road. 
   // The 'From PORT' section in UI (reverted) uses purchaseTransitFromPort... variables if applicable? 
@@ -4742,10 +4749,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 )}
               </div>
             )}
+          </div>
         </div>
-      </div>
-    );
-  };
+      );
+    };
 
   const renderSalesPurchaseForm = () => {
     if (voucherType === 'Purchase') return renderPurchaseForm();
@@ -6907,6 +6914,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           Sales Excel Upload
                         </button>
 
+
                       </div>
                     </div>
                   )}
@@ -6951,6 +6959,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   accept=".xlsx, .xls"
                   className="hidden"
                 />
+
+
 
                 <input
                   type="file"
@@ -7006,8 +7016,22 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             }} />
 
             {voucherType === 'Sales' && <SalesVoucher prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} customers={richCustomers} companyDetails={companyDetails} />}
-            {voucherType === 'Payment' && <PaymentVoucherSingle prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} />}
-            {voucherType === 'Receipt' && <ReceiptVoucher prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} />}
+            {voucherType === 'Payment' && (
+              <PaymentVoucherSingle 
+                prefilledData={localPrefilledData} 
+                clearPrefilledData={handleClearPrefilledData}
+                isLimitReached={isLimitReached}
+                onLimitReached={handleLimitReached}
+              />
+            )}
+            {voucherType === 'Receipt' && (
+              <ReceiptVoucher 
+                prefilledData={localPrefilledData} 
+                clearPrefilledData={handleClearPrefilledData}
+                isLimitReached={isLimitReached}
+                onLimitReached={handleLimitReached}
+              />
+            )}
             {voucherType === 'Purchase' && renderPurchaseForm()}
             {voucherType === 'Contra' && renderSimpleForm(voucherType)}
             {voucherType === 'Journal' && renderJournalForm()}
@@ -7679,6 +7703,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               }}
             />
           )}
+
+
         </>
       )}
     </div>

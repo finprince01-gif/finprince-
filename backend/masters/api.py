@@ -4,15 +4,15 @@ NO business logic, NO RBAC, NO tenant validation.
 Only HTTP handling - all logic delegated to flow.py
 """
 
-from rest_framework import viewsets, status
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
-from accounting.models import (
+from rest_framework import viewsets, status  # type: ignore
+from rest_framework.decorators import action  # type: ignore
+from rest_framework.response import Response  # type: ignore
+from rest_framework.permissions import IsAuthenticated, AllowAny  # type: ignore
+from accounting.models import (  # type: ignore
     MasterLedgerGroup, MasterLedger, MasterHierarchyRaw,
     AmountTransaction
 )
-from .models import (
+from .models import (  # type: ignore
     MasterVoucherSales,
     MasterVoucherCreditNote,
     MasterVoucherReceipts,
@@ -27,13 +27,13 @@ from .models import (
 MasterVoucherConfig = MasterVoucherSales
 VoucherConfiguration = MasterVoucherSales
 
-from accounting.serializers import (
+from accounting.serializers import (  # type: ignore
     MasterLedgerGroupSerializer, MasterLedgerSerializer,
     MasterHierarchyRawSerializer,
     AmountTransactionSerializer
 )
-from .serializers import VoucherConfigurationSerializer, MasterVoucherConfigSerializer
-from . import flow
+from .serializers import VoucherConfigurationSerializer, MasterVoucherConfigSerializer  # type: ignore
+from . import flow  # type: ignore
 
 
 # ============================================================================
@@ -299,7 +299,8 @@ class VoucherConfigurationViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """Delegate to flow layer."""
-        return flow.list_voucher_configurations(self.request.user)
+        voucher_type = self.request.query_params.get('voucher_type', 'sales')
+        return flow.list_voucher_configurations(self.request.user, voucher_type=voucher_type)
     
     def create(self, request, *args, **kwargs):
         """Delegate to flow layer."""

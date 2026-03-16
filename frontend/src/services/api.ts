@@ -407,6 +407,10 @@ class ApiService {
         }
     }
 
+    async getVoucherConfigs(type: string) {
+        return httpClient.get<any[]>(`/api/masters/voucher-configurations/?voucher_type=${type}`);
+    }
+
     // ============================================================================
     // VOUCHERS - UNIFIED ENDPOINT
     // ============================================================================
@@ -1153,6 +1157,64 @@ class ApiService {
 
     async updateSubscriptionPlan(plan: string) {
         return httpClient.post<{ success: boolean }>('/api/subscription/update/', { plan });
+    }
+
+    // ============================================================================
+    // BANK RECONCILIATION
+    // ============================================================================
+
+    async uploadBankStatement(file: File, bankLedgerId: number) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('bank_ledger_id', String(bankLedgerId));
+        return httpClient.postFormData<any>('/api/bank-reconciliation/upload/', formData);
+    }
+
+    async runBankMatching(bankLedgerId: number) {
+        return httpClient.post<any>('/api/bank-reconciliation/run-matching/', { bank_ledger_id: bankLedgerId });
+    }
+
+    async autoReconcileBank(bankLedgerId: number) {
+        return httpClient.post<any>('/api/bank-reconciliation/auto-reconcile/', { bank_ledger_id: bankLedgerId });
+    }
+
+    async getPendingBankMatches(bankLedgerId?: number, params?: any) {
+        let url = '/api/bank-reconciliation/pending_matches/';
+        const queryParams = new URLSearchParams();
+        if (bankLedgerId) queryParams.append('bank_ledger_id', String(bankLedgerId));
+        if (params) {
+            Object.keys(params).forEach(key => {
+                if (params[key] !== undefined && params[key] !== null) {
+                    queryParams.append(key, String(params[key]));
+                }
+            });
+        }
+        const queryString = queryParams.toString();
+        if (queryString) url += `?${queryString}`;
+        return httpClient.get<any[]>(url);
+    }
+
+    async linkBankVoucher(txnId: number, voucherId: number, voucherType: string) {
+        return httpClient.post<any>(`/api/bank-reconciliation/${txnId}/link_voucher/`, { 
+            voucher_id: voucherId,
+            voucher_type: voucherType
+        });
+    }
+
+    async ignoreBankTransaction(txnId: number) {
+        return httpClient.post<any>(`/api/bank-reconciliation/${txnId}/ignore/`, {});
+    }
+
+    async createBankVoucher(txnId: number, data: { voucher_type: string; bank_ledger_id: number; counterparty_ledger_id: number; amount: number; voucher_date?: string; reference?: string; narration?: string; bank_transaction_id: number }) {
+        return httpClient.post<any>(`/api/bank-reconciliation/${txnId}/create_voucher/`, data);
+    }
+
+    async downloadBankReconciliationStatement(bankLedgerId: number) {
+        return httpClient.get<string>(`/api/bank-reconciliation/export-statement/?bank_ledger_id=${bankLedgerId}`);
+    }
+
+    async downloadMatchedTransactionsSummary(bankLedgerId: number) {
+        return httpClient.get<string>(`/api/bank-reconciliation/export-summary/?bank_ledger_id=${bankLedgerId}`);
     }
 
     // ============================================================================

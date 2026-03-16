@@ -29,6 +29,9 @@ interface BulkTransaction {
     selected: boolean;
 }
 
+
+import Icon from '../../components/Icon';
+
 interface PaymentVoucherSingleProps {
     prefilledData?: ExtractedInvoiceData | null;
     clearPrefilledData?: () => void;
@@ -36,7 +39,12 @@ interface PaymentVoucherSingleProps {
     onLimitReached?: () => void;
 }
 
-const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledData, clearPrefilledData, isLimitReached, onLimitReached }) => {
+const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ 
+    prefilledData, 
+    clearPrefilledData, 
+    isLimitReached, 
+    onLimitReached
+}) => {
     // Tab state
     const [activeTab, setActiveTab] = useState<'single' | 'bulk'>('single');
 
@@ -52,6 +60,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
     const [date, setDate] = useState(getCurrentDate());
     const [voucherType, setVoucherType] = useState('Payment');
     const [voucherNumber, setVoucherNumber] = useState('');
+    const [bankTransactionId, setBankTransactionId] = useState<number | null>(null);
     const [payFrom, setPayFrom] = useState('');
     const [payFromBalance, setPayFromBalance] = useState('₹0 Cr');
     const [payTo, setPayTo] = useState('');
@@ -125,7 +134,8 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
 
     // Sync balances
     useEffect(() => {
-        const ledger = allLedgers.find(l => l.name === payFrom);
+        const normalized = (payFrom || '').trim().toLowerCase();
+        const ledger = allLedgers.find(l => l.name.trim().toLowerCase() === normalized);
         if (ledger) {
             const bal = ledger.balance || 0;
             const sign = bal >= 0 ? 'Dr' : 'Cr';
@@ -139,25 +149,45 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
 
     // Populate from AI Extraction
     useEffect(() => {
-        if (prefilledData) {
+        if (prefilledData && allLedgers.length > 0) {
 
             // Assuming prefilledData.invoiceDate is YYYY-MM-DD
             if (prefilledData.invoiceDate) {
                 setDate(prefilledData.invoiceDate);
             }
+            
+            // Helper to find exact ledger name from allLedgers (case-insensitive)
+            const findLedgerName = (name: string) => {
+                if (!name) return '';
+                const normalized = name.trim().toLowerCase();
+                const found = allLedgers.find(l => l.name.trim().toLowerCase() === normalized);
+                return found ? found.name : '';
+            };
+
             if (prefilledData.sellerName) {
-                setPayTo(prefilledData.sellerName);
+                setPayTo(findLedgerName(prefilledData.sellerName));
+            }
+            if ((prefilledData as any).account) {
+                setPayFrom(findLedgerName((prefilledData as any).account));
             }
             if (prefilledData.totalAmount) {
                 setSingleAdvanceAmount(prefilledData.totalAmount);
                 setShowSingleAdvanceSection(true);
                 if (prefilledData.invoiceNumber) {
                     setSingleAdvanceRefNo(prefilledData.invoiceNumber);
+                } else if ((prefilledData as any).reference_number) {
+                    setSingleAdvanceRefNo((prefilledData as any).reference_number);
                 }
+            }
+            if ((prefilledData as any).narration) {
+                setPostingNote((prefilledData as any).narration);
+            }
+            if ((prefilledData as any).bank_transaction_id) {
+                setBankTransactionId((prefilledData as any).bank_transaction_id);
             }
             if (clearPrefilledData) clearPrefilledData();
         }
-    }, [prefilledData, clearPrefilledData]);
+    }, [prefilledData, clearPrefilledData, allLedgers]);
 
     // Fetch payment voucher configurations on mount
     useEffect(() => {
@@ -345,13 +375,31 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
 
     const handlePostPayment = async () => {
         try {
+            const findLedgerId = (name: string) => {
+                if (!name) return null;
+                const normalized = name.trim().toLowerCase();
+                return allLedgers.find(l => l.name.trim().toLowerCase() === normalized)?.id;
+            };
+
+            const payFromId = findLedgerId(payFrom);
+            const payToId = findLedgerId(payTo);
+
             if (activeTab === 'single') {
+                if (!payFromId) {
+                    showError(`'Pay From' account '${payFrom || 'None'}' is invalid or not selected. Please select from the dropdown.`);
+                    return;
+                }
+                if (!payToId) {
+                    showError(`'Pay To' account '${payTo || 'None'}' is invalid or not selected. Please select from the dropdown.`);
+                    return;
+                }
+
                 const payload = {
                     date: date,
                     voucher_type: selectedPaymentConfig || voucherType,
                     voucher_number: voucherNumber,
-                    pay_from: payFrom,
-                    pay_to: payTo,
+                    pay_from: payFromId,
+                    pay_to: payToId,
                     total_payment: totalPayment,
                     transaction_details: pendingTransactions.map(t => ({
                         ...t,
@@ -359,21 +407,34 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                         advance: Math.max(0, t.payment - t.amount)
                     })),
                     advance_ref_no: singleAdvanceRefNo,
-                    advance_amount: singleAdvanceAmount
+                    advance_amount: singleAdvanceAmount,
+                    bank_transaction_id: bankTransactionId
                 };
 
-
-                const response = await httpClient.post('/api/vouchers/payment-single/', payload);
-
+                await httpClient.post('/api/vouchers/payment-single/', payload);
                 showSuccess('Single Payment Voucher posted successfully!');
-
                 handleCancel();
             } else {
+                if (!payFromId) {
+                    showError('Please select a Pay From account.');
+                    return;
+                }
+                
+                // Map paymentRows to contain payTo IDs instead of names
+                const mappedPaymentRows = paymentRows.map(row => {
+                    const normalized = (row.payTo || '').trim().toLowerCase();
+                    const rowPayToId = allLedgers.find(l => l.name.trim().toLowerCase() === normalized)?.id;
+                    return {
+                        ...row,
+                        payTo: rowPayToId || row.payTo
+                    };
+                });
+
                 const payload = {
                     date: date,
                     voucher_number: voucherNumber,
-                    pay_from: payFrom,
-                    payment_rows: paymentRows,
+                    pay_from: payFromId,
+                    payment_rows: mappedPaymentRows,
                     posting_note: postingNote,
                     advance_ref_no: advanceRefNo,
                     advance_amount: advanceAmount,
@@ -537,7 +598,14 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
 
                     {/* Pending Transactions */}
                     <div>
-                        <h3 className="text-sm font-semibold text-gray-800 mb-4">Pending Transactions</h3>
+                        <div className="flex justify-between items-end mb-4">
+                            <div>
+                                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-tight">
+                                    Pending Transactions
+                                </h3>
+                            </div>
+                        </div>
+
                         {payTo ? (
                             <div className="border-2 border-gray-200 rounded-[4px] overflow-hidden">
                                 <table className="w-full">
@@ -590,7 +658,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ prefilledDa
                                 <div className="border-t-2 border-gray-200 bg-white px-6 py-4 flex justify-end items-center gap-4">
                                     <span className="text-sm font-semibold text-gray-700">Total Payment</span>
                                     <div className="px-4 py-2 bg-gray-50 border border-gray-300 rounded-[4px] text-sm font-bold text-gray-900 min-w-[120px] text-right">
-                                        {totalPayment}
+                                        ₹{totalPayment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                     </div>
                                 </div>
                             </div>

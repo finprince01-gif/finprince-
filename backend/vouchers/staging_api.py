@@ -1,14 +1,14 @@
-from rest_framework import views, status
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-from django.db import transaction
-from django.utils import timezone
+from rest_framework import views, status # pyre-fixme
+from rest_framework.response import Response # pyre-fixme
+from rest_framework.permissions import IsAuthenticated # pyre-fixme
+from django.db import transaction # pyre-fixme
+from django.utils import timezone # pyre-fixme
 import logging
 import json
 import os
 import io
 
-from core.ocr_cache import (
+from core.ocr_cache import ( # pyre-fixme
     get_all_staged_invoices,
     remove_staged_invoice,
     clear_staged_invoices,
@@ -20,12 +20,12 @@ from core.ocr_cache import (
     update_ocr_cache_session,
     update_staged_invoice_extracted_data
 )
-from core.ai_service import create_dynamic_voucher_extraction_request
-from core.usage_service import check_and_increment_usage
-from vendors.models import VendorMasterBasicDetail, VendorMasterGSTDetails
-from vendors.vendor_validation_logic import validate_vendor
-from core.processing_engine import run_invoice_processing_pipeline, parse_and_process_ocr
-from accounting.serializers_voucher_purchase import VoucherPurchaseSupplierDetailsSerializer
+from core.ai_service import create_dynamic_voucher_extraction_request # pyre-fixme
+from core.usage_service import check_and_increment_usage # pyre-fixme
+from vendors.models import VendorMasterBasicDetail, VendorMasterGSTDetails # pyre-fixme
+from vendors.vendor_validation_logic import validate_vendor # pyre-fixme
+from core.processing_engine import run_invoice_processing_pipeline, parse_and_process_ocr # pyre-fixme
+from accounting.serializers_voucher_purchase import VoucherPurchaseSupplierDetailsSerializer # pyre-fixme
 
 logger = logging.getLogger(__name__)
 
@@ -120,12 +120,13 @@ class OCRStagingView(views.APIView):
         """
         import re as _re
         file_hash = None
+        raw_text = '' # Initialize to avoid UnboundLocalError
         try:
             file_hash = compute_file_hash(file_bytes)
 
             file_like = io.BytesIO(file_bytes)
-            file_like.name = file_path
-            file_like.content_type = mime_type
+            file_like.name = file_path # pyre-ignore
+            file_like.content_type = mime_type # pyre-ignore
 
             # ── Call AI Service ──────────────────────────────────────────────
             # Caching and duplicate check are now handled internally.
@@ -139,8 +140,33 @@ class OCRStagingView(views.APIView):
                 tenant_id=tenant_id,
                 upload_session_id=upload_session_id
             )
+            raw_text = extraction_res.get('reply', '')
 
             is_duplicate = extraction_res.get('duplicate', False)
+
+            # ── Check AI Usage Limit if not duplicate ──────────────────────────────────
+            if not is_duplicate and 'error' not in extraction_res:
+                user_record = request.user
+                plan = getattr(user_record, 'selected_plan', 'FREE') or 'FREE'
+                plan = plan.upper()
+                LIMITS = {'FREE': 5, 'STARTER': 100, 'PRO': float('inf'), 'ENTERPRISE': float('inf')}
+                limit = LIMITS.get(plan, 5)
+
+                if limit != float('inf'):
+                    from core.usage_service import check_and_increment_usage # pyre-ignore
+                    if not check_and_increment_usage(tenant_id, limit):
+                        logger.warning(f"Tenant {tenant_id} exceeded AI usage limit ({limit})")
+                        if file_hash:
+                            save_ocr_cache(
+                                file_hash=file_hash,
+                                tenant_id=tenant_id,
+                                upload_session_id=upload_session_id,
+                                file_path=file_path,
+                                ocr_raw_text="AI Usage Limit Exceeded",
+                                extracted_data={},
+                                validation_status='EXTRACTION_FAILED',
+                            )
+                        return False
 
             if 'error' in extraction_res:
                 logger.error("OCR error for %s: %s", file_path, extraction_res['error'])
@@ -173,6 +199,7 @@ class OCRStagingView(views.APIView):
                     extracted_data={},
                     validation_status='EXTRACTION_FAILED',
                 )
+            return False
         except Exception as exc:
             logger.exception("Error processing invoice %s", file_path)
             if file_hash:
@@ -185,6 +212,7 @@ class OCRStagingView(views.APIView):
                     extracted_data={},
                     validation_status='EXTRACTION_FAILED',
                 )
+            return False
 
     def post(self, request):
         """
@@ -233,7 +261,7 @@ class OCRStagingView(views.APIView):
                 uploaded_file.seek(0)
 
                 if self._is_pdf(uploaded_file) and len(file_bytes) > 0:
-                    from core.pdf_splitter import split_pdf_into_invoice_files
+                    from core.pdf_splitter import split_pdf_into_invoice_files # pyre-fixme
                     
                     split_results = split_pdf_into_invoice_files(
                         pdf_bytes=file_bytes,
@@ -254,7 +282,7 @@ class OCRStagingView(views.APIView):
                             })
                         except Exception as e:
                             logger.error(f"Error reading split {tmp_path}: {e}")
-                            from core.pdf_splitter import cleanup_temp_pdf
+                            from core.pdf_splitter import cleanup_temp_pdf # pyre-fixme
                             cleanup_temp_pdf(tmp_path)
                 else:
                     tasks.append({
@@ -268,7 +296,7 @@ class OCRStagingView(views.APIView):
 
         # ── EXECUTE CONCURRENTLY ───────────────────────
         def worker(task):
-            from django.db import connection
+            from django.db import connection # pyre-fixme
             try:
                 is_dup = self._process_single_invoice(
                     request,
@@ -286,7 +314,7 @@ class OCRStagingView(views.APIView):
                 return False
             finally:
                 if task.get('tmp_path'):
-                    from core.pdf_splitter import cleanup_temp_pdf
+                    from core.pdf_splitter import cleanup_temp_pdf # pyre-fixme
                     cleanup_temp_pdf(task['tmp_path'])
                 connection.close()
 
@@ -442,7 +470,8 @@ class OCRStagingFinalizeView(views.APIView):
             'created': 0,
             'failed': 0,
             'skipped': len(all_staged) - len(ready_to_upload), # Invoices not 'FOUND' or 'RESOLVED'
-            'errors': []
+            'errors': [],
+            'message': '' # Initialize to help Pyre inference
         }
         
         processed_hashes = []
@@ -511,17 +540,17 @@ class OCRStagingFinalizeView(views.APIView):
                     serializer = VoucherPurchaseSupplierDetailsSerializer(data=payload, context={'request': request})
                     if serializer.is_valid():
                         voucher = serializer.save(tenant_id=tenant_id)
-                        summary['created'] += 1
+                        summary['created'] = int(summary['created']) + 1 # pyre-ignore
                         processed_hashes.append(inv['file_hash'])
                         # Mark as processed in DB and store the voucher reference
                         mark_invoice_as_processed(inv['file_hash'], tenant_id, voucher_id=voucher.id)
                     else:
-                        summary['failed'] += 1
+                        summary['failed'] = int(summary['failed']) + 1 # pyre-ignore
                         summary['errors'].append({'file': inv['file_path'], 'error': serializer.errors})
 
             except Exception as e:
                 logger.exception(f"Exception finalising {inv['file_path']}")
-                summary['failed'] += 1
+                summary['failed'] = int(summary['failed']) + 1 # pyre-ignore
                 summary['errors'].append({'file': inv['file_path'], 'error': str(e)})
 
         # No longer deleting processed invoices instantly, to support status progression
@@ -529,8 +558,8 @@ class OCRStagingFinalizeView(views.APIView):
         #    remove_processed_invoices(processed_hashes, tenant_id, upload_session_id)
 
         # ── Step 5: User Message ──────────────────────────────────────────────
-        total_unresolved = summary['skipped'] + summary['failed']
-        if summary['created'] > 0:
+        total_unresolved = int(summary['skipped']) + int(summary['failed']) # pyre-ignore
+        if int(summary['created']) > 0: # pyre-ignore
             msg = f"{summary['created']} invoices successfully uploaded."
             if total_unresolved > 0:
                 msg += f" {total_unresolved} invoices require correction and remain in staging."

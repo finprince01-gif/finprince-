@@ -11,13 +11,13 @@ from django.utils import timezone  # type: ignore
 from datetime import timedelta
 # User model imported inside views to avoid AppRegistryNotReady
 
-from .models import CompanyFullInfo
-from .serializers import (
+from .models import CompanyFullInfo  # type: ignore
+from .serializers import (  # type: ignore
     UserSignupSerializer,
     CompanySettingsSerializer
 )
-from .utils import TenantQuerysetMixin, IsTenantMember
-from .exceptions import UsageLimitExceeded, BusinessException, ExternalServiceError
+from .utils import TenantQuerysetMixin, IsTenantMember  # type: ignore
+from .exceptions import UsageLimitExceeded, BusinessException, ExternalServiceError  # type: ignore
 
 class SignupView(generics.CreateAPIView):
     permission_classes = [AllowAny]
@@ -62,7 +62,7 @@ class CompanySettingsViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
         
         logo_file = request.FILES.get('logo')
         if logo_file:
-            from django.core.files.storage import default_storage
+            from django.core.files.storage import default_storage  # type: ignore
             file_path = default_storage.save(f"logos/{tid}_{logo_file.name}", logo_file)
             logo_path_str = default_storage.url(file_path)
             serializer.save(tenant_id=tid, logo_path=logo_path_str)
@@ -94,7 +94,7 @@ def check_status(request):
 @authentication_classes([])
 def check_phone(request):
     """Check if a phone number is already registered."""
-    from django.contrib.auth import get_user_model
+    from django.contrib.auth import get_user_model  # type: ignore
     User = get_user_model()
     phone = request.query_params.get('phone', '').strip()
     if not phone:
@@ -103,7 +103,7 @@ def check_phone(request):
     exists = User.objects.filter(phone=phone).exists()
     return Response({'exists': exists})
 
-from .ai_proxy import ai_service
+from .ai_proxy import ai_service  # type: ignore
 
 @method_decorator(csrf_exempt, name='dispatch')
 class AgentMessageView(views.APIView):
@@ -145,7 +145,7 @@ def ai_metrics(request):
     stats = ai_service.get_stats()
 
     # Add additional metrics
-    import redis
+    import redis  # type: ignore
     redis_client = redis.from_url(os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/0'))
 
     # Calculate real-time metrics
@@ -234,7 +234,7 @@ class AdminSubscriptionsView(views.APIView):
 
     def get(self, request):
         # Get all users as subscriptions
-        from django.contrib.auth import get_user_model
+        from django.contrib.auth import get_user_model  # type: ignore
         User = get_user_model()
         users = User.objects.filter(is_superuser=False).order_by('-created_at')
         subscriptions = []
@@ -272,7 +272,7 @@ class AdminSubscriptionsView(views.APIView):
         return Response(subscriptions)
 
     def put(self, request):
-        from django.contrib.auth import get_user_model
+        from django.contrib.auth import get_user_model  # type: ignore
         User = get_user_model()
         user_id = request.data.get('userId')
         is_active = request.data.get('isActive')
@@ -284,7 +284,7 @@ class AdminSubscriptionsView(views.APIView):
             user.save()
             return Response({'success': True})
         except User.DoesNotExist:
-            from django.http import Http404
+            from django.http import Http404  # type: ignore
             raise Http404("Requested resource not found.")
 
 
@@ -292,7 +292,7 @@ class AdminPaymentsView(views.APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        from django.contrib.auth import get_user_model
+        from django.contrib.auth import get_user_model  # type: ignore
         User = get_user_model()
         users = User.objects.all().order_by('-created_at')
         payments = []
@@ -351,7 +351,7 @@ class AIProxyView(views.APIView):
 
             # ── Call AI Service ──────────────────────────────────────────────
             # This now handles its own internal caching/duplicate check.
-            from .ai_service import create_dynamic_voucher_extraction_request
+            from .ai_service import create_dynamic_voucher_extraction_request  # type: ignore
             result = create_dynamic_voucher_extraction_request(
                 file_obj,
                 voucher_type=voucher_type,
@@ -384,20 +384,21 @@ class AIProxyView(views.APIView):
                 })
 
             # ── Only if NOT a duplicate, increment usage ──────────────────────
-            from .usage_service import check_and_increment_usage
+            from .usage_service import check_and_increment_usage  # type: ignore
             plan = getattr(request.user, 'selected_plan', 'FREE') or 'FREE'
             plan = plan.upper()
-            LIMITS = {'FREE': 5, 'STARTER': 100, 'PRO': 1000, 'ENTERPRISE': 10000}
+            LIMITS = {'FREE': 5, 'STARTER': 100, 'PRO': float('inf')}
             limit = LIMITS.get(plan, 5)
 
-            if not check_and_increment_usage(tenant_id, limit):
-                raise UsageLimitExceeded(f"Monthly AI extraction limit of {limit} has been reached.")
+            if limit != float('inf'):
+                if not check_and_increment_usage(tenant_id, limit):
+                    raise UsageLimitExceeded(f"Monthly AI extraction limit of {limit} has been reached.")
 
             # ── Parse the raw AI text into {header, line_items} ────────────────
             raw_text = result.get('reply', '').strip()
 
             # ── Unified Mapping Engine ────────────────────────────────────────
-            from .processing_engine import parse_and_process_ocr
+            from .processing_engine import parse_and_process_ocr  # type: ignore
             try:
                 processed_data = parse_and_process_ocr(raw_text)
                 invoice_data = processed_data.get('invoice', {})
@@ -409,7 +410,7 @@ class AIProxyView(views.APIView):
 
             # Store extraction performance
             end_time = time.time()
-            from .models import ExtractionPerformance
+            from .models import ExtractionPerformance  # type: ignore
             ExtractionPerformance.objects.create(
                 file_count=1,
                 processing_time_seconds=end_time - start_time
@@ -433,7 +434,7 @@ class AIProxyView(views.APIView):
                 return Response({'error': 'No file provided.'}, status=400)
 
             # Check AI Usage Limit (same as extract-invoice)
-            from .usage_service import check_and_increment_usage
+            from .usage_service import check_and_increment_usage  # type: ignore
 
             plan = getattr(request.user, 'selected_plan', 'FREE') or 'FREE'
             plan = plan.upper()
@@ -441,17 +442,17 @@ class AIProxyView(views.APIView):
             LIMITS = {
                 'FREE': 5,
                 'STARTER': 100,
-                'PRO': 1000,
-                'ENTERPRISE': 10000
+                'PRO': float('inf')
             }
             limit = LIMITS.get(plan, 5)
 
-            if not check_and_increment_usage(tenant_id, limit):
-                raise UsageLimitExceeded(f"Monthly AI extraction limit of {limit} has been reached.")
+            if limit != float('inf'):
+                if not check_and_increment_usage(tenant_id, limit):
+                    raise UsageLimitExceeded(f"Monthly AI extraction limit of {limit} has been reached.")
 
             file_obj = request.FILES['file']
 
-            from .ai_service import create_master_processing_request
+            from .ai_service import create_master_processing_request  # type: ignore
             result = create_master_processing_request(
                 file_obj,
                 mime_type=file_obj.content_type,
@@ -532,8 +533,8 @@ class AIProxyView(views.APIView):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def extraction_average_time(request):
-    from .models import ExtractionPerformance
-    from django.db.models import Avg
+    from .models import ExtractionPerformance  # type: ignore
+    from django.db.models import Avg  # type: ignore
     
     avg_data = ExtractionPerformance.objects.aggregate(Avg('processing_time_seconds'))
     avg_time = avg_data['processing_time_seconds__avg']
@@ -542,7 +543,7 @@ def extraction_average_time(request):
         avg_time = 3.85  # Fallback to a default if absolutely no records exist
         
     return Response({
-        'average_time_per_invoice': round(avg_time, 2)
+        'average_time_per_invoice': round(float(avg_time), 2)  # type: ignore
     })
 
 
@@ -577,7 +578,7 @@ class OCRCacheUpdateView(views.APIView):
 
     def patch(self, request, record_id):
         import json as _json
-        from django.db import connection
+        from django.db import connection  # type: ignore
 
         tenant_id = getattr(request.user, 'tenant_id', None)
         if not tenant_id:
@@ -613,7 +614,7 @@ class OCRCacheUpdateView(views.APIView):
             )
 
         # Perform the update
-        from core.ocr_cache import update_ocr_cache_extracted_data
+        from core.ocr_cache import update_ocr_cache_extracted_data  # type: ignore
         success = update_ocr_cache_extracted_data(record_id, extracted_data)
 
         if success:

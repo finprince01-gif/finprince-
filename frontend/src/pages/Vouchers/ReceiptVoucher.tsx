@@ -28,6 +28,9 @@ interface BulkTransaction {
     selected: boolean;
 }
 
+
+import Icon from '../../components/Icon';
+
 interface ReceiptVoucherProps {
     prefilledData?: ExtractedInvoiceData | null;
     clearPrefilledData?: () => void;
@@ -35,7 +38,12 @@ interface ReceiptVoucherProps {
     onLimitReached?: () => void;
 }
 
-const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPrefilledData, isLimitReached, onLimitReached }) => {
+const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ 
+    prefilledData, 
+    clearPrefilledData, 
+    isLimitReached, 
+    onLimitReached
+}) => {
     // Tab state
     const [activeTab, setActiveTab] = useState<'single' | 'bulk'>('single');
 
@@ -51,6 +59,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
     const [date, setDate] = useState(getCurrentDate());
     const [voucherType, setVoucherType] = useState('Receipt');
     const [voucherNumber, setVoucherNumber] = useState('');
+    const [bankTransactionId, setBankTransactionId] = useState<number | null>(null);
 
     // "Receive In" (Debit Account - Bank/Cash) matches PayFrom (Credit Account) visually in the single form
     const [receiveIn, setReceiveIn] = useState('');
@@ -128,7 +137,8 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
 
     // Sync balances
     useEffect(() => {
-        const ledger = allLedgers.find(l => l.name === receiveIn);
+        const normalized = (receiveIn || '').trim().toLowerCase();
+        const ledger = allLedgers.find(l => l.name.trim().toLowerCase() === normalized);
         if (ledger) {
             const bal = ledger.balance || 0;
             const sign = bal >= 0 ? 'Dr' : 'Cr';
@@ -142,19 +152,37 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
 
     // Populate from AI Extraction
     useEffect(() => {
-        if (prefilledData) {
+        if (prefilledData && allLedgers.length > 0) {
+            
+            // Helper to find exact ledger name from allLedgers (case-insensitive)
+            const findLedgerName = (name: string) => {
+                if (!name) return '';
+                const normalized = name.trim().toLowerCase();
+                const found = allLedgers.find(l => l.name.trim().toLowerCase() === normalized);
+                return found ? found.name : '';
+            };
+
             if (prefilledData.invoiceDate) setDate(prefilledData.invoiceDate);
-            if (prefilledData.sellerName) setReceiveFrom(prefilledData.sellerName);
+            if (prefilledData.sellerName) setReceiveFrom(findLedgerName(prefilledData.sellerName));
+            if ((prefilledData as any).account) setReceiveIn(findLedgerName((prefilledData as any).account));
             if (prefilledData.totalAmount) {
                 setSingleAdvanceAmount(prefilledData.totalAmount);
                 setShowSingleAdvanceSection(true);
                 if (prefilledData.invoiceNumber) {
                     setSingleAdvanceRefNo(prefilledData.invoiceNumber);
+                } else if ((prefilledData as any).reference_number) {
+                    setSingleAdvanceRefNo((prefilledData as any).reference_number);
                 }
+            }
+            if ((prefilledData as any).narration) {
+                setPostingNote((prefilledData as any).narration);
+            }
+            if ((prefilledData as any).bank_transaction_id) {
+                setBankTransactionId((prefilledData as any).bank_transaction_id);
             }
             if (clearPrefilledData) clearPrefilledData();
         }
-    }, [prefilledData, clearPrefilledData]);
+    }, [prefilledData, clearPrefilledData, allLedgers]);
 
     // Fetch receipt voucher configurations on mount
     useEffect(() => {
@@ -334,13 +362,31 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
 
     const handlePostReceipt = async () => {
         try {
+            const findLedgerId = (name: string) => {
+                if (!name) return null;
+                const normalized = name.trim().toLowerCase();
+                return allLedgers.find(l => l.name.trim().toLowerCase() === normalized)?.id;
+            };
+
+            const receiveInId = findLedgerId(receiveIn);
+            const receiveFromId = findLedgerId(receiveFrom);
+
             if (activeTab === 'single') {
+                if (!receiveInId) {
+                    showError(`'Receive In' account '${receiveIn || 'None'}' is invalid or not selected. Please select from the dropdown.`);
+                    return;
+                }
+                if (!receiveFromId) {
+                    showError(`'Receive From' account '${receiveFrom || 'None'}' is invalid or not selected. Please select from the dropdown.`);
+                    return;
+                }
+
                 const payload = {
                     date: date,
                     voucher_type: selectedReceiptConfig || voucherType,
                     voucher_number: voucherNumber,
-                    receive_in: receiveIn,
-                    receive_from: receiveFrom,
+                    receive_in: receiveInId,
+                    receive_from: receiveFromId,
                     total_receipt: totalReceipt,
                     transaction_details: pendingTransactions.map(t => ({
                         ...t,
@@ -348,21 +394,34 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                         advance: Math.max(0, t.receipt - t.amount)
                     })),
                     advance_ref_no: singleAdvanceRefNo,
-                    advance_amount: singleAdvanceAmount
+                    advance_amount: singleAdvanceAmount,
+                    bank_transaction_id: bankTransactionId
                 };
 
-
-                const response = await httpClient.post('/api/vouchers/receipt-single/', payload);
-
+                await httpClient.post('/api/vouchers/receipt-single/', payload);
                 showSuccess('Single Receipt Voucher posted successfully!');
-
                 handleCancel();
             } else {
+                if (!receiveInId) {
+                    showError('Please select a Receive In account.');
+                    return;
+                }
+
+                // Map receiptRows to contain receiveFrom IDs instead of names
+                const mappedReceiptRows = receiptRows.map(row => {
+                    const normalized = (row.receiveFrom || '').trim().toLowerCase();
+                    const rowReceiveFromId = allLedgers.find(l => l.name.trim().toLowerCase() === normalized)?.id;
+                    return {
+                        ...row,
+                        receiveFrom: rowReceiveFromId || row.receiveFrom
+                    };
+                });
+
                 const payload = {
                     date: date,
                     voucher_number: voucherNumber,
-                    receive_in: receiveIn,
-                    receipt_rows: receiptRows,
+                    receive_in: receiveInId,
+                    receipt_rows: mappedReceiptRows,
                     posting_note: postingNote,
                     advance_ref_no: advanceRefNo,
                     advance_amount: advanceAmount,
@@ -374,7 +433,6 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                             advance: Math.max(0, t.receiveNow - t.amount)
                         }))
                 };
-
 
                 const response = await httpClient.post('/api/vouchers/receipt-bulk/', payload);
 
@@ -526,7 +584,14 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
 
                     {/* Pending Transactions */}
                     <div>
-                        <h3 className="text-sm font-semibold text-gray-800 mb-4">Pending Transactions</h3>
+                        <div className="flex justify-between items-end mb-4">
+                            <div>
+                                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-tight">
+                                    Pending Transactions
+                                </h3>
+                            </div>
+                        </div>
+
                         {receiveFrom ? (
                             <div className="border-2 border-gray-200 rounded-[4px] overflow-hidden">
                                 <table className="w-full">
@@ -579,7 +644,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({ prefilledData, clearPre
                                 <div className="border-t-2 border-gray-200 bg-white px-6 py-4 flex justify-end items-center gap-4">
                                     <span className="text-sm font-semibold text-gray-700">Total Receipt</span>
                                     <div className="px-4 py-2 bg-gray-50 border border-gray-300 rounded-[4px] text-sm font-bold text-gray-900 min-w-[120px] text-right">
-                                        {totalReceipt}
+                                        ₹{totalReceipt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                     </div>
                                 </div>
                             </div>
