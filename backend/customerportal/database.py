@@ -106,7 +106,8 @@ class CustomerMasterCategory(models.Model):
         return " > ".join(parts)
     
     @property
-    def full_path(self):
+    def full_path(self) -> str:
+        """Returns the full path as category > group > subgroup"""
         return str(self)
 
 

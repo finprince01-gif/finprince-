@@ -1306,13 +1306,41 @@ const App: React.FC = () => {
       </Modal>
 
 
-      {/* Floating AI Agent Button */}
       <button
         onClick={() => setIsAgentOpen(true)}
-        className="fixed bottom-2 right-2 w-28 h-28 hover:scale-110 transition-transform duration-300 z-50 flex items-center justify-center group filter drop-shadow-none border-none outline-none focus:outline-none"
+        style={{
+          width: '56px',
+          height: '56px',
+          backgroundColor: '#ffffff',
+          borderRadius: '50%',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          position: 'fixed',
+          bottom: '16px',
+          right: '16px',
+          zIndex: 20,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 0,
+          margin: 0,
+          cursor: 'pointer',
+          border: 'none',
+          outline: 'none',
+          overflow: 'hidden'
+        }}
+        className="hover:scale-110 transition-transform duration-300 group"
         title="Chat with Kiki Agent"
       >
-        <img src={kikiLogo} alt="AI Agent" className="w-full h-full object-contain" />
+        <img 
+          src={kikiLogo} 
+          alt="AI Agent" 
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'contain',
+            transform: 'scale(1.6)'
+          }}
+        />
       </button>
 
 

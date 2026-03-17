@@ -604,6 +604,29 @@ CREATE TABLE `company_informations` (
   COMMENT='Inventory Master Items';
 
 
+  -- Table: inventory_unit
+
+  CREATE TABLE IF NOT EXISTS `inventory_unit` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `tenant_id` CHAR(36) NOT NULL,
+    `name` VARCHAR(100) NOT NULL DEFAULT 'Number',
+    `symbol` VARCHAR(50) NOT NULL DEFAULT 'nos',
+    `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+    `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    `updated_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+      ON UPDATE CURRENT_TIMESTAMP(6),
+
+    PRIMARY KEY (`id`),
+    KEY `inventory_unit_tenant_id_idx` (`tenant_id`)
+  )
+  ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci
+  COMMENT='Inventory Units of Measure';
+
+
+
+
   --
   -- Table structure for table `vendor_master_banking`
   --
@@ -1314,7 +1337,9 @@ CREATE TABLE `customer_transaction_salesorder_items` (
   `gst_rate` decimal(5,2) DEFAULT '0.00' COMMENT 'GST Rate (%)',
   `net_value` decimal(15,2) NOT NULL DEFAULT '0.00' COMMENT 'Net Value (Taxable + GST)',
   `uom` varchar(50) DEFAULT NULL COMMENT 'Unit of Measure',
+  `packing_notes` text DEFAULT NULL COMMENT 'Packing notes for this item',
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   PRIMARY KEY (`id`),
   KEY `cust_trans_so_items_tenant_idx` (`tenant_id`),
@@ -2877,3 +2902,45 @@ CREATE TABLE journal_entries (
     INDEX idx_voucher (voucher_id),
     INDEX idx_tenant (tenant_id)
 );
+
+-- Schema Updates
+ALTER TABLE inventory_master_inventoryitems ADD COLUMN cess_rate DECIMAL(5, 2) DEFAULT NULL AFTER gst_rate;
+
+ALTER TABLE voucher_purchase_supplier_details
+MODIFY vendor_basic_detail_id BIGINT;
+
+
+-- Vendor Category Hierarchy Fixes (2026-03-16)
+ALTER TABLE vendor_master_category CHANGE COLUMN name category VARCHAR(255) NOT NULL;
+ALTER TABLE vendor_master_category ADD COLUMN is_system TINYINT(1) DEFAULT 0;
+ALTER TABLE vendor_master_category ADD COLUMN `group` VARCHAR(255) DEFAULT '';
+ALTER TABLE vendor_master_category ADD COLUMN subgroup VARCHAR(255) DEFAULT '';
+ALTER TABLE vendor_master_category DROP INDEX IF EXISTS uq_vendor_category_name_per_tenant;
+ALTER TABLE vendor_master_category DROP INDEX IF EXISTS vendor_category_tenant_unique;
+ALTER TABLE vendor_master_category ADD UNIQUE KEY vendor_category_tenant_unique (tenant_id, category(100), `group`(100), subgroup(100));
+
+ALTER TABLE customer_master_customer_productservice
+ADD COLUMN packing_notes VARCHAR(255) DEFAULT NULL COMMENT 'Packing Notes';
+
+CREATE TABLE `customer_masters_salesorder` (
+              `id` int(11) NOT NULL AUTO_INCREMENT,
+              `tenant_id` varchar(36) NOT NULL,
+              `series_name` varchar(100) NOT NULL,
+              `customer_category` varchar(100) DEFAULT NULL,
+              `prefix` varchar(20) DEFAULT 'SO/',
+              `suffix` varchar(20) DEFAULT '/24-25',
+              `required_digits` int(11) DEFAULT '4',
+              `current_number` int(11) DEFAULT '0',
+              `auto_year` tinyint(1) DEFAULT '0',
+              `is_active` tinyint(1) NOT NULL DEFAULT '1',
+              `is_deleted` tinyint(1) NOT NULL DEFAULT '0',
+              `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+              `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+              `created_by` varchar(100) DEFAULT NULL,
+              PRIMARY KEY (`id`),
+              UNIQUE KEY `customer_so_tenant_series_unique` (`tenant_id`,`series_name`),
+              KEY `customer_so_tenant_id_idx` (`tenant_id`),
+              KEY `customer_so_category_idx` (`customer_category`),
+              KEY `customer_so_is_active_idx` (`is_active`),
+              KEY `customer_so_is_deleted_idx` (`is_deleted`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

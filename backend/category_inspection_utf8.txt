@@ -1,0 +1,31 @@
+﻿
+Table: customer_master_category
+  id: bigint
+  tenant_id: varchar(36)
+  category: varchar(255)
+  group: varchar(255)
+  subgroup: varchar(255)
+  is_active: tinyint(1)
+  created_at: datetime(6)
+  updated_at: datetime(6)
+
+Table: inventory_master_category
+  id: bigint
+  tenant_id: char(36)
+  category: varchar(255)
+  group: varchar(255)
+  subgroup: varchar(255)
+  is_active: tinyint(1)
+  created_at: datetime(6)
+  updated_at: datetime(6)
+
+Table: vendor_master_category
+  id: bigint
+  tenant_id: varchar(36)
+  category: varchar(255)
+  is_active: tinyint(1)
+  created_at: datetime(6)
+  updated_at: datetime(6)
+  is_system: tinyint(1)
+  group: varchar(255)
+  subgroup: varchar(255)

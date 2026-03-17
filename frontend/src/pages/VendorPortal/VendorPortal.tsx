@@ -26,6 +26,8 @@ const VENDOR_SYSTEM_CATEGORIES = [
     'Packing Material',
     'Stock in Trade',
     'Fixed Assets',
+    'Capital Goods',
+    'Consumables',
     'Service',
     'Jobwork'
 ];
@@ -1914,7 +1916,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const fetchCategories = async () => {
         try {
             setLoadingCategories(true);
-            const response = await httpClient.get('/api/inventory/master-categories/');
+            const response = await httpClient.get('/api/vendors/categories/');
             setCategories(Array.isArray(response) ? response : []);
         } catch (error) {
             handleApiError(error, 'Fetch Categories');
@@ -1941,10 +1943,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
         try {
             if (isEditModeCategory && selectedCategory) {
-                await httpClient.put(`/api/inventory/master-categories/${selectedCategory.id}/`, payload);
+                await httpClient.put(`/api/vendors/categories/${selectedCategory.id}/`, payload);
                 showSuccess('Category updated successfully!');
             } else {
-                await httpClient.post('/api/inventory/master-categories/', payload);
+                await httpClient.post('/api/vendors/categories/', payload);
                 showSuccess('Category created successfully!');
             }
             fetchCategories();
@@ -1965,7 +1967,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const handleDeleteCategory = async (id: number) => {
         if (!await confirm('Are you sure you want to delete this category?')) return;
         try {
-            await httpClient.delete(`/api/inventory/master-categories/${id}/`);
+            await httpClient.delete(`/api/vendors/categories/${id}/`);
             showSuccess('Category deleted successfully!');
             fetchCategories();
         } catch (error: any) {
@@ -1997,12 +1999,15 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         }
     };
 
-    // Load on tab switch
+    // Load categories on tab switch to Category or Vendor Creation
     useEffect(() => {
-        if (activeTab === 'Master' && (activeMasterSubTab === 'Category' || activeMasterSubTab === 'Vendor Creation')) {
-            fetchCategories();
-        } else if (activeTab === 'Master' && activeMasterSubTab === 'PO Settings') {
-            fetchPOSeries();
+        if (activeTab === 'Master') {
+            if (activeMasterSubTab === 'Category' || activeMasterSubTab === 'Vendor Creation' || activeMasterSubTab === 'PO Settings') {
+                fetchCategories();
+            }
+            if (activeMasterSubTab === 'PO Settings') {
+                fetchPOSeries();
+            }
         }
     }, [activeTab, activeMasterSubTab]);
 
@@ -2030,6 +2035,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             digits: poDigits,
             is_active: true
         };
+
+        console.log("Submitting PO settings payload:", payload);
 
         try {
             if (isEditModePO && selectedPOSeries) {
