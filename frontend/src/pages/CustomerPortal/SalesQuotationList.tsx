@@ -214,35 +214,35 @@ const SalesQuotationList: React.FC<SalesQuotationListProps> = ({ onCreateQuotati
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">
                                 <tr>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         Quote #
                                     </th>
                                     {activeType === 'General Customer Quote' ? (
                                         <>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                 Customer Category
                                             </th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                 Validity Period
                                             </th>
                                         </>
                                     ) : (
                                         <>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                 Customer Reference Name
                                             </th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                 Tentative Delivery Date
                                             </th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                 Validity
                                             </th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                 Amount
                                             </th>
                                         </>
                                     )}
-                                    <th scope="col" className="relative px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         Action
                                     </th>
                                 </tr>
@@ -261,19 +261,19 @@ const SalesQuotationList: React.FC<SalesQuotationListProps> = ({ onCreateQuotati
                                     displayedGeneralQuotations.length > 0 ? (
                                         displayedGeneralQuotations.map((quote) => (
                                             <tr key={quote.id} className="hover:bg-gray-50 transition-colors">
-                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                <td className="px-6 py-4 whitespace-nowrap text-center">
                                                     <button className="text-sm font-medium text-indigo-600 hover:text-indigo-900 hover:underline">
                                                         {quote.quoteNumber}
                                                     </button>
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
                                                     {quote.customerCategory}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
                                                     {quote.validityPeriod}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                    <div className="flex items-center justify-end space-x-3">
+                                                <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                                                    <div className="flex items-center justify-center space-x-3">
                                                         <button
                                                             onClick={() => handleView(quote.id)}
                                                             className="text-gray-400 hover:text-indigo-600 transition-colors tooltip-trigger"
@@ -308,25 +308,25 @@ const SalesQuotationList: React.FC<SalesQuotationListProps> = ({ onCreateQuotati
                                     displayedSpecificQuotations.length > 0 ? (
                                         displayedSpecificQuotations.map((quote) => (
                                             <tr key={quote.id} className="hover:bg-gray-50 transition-colors">
-                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                <td className="px-6 py-4 whitespace-nowrap text-center">
                                                     <button className="text-sm font-medium text-indigo-600 hover:text-indigo-900 hover:underline">
                                                         {quote.quoteNumber}
                                                     </button>
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
                                                     {quote.customerReferenceName}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
                                                     {quote.tentativeDeliveryDate}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
                                                     {quote.validity}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 text-center">
                                                     {quote.amount}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                    <div className="flex items-center justify-end space-x-3">
+                                                <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                                                    <div className="flex items-center justify-center space-x-3">
                                                         <button
                                                             onClick={() => handleView(quote.id)}
                                                             className="text-gray-400 hover:text-indigo-600 transition-colors tooltip-trigger"

@@ -1,19 +1,16 @@
 {
-    "include": [
+    "include": ["."],
+    "exclude": ["__pycache__", "migrations"],
+    "reportMissingImports": false,
+    "reportMissingTypeStubs": false,
+    "pythonVersion": "3.14",
+    "typeCheckingMode": "basic",
+    "useLibraryCodeForTypes": true,
+    "extraPaths": [
+        "D:/finpixe/Ai_Accounting_v1-21/AI-accounting-0.03/backend",
+        "C:/Python314/Lib/site-packages",
+        "C:/Users/Dharun/AppData/Roaming/Python/Python314/site-packages",
         "."
     ],
-    "exclude": [
-        "__pycache__",
-        "migrations",
-        "stubs"
-    ],
-    "reportMissingImports": "none",
-    "reportMissingModuleSource": "none",
-    "reportMissingTypeStubs": "none",
-    "pythonVersion": "3.12",
-    "pythonPlatform": "Windows",
-    "typeCheckingMode": "off",
-    "useLibraryCodeForTypes": true,
-    "venvPath": ".",
-    "venv": "venv"
+    "stubPath": "./stubs"
 }

@@ -166,15 +166,23 @@ class InventoryMasterGRNViewSet(viewsets.ModelViewSet):
         year = series.year or ''
         required_digits = series.required_digits or 4
 
-        # Build the pattern prefix used in grn_no (e.g. "GRN-2024-")
-        if prefix and year:
-            number_prefix = f"{prefix}{year}"
-        elif prefix:
-            number_prefix = prefix
-        elif year:
-            number_prefix = year
-        else:
-            number_prefix = ''
+        # Use the separator from preview if available, otherwise default to '-'
+        preview = str(series.preview or '')
+        # Detect separator from preview
+        sep: str = '-'
+        for s in ['/', '_', '-', ' ']:
+            if s in preview:
+                sep = s
+                break
+
+        # Build the pattern prefix used in number
+        number_parts: list[str] = []
+        if prefix:
+            number_parts.append(str(prefix))
+        if year:
+            number_parts.append(str(year))
+        
+        number_prefix: str = f"{str(sep).join(number_parts)}{sep}" if number_parts else ''
 
         # Count existing GRNs for this tenant that match this series pattern
         existing_count = InventoryOperationNewGRN.objects.filter(
@@ -186,25 +194,16 @@ class InventoryMasterGRNViewSet(viewsets.ModelViewSet):
         seq_str = str(next_seq).zfill(required_digits)
 
         # Compose the GRN number
-        parts = []
+        parts: list[str] = []
         if prefix:
-            parts.append(prefix)
+            parts.append(str(prefix))
         if year:
-            parts.append(year)
-        parts.append(seq_str)
+            parts.append(str(year))
+        parts.append(str(seq_str))
         if suffix:
-            parts.append(suffix)
+            parts.append(str(suffix))
 
-        # Use the separator from preview if available, otherwise default to '-'
-        preview = series.preview or ''
-        # Detect separator from preview
-        sep = '-'
-        for s in ['/', '_', '-', ' ']:
-            if s in preview:
-                sep = s
-                break
-
-        grn_no = sep.join(parts)
+        grn_no: str = str(sep).join(parts)
 
         return Response({'grn_no': grn_no, 'series_name': series.name})
 
@@ -247,15 +246,22 @@ class InventoryMasterIssueSlipViewSet(viewsets.ModelViewSet):
         year = series.year or ''
         required_digits = series.required_digits or 4
 
+        # Use the separator from preview if available, otherwise default to '-'
+        preview = str(series.preview or '')
+        sep: str = '-'
+        for s in ['/', '_', '-', ' ']:
+            if s in preview:
+                sep = s
+                break
+
         # Build the pattern prefix used in number
-        if prefix and year:
-            number_prefix = f"{prefix}{year}"
-        elif prefix:
-            number_prefix = prefix
-        elif year:
-            number_prefix = year
-        else:
-            number_prefix = ''
+        number_parts: list[str] = []
+        if prefix:
+            number_parts.append(str(prefix))
+        if year:
+            number_parts.append(str(year))
+        
+        number_prefix: str = f"{str(sep).join(number_parts)}{sep}" if number_parts else ''
 
         # Count existing outward slips for this tenant that match this series pattern
         existing_count = InventoryOperationOutward.objects.filter(
@@ -267,24 +273,16 @@ class InventoryMasterIssueSlipViewSet(viewsets.ModelViewSet):
         seq_str = str(next_seq).zfill(required_digits)
 
         # Compose the number
-        parts = []
+        parts: list[str] = []
         if prefix:
-            parts.append(prefix)
+            parts.append(str(prefix))
         if year:
-            parts.append(year)
-        parts.append(seq_str)
+            parts.append(str(year))
+        parts.append(str(seq_str))
         if suffix:
-            parts.append(suffix)
+            parts.append(str(suffix))
 
-        # Use the separator from preview if available, otherwise default to '-'
-        preview = series.preview or ''
-        sep = '-'
-        for s in ['/', '_', '-', ' ']:
-            if s in preview:
-                sep = s
-                break
-
-        slip_no = sep.join(parts)
+        slip_no: str = str(sep).join(parts)
 
         return Response({'outward_slip_no': slip_no, 'series_name': series.name})
 

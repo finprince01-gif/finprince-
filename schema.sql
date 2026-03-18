@@ -604,29 +604,6 @@ CREATE TABLE `company_informations` (
   COMMENT='Inventory Master Items';
 
 
-  -- Table: inventory_unit
-
-  CREATE TABLE IF NOT EXISTS `inventory_unit` (
-    `id` BIGINT NOT NULL AUTO_INCREMENT,
-    `tenant_id` CHAR(36) NOT NULL,
-    `name` VARCHAR(100) NOT NULL DEFAULT 'Number',
-    `symbol` VARCHAR(50) NOT NULL DEFAULT 'nos',
-    `is_active` TINYINT(1) NOT NULL DEFAULT 1,
-    `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    `updated_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
-      ON UPDATE CURRENT_TIMESTAMP(6),
-
-    PRIMARY KEY (`id`),
-    KEY `inventory_unit_tenant_id_idx` (`tenant_id`)
-  )
-  ENGINE=InnoDB
-  DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_unicode_ci
-  COMMENT='Inventory Units of Measure';
-
-
-
-
   --
   -- Table structure for table `vendor_master_banking`
   --
@@ -1057,7 +1034,6 @@ CREATE TABLE `customer_master_longtermcontracts_basicdetails` (
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   `created_by` varchar(100) DEFAULT NULL,
-  `updated_by` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `cust_ltc_basic_tenant_contract_unique` (`tenant_id`,`contract_number`),
   KEY `cust_ltc_basic_tenant_id_idx` (`tenant_id`),
@@ -1084,7 +1060,6 @@ CREATE TABLE `customer_master_longtermcontracts_productservices` (
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   `created_by` varchar(100) DEFAULT NULL,
-  `updated_by` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `cust_ltc_prod_tenant_item_idx` (`tenant_id`, `item_code`),
   KEY `cust_ltc_prod_contract_idx` (`contract_basic_detail_id`),
@@ -1107,7 +1082,6 @@ CREATE TABLE `customer_master_longtermcontracts_termscondition` (
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   `created_by` varchar(100) DEFAULT NULL,
-  `updated_by` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `cust_ltc_terms_contract_unique` (`contract_basic_detail_id`),
   KEY `cust_ltc_terms_tenant_idx` (`tenant_id`),
@@ -1311,7 +1285,6 @@ CREATE TABLE `customer_transaction_salesorder_basicdetails` (
   `email` varchar(254) DEFAULT NULL COMMENT 'Email Address',
   `contact_number` varchar(20) DEFAULT NULL COMMENT 'Contact Number',
   `gst_no` varchar(20) DEFAULT NULL COMMENT 'GST Number',
-  `status` varchar(20) NOT NULL DEFAULT 'pending' COMMENT 'SO Status: pending, approved, cancelled, completed',
   `is_active` tinyint(1) NOT NULL DEFAULT '1',
   `is_deleted` tinyint(1) NOT NULL DEFAULT '0',
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
@@ -1341,9 +1314,7 @@ CREATE TABLE `customer_transaction_salesorder_items` (
   `gst_rate` decimal(5,2) DEFAULT '0.00' COMMENT 'GST Rate (%)',
   `net_value` decimal(15,2) NOT NULL DEFAULT '0.00' COMMENT 'Net Value (Taxable + GST)',
   `uom` varchar(50) DEFAULT NULL COMMENT 'Unit of Measure',
-  `packing_notes` text DEFAULT NULL COMMENT 'Packing notes for this item',
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   PRIMARY KEY (`id`),
   KEY `cust_trans_so_items_tenant_idx` (`tenant_id`),
@@ -2406,17 +2377,17 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_outward` (
 
 
 
-CREATE TABLE `service_group` (
-    `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    `tenant_id` VARCHAR(36) NOT NULL,
-    `category` VARCHAR(100) NOT NULL,
+CREATE TABLE service_group (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id VARCHAR(36) NOT NULL,
+    category VARCHAR(100) NOT NULL,
     `group` VARCHAR(100) NOT NULL DEFAULT '',
     `subgroup` VARCHAR(100) NOT NULL DEFAULT '',
-    `is_active` BOOLEAN DEFAULT TRUE,
-    `created_at` DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
-    `updated_at` DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
 
-    INDEX `idx_tenant` (`tenant_id`)
+    INDEX idx_tenant (tenant_id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE service_list (
@@ -2618,6 +2589,7 @@ MODIFY COLUMN `subgroup` VARCHAR(100) NOT NULL DEFAULT '';
 -- used by the UI tree (which builds roots from systemCategories constants).
 DELETE FROM `inventory_master_category` WHERE `group` = '' AND `subgroup` = '';
 DELETE FROM `vendor_master_category`    WHERE `group` = '' AND `subgroup` = '';
+DELETE FROM `customer_master_category`  WHERE `group` = '' AND `subgroup` = '';
 DELETE FROM `service_group`             WHERE `group` = '' AND `subgroup` = '';
 
 -----------------------------------------------------
@@ -2906,58 +2878,14 @@ CREATE TABLE journal_entries (
     INDEX idx_tenant (tenant_id)
 );
 
--- Schema Updates
-ALTER TABLE inventory_master_inventoryitems ADD COLUMN cess_rate DECIMAL(5, 2) DEFAULT NULL AFTER gst_rate;
-
-ALTER TABLE voucher_purchase_supplier_details
-MODIFY vendor_basic_detail_id BIGINT;
 
 
--- Vendor Category Hierarchy Fixes (2026-03-16)
-ALTER TABLE vendor_master_category CHANGE COLUMN name category VARCHAR(255) NOT NULL;
-ALTER TABLE vendor_master_category ADD COLUMN is_system TINYINT(1) DEFAULT 0;
-ALTER TABLE vendor_master_category ADD COLUMN `group` VARCHAR(255) DEFAULT '';
-ALTER TABLE vendor_master_category ADD COLUMN subgroup VARCHAR(255) DEFAULT '';
-ALTER TABLE vendor_master_category DROP INDEX IF EXISTS uq_vendor_category_name_per_tenant;
-ALTER TABLE vendor_master_category DROP INDEX IF EXISTS vendor_category_tenant_unique;
-ALTER TABLE vendor_master_category ADD UNIQUE KEY vendor_category_tenant_unique (tenant_id, category(100), `group`(100), subgroup(100));
-
+-- Alter the customer_master_customer_productservice table by added a new column packing_notes
 ALTER TABLE customer_master_customer_productservice
 ADD COLUMN packing_notes VARCHAR(255) DEFAULT NULL COMMENT 'Packing Notes';
 
-CREATE TABLE `customer_masters_salesorder` (
-              `id` int(11) NOT NULL AUTO_INCREMENT,
-              `tenant_id` varchar(36) NOT NULL,
-              `series_name` varchar(100) NOT NULL,
-              `customer_category` varchar(100) DEFAULT NULL,
-              `prefix` varchar(20) DEFAULT 'SO/',
-              `suffix` varchar(20) DEFAULT '/24-25',
-              `required_digits` int(11) DEFAULT '4',
-              `current_number` int(11) DEFAULT '0',
-              `auto_year` tinyint(1) DEFAULT '0',
-              `is_active` tinyint(1) NOT NULL DEFAULT '1',
-              `is_deleted` tinyint(1) NOT NULL DEFAULT '0',
-              `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-              `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-              `created_by` varchar(100) DEFAULT NULL,
-              PRIMARY KEY (`id`),
-              UNIQUE KEY `customer_so_tenant_series_unique` (`tenant_id`,`series_name`),
-              KEY `customer_so_tenant_id_idx` (`tenant_id`),
-              KEY `customer_so_category_idx` (`customer_category`),
-              KEY `customer_so_is_active_idx` (`is_active`),
-              KEY `customer_so_is_deleted_idx` (`is_deleted`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Service Group Hierarchy Fixes (2026-03-17)
--- Ensuring all columns exist for service group hierarchy
-ALTER TABLE `service_group` ADD COLUMN `category` VARCHAR(100) NOT NULL AFTER `tenant_id`;
-ALTER TABLE `service_group` ADD COLUMN `group` VARCHAR(100) NOT NULL DEFAULT '' AFTER `category`;
-ALTER TABLE `service_group` ADD COLUMN `subgroup` VARCHAR(100) NOT NULL DEFAULT '' AFTER `group`;
 
--- Updates for Customer Master Long-term Contracts (2026-03-17)
-ALTER TABLE `customer_master_longtermcontracts_basicdetails` ADD COLUMN `updated_by` VARCHAR(100) DEFAULT NULL AFTER `created_by`;
-ALTER TABLE `customer_master_longtermcontracts_productservices` ADD COLUMN `updated_by` VARCHAR(100) DEFAULT NULL AFTER `created_by`;
-ALTER TABLE `customer_master_longtermcontracts_termscondition` ADD COLUMN `updated_by` VARCHAR(100) DEFAULT NULL AFTER `created_by`;
-ALTER TABLE `service_group` DROP COLUMN IF EXISTS `category_id`;
-ALTER TABLE `service_group` DROP COLUMN IF EXISTS `parent_group_id`;
-
+--Alter the customer_transaction_salesorder_items table by adding a new column packing_notes
+ALTER TABLE customer_transaction_salesorder_items
+ADD COLUMN packing_notes TEXT DEFAULT NULL COMMENT 'Packing Notes';

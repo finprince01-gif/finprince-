@@ -11,6 +11,7 @@ interface SearchableDropdownProps {
     required?: boolean;
     label?: string;
     noResultsText?: string;
+    onCreateAction?: { label: string; onClick: () => void };
 }
 
 const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
@@ -20,7 +21,8 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
     placeholder = 'Select...',
     disabled = false,
     required = false,
-    noResultsText = 'No results found'
+    noResultsText = 'No results found',
+    onCreateAction
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -173,6 +175,23 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
                             />
                         </div>
                     </div>
+
+                    {onCreateAction && (
+                        <div className="border-b border-gray-100 bg-indigo-50/50">
+                            <button
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => {
+                                    setIsOpen(false);
+                                    onCreateAction.onClick();
+                                }}
+                                className="w-full px-4 py-2 text-left text-sm text-indigo-700 font-semibold hover:bg-indigo-100 transition-colors flex items-center gap-1.5"
+                            >
+                                <span className="text-base leading-none font-bold">+</span>
+                                {onCreateAction.label}
+                            </button>
+                        </div>
+                    )}
 
                     <div className="overflow-y-scroll flex-1 overscroll-contain custom-scrollbar" style={{ minHeight: '100px' }}>
                         {filteredOptions.length > 0 ? (

@@ -16,6 +16,7 @@ interface IssueSlipItem {
     boxes: string;
     packingNotes: string;
     soNo?: string;
+    itemRate: string;
 }
 
 // Helper to generate consistent vibrant colors for SO tags
@@ -46,9 +47,15 @@ interface Location {
 interface CreateIssueSlipModalProps {
     onClose: () => void;
     onSave: (data: any) => void;
+    initialData?: {
+        customerName?: string;
+        branch?: string;
+        address?: string;
+        gstin?: string;
+    };
 }
 
-const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, onSave }) => {
+const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, onSave, initialData }) => {
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
@@ -63,10 +70,10 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
     // Reference Details
     const [salesOrderNo, setSalesOrderNo] = useState('');
     const [selectedSalesOrders, setSelectedSalesOrders] = useState<string[]>([]);
-    const [customerName, setCustomerName] = useState('');
-    const [branch, setBranch] = useState('');
-    const [address, setAddress] = useState('');
-    const [gstin, setGstin] = useState('');
+    const [customerName, setCustomerName] = useState(initialData?.customerName || '');
+    const [branch, setBranch] = useState(initialData?.branch || '');
+    const [address, setAddress] = useState(initialData?.address || '');
+    const [gstin, setGstin] = useState(initialData?.gstin || '');
     const [postingNote, setPostingNote] = useState('');
 
     // Delivery Challan / Dispatch Details State
@@ -119,7 +126,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
 
     // Items State
     const [items, setItems] = useState<IssueSlipItem[]>([
-        { id: 1, itemCode: '', itemName: '', hsnCode: '', uom: '', alternateUnit: '', quantity: '', boxes: '', packingNotes: '' }
+        { id: 1, itemCode: '', itemName: '', hsnCode: '', uom: '', alternateUnit: '', quantity: '', boxes: '', packingNotes: '', itemRate: '' }
     ]);
 
     // Fetch data on mount
@@ -203,31 +210,38 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
 
     // Update Address & GSTIN when Branch changes
 
-    // Fetch next Issue Slip Number when series changes
-    useEffect(() => {
-        if (!outwardSlipSeries || outwardSeriesList.length === 0) {
+    // Fetch next Issue Slip Number
+    const fetchNextSlipNo = React.useCallback((seriesName: string, seriesList: any[]) => {
+        if (!seriesName || seriesList.length === 0) {
             setOutwardSlipNo('');
             return;
         }
-
-        const selectedSeriesObj = outwardSeriesList.find(s => s.name === outwardSlipSeries);
+        const selectedSeriesObj = seriesList.find((s: any) => s.name === seriesName);
         if (selectedSeriesObj) {
-            httpClient.get<any>(`/api/inventory/master-voucher-issue-slip/${selectedSeriesObj.id}/next-number/`)
-                .then(res => {
-                    if (res && res.outward_slip_no) {
-                        setOutwardSlipNo(res.outward_slip_no);
-                    }
-                })
-                .catch(err => {
-                    console.error("Failed to fetch next issue slip number:", err);
-                });
+            // Fetch the preview value of the selected Outward Slip Series
+            setOutwardSlipNo(selectedSeriesObj.preview || '');
         }
-    }, [outwardSlipSeries, outwardSeriesList]);
+    }, []);
+
+    useEffect(() => {
+        fetchNextSlipNo(outwardSlipSeries, outwardSeriesList);
+    }, [outwardSlipSeries, outwardSeriesList, fetchNextSlipNo]);
 
     useEffect(() => {
         if (!customerName) {
             setAddress('');
             setGstin('');
+            return;
+        }
+
+        // If customer/branch matches initialData, keep the manually passed values and don't overwrite from DB defaults
+        if (
+            initialData &&
+            customerName === initialData.customerName &&
+            branch === initialData.branch
+        ) {
+            setAddress(initialData.address || '');
+            setGstin(initialData.gstin || '');
             return;
         }
 
@@ -312,7 +326,8 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                 quantity: soItem.quantity?.toString() || '',
                                 boxes: '',
                                 packingNotes: notes,
-                                soNo: orderNo
+                                soNo: orderNo,
+                                itemRate: (soItem.item_rate || soItem.price || soItem.negotiated_price || soItem.rate || '0').toString()
                             };
                         }
                     });
@@ -323,11 +338,11 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
             if (newItemsList.length > 0) {
                 setItems(newItemsList as IssueSlipItem[]);
             } else {
-                setItems([{ id: Date.now(), itemCode: '', itemName: '', hsnCode: '', uom: '', alternateUnit: '', quantity: '', boxes: '', packingNotes: '' }]);
+                setItems([{ id: Date.now(), itemCode: '', itemName: '', hsnCode: '', uom: '', alternateUnit: '', quantity: '', boxes: '', packingNotes: '', itemRate: '' }]);
             }
         } else {
             // Keep current customer/branch but clear items
-            setItems([{ id: Date.now(), itemCode: '', itemName: '', hsnCode: '', uom: '', alternateUnit: '', quantity: '', boxes: '', packingNotes: '' }]);
+            setItems([{ id: Date.now(), itemCode: '', itemName: '', hsnCode: '', uom: '', alternateUnit: '', quantity: '', boxes: '', packingNotes: '', itemRate: '' }]);
         }
     };
 
@@ -345,7 +360,8 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
             alternateUnit: '',
             quantity: '',
             boxes: '',
-            packingNotes: ''
+            packingNotes: '',
+            itemRate: ''
         };
         setItems([...items, newItem]);
     };
@@ -368,6 +384,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                     updatedItem.itemName = found.item_name || found.service_name || found.name || '';
                     updatedItem.hsnCode = found.hsn_code || found.hsn_sac_code || '';
                     updatedItem.uom = found.uom || found.unit || '';
+                    updatedItem.itemRate = (found.rate || found.price || '0').toString();
 
                     // Auto-populate Packing Notes from Customer Master
                     const customer = customersList.find(c => c.customer_name === customerName);
@@ -386,6 +403,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                     updatedItem.itemCode = found.item_code || found.service_code || '';
                     updatedItem.hsnCode = found.hsn_code || found.hsn_sac_code || '';
                     updatedItem.uom = found.uom || found.unit || '';
+                    updatedItem.itemRate = (found.rate || found.price || '0').toString();
 
                     // Auto-populate Packing Notes from Customer Master
                     const customer = customersList.find(c => c.customer_name === customerName);
@@ -414,6 +432,27 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
             return;
         }
 
+        // Validate that Customer Name and Branch match the Invoice Details
+        if (initialData) {
+            const invoiceCustomer = (initialData.customerName || '').trim();
+            const invoiceBranch = (initialData.branch || '').trim();
+            const slipCustomer = (customerName || '').trim();
+            const slipBranch = (branch || '').trim();
+
+            if (invoiceCustomer && slipCustomer !== invoiceCustomer) {
+                showWarning(
+                    `Customer Name mismatch! The Issue Slip has "${slipCustomer}" but the Invoice has "${invoiceCustomer}". Please correct and try again.`
+                );
+                return;
+            }
+            if (invoiceBranch && slipBranch !== invoiceBranch) {
+                showWarning(
+                    `Branch mismatch! The Issue Slip has "${slipBranch}" but the Invoice has "${invoiceBranch}". Please correct and try again.`
+                );
+                return;
+            }
+        }
+
         const payload = {
             outward_slip_no: outwardSlipNo,
             issue_slip_series_name: outwardSlipSeries || '',
@@ -435,6 +474,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                 uom: item.uom || '',
                 alternate_unit: item.alternateUnit || '',
                 quantity: parseFloat(item.quantity) || 0,
+                rate: parseFloat(item.itemRate) || 0,
                 no_of_boxes: item.boxes || '0',
                 packing_notes: item.packingNotes || ''
             })),
@@ -763,6 +803,12 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                                             type="number"
                                                             value={item.quantity}
                                                             onChange={(e) => handleItemChange(item.id, 'quantity', e.target.value)}
+                                                            min="0"
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === '-' || e.key === 'e') {
+                                                                    e.preventDefault();
+                                                                }
+                                                            }}
                                                             className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                                                         />
                                                     </td>
@@ -771,6 +817,12 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                                             type="number"
                                                             value={item.boxes}
                                                             onChange={(e) => handleItemChange(item.id, 'boxes', e.target.value)}
+                                                            min="0"
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === '-' || e.key === 'e') {
+                                                                    e.preventDefault();
+                                                                }
+                                                            }}
                                                             className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                                                         />
                                                     </td>

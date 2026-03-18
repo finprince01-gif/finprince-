@@ -3011,7 +3011,17 @@ const CustomerContent: React.FC = () => {
                                         <button
                                             className="text-indigo-600 hover:text-indigo-900 transition-colors"
                                             title="View"
-                                            onClick={() => setViewCustomer(customer)}
+                                            onClick={() => {
+                                                // Enrich customer object with resolved category name
+                                                let resolvedCategoryName = '';
+                                                if (customer.customer_category_name) {
+                                                    resolvedCategoryName = customer.customer_category_name;
+                                                } else if (categories.length > 0 && customer.customer_category) {
+                                                    const cat = categories.find((c: Category) => c.id === customer.customer_category);
+                                                    if (cat) resolvedCategoryName = cat.full_path || cat.category;
+                                                }
+                                                setViewCustomer({ ...customer, customer_category_name: resolvedCategoryName });
+                                            }}
                                         >
                                             <Eye className="w-5 h-5" />
                                         </button>
