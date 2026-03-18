@@ -4,15 +4,11 @@
     "."
   ],
   "search_path": [
-<<<<<<< muthu
-    "C:/Users/muthu/AppData/Local/Programs/Python/Python314/Lib/site-packages"
-=======
     ".",
-    "D:/finpixe/Ai_Accounting_v1-22/AI-accounting-0.03/backend",
+    "D:/finpixe/Ai_Accounting_v1-23/AI-accounting-0.03/backend",
     "C:/Python314",
     "C:/Python314/Lib/site-packages",
     "C:/Users/Dharun/AppData/Roaming/Python/Python314/site-packages"
->>>>>>> main
   ],
   "python_version": "3.14",
   "strict": false,
