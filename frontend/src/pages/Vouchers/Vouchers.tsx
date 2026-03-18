@@ -2988,9 +2988,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <input
                     type="text"
                     value={invoiceNo}
-                    onChange={(e) => setInvoiceNo(e.target.value)}
+                    onChange={(e) => {
+                      // Allow only alphanumeric, '/' and '-'
+                      const sanitized = e.target.value.replace(/[^a-zA-Z0-9/\-]/g, '');
+                      setInvoiceNo(sanitized);
+                    }}
                     className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                    placeholder="From Document"
+                    placeholder="Enter invoice number"
                     required
                   />
                 </div>
@@ -4763,10 +4767,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 )}
               </div>
             )}
-          </div>
         </div>
-      );
-    };
+      </div>
+    );
+  };
 
   const renderSalesPurchaseForm = () => {
     if (voucherType === 'Purchase') return renderPurchaseForm();
@@ -7031,16 +7035,16 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
             {voucherType === 'Sales' && <SalesVoucher prefilledData={localPrefilledData} clearPrefilledData={handleClearPrefilledData} isLimitReached={isLimitReached} onLimitReached={handleLimitReached} customers={richCustomers} companyDetails={companyDetails} />}
             {voucherType === 'Payment' && (
-              <PaymentVoucherSingle 
-                prefilledData={localPrefilledData} 
+              <PaymentVoucherSingle
+                prefilledData={localPrefilledData}
                 clearPrefilledData={handleClearPrefilledData}
                 isLimitReached={isLimitReached}
                 onLimitReached={handleLimitReached}
               />
             )}
             {voucherType === 'Receipt' && (
-              <ReceiptVoucher 
-                prefilledData={localPrefilledData} 
+              <ReceiptVoucher
+                prefilledData={localPrefilledData}
                 clearPrefilledData={handleClearPrefilledData}
                 isLimitReached={isLimitReached}
                 onLimitReached={handleLimitReached}

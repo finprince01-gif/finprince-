@@ -396,21 +396,27 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
     const [outwardSlipsData, setOutwardSlipsData] = useState<any[]>([]);
 
     // Fetch Outward Slips
-    React.useEffect(() => {
-        const fetchOutwardSlips = async () => {
-            try {
-                const data = await httpClient.get<any[]>('/api/inventory/operations/outward/').catch(() => []);
-                if (Array.isArray(data)) {
-                    setOutwardSlipsData(data);
-                    const options = data.map(item => item.outward_slip_no || item.slip_no || item.id || '').filter(Boolean);
-                    setOutwardSlipOptions([...new Set(options)]);
-                }
-            } catch (e) {
-                console.error('Failed to fetch outward slips', e);
+    const fetchOutwardSlips = React.useCallback(async () => {
+        try {
+            // Add timestamp to prevent browser caching of the GET response
+            const data = await httpClient.get<any[]>(`/api/inventory/operations/outward/?_t=${Date.now()}`).catch(() => []);
+            if (Array.isArray(data)) {
+                setOutwardSlipsData(data);
+                // Extract unique slip numbers, trim them, and sort descending (newest format first)
+                const options = data.map(item => (item.outward_slip_no || item.slip_no || '').toString().trim()).filter(Boolean);
+                const uniqueOptions = [...new Set(options)].sort((a, b) => b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' }));
+                setOutwardSlipOptions(uniqueOptions);
+                return data;
             }
-        };
-        fetchOutwardSlips();
+        } catch (e) {
+            console.error('Failed to fetch outward slips', e);
+        }
+        return [];
     }, []);
+
+    React.useEffect(() => {
+        fetchOutwardSlips();
+    }, [fetchOutwardSlips]);
 
     const [customerName, setCustomerName] = useState('');
     const [customerBranch, setCustomerBranch] = useState('');
@@ -862,6 +868,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
     }, [salesDocDropdownOpen]);
 
     const handleSalesDocToggle = async (val: string) => {
+        // Find if this is a composite key or just a number
+        const valToMatch = val;
         const isAlreadySelected = salesOrderNos.includes(val);
 
         if (isAlreadySelected) {
@@ -890,7 +898,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         // Select: add to list and load items
         setSalesOrderNos(prev => [...prev, val]);
 
-        const doc = salesDocOptions.find(d => d.number === val);
+        const doc = salesDocOptions.find(d => d.uniqueKey === val || d.number === val);
         if (!doc) return;
 
         try {
@@ -923,11 +931,28 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                     const cess = parseFloat(item.cess || item.cess_amount) || 0;
                     const invValInr = taxableInr + igst + cgst + sgst + cess;
 
+                    // Lookup HSN/SAC from master if missing
+                    let hsn = item.hsn_sac || item.hsn_code || item.hsnSac || item.hsnCode || '';
+                    if (!hsn) {
+                        const code = item.item_code || '';
+                        const name = item.item_name || '';
+                        const masterItem = inventoryItems.find(i =>
+                            (code && i.item_code === code) ||
+                            (name && (i.name === name || i.item_name === name))
+                        ) || serviceItems.find(i =>
+                            (code && (i.serviceCode === code || i.service_code === code)) ||
+                            (name && (i.serviceName === name || i.service_name === name))
+                        );
+                        if (masterItem) {
+                            hsn = masterItem.hsn_code || masterItem.hsnCode || masterItem.hsn_sac || masterItem.hsnSac || masterItem.sac_code || masterItem.sacCode || '';
+                        }
+                    }
+
                     return {
                         id: Date.now() + idx,
                         itemCode: item.item_code || '',
                         itemName: item.item_name || '',
-                        hsnSac: item.hsn_sac || '',
+                        hsnSac: hsn,
                         qty: qty.toString(),
                         uom: item.uom || '',
                         itemRate: inrRate.toFixed(2),
@@ -950,11 +975,15 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                     const rateFromDoc = parseFloat(item.item_rate || item.price || item.negotiated_price || item.rate) || 0;
                     const amtFc = qty * rateFromDoc;
 
+                    // Lookup HSN/SAC from master if missing (consistent with INR rows)
+                    const matchedInrRow = newRows[idx]; // We just mapped these in the same order
+                    const hsn = matchedInrRow ? matchedInrRow.hsnSac : '';
+
                     return {
                         id: Date.now() + idx,
                         itemCode: item.item_code || '',
                         itemName: item.item_name || '',
-                        hsnSac: item.hsn_sac || '',
+                        hsnSac: hsn,
                         qty: qty.toString(),
                         uom: item.uom || '',
                         itemRate: rateFromDoc.toString(), // Doc rate is treated as FC
@@ -1027,20 +1056,30 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         const combined = [...orders, ...quotations];
         const uniqueMap = new Map();
         combined.forEach(doc => {
-            if (doc.number && !uniqueMap.has(doc.number)) {
-                uniqueMap.set(doc.number, doc);
+            // Create a unique key to differentiate between Order and Quotation with same number
+            const uniqueKey = `${doc.type}:${doc.number}`;
+            if (doc.number && !uniqueMap.has(uniqueKey)) {
+                uniqueMap.set(uniqueKey, { ...doc, uniqueKey });
             }
         });
 
         let filtered = Array.from(uniqueMap.values());
         if (customerName) {
+            const lowerCustomer = customerName.toLowerCase();
             filtered = filtered.filter(doc =>
+                // Always keep already selected ones
+                salesOrderNos.includes(doc.uniqueKey) ||
+                salesOrderNos.includes(doc.number) ||
+                // Or matches customer
                 !doc.customer ||
-                doc.customer.toLowerCase() === customerName.toLowerCase()
+                doc.customer.toLowerCase() === lowerCustomer ||
+                // Or if it's a category doc, maybe it's compatible? 
+                // Let's be a bit more permissive if it's from quotations
+                (doc.type === 'Quotation' && doc.customer && (doc.customer.includes('B2C') || doc.customer.includes('B2B')))
             );
         }
         return filtered;
-    }, [salesOrders, salesQuotations, customerName, masterCustomers]);
+    }, [salesOrders, salesQuotations, customerName, masterCustomers, salesOrderNos]);
 
     const [itemRows, setItemRows] = useState<ItemRow[]>([
         {
@@ -1125,8 +1164,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         setIsTermsModalOpen(true);
     };
 
-    const saveTermsModal = () => {
-        // Build formatted display string from individual fields
+    const saveTermsModal = async () => {
+        // Build formatted display string from individual fields to update the local textarea
         const parts: string[] = [];
         if (draftCreditPeriod) parts.push(`Credit Period: ${draftCreditPeriod}`);
         if (draftCreditTerms) parts.push(`Credit Terms: ${draftCreditTerms}`);
@@ -1136,6 +1175,37 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         if (draftForceMajeure) parts.push(`Force Majeure: ${draftForceMajeure}`);
         if (draftDisputeTerms) parts.push(`Dispute & Redressal: ${draftDisputeTerms}`);
         setTermsConditions(parts.join('\n\n'));
+
+        // PERSIST TO MASTER if a customer is selected and has an ID
+        if (masterTermsData?.id) {
+            try {
+                const payload = {
+                    credit_period: draftCreditPeriod || null,
+                    credit_terms: draftCreditTerms || null,
+                    penalty_terms: draftPenaltyTerms || null,
+                    delivery_terms: draftDeliveryTerms || null,
+                    warranty_details: draftWarrantyDetails || null,
+                    force_majeure: draftForceMajeure || null,
+                    dispute_terms: draftDisputeTerms || null
+                };
+                
+                // Call API to update customer master records in the backend
+                await httpClient.patch(`/api/customerportal/customer-master/${masterTermsData.id}/`, payload);
+                showSuccess('Customer terms updated in Master');
+                
+                // Update local states so changes persist in this session
+                const updatedMasterData = { ...masterTermsData, ...payload };
+                setMasterTermsData(updatedMasterData);
+                
+                // Update the customer in the master list so if it's re-selected it has the new data
+                setMasterCustomers(prev => prev.map(c => c.id === masterTermsData.id ? { ...c, ...payload } : c));
+                
+            } catch (error) {
+                console.error('Error updating master terms:', error);
+                showError('Failed to update customer master terms');
+            }
+        }
+
         setIsTermsModalOpen(false);
     };
 
@@ -1300,14 +1370,22 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         fetchCompany();
     }, []);
 
+    // Automatic Validation for Quantity and Outward Slip matches
+    React.useEffect(() => {
+        validateQtyMatch();
+    }, [itemRows, foreignItemRows, exchangeRate, invoiceType, stateType]);
+
+    React.useEffect(() => {
+        validateOutwardSlipMatch();
+    }, [itemRows, outwardSlipNo, customerName, customerBranch, gstin, outwardSlipsData]);
+
     // Show Foreign Currency + INR tabs when stateType is 'export' OR when Nature of Supply is
     // Export with payment, Export without payment, or Deemed Export
     const FOREIGN_INVOICE_TYPES = ['Export with payment', 'Export without payment', 'Deemed Export'];
     const showForeignTabs = stateType === 'export' || FOREIGN_INVOICE_TYPES.includes(invoiceType);
 
-    const handleOutwardSlipChange = (val: string) => {
-        setOutwardSlipNo(val);
-        const selectedSlip = outwardSlipsData.find(s =>
+    const applySlipData = (val: string, slipsList: any[]) => {
+        const selectedSlip = slipsList.find(s =>
             (s.outward_slip_no === val) ||
             (s.slip_no === val) ||
             (s.id?.toString() === val)
@@ -1315,23 +1393,46 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         if (selectedSlip && selectedSlip.items) {
             const slipItems = Array.isArray(selectedSlip.items) ? selectedSlip.items : [];
             const newRows: ItemRow[] = slipItems.map((item: any, idx: number) => {
-                const qty = (parseFloat(item.qty || item.quantity || '0')).toString();
-                // Map fields from outward slip item to ItemRow
-                // Note: field names might vary based on Backend API
+                const qtyNum = parseFloat(item.qty || item.quantity || '0');
+                const rateNum = parseFloat(item.rate || item.item_rate || '0');
+                const taxableValNum = parseFloat(item.taxable_value || '0') || (qtyNum * rateNum);
+                const igstNum = parseFloat(item.igst || '0');
+                const cgstNum = parseFloat(item.cgst || '0');
+                const sgstNum = parseFloat(item.sgst || '0');
+                const cessNum = parseFloat(item.cess || '0');
+                const invoiceValNum = parseFloat(item.invoice_value || '0') || (taxableValNum + igstNum + cgstNum + sgstNum + cessNum);
+
+                // Lookup HSN/SAC from master if missing
+                let hsn = item.hsn_code || item.hsnCode || item.hsn_sac || item.hsnSac || item.sacCode || item.sac_code || '';
+                if (!hsn) {
+                    const code = (item.item_code || item.itemCode || item.serviceCode || item.service_code || '').toString();
+                    const name = (item.item_name || item.itemName || item.serviceName || item.service_name || '').toString();
+                    const masterItem = inventoryItems.find(i =>
+                        (code && i.item_code === code) ||
+                        (name && (i.name === name || i.item_name === name))
+                    ) || serviceItems.find(i =>
+                        (code && (i.serviceCode === code || i.service_code === code)) ||
+                        (name && (i.serviceName === name || i.service_name === name))
+                    );
+                    if (masterItem) {
+                        hsn = masterItem.hsn_code || masterItem.hsnCode || masterItem.hsn_sac || masterItem.hsnSac || masterItem.sac_code || masterItem.sacCode || '';
+                    }
+                }
+
                 return {
                     id: Date.now() + idx,
                     itemCode: item.item_code || item.itemCode || item.serviceCode || item.service_code || '',
                     itemName: item.item_name || item.itemName || item.serviceName || item.service_name || '',
-                    hsnSac: item.hsn_sac || item.hsnSac || item.sacCode || item.sac_code || '',
-                    qty: qty,
+                    hsnSac: hsn,
+                    qty: qtyNum.toString(),
                     uom: item.uom || '',
-                    itemRate: (parseFloat(item.rate || item.item_rate || '0')).toString(),
-                    taxableValue: (parseFloat(item.taxable_value || '0')).toFixed(2),
-                    igst: (parseFloat(item.igst || '0')).toFixed(2),
-                    cgst: (parseFloat(item.cgst || '0')).toFixed(2),
-                    sgst: (parseFloat(item.sgst || '0')).toFixed(2),
-                    cess: (parseFloat(item.cess || '0')).toFixed(2),
-                    invoiceValue: (parseFloat(item.invoice_value || '0')).toFixed(2),
+                    itemRate: rateNum.toString(),
+                    taxableValue: taxableValNum.toFixed(2),
+                    igst: igstNum.toFixed(2),
+                    cgst: cgstNum.toFixed(2),
+                    sgst: sgstNum.toFixed(2),
+                    cess: cessNum.toFixed(2),
+                    invoiceValue: invoiceValNum.toFixed(2),
                     salesLedger: '',
                     description: item.description || '',
                     alternateUnit: item.alternate_uom || item.alternateUnit || '',
@@ -1345,6 +1446,11 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 setForeignItemRows(newRows);
             }
         }
+    };
+
+    const handleOutwardSlipChange = (val: string) => {
+        setOutwardSlipNo(val);
+        applySlipData(val, outwardSlipsData);
     };
 
     const tabs = showForeignTabs ? [
@@ -1779,10 +1885,12 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
 
                     if (matchedItem) {
                         let inrRate = 0;
+                        const hsn = matchedItem.hsn_code || matchedItem.hsnCode || matchedItem.hsn_sac || matchedItem.hsnSac || matchedItem.sac_code || matchedItem.sac_code || '';
+
                         if (isService) {
                             updatedRow.itemCode = matchedItem.serviceCode || matchedItem.service_code || updatedRow.itemCode;
                             updatedRow.itemName = matchedItem.serviceName || matchedItem.service_name || updatedRow.itemName;
-                            updatedRow.hsnSac = matchedItem.sacCode || matchedItem.sac_code || updatedRow.hsnSac;
+                            updatedRow.hsnSac = hsn || updatedRow.hsnSac;
                             updatedRow.uom = matchedItem.uom || updatedRow.uom;
                             updatedRow.alternateUnit = '';
                             updatedRow.description = matchedItem.description || updatedRow.description;
@@ -1791,7 +1899,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                         } else {
                             updatedRow.itemCode = matchedItem.item_code || updatedRow.itemCode;
                             updatedRow.itemName = matchedItem.name || matchedItem.item_name || updatedRow.itemName;
-                            updatedRow.hsnSac = matchedItem.hsn_code || matchedItem.hsn || updatedRow.hsnSac;
+                            updatedRow.hsnSac = hsn || updatedRow.hsnSac;
                             updatedRow.uom = matchedItem.uom || matchedItem.unit || updatedRow.uom;
                             updatedRow.alternateUnit = matchedItem.alternative_unit || matchedItem.alternate_uom || '';
                             updatedRow.description = matchedItem.description || updatedRow.description;
@@ -1977,16 +2085,18 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                     if (matchedItem) {
                         const convRate = parseFloat(exchangeRate) || 1;
                         let inrRate = 0;
+                        const hsn = matchedItem.hsn_code || matchedItem.hsnCode || matchedItem.hsn_sac || matchedItem.hsnSac || matchedItem.sac_code || matchedItem.sac_code || '';
+
                         if (isService) {
                             updatedRow.itemCode = matchedItem.serviceCode || matchedItem.service_code || updatedRow.itemCode;
                             updatedRow.itemName = matchedItem.serviceName || matchedItem.service_name || updatedRow.itemName;
-                            updatedRow.hsnSac = matchedItem.sacCode || matchedItem.sac_code || updatedRow.hsnSac;
+                            updatedRow.hsnSac = hsn || updatedRow.hsnSac;
                             updatedRow.uom = matchedItem.uom || updatedRow.uom;
                             inrRate = parseFloat(matchedItem.rate || matchedItem.price || '0');
                         } else {
                             updatedRow.itemCode = matchedItem.item_code || updatedRow.itemCode;
                             updatedRow.itemName = matchedItem.name || matchedItem.item_name || updatedRow.itemName;
-                            updatedRow.hsnSac = matchedItem.hsn_code || matchedItem.hsn || updatedRow.hsnSac;
+                            updatedRow.hsnSac = hsn || updatedRow.hsnSac;
                             updatedRow.uom = matchedItem.uom || matchedItem.unit || updatedRow.uom;
                             updatedRow.description = matchedItem.description || updatedRow.description;
                             inrRate = parseFloat(matchedItem.rate || matchedItem.standard_rate || '0');
@@ -2302,21 +2412,35 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
 
             <div className="border-b border-gray-200 mb-6">
                 <div className="flex flex-wrap gap-8">
-                    {tabs.map((tab) => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
-                            className={`
-                                pb-3 text-sm font-medium transition-colors duration-200 relative
-                                ${activeTab === tab.id
-                                    ? 'text-indigo-600 border-b-2 border-indigo-600'
-                                    : 'text-gray-600 hover:text-gray-800'
-                                }
-                            `}
-                        >
-                            {tab.label}
-                        </button>
-                    ))}
+                    {tabs.map((tab) => {
+                        const isDependentTab = ['payment', 'dispatch', 'einvoice'].includes(tab.id);
+                        const isDisabled = outwardSlipError && isDependentTab;
+
+                        return (
+                            <button
+                                key={tab.id}
+                                onClick={() => !isDisabled && setActiveTab(tab.id)}
+                                disabled={isDisabled}
+                                className={`
+                                    pb-3 text-sm font-medium transition-colors duration-200 relative
+                                    ${activeTab === tab.id
+                                        ? 'text-indigo-600 border-b-2 border-indigo-600'
+                                        : isDisabled
+                                            ? 'text-gray-300 cursor-not-allowed opacity-60'
+                                            : 'text-gray-600 hover:text-gray-800'
+                                    }
+                                `}
+                                title={isDisabled ? outwardSlipError : ""}
+                            >
+                                {tab.label}
+                                {isDisabled && (
+                                    <span className="ml-1.5 text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-tighter">
+                                        Locked
+                                    </span>
+                                )}
+                            </button>
+                        );
+                    })}
                 </div>
             </div>
 
@@ -2437,20 +2561,6 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                 )}
                             </div>
 
-                            {/* Row 3 Col 1: Create Outward Slip */}
-                            <div>
-                                <label className="block text-sm font-medium text-transparent mb-2">
-                                    Action
-                                </label>
-                                <button
-                                    type="button"
-                                    onClick={() => setIsIssueSlipModalOpen(true)}
-                                    className="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors font-medium"
-                                >
-                                    Create Outward Slip
-                                </button>
-                            </div>
-
                             {/* Row 3 Col 2: Outward Slip No. */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -2462,6 +2572,10 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                     options={outwardSlipOptions}
                                     placeholder="Select or enter slip no"
                                     disabled={false}
+                                    onCreateAction={{
+                                        label: 'Create Outward Slip',
+                                        onClick: () => setIsIssueSlipModalOpen(true)
+                                    }}
                                 />
                             </div>
 
@@ -2630,7 +2744,19 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                         <input
                                             type="checkbox"
                                             checked={sameAsBillTo}
-                                            onChange={(e) => setSameAsBillTo(e.target.checked)}
+                                            onChange={(e) => {
+                                                const checked = e.target.checked;
+                                                setSameAsBillTo(checked);
+                                                if (!checked) {
+                                                    setShipToAddress1('');
+                                                    setShipToAddress2('');
+                                                    setShipToAddress3('');
+                                                    setShipToCity('');
+                                                    setShipToPincode('');
+                                                    setShipToState('');
+                                                    setShipToCountry('India');
+                                                }
+                                            }}
                                             className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                                         />
                                         <span className="text-xs text-gray-600">Same as Bill To Address</span>
@@ -2896,7 +3022,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                             </div>
                                                             {salesDocOptions.filter(d => d.type === 'Order').map((doc, idx) => (
                                                                 <label key={`so-${doc.id}-${idx}`} className="flex items-center gap-2 px-3 py-2 hover:bg-indigo-50 cursor-pointer text-sm">
-                                                                    <input type="checkbox" checked={salesOrderNos.includes(doc.number)} onChange={() => handleSalesDocToggle(doc.number)} className="w-4 h-4 text-indigo-600 border-gray-300 rounded" />
+                                                                    <input type="checkbox" checked={salesOrderNos.includes(doc.uniqueKey)} onChange={() => handleSalesDocToggle(doc.uniqueKey)} className="w-4 h-4 text-indigo-600 border-gray-300 rounded" />
                                                                     <span className="font-medium text-gray-800">{doc.number}</span>
                                                                     {doc.customer && <span className="text-gray-400 text-xs">({doc.customer})</span>}
                                                                 </label>
@@ -2910,7 +3036,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                             </div>
                                                             {salesDocOptions.filter(d => d.type === 'Quotation').map((doc, idx) => (
                                                                 <label key={`sq-${doc.id}-${idx}`} className="flex items-center gap-2 px-3 py-2 hover:bg-indigo-50 cursor-pointer text-sm">
-                                                                    <input type="checkbox" checked={salesOrderNos.includes(doc.number)} onChange={() => handleSalesDocToggle(doc.number)} className="w-4 h-4 text-indigo-600 border-gray-300 rounded" />
+                                                                    <input type="checkbox" checked={salesOrderNos.includes(doc.uniqueKey)} onChange={() => handleSalesDocToggle(doc.uniqueKey)} className="w-4 h-4 text-indigo-600 border-gray-300 rounded" />
                                                                     <span className="font-medium text-gray-800">{doc.number}</span>
                                                                     {doc.customer && <span className="text-gray-400 text-xs">({doc.customer})</span>}
                                                                 </label>
@@ -3093,7 +3219,12 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                 setActiveTab('item_tax_inr');
                                             }
                                         }}
-                                        className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors flex items-center gap-2 font-medium shadow-none border border-slate-200-none border border-slate-200"
+                                        disabled={!!outwardSlipError}
+                                        className={`px-6 py-2 rounded-[4px] transition-colors flex items-center gap-2 font-medium shadow-none border border-slate-200-none border border-slate-200 ${
+                                            outwardSlipError 
+                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                                            : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                                        }`}
                                     >
                                         NEXT
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3144,8 +3275,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                         >
                                                             <input
                                                                 type="checkbox"
-                                                                checked={salesOrderNos.includes(doc.number)}
-                                                                onChange={() => handleSalesDocToggle(doc.number)}
+                                                                checked={salesOrderNos.includes(doc.uniqueKey)}
+                                                                onChange={() => handleSalesDocToggle(doc.uniqueKey)}
                                                                 className="w-4 h-4 text-indigo-600 border-gray-300 rounded"
                                                             />
                                                             <span className="font-medium text-gray-800">{doc.number}</span>
@@ -3166,8 +3297,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                         >
                                                             <input
                                                                 type="checkbox"
-                                                                checked={salesOrderNos.includes(doc.number)}
-                                                                onChange={() => handleSalesDocToggle(doc.number)}
+                                                                checked={salesOrderNos.includes(doc.uniqueKey)}
+                                                                onChange={() => handleSalesDocToggle(doc.uniqueKey)}
                                                                 className="w-4 h-4 text-indigo-600 border-gray-300 rounded"
                                                             />
                                                             <span className="font-medium text-gray-800">{doc.number}</span>
@@ -3197,7 +3328,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                     {num}
                                                     <button
                                                         type="button"
-                                                        onClick={() => setSalesOrderNos(prev => prev.filter(v => v !== num))}
+                                                        onClick={() => handleSalesDocToggle(num)}
                                                         className="ml-0.5 font-bold leading-none opacity-60 hover:opacity-100"
                                                     >×</button>
                                                 </span>
@@ -3534,13 +3665,17 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                 <div className="flex items-center gap-4">
 
                                     <button
-                                        type="button"
                                         onClick={() => {
-                                            if (validateQtyMatch() && validateOutwardSlipMatch()) {
+                                            if (validateOutwardSlipMatch()) {
                                                 setActiveTab('payment');
                                             }
                                         }}
-                                        className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors flex items-center gap-2 font-medium"
+                                        disabled={!!outwardSlipError}
+                                        className={`px-6 py-2 rounded-[4px] transition-colors flex items-center gap-2 font-medium ${
+                                            outwardSlipError
+                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                            : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                                        }`}
                                     >
                                         NEXT
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -4997,12 +5132,27 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 isIssueSlipModalOpen && (
                     <CreateIssueSlipModal
                         onClose={() => setIsIssueSlipModalOpen(false)}
+                        initialData={{
+                            customerName: customerName,
+                            branch: customerBranch,
+                            gstin: gstin,
+                            address: `${billToAddress1}${billToAddress2 ? ', ' + billToAddress2 : ''}${billToAddress3 ? ', ' + billToAddress3 : ''}${billToCity ? ', ' + billToCity : ''}${billToState ? ', ' + billToState : ''}${billToPincode ? ' - ' + billToPincode : ''}`.replace(/^,\s*/, '').trim()
+                        }}
                         onSave={async (data) => {
                             try {
 
                                 const response = await apiService.createInventoryOperationOutward(data);
 
-                                setOutwardSlipNo(response.outward_slip_no);
+                                // Refresh the list from server
+                                const freshData = await fetchOutwardSlips();
+
+                                // Auto-select the newly created slip and load its items
+                                const newSlipNo = (response.outward_slip_no || '').toString().trim();
+                                if (newSlipNo) {
+                                    setOutwardSlipNo(newSlipNo);
+                                    applySlipData(newSlipNo, freshData);
+                                }
+
                                 showSuccess('Issue Slip Created Successfully!');
 
                             } catch (error) {
@@ -5414,5 +5564,3 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
 };
 
 export default SalesVoucher;
-
-

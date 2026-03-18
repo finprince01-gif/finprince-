@@ -2877,3 +2877,15 @@ CREATE TABLE journal_entries (
     INDEX idx_voucher (voucher_id),
     INDEX idx_tenant (tenant_id)
 );
+
+
+
+-- Alter the customer_master_customer_productservice table by added a new column packing_notes
+ALTER TABLE customer_master_customer_productservice
+ADD COLUMN packing_notes VARCHAR(255) DEFAULT NULL COMMENT 'Packing Notes';
+
+
+
+--Alter the customer_transaction_salesorder_items table by adding a new column packing_notes
+ALTER TABLE customer_transaction_salesorder_items
+ADD COLUMN packing_notes TEXT DEFAULT NULL COMMENT 'Packing Notes';

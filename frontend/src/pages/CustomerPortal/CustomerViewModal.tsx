@@ -119,7 +119,7 @@ const BasicDetailsView = ({ customer }: { customer: any }) => {
             <SectionHeading title="Basic Information" />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
                 <InfoField label="Customer Name" value={customer.customer_name || customer.name} />
-                <InfoField label="Customer Category" value={customer.customer_category_name || customer.category} />
+                <InfoField label="Customer Category" value={customer.customer_category_name || customer.category_name || customer.category || ''} />
                 <InfoField label="Customer Code" value={customer.customer_code || customer.code} />
                 <InfoField label="PAN Number" value={customer.pan_number} />
                 <InfoField label="Contact Person" value={customer.contact_person} />
@@ -176,7 +176,22 @@ const GSTDetailsView = ({ customer }: { customer: any }) => {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="col-span-full">
                                         <p className="text-xs text-gray-500 uppercase mb-1">Address</p>
-                                        <p className="text-sm text-gray-800 whitespace-pre-wrap">{branch.address || 'N/A'}</p>
+                                        <p className="text-sm text-gray-800 whitespace-pre-wrap">
+                                            {(() => {
+                                                // Build address from individual lines (API returns addressLine1/2/3, not a combined address)
+                                                const parts = [
+                                                    branch.addressLine1,
+                                                    branch.addressLine2,
+                                                    branch.addressLine3,
+                                                    branch.city,
+                                                    branch.state,
+                                                    branch.pincode,
+                                                    branch.country
+                                                ].filter(Boolean);
+                                                // Also support legacy branch.address field
+                                                return parts.length > 0 ? parts.join(', ') : (branch.address || 'N/A');
+                                            })()}
+                                        </p>
                                     </div>
                                     <div>
                                         <p className="text-xs text-gray-500 uppercase mb-1">Contact Person</p>
