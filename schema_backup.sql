@@ -9,7 +9,38 @@
     `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
     PRIMARY KEY (`id`)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+  -- Table: ai_usage
+  -- Tracks monthly AI invoice extraction usage per tenant for subscription enforcement.
+
+  CREATE TABLE IF NOT EXISTS `ai_usage` (
+    `id` bigint NOT NULL AUTO_INCREMENT,
+    `tenant_id` char(36) NOT NULL,
+    `year` int NOT NULL,
+    `month` int NOT NULL,
+    `used_count` int NOT NULL DEFAULT '0',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `ai_usage_tenant_year_month_uniq` (`tenant_id`, `year`, `month`),
+    KEY `ai_usage_tenant_id_idx` (`tenant_id`),
+    CONSTRAINT `ai_usage_tenant_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Monthly AI invoice extraction usage tracker per tenant';
+
+  -- Table: extraction_performance
+  -- Stores historical OCR extraction timings for estimating scan duration.
+
+  CREATE TABLE IF NOT EXISTS `extraction_performance` (
+    `id` bigint NOT NULL AUTO_INCREMENT,
+    `file_count` int NOT NULL DEFAULT '1',
+    `processing_time_seconds` double NOT NULL,
+    `timestamp` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (`id`),
+    KEY `extraction_performance_timestamp_idx` (`timestamp`)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='OCR extraction performance timings for scan duration estimation';
+
   -- Table: amount_transactions
+
 
   CREATE TABLE `amount_transactions` (
     `id` bigint NOT NULL AUTO_INCREMENT,
@@ -573,6 +604,29 @@ CREATE TABLE `company_informations` (
   COMMENT='Inventory Master Items';
 
 
+  -- Table: inventory_unit
+
+  CREATE TABLE IF NOT EXISTS `inventory_unit` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `tenant_id` CHAR(36) NOT NULL,
+    `name` VARCHAR(100) NOT NULL DEFAULT 'Number',
+    `symbol` VARCHAR(50) NOT NULL DEFAULT 'nos',
+    `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+    `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    `updated_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+      ON UPDATE CURRENT_TIMESTAMP(6),
+
+    PRIMARY KEY (`id`),
+    KEY `inventory_unit_tenant_id_idx` (`tenant_id`)
+  )
+  ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci
+  COMMENT='Inventory Units of Measure';
+
+
+
+
   --
   -- Table structure for table `vendor_master_banking`
   --
@@ -1003,6 +1057,7 @@ CREATE TABLE `customer_master_longtermcontracts_basicdetails` (
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   `created_by` varchar(100) DEFAULT NULL,
+  `updated_by` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `cust_ltc_basic_tenant_contract_unique` (`tenant_id`,`contract_number`),
   KEY `cust_ltc_basic_tenant_id_idx` (`tenant_id`),
@@ -1029,6 +1084,7 @@ CREATE TABLE `customer_master_longtermcontracts_productservices` (
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   `created_by` varchar(100) DEFAULT NULL,
+  `updated_by` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `cust_ltc_prod_tenant_item_idx` (`tenant_id`, `item_code`),
   KEY `cust_ltc_prod_contract_idx` (`contract_basic_detail_id`),
@@ -1051,6 +1107,7 @@ CREATE TABLE `customer_master_longtermcontracts_termscondition` (
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   `created_by` varchar(100) DEFAULT NULL,
+  `updated_by` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `cust_ltc_terms_contract_unique` (`contract_basic_detail_id`),
   KEY `cust_ltc_terms_tenant_idx` (`tenant_id`),
@@ -1283,7 +1340,9 @@ CREATE TABLE `customer_transaction_salesorder_items` (
   `gst_rate` decimal(5,2) DEFAULT '0.00' COMMENT 'GST Rate (%)',
   `net_value` decimal(15,2) NOT NULL DEFAULT '0.00' COMMENT 'Net Value (Taxable + GST)',
   `uom` varchar(50) DEFAULT NULL COMMENT 'Unit of Measure',
+  `packing_notes` text DEFAULT NULL COMMENT 'Packing notes for this item',
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   PRIMARY KEY (`id`),
   KEY `cust_trans_so_items_tenant_idx` (`tenant_id`),
@@ -1737,18 +1796,24 @@ CREATE TABLE IF NOT EXISTS `voucher_payment_single` (
   `date` date NOT NULL,
   `voucher_type` varchar(100) DEFAULT NULL,
   `voucher_number` varchar(100) NOT NULL,
-  `pay_from` varchar(100) DEFAULT NULL,
-  `pay_to` varchar(255) DEFAULT NULL,
+  `pay_from_ledger_id` bigint NOT NULL,
+  `pay_to_ledger_id` bigint NOT NULL,
   `total_payment` decimal(15,2) DEFAULT '0.00',
   `advance_ref_no` varchar(100) DEFAULT NULL,
   `advance_amount` decimal(15,2) DEFAULT '0.00',
   `transaction_details` json DEFAULT NULL COMMENT 'List: [{date, referenceNumber, amount, payment, pending, advance}]',
   `created_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `bank_reconciled` tinyint(1) NOT NULL DEFAULT '0',
+  `bank_reconcile_date` date DEFAULT NULL,
+  `bank_statement_id` bigint DEFAULT NULL,
+  `bank_reference_number` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `voucher_payment_single_tenant_id_idx` (`tenant_id`),
   KEY `voucher_payment_single_date_idx` (`date`),
-  CONSTRAINT `voucher_payment_single_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
+  CONSTRAINT `voucher_payment_single_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_vps_pay_from` FOREIGN KEY (`pay_from_ledger_id`) REFERENCES `master_ledgers` (`id`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_vps_pay_to` FOREIGN KEY (`pay_to_ledger_id`) REFERENCES `master_ledgers` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
@@ -1759,7 +1824,7 @@ CREATE TABLE IF NOT EXISTS `voucher_payment_bulk` (
   `tenant_id` char(36) NOT NULL,
   `date` date NOT NULL,
   `voucher_number` varchar(100) NOT NULL,
-  `pay_from` varchar(100) DEFAULT NULL,
+  `pay_from_ledger_id` bigint NOT NULL,
   `payment_rows` json DEFAULT NULL,
   `posting_note` longtext,
   `advance_ref_no` varchar(100) DEFAULT NULL,
@@ -1767,56 +1832,17 @@ CREATE TABLE IF NOT EXISTS `voucher_payment_bulk` (
   `transaction_details` json DEFAULT NULL COMMENT 'List: [{date, invoiceNo, amount, payNow, pending, advance}]',
   `created_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `bank_reconciled` tinyint(1) NOT NULL DEFAULT '0',
+  `bank_reconcile_date` date DEFAULT NULL,
+  `bank_statement_id` bigint DEFAULT NULL,
+  `bank_reference_number` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `voucher_payment_bulk_tenant_id_idx` (`tenant_id`),
   KEY `voucher_payment_bulk_date_idx` (`date`),
-  CONSTRAINT `voucher_payment_bulk_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
+  CONSTRAINT `voucher_payment_bulk_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_vpb_pay_from` FOREIGN KEY (`pay_from_ledger_id`) REFERENCES `master_ledgers` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
---
--- Table: voucher_receipt_single
---
-CREATE TABLE IF NOT EXISTS `voucher_receipt_single` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `tenant_id` char(36) NOT NULL,
-  `date` date NOT NULL,
-  `voucher_type` varchar(100) DEFAULT NULL,
-  `voucher_number` varchar(100) NOT NULL,
-  `receive_in` varchar(100) DEFAULT NULL,
-  `receive_from` varchar(255) DEFAULT NULL,
-  `total_receipt` decimal(15,2) DEFAULT '0.00',
-  `advance_ref_no` varchar(100) DEFAULT NULL,
-  `advance_amount` decimal(15,2) DEFAULT '0.00',
-  `transaction_details` json DEFAULT NULL COMMENT 'List: [{date, referenceNumber, amount, receipt, pending, advance}]',
-  `created_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6),
-  `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-  PRIMARY KEY (`id`),
-  KEY `voucher_receipt_single_tenant_id_idx` (`tenant_id`),
-  KEY `voucher_receipt_single_date_idx` (`date`),
-  CONSTRAINT `voucher_receipt_single_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Table: voucher_receipt_bulk
---
-CREATE TABLE IF NOT EXISTS `voucher_receipt_bulk` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `tenant_id` char(36) NOT NULL,
-  `date` date NOT NULL,
-  `voucher_number` varchar(100) NOT NULL,
-  `receive_in` varchar(100) DEFAULT NULL,
-  `receipt_rows` json DEFAULT NULL,
-  `posting_note` longtext,
-  `advance_ref_no` varchar(100) DEFAULT NULL,
-  `advance_amount` decimal(15,2) DEFAULT '0.00',
-  `transaction_details` json DEFAULT NULL COMMENT 'List: [{date, invoiceNo, amount, receiveNow, pending, advance}]',
-  `created_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6),
-  `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-  PRIMARY KEY (`id`),
-  KEY `voucher_receipt_bulk_tenant_id_idx` (`tenant_id`),
-  KEY `voucher_receipt_bulk_date_idx` (`date`),
-  CONSTRAINT `voucher_receipt_bulk_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Table: voucher_expenses
@@ -2379,17 +2405,17 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_outward` (
 
 
 
-CREATE TABLE service_group (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    tenant_id VARCHAR(36) NOT NULL,
-    category VARCHAR(100) NOT NULL,
+CREATE TABLE `service_group` (
+    `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    `tenant_id` VARCHAR(36) NOT NULL,
+    `category` VARCHAR(100) NOT NULL,
     `group` VARCHAR(100) NOT NULL DEFAULT '',
     `subgroup` VARCHAR(100) NOT NULL DEFAULT '',
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
-    updated_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    `is_active` BOOLEAN DEFAULT TRUE,
+    `created_at` DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
+    `updated_at` DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
 
-    INDEX idx_tenant (tenant_id)
+    INDEX `idx_tenant` (`tenant_id`)
 ) ENGINE=InnoDB;
 
 CREATE TABLE service_list (
@@ -2541,18 +2567,6 @@ CREATE TABLE IF NOT EXISTS `rbac_user_roles` (
 
 -- ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
--- Table structure for table `ai_usage`
-CREATE TABLE `ai_usage` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `tenant_id` varchar(50) NOT NULL,
-  `year` int NOT NULL,
-  `month` int NOT NULL,
-  `used_count` int DEFAULT '0',
-  `plan` varchar(50) DEFAULT 'FREE',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `tenant_year_month` (`tenant_id`,`year`,`month`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
 -- Updates for Customer Master Schema (2026-02-20)
 -- Add TDS Applicable field to customer_master_customer_basicdetails
 ALTER TABLE customer_master_customer_basicdetails 
@@ -2603,7 +2617,6 @@ MODIFY COLUMN `subgroup` VARCHAR(100) NOT NULL DEFAULT '';
 -- used by the UI tree (which builds roots from systemCategories constants).
 DELETE FROM `inventory_master_category` WHERE `group` = '' AND `subgroup` = '';
 DELETE FROM `vendor_master_category`    WHERE `group` = '' AND `subgroup` = '';
-DELETE FROM `customer_master_category`  WHERE `group` = '' AND `subgroup` = '';
 DELETE FROM `service_group`             WHERE `group` = '' AND `subgroup` = '';
 
 -----------------------------------------------------
@@ -2727,4 +2740,223 @@ ALTER TABLE `invoice_ocr_temp`
     ADD COLUMN `conflict_message` TEXT DEFAULT NULL,
     ADD COLUMN `vendor_id` BIGINT DEFAULT NULL,
     ADD COLUMN `voucher_id` BIGINT DEFAULT NULL;
+
+-- ============================================================
+-- Bank Statement Staging and Reconciliation Tables
+-- Tally-style architecture: Upload → Stage → Match → Reconcile
+-- Voucher creation is NEVER automatic during upload.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS `bank_statement_transactions` (
+    `id` bigint NOT NULL AUTO_INCREMENT,
+    `tenant_id` char(36) NOT NULL,
+    `bank_ledger_id` bigint NOT NULL COMMENT 'FK to master_ledgers (Bank/Cash ledger)',
+    `transaction_date` date NOT NULL COMMENT 'Date of bank transaction',
+    `narration` longtext COMMENT 'Transaction description/narration',
+    `debit` decimal(15,2) NOT NULL DEFAULT '0.00' COMMENT 'Debit amount (money out)',
+    `credit` decimal(15,2) NOT NULL DEFAULT '0.00' COMMENT 'Credit amount (money in)',
+    `reference_number` varchar(100) DEFAULT NULL COMMENT 'Cheque No / UTR / Transaction ID',
+    `cheque_number` varchar(100) DEFAULT NULL COMMENT 'Extracted cheque number',
+    `running_balance` decimal(15,2) NOT NULL DEFAULT '0.00' COMMENT 'Statement running balance',
+    `import_batch_id` varchar(100) DEFAULT NULL COMMENT 'Batch ID for the upload session',
+    `match_status` varchar(20) NOT NULL DEFAULT 'Unmatched'
+        COMMENT 'Matched | Possible Match | Unmatched | Ignored',
+    `matched_voucher_id` bigint DEFAULT NULL COMMENT 'FK to vouchers.id when matched',
+    `confidence_score` int DEFAULT 0 COMMENT 'Match confidence score (0-100)',
+    `match_method` varchar(50) DEFAULT NULL COMMENT 'How the match was achieved',
+    `multi_voucher_ids` json DEFAULT NULL COMMENT 'JSON array of voucher IDs for multi-match',
+    `suggested_party` varchar(255) DEFAULT NULL COMMENT 'Extracted party name from narration',
+    `suggested_invoice` varchar(100) DEFAULT NULL COMMENT 'Extracted invoice number from narration',
+    `suggested_voucher_type` varchar(20) DEFAULT NULL COMMENT 'Suggested voucher type (payment/receipt)',
+    `is_ignored` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'User explicitly ignored this transaction',
+    `reconciled_at` datetime(6) DEFAULT NULL COMMENT 'Timestamp when reconciled',
+    `source` varchar(50) NOT NULL DEFAULT 'BANK_UPLOAD' COMMENT 'Source of transaction',
+    `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `unique_bank_stmt_txn` (`bank_ledger_id`,`transaction_date`,`reference_number`,`debit`,`credit`),
+    KEY `idx_bank_st_tenant_ledger_status` (`tenant_id`, `bank_ledger_id`, `match_status`),
+    KEY `idx_bank_st_tenant_date` (`tenant_id`, `transaction_date`),
+    KEY `idx_bank_st_tenant` (`tenant_id`),
+    CONSTRAINT `fk_bank_st_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Staging table for bank statement transactions. Populated on upload; vouchers NOT created here.';
+
+-- ALTER queries to add newly introduced columns to existing environments:
+-- ALTER TABLE `bank_statement_transactions`
+--   ADD COLUMN IF NOT EXISTS `matched_voucher_id` bigint DEFAULT NULL,
+--   ADD COLUMN IF NOT EXISTS `confidence_score` int DEFAULT 0,
+--   ADD COLUMN IF NOT EXISTS `match_method` varchar(50) DEFAULT NULL,
+--   ADD COLUMN IF NOT EXISTS `multi_voucher_ids` json DEFAULT NULL,
+--   ADD COLUMN IF NOT EXISTS `suggested_party` varchar(255) DEFAULT NULL,
+--   ADD COLUMN IF NOT EXISTS `suggested_invoice` varchar(100) DEFAULT NULL,
+--   ADD COLUMN IF NOT EXISTS `suggested_voucher_type` varchar(20) DEFAULT NULL,
+--   ADD COLUMN IF NOT EXISTS `reconciled_at` datetime(6) DEFAULT NULL,
+--   ADD COLUMN IF NOT EXISTS `source` varchar(50) NOT NULL DEFAULT 'BANK_UPLOAD',
+--   MODIFY COLUMN `match_status` varchar(20) NOT NULL DEFAULT 'Unmatched',
+--   ADD INDEX IF NOT EXISTS `idx_bank_st_tenant_ledger_status` (`tenant_id`, `bank_ledger_id`, `match_status`),
+--   ADD INDEX IF NOT EXISTS `idx_bank_st_tenant_date` (`tenant_id`, `transaction_date`);
+
+CREATE TABLE IF NOT EXISTS `bank_reconciliation_links` (
+    `id` bigint NOT NULL AUTO_INCREMENT,
+    `tenant_id` char(36) NOT NULL,
+    `bank_transaction_id` bigint NOT NULL COMMENT 'FK to bank_statement_transactions',
+    `voucher_id` bigint NOT NULL COMMENT 'FK to vouchers.id',
+    `reconciliation_date` date DEFAULT NULL COMMENT 'Date when reconciled',
+    `reconciliation_status` varchar(20) NOT NULL DEFAULT 'Reconciled' COMMENT 'Reconciled | Pending | Disputed',
+    `reconciliation_type` varchar(50) NOT NULL DEFAULT 'manual' COMMENT 'automatic | manual',
+    `voucher_type` varchar(50) DEFAULT NULL,
+    `confidence_score` int NOT NULL DEFAULT '0',
+    `match_method` varchar(50) DEFAULT NULL,
+    `reconciled_at` datetime(6) DEFAULT NULL,
+    `cheque_number` varchar(100) DEFAULT NULL,
+    `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_bank_transaction` (`bank_transaction_id`),
+    KEY `idx_bank_rec_tenant` (`tenant_id`),
+    KEY `idx_bank_rec_voucher` (`voucher_id`),
+    CONSTRAINT `fk_bank_rec_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
+    CONSTRAINT `fk_bank_rec_transaction` FOREIGN KEY (`bank_transaction_id`) REFERENCES `bank_statement_transactions` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Stores bank transaction → voucher reconciliation mappings. Separate from voucher tables.';
+
+-- ALTER TABLE `bank_reconciliation_links`
+--   ADD COLUMN IF NOT EXISTS `voucher_type` varchar(50) DEFAULT NULL,
+--   ADD COLUMN IF NOT EXISTS `confidence_score` int NOT NULL DEFAULT '0',
+--   ADD COLUMN IF NOT EXISTS `match_method` varchar(50) DEFAULT NULL,
+--   ADD COLUMN IF NOT EXISTS `cheque_number` varchar(100) DEFAULT NULL,
+--   ADD COLUMN IF NOT EXISTS `reconciled_at` datetime(6) DEFAULT NULL;
+
+-- ============================================================================
+-- Table: voucher_receipt_single
+-- Single receipt voucher – receive_in & receive_from are FK to master_ledgers
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS `voucher_receipt_single` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` char(36) NOT NULL,
+  `date` date NOT NULL,
+  `voucher_type` varchar(100) DEFAULT NULL,
+  `voucher_number` varchar(100) NOT NULL,
+  `total_receipt` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `advance_ref_no` varchar(100) DEFAULT NULL,
+  `advance_amount` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `transaction_details` json DEFAULT NULL COMMENT 'List: [{date, referenceNumber, amount, receipt, pending, advance}]',
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `bank_reconciled` tinyint(1) NOT NULL DEFAULT '0',
+  `bank_reconcile_date` date DEFAULT NULL,
+  `bank_statement_id` bigint DEFAULT NULL,
+  `bank_reference_number` varchar(100) DEFAULT NULL,
+  `receive_in_ledger_id` bigint NOT NULL COMMENT 'FK to master_ledgers (Bank/Cash account)',
+  `receive_from_ledger_id` bigint NOT NULL COMMENT 'FK to master_ledgers (Customer/Party)',
+  PRIMARY KEY (`id`),
+  KEY `voucher_receipt_single_tenant_id_idx` (`tenant_id`),
+  KEY `voucher_receipt_single_date_idx` (`date`),
+  KEY `fk_vrs_receive_in` (`receive_in_ledger_id`),
+  KEY `fk_vrs_receive_from` (`receive_from_ledger_id`),
+  CONSTRAINT `fk_vrs_receive_from` FOREIGN KEY (`receive_from_ledger_id`) REFERENCES `master_ledgers` (`id`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_vrs_receive_in` FOREIGN KEY (`receive_in_ledger_id`) REFERENCES `master_ledgers` (`id`) ON DELETE RESTRICT,
+  CONSTRAINT `voucher_receipt_single_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Single receipt vouchers. Debit: receive_in (Bank/Cash), Credit: receive_from (Customer).';
+
+-- ============================================================================
+-- Table: voucher_receipt_bulk
+-- Bulk receipt voucher – receive_in is FK to master_ledgers; receipt_rows JSON
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS `voucher_receipt_bulk` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tenant_id` char(36) NOT NULL,
+  `date` date NOT NULL,
+  `voucher_number` varchar(100) NOT NULL,
+  `receipt_rows` json DEFAULT NULL COMMENT 'List of {receiveFrom, amount}',
+  `posting_note` longtext DEFAULT NULL,
+  `advance_ref_no` varchar(100) DEFAULT NULL,
+  `advance_amount` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `transaction_details` json DEFAULT NULL COMMENT 'List: [{date, invoiceNo, amount, receiveNow, pending, advance}]',
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `bank_reconciled` tinyint(1) NOT NULL DEFAULT '0',
+  `bank_reconcile_date` date DEFAULT NULL,
+  `bank_statement_id` bigint DEFAULT NULL,
+  `bank_reference_number` varchar(100) DEFAULT NULL,
+  `receive_in_ledger_id` bigint NOT NULL COMMENT 'FK to master_ledgers (Bank/Cash account)',
+  PRIMARY KEY (`id`),
+  KEY `voucher_receipt_bulk_tenant_id_idx` (`tenant_id`),
+  KEY `voucher_receipt_bulk_date_idx` (`date`),
+  KEY `fk_vrb_receive_in` (`receive_in_ledger_id`),
+  CONSTRAINT `fk_vrb_receive_in` FOREIGN KEY (`receive_in_ledger_id`) REFERENCES `master_ledgers` (`id`) ON DELETE RESTRICT,
+  CONSTRAINT `voucher_receipt_bulk_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Bulk receipt vouchers. One voucher can receive from multiple parties.';
+
+CREATE TABLE journal_entries (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tenant_id VARCHAR(36) NOT NULL,
+    created_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    voucher_id BIGINT NOT NULL,
+    ledger VARCHAR(255) NOT NULL,
+    debit DECIMAL(15,2) DEFAULT 0.00,
+    credit DECIMAL(15,2) DEFAULT 0.00,
+
+    INDEX idx_voucher (voucher_id),
+    INDEX idx_tenant (tenant_id)
+);
+
+-- Schema Updates
+ALTER TABLE inventory_master_inventoryitems ADD COLUMN cess_rate DECIMAL(5, 2) DEFAULT NULL AFTER gst_rate;
+
+ALTER TABLE voucher_purchase_supplier_details
+MODIFY vendor_basic_detail_id BIGINT;
+
+
+-- Vendor Category Hierarchy Fixes (2026-03-16)
+ALTER TABLE vendor_master_category CHANGE COLUMN name category VARCHAR(255) NOT NULL;
+ALTER TABLE vendor_master_category ADD COLUMN is_system TINYINT(1) DEFAULT 0;
+ALTER TABLE vendor_master_category ADD COLUMN `group` VARCHAR(255) DEFAULT '';
+ALTER TABLE vendor_master_category ADD COLUMN subgroup VARCHAR(255) DEFAULT '';
+ALTER TABLE vendor_master_category DROP INDEX IF EXISTS uq_vendor_category_name_per_tenant;
+ALTER TABLE vendor_master_category DROP INDEX IF EXISTS vendor_category_tenant_unique;
+ALTER TABLE vendor_master_category ADD UNIQUE KEY vendor_category_tenant_unique (tenant_id, category(100), `group`(100), subgroup(100));
+
+ALTER TABLE customer_master_customer_productservice
+ADD COLUMN packing_notes VARCHAR(255) DEFAULT NULL COMMENT 'Packing Notes';
+
+CREATE TABLE `customer_masters_salesorder` (
+              `id` int(11) NOT NULL AUTO_INCREMENT,
+              `tenant_id` varchar(36) NOT NULL,
+              `series_name` varchar(100) NOT NULL,
+              `customer_category` varchar(100) DEFAULT NULL,
+              `prefix` varchar(20) DEFAULT 'SO/',
+              `suffix` varchar(20) DEFAULT '/24-25',
+              `required_digits` int(11) DEFAULT '4',
+              `current_number` int(11) DEFAULT '0',
+              `auto_year` tinyint(1) DEFAULT '0',
+              `is_active` tinyint(1) NOT NULL DEFAULT '1',
+              `is_deleted` tinyint(1) NOT NULL DEFAULT '0',
+              `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+              `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+              `created_by` varchar(100) DEFAULT NULL,
+              PRIMARY KEY (`id`),
+              UNIQUE KEY `customer_so_tenant_series_unique` (`tenant_id`,`series_name`),
+              KEY `customer_so_tenant_id_idx` (`tenant_id`),
+              KEY `customer_so_category_idx` (`customer_category`),
+              KEY `customer_so_is_active_idx` (`is_active`),
+              KEY `customer_so_is_deleted_idx` (`is_deleted`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Service Group Hierarchy Fixes (2026-03-17)
+-- Ensuring all columns exist for service group hierarchy
+ALTER TABLE `service_group` ADD COLUMN `category` VARCHAR(100) NOT NULL AFTER `tenant_id`;
+ALTER TABLE `service_group` ADD COLUMN `group` VARCHAR(100) NOT NULL DEFAULT '' AFTER `category`;
+ALTER TABLE `service_group` ADD COLUMN `subgroup` VARCHAR(100) NOT NULL DEFAULT '' AFTER `group`;
+
+-- Updates for Customer Master Long-term Contracts (2026-03-17)
+ALTER TABLE `customer_master_longtermcontracts_basicdetails` ADD COLUMN `updated_by` VARCHAR(100) DEFAULT NULL AFTER `created_by`;
+ALTER TABLE `customer_master_longtermcontracts_productservices` ADD COLUMN `updated_by` VARCHAR(100) DEFAULT NULL AFTER `created_by`;
+ALTER TABLE `customer_master_longtermcontracts_termscondition` ADD COLUMN `updated_by` VARCHAR(100) DEFAULT NULL AFTER `created_by`;
+ALTER TABLE `service_group` DROP COLUMN IF EXISTS `category_id`;
+ALTER TABLE `service_group` DROP COLUMN IF EXISTS `parent_group_id`;
 

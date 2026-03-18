@@ -1,12 +1,19 @@
 {
-    "include": ["."],
-    "exclude": ["__pycache__", "migrations"],
-    "reportMissingImports": false,
-    "reportMissingTypeStubs": false,
+    "include": [
+        "."
+    ],
+    "exclude": [
+        "__pycache__",
+        "migrations",
+        "stubs"
+    ],
+    "reportMissingImports": "none",
+    "reportMissingModuleSource": "none",
+    "reportMissingTypeStubs": "none",
     "pythonVersion": "3.12",
-    "typeCheckingMode": "basic",
+    "pythonPlatform": "Windows",
+    "typeCheckingMode": "off",
     "useLibraryCodeForTypes": true,
     "venvPath": ".",
-    "venv": "env",
-    "stubPath": "./stubs"
+    "venv": "venv"
 }

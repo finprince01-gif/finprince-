@@ -660,6 +660,7 @@ class CustomerMasterLongTermContractBasicDetail(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     created_by = models.CharField(max_length=100, null=True, blank=True)
+    updated_by = models.CharField(max_length=100, null=True, blank=True)
     
     class Meta:
         managed = False
@@ -710,6 +711,7 @@ class CustomerMasterLongTermContractProductService(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     created_by = models.CharField(max_length=100, null=True, blank=True)
+    updated_by = models.CharField(max_length=100, null=True, blank=True)
     
     class Meta:
         managed = False
@@ -749,6 +751,7 @@ class CustomerMasterLongTermContractTermsCondition(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     created_by = models.CharField(max_length=100, null=True, blank=True)
+    updated_by = models.CharField(max_length=100, null=True, blank=True)
     
     class Meta:
         managed = False
@@ -854,6 +857,7 @@ class CustomerTransactionSalesOrderBasicDetails(models.Model):
     email = models.EmailField(null=True, blank=True, help_text='Email Address')
     contact_number = models.CharField(max_length=20, null=True, blank=True, help_text='Contact Number')
     gst_no = models.CharField(max_length=20, null=True, blank=True, help_text='GST Number')
+    status = models.CharField(max_length=20, default='pending', help_text='SO Status: pending, approved, cancelled, completed')
     
     # Quotation/Contract Linking - Moved to separate table
     # quotation_type and quotation_number removed

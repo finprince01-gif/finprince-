@@ -1649,10 +1649,12 @@ const InventoryPage: React.FC = () => {
           setOutwardGstin(defaultBranch.gstin || '');
         }
 
-        // Fetch Pending POs for this vendor
-        const poResponse = await apiService.getVendorPurchaseOrders(selectedVendorName, 'Pending');
+        // Fetch ALL POs for this vendor
+        const poResponse = await apiService.getVendorPurchaseOrders(selectedVendorName);
         if (poResponse && poResponse.success && Array.isArray(poResponse.data)) {
           setJobWorkOrderNoOptions(poResponse.data);
+        } else if (Array.isArray(poResponse)) {
+          setJobWorkOrderNoOptions(poResponse as any[]);
         }
       } catch (error) {
         handleApiError(error, "Fetching vendor details");
@@ -1675,15 +1677,80 @@ const InventoryPage: React.FC = () => {
 
   // --- Handlers for Outward Sales & Purchase Return ---
 
-  const handleOutwardSalesOrderChange = (soNumber: string) => {
-    setOutwardSalesOrder(soNumber);
-    const so = outwardSalesOrderOptions.find(o => o.voucher_number === soNumber || o.id?.toString() === soNumber || o.sales_order_no === soNumber);
+  const handleOutwardSalesOrderChange = (soId: string) => {
+    setOutwardSalesOrder(soId);
+    if (!soId) {
+      setOutwardCustomerName('');
+      setOutwardBranch('');
+      setOutwardBranchOptions([]);
+      setOutwardAddress('');
+      setOutwardGstin('');
+      setIssueSlipItems([{ itemCode: '', itemName: '', uom: '', quantity: '', rate: '', value: 0, noOfBoxes: '' }]);
+      return;
+    }
+
+    const so = outwardSalesOrderOptions.find(o => o.id?.toString() === soId || o.so_number === soId);
     if (so) {
-      if (so.party_name) {
-        handleSalesOutwardCustomerChange(so.party_name);
+      console.log("Selected Order:", so); // Mandatory log for debugging
+      if (so.customer_name) {
+        setOutwardCustomerName(so.customer_name);
+        
+        // Populate branch options safely without an external async handler
+        const customer = customers.find(c => c.customer_name === so.customer_name);
+        if (customer && customer.gst_details && Array.isArray(customer.gst_details.branches)) {
+          const branches = customer.gst_details.branches.map((b: any) => ({
+            ...b,
+            reference_name: b.defaultRef || b.branch_reference_name || 'Main',
+            branch_address: b.address || b.branch_address,
+            gstin: b.gstin
+          }));
+          setOutwardBranchOptions(branches);
+        } else {
+          setOutwardBranchOptions([]);
+        }
+      } else {
+        setOutwardCustomerName('');
+        setOutwardBranchOptions([]);
       }
-      // Optional: Populate items from SO if needed?
-      // For now, let's just handle header details as per requirement.
+
+      // Safely apply specific populated branch and address mapping
+      if (so.branch) {
+        setOutwardBranch(so.branch);
+      } else {
+        setOutwardBranch('');
+      }
+
+      if (so.address) {
+        setOutwardAddress(so.address);
+      } else {
+        setOutwardAddress('');
+      }
+
+      const gst = so.gst_no || so.gstin || '';
+      if (gst) {
+        setOutwardGstin(gst);
+      } else {
+        setOutwardGstin('');
+      }
+
+      // Populate items from Sales Order
+      if (so.items && Array.isArray(so.items)) {
+        const itemsList = so.items.map((item: any) => {
+          // Lookup HSN code from Master Items list
+          const masterItem = items.find(i => i.item_code === item.item_code);
+          return {
+            itemCode: item.item_code || '',
+            itemName: item.item_name || '',
+            hsnCode: masterItem?.hsn_code || (masterItem as any)?.hsn || item.hsn_code || '',
+            uom: item.uom || '',
+            quantity: item.quantity || 0,
+            rate: item.price || 0,
+            value: item.taxable_value || 0,
+            noOfBoxes: item.packing_notes || ''
+          };
+        });
+        setIssueSlipItems(itemsList.length > 0 ? itemsList : [{ itemCode: '', itemName: '', uom: '', hsnCode: '', quantity: '', rate: '', value: 0, noOfBoxes: '' }]);
+      }
     }
   };
 
@@ -2042,7 +2109,7 @@ const InventoryPage: React.FC = () => {
       const fetchOutwardData = async () => {
         try {
           if (outwardType === 'sales') {
-            const response = await apiService.getSalesVouchers({ status: 'Pending' });
+            const response = await apiService.getSalesOrders({ status: 'pending' });
             setOutwardSalesOrderOptions(Array.isArray(response) ? response : []);
           } else if (outwardType === 'purchase_return') {
             const response = await apiService.getVouchers('Purchase');
@@ -2120,7 +2187,7 @@ const InventoryPage: React.FC = () => {
       if (selectedItem) {
         updatedItems[index].itemName = selectedItem.name || selectedItem.item_name;
         updatedItems[index].uom = selectedItem.uom || selectedItem.unit;
-        updatedItems[index].hsnCode = selectedItem.hsn_code || '';
+        updatedItems[index].hsnCode = (selectedItem as any).hsn_code || (selectedItem as any).hsn || (selectedItem as any).hsn_sac || (selectedItem as any).hsn_sac_code || '';
         // Fetch Rate
         updatedItems[index].rate = selectedItem.standard_rate || selectedItem.rate || 0;
         // Recalculate Value immediately as rate changed
@@ -2132,7 +2199,7 @@ const InventoryPage: React.FC = () => {
       if (selectedItem) {
         updatedItems[index].itemCode = selectedItem.item_code;
         updatedItems[index].uom = selectedItem.uom || selectedItem.unit;
-        updatedItems[index].hsnCode = selectedItem.hsn_code || '';
+        updatedItems[index].hsnCode = (selectedItem as any).hsn_code || (selectedItem as any).hsn || (selectedItem as any).hsn_sac || (selectedItem as any).hsn_sac_code || '';
         // Fetch Rate
         updatedItems[index].rate = selectedItem.standard_rate || selectedItem.rate || 0;
         // Recalculate Value immediately as rate changed
@@ -2940,8 +3007,9 @@ const InventoryPage: React.FC = () => {
                               >
                                 <option value="">Select PO</option>
                                 {jobWorkOrderNoOptions.map((po: any) => (
-                                  <option key={po.id} value={po.po_number}>{po.po_number}</option>
+                                  <option key={po.id} value={po.po_number}>{po.po_number} ({po.status || 'Active'})</option>
                                 ))}
+
                               </select>
                             </div>
                           </div>
@@ -2965,6 +3033,7 @@ const InventoryPage: React.FC = () => {
                               <tr>
                                 <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Item Code</th>
                                 <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Item Name</th>
+                                <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">HSN Code</th>
                                 <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">UOM</th>
                                 <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Quantity</th>
                                 <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Rate</th>
@@ -3009,6 +3078,9 @@ const InventoryPage: React.FC = () => {
                                           <option key={i.id} value={i.item_name || i.name}>{i.item_name || i.name}</option>
                                         ))}
                                       </select>
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <input type="text" value={slipItem.hsnCode || ''} readOnly className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-gray-50" />
                                     </td>
                                     <td className="px-3 py-2">
                                       <select
@@ -3503,6 +3575,7 @@ const InventoryPage: React.FC = () => {
                                 <tr>
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-r">Item Code</th>
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-r">Item Name</th>
+                                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-r">HSN Code</th>
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-r">UOM</th>
                                   <th className="px-3 py-2 text-center text-xs font-semibold text-gray-700 border-r">Total Quantity</th>
                                   <th className="px-3 py-2 text-center text-xs font-semibold text-gray-700 border-r">Consumed Quantity</th>
@@ -3515,6 +3588,7 @@ const InventoryPage: React.FC = () => {
                                   <tr key={index}>
                                     <td className="px-3 py-2 border-r"><input type="text" value={item.itemCode} readOnly className="w-full px-2 py-1 bg-gray-50 border-none rounded text-sm text-gray-700" /></td>
                                     <td className="px-3 py-2 border-r"><input type="text" value={item.itemName} readOnly className="w-full px-2 py-1 bg-gray-50 border-none rounded text-sm text-gray-700" /></td>
+                                    <td className="px-3 py-2 border-r"><input type="text" value={item.hsnCode || ''} readOnly className="w-full px-2 py-1 bg-gray-50 border-none rounded text-sm text-gray-700" /></td>
                                     <td className="px-3 py-2 border-r"><input type="text" value={item.uom} readOnly className="w-full px-2 py-1 bg-gray-50 border-none rounded text-sm text-gray-700" /></td>
                                     <td className="px-3 py-2 border-r"><input type="number" value={item.quantity || ''} onChange={(e) => handleIssueSlipItemChange(index, 'quantity', e.target.value)} placeholder="Total" className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-center" /></td>
                                     <td className="px-3 py-2 border-r"><input type="number" value={item.consumedQty || ''} onChange={(e) => handleIssueSlipItemChange(index, 'consumedQty', e.target.value)} placeholder="Consumed" className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-center" /></td>
@@ -3530,6 +3604,7 @@ const InventoryPage: React.FC = () => {
                                 <tr>
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-r">Item Code</th>
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-r">Item Name</th>
+                                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-r">HSN Code</th>
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-r">UOM</th>
                                   <th className="px-3 py-2 text-center text-xs font-semibold text-gray-700 border-r bg-indigo-50/50">Vendor's RDC Qty</th>
                                   <th className="px-3 py-2 text-center text-xs font-semibold text-gray-700 border-r bg-indigo-50/50">Received Qty</th>
@@ -3545,6 +3620,7 @@ const InventoryPage: React.FC = () => {
                                   <tr key={index}>
                                     <td className="px-3 py-2 border-r"><input type="text" value={item.itemCode} onChange={(e) => handleIssueSlipItemChange(index, 'itemCode', e.target.value)} className="w-24 px-2 py-1 border border-gray-300 rounded text-sm" /></td>
                                     <td className="px-3 py-2 border-r"><input type="text" value={item.itemName} onChange={(e) => handleIssueSlipItemChange(index, 'itemName', e.target.value)} className="w-32 px-2 py-1 border border-gray-300 rounded text-sm" /></td>
+                                    <td className="px-3 py-2 border-r"><input type="text" value={item.hsnCode || ''} readOnly className="w-full px-2 py-1 bg-gray-50 border-none rounded text-sm text-gray-700" /></td>
                                     <td className="px-3 py-2 border-r">
                                       <select
                                         value={item.uom || ''}
@@ -3706,8 +3782,10 @@ const InventoryPage: React.FC = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select Pending Sales Order</option>
-                            {outwardSalesOrderOptions.map(so => (
-                              <option key={so.id} value={so.voucher_number || so.id}>{so.voucher_number || so.sales_order_no || `SO #${so.id}`}</option>
+                            {outwardSalesOrderOptions.map(order => (
+                              <option key={order.id} value={order.id}>
+                                {order.so_number}
+                              </option>
                             ))}
                           </select>
                         </div>
@@ -4254,6 +4332,7 @@ const InventoryPage: React.FC = () => {
                                 <tr>
                                   <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">Item Code</th>
                                   <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">Item Name</th>
+                                  <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">HSN Code</th>
                                   <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">UOM</th>
                                   <th className="px-2 py-1 text-right text-xs font-medium text-gray-500">Quantity</th>
                                 </tr>
@@ -4287,6 +4366,9 @@ const InventoryPage: React.FC = () => {
                                       </select>
                                     </td>
                                     <td className="p-1">
+                                      <input type="text" value={item.hsnCode || ''} readOnly className="w-full border rounded px-1 text-xs bg-gray-50" />
+                                    </td>
+                                    <td className="p-1">
                                       <select
                                         value={item.uom || ''}
                                         onChange={(e) => handleIssueSlipItemChange(index, 'uom', e.target.value)}
@@ -4312,7 +4394,7 @@ const InventoryPage: React.FC = () => {
                                   </tr>
                                 ))}
                                 <tr>
-                                  <td colSpan={4} className="p-2 text-center">
+                                  <td colSpan={5} className="p-2 text-center">
                                     <button onClick={handleAddIssueSlipItem} className="text-indigo-600 text-xs font-bold hover:underline">+ Add Raw Material</button>
                                   </td>
                                 </tr>
@@ -4332,6 +4414,7 @@ const InventoryPage: React.FC = () => {
                                 <tr>
                                   <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">Item Code</th>
                                   <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">Item Name</th>
+                                  <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">HSN Code</th>
                                   <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">UOM</th>
                                   <th className="px-2 py-1 text-right text-xs font-medium text-gray-500">Quantity</th>
                                 </tr>
@@ -4350,6 +4433,7 @@ const InventoryPage: React.FC = () => {
                                           if (selectedItem) {
                                             newWIP[index].itemName = selectedItem.name || selectedItem.item_name;
                                             newWIP[index].uom = selectedItem.uom || selectedItem.unit;
+                                            newWIP[index].hsnCode = (selectedItem as any).hsn_code || (selectedItem as any).hsn || (selectedItem as any).hsn_sac || (selectedItem as any).hsn_sac_code || '';
                                           }
                                           setResultingWIPItems(newWIP);
                                         }}
@@ -4372,6 +4456,7 @@ const InventoryPage: React.FC = () => {
                                           if (selectedItem) {
                                             newWIP[index].itemCode = selectedItem.item_code;
                                             newWIP[index].uom = selectedItem.uom || selectedItem.unit;
+                                            newWIP[index].hsnCode = (selectedItem as any).hsn_code || (selectedItem as any).hsn || (selectedItem as any).hsn_sac || (selectedItem as any).hsn_sac_code || '';
                                           }
                                           setResultingWIPItems(newWIP);
                                         }}
@@ -4382,6 +4467,9 @@ const InventoryPage: React.FC = () => {
                                           <option key={i.id} value={i.name || i.item_name}>{i.name || i.item_name}</option>
                                         ))}
                                       </select>
+                                    </td>
+                                    <td className="p-1">
+                                      <input type="text" value={item.hsnCode || ''} readOnly className="w-full border rounded px-1 text-xs bg-gray-50" />
                                     </td>
                                     <td className="p-1">
                                       <select
@@ -4424,7 +4512,7 @@ const InventoryPage: React.FC = () => {
                                   </tr>
                                 ))}
                                 <tr>
-                                  <td colSpan={4} className="p-2 text-center">
+                                  <td colSpan={5} className="p-2 text-center">
                                     <button
                                       onClick={() => setResultingWIPItems([...resultingWIPItems, { itemCode: '', itemName: '', uom: '', quantity: '' }])}
                                       className="text-indigo-600 text-xs font-bold hover:underline"
@@ -4432,6 +4520,7 @@ const InventoryPage: React.FC = () => {
                                       + Add WIP Item
                                     </button>
                                   </td>
+
                                 </tr>
                               </tbody>
                             </table>
@@ -4593,14 +4682,17 @@ const InventoryPage: React.FC = () => {
                                         type="number"
                                         value={item.issueQty || ''}
                                         onChange={(e) => {
+                                          const val = e.target.value;
                                           const newItems = [...resultingWIPItems];
-                                          newItems[index] = { ...newItems[index], issueQty: e.target.value };
-                                          // Auto calc amount
-                                          if (newItems[index].rate && e.target.value) {
-                                            newItems[index].amount = (parseFloat(e.target.value) * parseFloat(newItems[index].rate)).toFixed(2);
-                                          } else {
-                                            newItems[index].amount = '';
-                                          }
+                                          const qty = Number(val || 0);
+                                          const rate = Number(newItems[index].rate || 0);
+                                          const amount = parseFloat((qty * rate).toFixed(2));
+                                          
+                                          newItems[index] = { 
+                                            ...newItems[index], 
+                                            issueQty: val,
+                                            amount: amount.toString()
+                                          };
                                           setResultingWIPItems(newItems);
                                         }}
                                         placeholder="Issue Qty"
@@ -4621,8 +4713,9 @@ const InventoryPage: React.FC = () => {
                                         type="number"
                                         value={item.amount || ''}
                                         readOnly
-                                        placeholder="Amount"
-                                        className="w-full bg-gray-50 border-none rounded text-sm text-center"
+                                        disabled
+                                        placeholder="0.00"
+                                        className="w-full bg-gray-100 border border-gray-300 rounded px-2 py-1 text-sm text-center cursor-not-allowed"
                                       />
                                     </td>
                                   </tr>
@@ -4635,6 +4728,7 @@ const InventoryPage: React.FC = () => {
                                 <tr>
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-r">Item Code</th>
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-r">Item Name</th>
+                                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-r">HSN Code</th>
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-r">UOM</th>
                                   <th className="px-3 py-2 text-center text-xs font-semibold text-gray-700 border-r">Quantity</th>
                                   <th className="px-3 py-2 text-center text-xs font-semibold text-gray-700 border-r">Rate</th>
@@ -4719,14 +4813,17 @@ const InventoryPage: React.FC = () => {
                                         type="number"
                                         value={item.quantity}
                                         onChange={(e) => {
+                                          const val = e.target.value;
                                           const newItems = [...convertedOutputItems];
-                                          newItems[index].quantity = e.target.value;
-                                          // Auto calc amount
-                                          if (newItems[index].rate && e.target.value) {
-                                            newItems[index].amount = (parseFloat(e.target.value) * parseFloat(newItems[index].rate)).toFixed(2);
-                                          } else {
-                                            newItems[index].amount = '';
-                                          }
+                                          const qty = Number(val || 0);
+                                          const rate = Number(newItems[index].rate || 0);
+                                          const amount = parseFloat((qty * rate).toFixed(2));
+                                          
+                                          newItems[index] = {
+                                            ...newItems[index],
+                                            quantity: val,
+                                            amount: amount.toString()
+                                          };
                                           setConvertedOutputItems(newItems);
                                         }}
                                         className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-center"
@@ -4737,14 +4834,17 @@ const InventoryPage: React.FC = () => {
                                         type="number"
                                         value={item.rate}
                                         onChange={(e) => {
+                                          const val = e.target.value;
                                           const newItems = [...convertedOutputItems];
-                                          newItems[index].rate = e.target.value;
-                                          // Auto calc amount
-                                          if (newItems[index].quantity && e.target.value) {
-                                            newItems[index].amount = (parseFloat(newItems[index].quantity) * parseFloat(e.target.value)).toFixed(2);
-                                          } else {
-                                            newItems[index].amount = '';
-                                          }
+                                          const rate = Number(val || 0);
+                                          const qty = Number(newItems[index].quantity || 0);
+                                          const amount = parseFloat((qty * rate).toFixed(2));
+                                          
+                                          newItems[index] = {
+                                            ...newItems[index],
+                                            rate: val,
+                                            amount: amount.toString()
+                                          };
                                           setConvertedOutputItems(newItems);
                                         }}
                                         className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-center"
@@ -4755,7 +4855,9 @@ const InventoryPage: React.FC = () => {
                                         type="number"
                                         value={item.amount}
                                         readOnly
-                                        className="w-full bg-gray-50 border-none rounded px-2 py-1 text-sm text-center"
+                                        disabled
+                                        placeholder="0.00"
+                                        className="w-full bg-gray-100 border border-gray-300 rounded px-2 py-1 text-sm text-center cursor-not-allowed"
                                       />
                                     </td>
                                   </tr>
@@ -4910,6 +5012,7 @@ const InventoryPage: React.FC = () => {
                                 <tr>
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-r">Item Code</th>
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-r">Item Name</th>
+                                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-r">HSN Code</th>
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-r">UOM</th>
                                   <th className="px-3 py-2 text-center text-xs font-semibold text-gray-700 border-r">Quantity Available</th>
                                   <th className="px-3 py-2 text-center text-xs font-semibold text-gray-700 border-r">Quantity Issued</th>
@@ -4925,9 +5028,39 @@ const InventoryPage: React.FC = () => {
                                     <td className="px-3 py-2 border-r"><input type="text" value={item.itemName} readOnly className="w-full bg-gray-50 border-none rounded text-sm" /></td>
                                     <td className="px-3 py-2 border-r"><input type="text" value={item.uom} readOnly className="w-full bg-gray-50 border-none rounded text-sm text-center" /></td>
                                     <td className="px-3 py-2 border-r"><input type="number" value={item.quantityAvailable} readOnly className="w-full bg-gray-50 border-none rounded text-sm text-center" /></td>
-                                    <td className="px-3 py-2 border-r"><input type="number" value={item.quantityIssued} placeholder="Issue Qty" className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-center" /></td>
+                                    <td className="px-3 py-2 border-r">
+                                      <input 
+                                        type="number" 
+                                        value={item.quantityIssued} 
+                                        placeholder="Issue Qty" 
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          const newItems = [...fgMaterialsIssuedItems];
+                                          const qty = Number(val || 0);
+                                          const rate = Number(newItems[index].rate || 0);
+                                          const amount = parseFloat((qty * rate).toFixed(2));
+                                          
+                                          newItems[index] = {
+                                            ...newItems[index],
+                                            quantityIssued: val,
+                                            amount: amount.toString()
+                                          };
+                                          setFgMaterialsIssuedItems(newItems);
+                                        }}
+                                        className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-center" 
+                                      />
+                                    </td>
                                     <td className="px-3 py-2 border-r"><input type="number" value={item.rate} readOnly className="w-full bg-gray-50 border-none rounded text-sm text-center" /></td>
-                                    <td className="px-3 py-2"><input type="number" value={item.amount} readOnly className="w-full bg-gray-50 border-none rounded text-sm text-center" /></td>
+                                    <td className="px-3 py-2">
+                                      <input 
+                                        type="number" 
+                                        value={item.amount} 
+                                        readOnly 
+                                        disabled
+                                        placeholder="0.00"
+                                        className="w-full bg-gray-100 border border-gray-300 rounded px-2 py-1 text-sm text-center cursor-not-allowed" 
+                                      />
+                                    </td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -4938,6 +5071,7 @@ const InventoryPage: React.FC = () => {
                                 <tr>
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-r">Item Code</th>
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-r">Item Name</th>
+                                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-r">HSN Code</th>
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-r">UOM</th>
                                   <th className="px-3 py-2 text-center text-xs font-semibold text-gray-700 border-r">Quantity Produced</th>
                                   <th className="px-3 py-2 text-center text-xs font-semibold text-gray-700 border-r">Cost Alloc %</th>
@@ -5023,8 +5157,17 @@ const InventoryPage: React.FC = () => {
                                         type="number"
                                         value={item.quantityProduced}
                                         onChange={(e) => {
+                                          const val = e.target.value;
                                           const newItems = [...goodsProducedItems];
-                                          newItems[index].quantityProduced = e.target.value;
+                                          const qty = Number(val || 0);
+                                          const rate = Number(newItems[index].rate || 0);
+                                          const amount = parseFloat((qty * rate).toFixed(2));
+                                          
+                                          newItems[index] = {
+                                            ...newItems[index],
+                                            quantityProduced: val,
+                                            amount: amount.toString()
+                                          };
                                           setGoodsProducedItems(newItems);
                                         }}
                                         className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-center"
@@ -5047,8 +5190,17 @@ const InventoryPage: React.FC = () => {
                                         type="number"
                                         value={item.rate}
                                         onChange={(e) => {
+                                          const val = e.target.value;
                                           const newItems = [...goodsProducedItems];
-                                          newItems[index].rate = e.target.value;
+                                          const rate = Number(val || 0);
+                                          const qty = Number(newItems[index].quantityProduced || 0);
+                                          const amount = parseFloat((qty * rate).toFixed(2));
+                                          
+                                          newItems[index] = {
+                                            ...newItems[index],
+                                            rate: val,
+                                            amount: amount.toString()
+                                          };
                                           setGoodsProducedItems(newItems);
                                         }}
                                         className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-center"
@@ -5059,7 +5211,9 @@ const InventoryPage: React.FC = () => {
                                         type="number"
                                         value={item.amount}
                                         readOnly
-                                        className="w-full bg-gray-50 border-none rounded px-2 py-1 text-sm text-center"
+                                        disabled
+                                        placeholder="0.00"
+                                        className="w-full bg-gray-100 border border-gray-300 rounded px-2 py-1 text-sm text-center cursor-not-allowed"
                                       />
                                     </td>
                                   </tr>
@@ -5235,6 +5389,9 @@ const InventoryPage: React.FC = () => {
                                         <option key={i.id} value={i.item_name || i.name}>{i.item_name || i.name}</option>
                                       ))}
                                     </select>
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <input type="text" value={item.hsnCode || ''} readOnly className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-gray-50" />
                                   </td>
                                   <td className="px-3 py-2">
                                     <select

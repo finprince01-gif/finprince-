@@ -3534,7 +3534,15 @@ const LongTermContractsContent: React.FC = () => {
     };
 
     const handleSaveContract = async () => {
+        // Basic Validation
+        if (!basicDetails.contractNumber || !basicDetails.customerId || !basicDetails.contractType || !basicDetails.validityFrom || !basicDetails.validityTo) {
+            showError('Please fill all required fields in Basic Details section.');
+            setActiveTab('Basic Details');
+            return;
+        }
+
         setLoading(true);
+
         try {
             // Prepare contract data
             const contractData = {
@@ -4107,8 +4115,23 @@ const LongTermContractsContent: React.FC = () => {
                                 )}
                                 <button
                                     onClick={() => {
-                                        if (activeTab === 'Basic Details') setActiveTab('Products / Services');
-                                        else if (activeTab === 'Products / Services') setActiveTab('Terms & Conditions');
+                                        if (activeTab === 'Basic Details') {
+                                            if (!basicDetails.contractNumber || !basicDetails.customerId || !basicDetails.contractType || !basicDetails.validityFrom || !basicDetails.validityTo) {
+                                                showError('Please fill all required fields in Basic Details section.');
+                                                return;
+                                            }
+                                            setActiveTab('Products / Services');
+                                        }
+                                        else if (activeTab === 'Products / Services') {
+                                            // Optional: Basic validation for products
+                                            const invalidProduct = contractProducts.find(p => !p.itemCode || !p.itemName);
+                                            if (invalidProduct && contractProducts.length > 0 && contractProducts[0].itemCode !== '') {
+                                                // Only show error if they started filling but left something incomplete
+                                                // showError('Please fill Item Code and Name for all products.');
+                                                // return;
+                                            }
+                                            setActiveTab('Terms & Conditions');
+                                        }
                                         else if (activeTab === 'Terms & Conditions') {
                                             handleSaveContract();
                                         }
@@ -4216,43 +4239,7 @@ const ReceiptContent: React.FC = () => {
         setActiveFilter(activeFilter === filterName ? null : filterName);
     };
     // Mock receipt data - sorted by most recent first
-    const receipts = [
-        {
-            id: 1,
-            date: '2026-01-18',
-            customerRefName: 'Acme Corporation',
-            voucherNo: 'RCP-2026-001',
-            amount: 45000.00
-        },
-        {
-            id: 2,
-            date: '2026-01-17',
-            customerRefName: 'Global Traders',
-            voucherNo: 'RCP-2026-002',
-            amount: 32500.00
-        },
-        {
-            id: 3,
-            date: '2026-01-16',
-            customerRefName: 'Tech Solutions Inc',
-            voucherNo: 'RCP-2026-003',
-            amount: 78500.00
-        },
-        {
-            id: 4,
-            date: '2026-01-15',
-            customerRefName: 'Sunrise Enterprises',
-            voucherNo: 'RCP-2026-004',
-            amount: 51200.00
-        },
-        {
-            id: 5,
-            date: '2026-01-14',
-            customerRefName: 'Metro Supplies Inc',
-            voucherNo: 'RCP-2026-005',
-            amount: 29800.00
-        }
-    ];
+    const receipts: any[] = [];
 
     const filteredReceipts = useMemo(() => {
         return receipts.filter(receipt => {
@@ -5989,64 +5976,7 @@ const SalesContent: React.FC = () => {
     // Mock data for demonstration - same structure for all categories
     const getMockData = (category: SalesCategory): AgingData[] => {
         // In a real app, this would fetch data based on category
-        const baseData: AgingData[] = [
-            {
-                customerId: '1',
-                customerCode: 'CUST-001',
-                customerName: 'Acme Corporation',
-                subCategory: 'Retail',
-                notDue: 50000,
-                days0to45: 25000,
-                days45to90: 15000,
-                months6: 10000,
-                year1: 5000,
-                is_also_vendor: true
-            },
-            {
-                customerId: '2',
-                customerCode: 'CUST-002',
-                customerName: 'Global Traders Pvt Ltd',
-                subCategory: 'Wholesale',
-                notDue: 75000,
-                days0to45: 0,
-                days45to90: 30000,
-                months6: 0,
-                year1: 12000
-            },
-            {
-                customerId: '3',
-                customerCode: 'CUST-003',
-                customerName: 'TechVision Solutions',
-                subCategory: 'Technology',
-                notDue: 0,
-                days0to45: 45000,
-                days45to90: 0,
-                months6: 25000,
-                year1: 0
-            },
-            {
-                customerId: '4',
-                customerCode: 'CUST-004',
-                customerName: 'Sunrise Enterprises',
-                subCategory: 'Manufacturing',
-                notDue: 120000,
-                days0to45: 35000,
-                days45to90: 18000,
-                months6: 8000,
-                year1: 3000
-            },
-            {
-                customerId: '5',
-                customerCode: 'CUST-005',
-                customerName: 'Metro Supplies Inc',
-                subCategory: 'Distribution',
-                notDue: 0,
-                days0to45: 0,
-                days45to90: 42000,
-                months6: 15000,
-                year1: 22000
-            },
-        ];
+        const baseData: AgingData[] = [];
 
         return baseData;
     };

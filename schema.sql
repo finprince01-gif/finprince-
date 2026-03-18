@@ -1057,6 +1057,7 @@ CREATE TABLE `customer_master_longtermcontracts_basicdetails` (
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   `created_by` varchar(100) DEFAULT NULL,
+  `updated_by` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `cust_ltc_basic_tenant_contract_unique` (`tenant_id`,`contract_number`),
   KEY `cust_ltc_basic_tenant_id_idx` (`tenant_id`),
@@ -1083,6 +1084,7 @@ CREATE TABLE `customer_master_longtermcontracts_productservices` (
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   `created_by` varchar(100) DEFAULT NULL,
+  `updated_by` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `cust_ltc_prod_tenant_item_idx` (`tenant_id`, `item_code`),
   KEY `cust_ltc_prod_contract_idx` (`contract_basic_detail_id`),
@@ -1105,6 +1107,7 @@ CREATE TABLE `customer_master_longtermcontracts_termscondition` (
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   `created_by` varchar(100) DEFAULT NULL,
+  `updated_by` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `cust_ltc_terms_contract_unique` (`contract_basic_detail_id`),
   KEY `cust_ltc_terms_tenant_idx` (`tenant_id`),
@@ -1308,6 +1311,7 @@ CREATE TABLE `customer_transaction_salesorder_basicdetails` (
   `email` varchar(254) DEFAULT NULL COMMENT 'Email Address',
   `contact_number` varchar(20) DEFAULT NULL COMMENT 'Contact Number',
   `gst_no` varchar(20) DEFAULT NULL COMMENT 'GST Number',
+  `status` varchar(20) NOT NULL DEFAULT 'pending' COMMENT 'SO Status: pending, approved, cancelled, completed',
   `is_active` tinyint(1) NOT NULL DEFAULT '1',
   `is_deleted` tinyint(1) NOT NULL DEFAULT '0',
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
@@ -2402,17 +2406,17 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_outward` (
 
 
 
-CREATE TABLE service_group (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    tenant_id VARCHAR(36) NOT NULL,
-    category VARCHAR(100) NOT NULL,
+CREATE TABLE `service_group` (
+    `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    `tenant_id` VARCHAR(36) NOT NULL,
+    `category` VARCHAR(100) NOT NULL,
     `group` VARCHAR(100) NOT NULL DEFAULT '',
     `subgroup` VARCHAR(100) NOT NULL DEFAULT '',
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
-    updated_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    `is_active` BOOLEAN DEFAULT TRUE,
+    `created_at` DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
+    `updated_at` DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
 
-    INDEX idx_tenant (tenant_id)
+    INDEX `idx_tenant` (`tenant_id`)
 ) ENGINE=InnoDB;
 
 CREATE TABLE service_list (
@@ -2614,7 +2618,6 @@ MODIFY COLUMN `subgroup` VARCHAR(100) NOT NULL DEFAULT '';
 -- used by the UI tree (which builds roots from systemCategories constants).
 DELETE FROM `inventory_master_category` WHERE `group` = '' AND `subgroup` = '';
 DELETE FROM `vendor_master_category`    WHERE `group` = '' AND `subgroup` = '';
-DELETE FROM `customer_master_category`  WHERE `group` = '' AND `subgroup` = '';
 DELETE FROM `service_group`             WHERE `group` = '' AND `subgroup` = '';
 
 -----------------------------------------------------
@@ -2944,3 +2947,17 @@ CREATE TABLE `customer_masters_salesorder` (
               KEY `customer_so_is_active_idx` (`is_active`),
               KEY `customer_so_is_deleted_idx` (`is_deleted`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Service Group Hierarchy Fixes (2026-03-17)
+-- Ensuring all columns exist for service group hierarchy
+ALTER TABLE `service_group` ADD COLUMN `category` VARCHAR(100) NOT NULL AFTER `tenant_id`;
+ALTER TABLE `service_group` ADD COLUMN `group` VARCHAR(100) NOT NULL DEFAULT '' AFTER `category`;
+ALTER TABLE `service_group` ADD COLUMN `subgroup` VARCHAR(100) NOT NULL DEFAULT '' AFTER `group`;
+
+-- Updates for Customer Master Long-term Contracts (2026-03-17)
+ALTER TABLE `customer_master_longtermcontracts_basicdetails` ADD COLUMN `updated_by` VARCHAR(100) DEFAULT NULL AFTER `created_by`;
+ALTER TABLE `customer_master_longtermcontracts_productservices` ADD COLUMN `updated_by` VARCHAR(100) DEFAULT NULL AFTER `created_by`;
+ALTER TABLE `customer_master_longtermcontracts_termscondition` ADD COLUMN `updated_by` VARCHAR(100) DEFAULT NULL AFTER `created_by`;
+ALTER TABLE `service_group` DROP COLUMN IF EXISTS `category_id`;
+ALTER TABLE `service_group` DROP COLUMN IF EXISTS `parent_group_id`;
+

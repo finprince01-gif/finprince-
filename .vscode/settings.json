@@ -1,17 +1,18 @@
 {
-    "python.defaultInterpreterPath": "backend/venv/Scripts/python.exe",
-    "python.pythonPath": "backend/venv/Scripts/python.exe",
+    "python.defaultInterpreterPath": "${workspaceFolder}/backend/venv/Scripts/python.exe",
     "python.languageServer": "Pylance",
     "css.lint.unknownAtRules": "ignore",
     "scss.lint.unknownAtRules": "ignore",
     "less.lint.unknownAtRules": "ignore",
 
-    "pyre2.enablePyre2": false,
-
     "python.analysis.extraPaths": [
-        "backend",
-        "backend/venv/Lib/site-packages"
+        "${workspaceFolder}/backend",
+        "C:/Users/ulaganathan/AppData/Local/Programs/Python/Python312/Lib/site-packages"
     ],
     "python.analysis.typeCheckingMode": "off",
-    "python.analysis.diagnosticMode": "openFilesOnly"
+    "python.analysis.diagnosticMode": "off",
+    "python.analysis.reportMissingImports": "none",
+    "python.analysis.reportMissingModuleSource": "none",
+    "python.analysis.reportMissingTypeStubs": "none",
+    "python.analysis.autoImportCompletions": true
 }
