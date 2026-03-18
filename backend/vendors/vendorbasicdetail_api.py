@@ -234,6 +234,17 @@ class VendorBasicDetailViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         """Hard delete a vendor basic detail (permanently remove from DB)"""
         instance = self.get_object()
+        
+        # Rule: Cannot delete if vendor is live (has transactions or balance)
+        from .vendor_flow import VendorFlow
+        can_delete, reason = VendorFlow.can_delete_vendor_basic_detail(instance)
+        
+        if not can_delete:
+            return Response(
+                {'detail': reason},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
         success = VendorBasicDetailDatabase.delete_vendor_basic_detail(instance.id, soft_delete=False)
         
         if success:

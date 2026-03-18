@@ -34,7 +34,7 @@ const sanitizeMessage = (message: string): string => {
     // Block any message containing technical details
     const blockedPatterns = [
         '/api/', 'http://', 'https://', 'endpoint',
-        'post ', 'get ', 'put ', 'patch ', 'delete ',
+        'post /', 'get /', 'put /', 'patch /', 'delete /',
         'failed to fetch', 'networkerror', 'err_',
         'econnrefused', 'traceback', 'exception',
         'stack trace', 'integrityerror', 'databaseerror',

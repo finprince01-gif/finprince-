@@ -1,10 +1,27 @@
 {
-  "include": ["backend"],
-  "exclude": ["**/node_modules", "**/__pycache__", "**/migrations"],
-  "venvPath": ".",
-  "venv": "venv",
-  "pythonVersion": "3.11",
-  "reportMissingImports": false,
-  "reportMissingModuleSource": false,
-  "typeCheckingMode": "off"
+    "include": [
+        "backend"
+    ],
+    "exclude": [
+        "**/node_modules",
+        "**/__pycache__",
+        "**/migrations"
+    ],
+    "pythonVersion": "3.12",
+    "pythonPlatform": "Windows",
+    "reportMissingImports": "none",
+    "reportMissingModuleSource": "none",
+    "reportMissingTypeStubs": "none",
+    "typeCheckingMode": "off",
+    "useLibraryCodeForTypes": true,
+    "venvPath": "backend",
+    "venv": "venv",
+    "executionEnvironments": [
+        {
+            "root": "backend",
+            "extraPaths": [
+                "."
+            ]
+        }
+    ]
 }

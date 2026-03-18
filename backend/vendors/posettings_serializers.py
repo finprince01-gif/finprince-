@@ -11,8 +11,9 @@ class VendorMasterPOSettingsSerializer(serializers.ModelSerializer):
     Serializer for reading VendorMasterPOSettings data.
     Includes category details.
     """
-    category_name = serializers.CharField(source='category.full_path', read_only=True, allow_null=True)
+    category_name = serializers.CharField(source='category.category', read_only=True, allow_null=True)
     category_full_path = serializers.CharField(source='category.full_path', read_only=True, allow_null=True)
+    category_path = serializers.CharField(source='category.full_path', read_only=True, allow_null=True)
     preview_po_number = serializers.SerializerMethodField()
     
     class Meta:
@@ -24,6 +25,7 @@ class VendorMasterPOSettingsSerializer(serializers.ModelSerializer):
             'category',
             'category_name',
             'category_full_path',
+            'category_path',
             'prefix',
             'suffix',
             'digits',
@@ -61,6 +63,13 @@ class VendorMasterPOSettingsCreateSerializer(serializers.ModelSerializer):
             'digits',
             'auto_year'
         ]
+
+    def validate_category(self, value):
+        """Temporary logging to trace category ID"""
+        print(f"DEBUG: Received category_id object: {value}")
+        if value:
+            print(f"DEBUG: category_id PK: {value.pk}")
+        return value
     
     def validate_name(self, value):
         """Validate that name is not empty"""
@@ -133,7 +142,8 @@ class VendorMasterPOSettingsListSerializer(serializers.ModelSerializer):
     """
     Lightweight serializer for listing PO settings.
     """
-    category_name = serializers.CharField(source='category.name', read_only=True, allow_null=True)
+    category_name = serializers.CharField(source='category.category', read_only=True, allow_null=True)
+    category_path = serializers.CharField(source='category.full_path', read_only=True, allow_null=True)
     
     class Meta:
         model = VendorMasterPOSettings
@@ -142,6 +152,7 @@ class VendorMasterPOSettingsListSerializer(serializers.ModelSerializer):
             'name',
             'category',
             'category_name',
+            'category_path',
             'prefix',
             'suffix',
             'digits',

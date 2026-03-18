@@ -1,0 +1,8 @@
+﻿Field	Type	Null	Key	Default	Extra
+id	bigint	NO	PRI	NULL	auto_increment
+tenant_id	varchar(36)	NO	MUL	NULL	
+name	varchar(255)	NO	MUL	NULL	
+is_active	tinyint(1)	NO		1	
+created_at	datetime(6)	NO		CURRENT_TIMESTAMP(6)	DEFAULT_GENERATED
+updated_at	datetime(6)	NO		CURRENT_TIMESTAMP(6)	DEFAULT_GENERATED on update CURRENT_TIMESTAMP(6)
+is_system	tinyint(1)	YES		0	

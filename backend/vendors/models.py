@@ -50,7 +50,7 @@ class VendorMasterCategory(models.Model):
         return " > ".join(parts)
     
     @property
-    def full_path(self):
+    def full_path(self) -> str:
         """Get full category path"""
         return str(self)
 

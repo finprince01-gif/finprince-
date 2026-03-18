@@ -18,8 +18,9 @@ def seed_tenant_data(tenant_id):
         
         # Currently just a placeholder to prevent import errors and crashes
         # Call the seeder from registration.database
-        from registration.database import seed_default_ledger_groups
-        seed_default_ledger_groups(tenant_id)
+        # from registration.database import seed_default_ledger_groups
+        # seed_default_ledger_groups(tenant_id)
+        pass
         
     except Exception as e:
         logger.error(f"❌ Error seeding data for tenant {tenant_id}: {e}")

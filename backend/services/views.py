@@ -215,42 +215,42 @@ class ServiceGroupViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         """Create a new service group"""
         try:
-            logger.info(f"📥 Received service group creation request: {request.data}")
+            logger.info(f"Received service group creation request: {request.data}")
             
             # Get tenant_id from authenticated user
             tenant_id = getattr(request.user, 'tenant_id', None)
-            logger.info(f"🔑 Tenant ID: {tenant_id}")
+            logger.info(f"Tenant ID: {tenant_id}")
             
             if not tenant_id:
-                logger.error("❌ No tenant_id found for user")
+                logger.error("No tenant_id found for user")
                 return Response(
                     {'error': 'Tenant ID not found for user'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            logger.info(f"📝 Creating serializer with data: {request.data}")
+            logger.info(f"Creating serializer with data: {request.data}")
             serializer = self.get_serializer(data=request.data)
             
-            logger.info(f"✔️ Validating serializer...")
+            logger.info(f"Validating serializer...")
             serializer.is_valid(raise_exception=True)
             
-            logger.info(f"💾 Saving service group with tenant_id: {tenant_id}")
+            logger.info(f"Saving service group with tenant_id: {tenant_id}")
             group = serializer.save(tenant_id=tenant_id)
             
-            logger.info(f"✅ Created service group: {group} (ID: {group.id})")
+            logger.info(f"Created service group: {group} (ID: {group.id})")
             
             return Response(
                 serializer.data,
                 status=status.HTTP_201_CREATED
             )
         except serializers.ValidationError as e:
-            logger.warning(f"⚠️ Validation error creating service group: {e.detail}")
+            logger.warning(f"Validation error creating service group: {e.detail}")
             return Response(
                 {'error': e.detail},
                 status=status.HTTP_400_BAD_REQUEST
             )
         except Exception as e:
-            logger.error(f"❌ Error creating service group: {type(e).__name__}: {str(e)}", exc_info=True)
+            logger.error(f"Error creating service group: {type(e).__name__}: {str(e)}", exc_info=True)
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

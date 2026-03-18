@@ -234,6 +234,9 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                         }
                     };
                     rootNode.children.push(groupNode);
+                } else if (!item.subgroup && !groupNode.data.id) {
+                    // Update existing group node (system or previous) with ID if it doesn't have one
+                    groupNode.data.id = item.id;
                 }
 
                 // Process Subgroup under Group
@@ -423,9 +426,15 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
             fetchMasterCategories(); // Refresh tree
 
         } catch (error: any) {
-            // Check for duplicate error
+            // Check for duplicate error (409 status or specific error strings)
             const errorMsg = error.toString();
-            if (errorMsg.includes('Duplicate') || errorMsg.includes('IntegrityError') || errorMsg.includes('already exists')) {
+            const isDuplicate = error.status === 409 || 
+                               error.response?.status === 409 ||
+                               errorMsg.includes('Duplicate') || 
+                               errorMsg.includes('IntegrityError') || 
+                               errorMsg.includes('already exists');
+
+            if (isDuplicate) {
                 // It's a duplicate! Reveal it if it was hidden.
                 const restoreKey = `${selectedNode.data.category}-${formData.group.trim() || 'null'}-${formData.subgroup.trim() || 'null'}`;
 
@@ -531,19 +540,35 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                 {/* Right Panel: Creation Form */}
                 <div className="w-full md:w-1/2 bg-white rounded-[4px] border border-gray-200">
                     <div className="p-5">
-                        <h3 className="section-title text-sm mb-6">Category Preview</h3>
+                        <h3 className="section-title text-sm mb-2">Category Preview</h3>
+                        <p className="text-xs text-indigo-600 font-medium mb-4">
+                            {selectedNode 
+                                ? (selectedNode.level === 0 ? `Creating New Group under ${selectedNode.name}` : `Creating New Subgroup under ${selectedNode.name}`)
+                                : "Please select a category to begin"}
+                        </p>
                         <form onSubmit={handleSubmit} className="space-y-5">
                             {/* Logic for Creation Inputs based on Selection Level */}
                             <div className="space-y-5">
 
                                 {/* 1. Category Display (Always Fixed) */}
                                 <div>
-                                    <label className="label-text">
-                                        CATEGORY
-                                    </label>
                                     {selectedNode ? (
-                                        <div className="text-gray-900 font-semibold text-base">
-                                            {selectedNode.level === 0 ? selectedNode.name : selectedNode.data.category}
+                                        <div className="flex items-center justify-between">
+                                            <div className="text-gray-900 font-semibold text-base">
+                                                {selectedNode.level === 0 ? selectedNode.name : selectedNode.data.category}
+                                            </div>
+                                            {(selectedNode.level > 0) && (
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const rootNode = treeData.find(n => n.name === selectedNode.data.category);
+                                                        if (rootNode) handleNodeSelect(rootNode);
+                                                    }}
+                                                    className="text-indigo-600 hover:text-indigo-800 text-xs font-medium"
+                                                >
+                                                    Change Parent
+                                                </button>
+                                            )}
                                         </div>
                                     ) : (
                                         <div className="text-gray-400 font-normal text-sm italic">

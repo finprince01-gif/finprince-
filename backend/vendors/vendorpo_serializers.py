@@ -98,6 +98,8 @@ class VendorPOCreateSerializer(serializers.Serializer):
     receive_at = serializers.CharField(max_length=200, required=False, allow_blank=True)
     delivery_terms = serializers.CharField(required=False, allow_blank=True)
     
+    status = serializers.CharField(max_length=50, required=False, default='Pending Approval')
+    
     # PO Items
     items = serializers.ListField(
         child=serializers.DictField(),

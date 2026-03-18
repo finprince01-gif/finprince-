@@ -131,7 +131,7 @@ def create_purchase_order(
                 total_taxable_value,
                 total_tax,
                 total_value,
-                'Draft',
+                po_data.get('status', 'Pending Approval'),
                 1,  # is_active
                 created_by
             ])
@@ -211,7 +211,7 @@ def get_purchase_order_by_id(po_id: int) -> Optional[Dict[str, Any]]:
             return None
         
         columns = [col[0] for col in cursor.description]
-        po_data = dict(zip(columns, row))
+        po_data: Dict[str, Any] = dict(zip(columns, row))
         po_number = po_data.get('po_number', '')
         tenant_id = po_data.get('tenant_id', '')
         
@@ -228,7 +228,7 @@ def get_purchase_order_by_id(po_id: int) -> Optional[Dict[str, Any]]:
         
         cursor.execute(items_query, [po_id])
         item_columns = [col[0] for col in cursor.description]
-        po_items = [dict(zip(item_columns, item_row)) for item_row in cursor.fetchall()]
+        po_items: List[Dict[str, Any]] = [dict(zip(item_columns, item_row)) for item_row in cursor.fetchall()]
         
         # Calculate received qty for each item from GRNs linked to this PO
         # GRNs store items as JSON; reference_no holds the PO number(s)
