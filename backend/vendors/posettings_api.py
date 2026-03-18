@@ -44,9 +44,15 @@ class VendorMasterPOSettingsViewSet(viewsets.ModelViewSet):
             return getattr(user, 'id', 'default_tenant')
     
     def get_queryset(self):
-        """Filter queryset by tenant"""
+        """Filter queryset by tenant only. is_active filtering is handled in list()"""
         tenant_id = self.get_tenant_id()
-        return POSettingsDatabase.get_po_settings_by_tenant(tenant_id)
+        return POSettingsDatabase.get_po_settings_by_tenant(tenant_id, is_active=None)
+
+    def list(self, request, *args, **kwargs):
+        """Override list to only show active PO settings"""
+        queryset = self.get_queryset().filter(is_active=True)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
     
     def get_serializer_class(self):
         """Return appropriate serializer based on action"""
@@ -195,10 +201,7 @@ class VendorMasterPOSettingsViewSet(viewsets.ModelViewSet):
         success = POSettingsDatabase.delete_po_setting(instance.id, soft_delete=True)
         
         if success:
-            return Response(
-                {'message': 'PO setting deactivated successfully'},
-                status=status.HTTP_204_NO_CONTENT
-            )
+            return Response(status=status.HTTP_204_NO_CONTENT)
         else:
             return Response(
                 {'error': 'PO setting not found'},

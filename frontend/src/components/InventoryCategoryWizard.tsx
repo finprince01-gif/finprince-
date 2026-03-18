@@ -9,6 +9,7 @@ interface MasterCategory {
     category: string;
     group: string | null;
     subgroup: string | null;
+    sub_subgroup: string | null;
     is_active: boolean;
     full_path?: string;
 }
@@ -17,13 +18,14 @@ interface TreeNode {
     id: string; // Composite ID for tree tracking
     name: string;
     children: TreeNode[];
-    level: number; // 0=Category, 1=Group, 2=Subgroup
+    level: number; // 0=Category, 1=Group, 2=Subgroup, 3=Item
     isSystem: boolean;
     data: {
         id?: number;
         category: string;
         group: string | null;
         subgroup: string | null;
+        sub_subgroup: string | null;
     };
 }
 
@@ -32,12 +34,14 @@ interface InventoryCategoryWizardProps {
         category: string;
         group: string;
         subgroup: string;
+        sub_subgroup?: string;
     }) => Promise<void>;
     onEditCategory?: (data: {
         id: number;
         category: string;
         group: string | null;
         subgroup: string;
+        sub_subgroup?: string;
     }) => Promise<void>;
     onDeleteCategory?: (id: number) => Promise<void>;
     apiEndpoint?: string; // Optional API endpoint, defaults to inventory
@@ -46,6 +50,7 @@ interface InventoryCategoryWizardProps {
     defaultGroups?: any[]; // Using any[] for simplicity as the shape is defined in DEFAULT_GROUPS_DATA
     showSubgroup?: boolean; // Optional prop to control visibility of Subgroups
     excludeGroups?: string[]; // Names of groups to exclude mainly from view
+    defaultSubgroupsOnlyFor?: string[]; // If provided, default subgroups are ONLY prepopulated for these categories
 }
 
 // Hardcoded base categories (System Categories) - Default
@@ -82,7 +87,8 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
     defaultGroups = DEFAULT_GROUPS_DATA,
     allowCreateGroup = true,
     showSubgroup = true, // Default to true to maintain existing behavior,
-    excludeGroups = DEFAULT_EXCLUDE_GROUPS
+    excludeGroups = DEFAULT_EXCLUDE_GROUPS,
+    defaultSubgroupsOnlyFor
 }) => {
     const [loading, setLoading] = useState(false);
     const [treeData, setTreeData] = useState<TreeNode[]>([]);
@@ -99,7 +105,8 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
     const [formData, setFormData] = useState({
         category: '',
         group: '',
-        subgroup: ''
+        subgroup: '',
+        sub_subgroup: ''
     });
 
     useEffect(() => {
@@ -144,7 +151,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                 children: [],
                 level: 0,
                 isSystem: true,
-                data: { category: catName, group: null, subgroup: null }
+                data: { category: catName, group: null, subgroup: null, sub_subgroup: null }
             };
 
             // Add default groups and subgroups to each system category
@@ -159,40 +166,56 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                         children: [],
                         level: 1,
                         isSystem: true,
-                        data: { category: catName, group: groupData.name, subgroup: null }
+                        data: { category: catName, group: groupData.name, subgroup: null, sub_subgroup: null }
                     };
 
                     // Logic for adding subgroups
                     // Only add subgroups if showSubgroup is true
                     if (showSubgroup) {
-                        // If this is the specific 'Inventory' case with 'Stores and Spares', keep original logic
-                        if (catName === 'Stores and Spares' && defaultGroups === DEFAULT_GROUPS_DATA) {
-                            groupData.subgroups.forEach(subgroupName => {
-                                const subgroupNode: TreeNode = {
-                                    id: `sub-${catName}-${groupData.name}-${subgroupName}`,
-                                    name: subgroupName,
-                                    children: [],
-                                    level: 2,
-                                    isSystem: true,
-                                    data: { category: catName, group: groupData.name, subgroup: subgroupName }
-                                };
-                                groupNode.children.push(subgroupNode);
-                            });
-                        }
-                        // If custom groups are provided (not the default inventory ones), we apply subgroups to ALL categories
-                        // This allows other modules (like Customer) to have subgroups for all their categories if defined
-                        else if (defaultGroups !== DEFAULT_GROUPS_DATA && groupData.subgroups && groupData.subgroups.length > 0) {
-                            groupData.subgroups.forEach(subgroupName => {
-                                const subgroupNode: TreeNode = {
-                                    id: `sub-${catName}-${groupData.name}-${subgroupName}`,
-                                    name: subgroupName,
-                                    children: [],
-                                    level: 2,
-                                    isSystem: true,
-                                    data: { category: catName, group: groupData.name, subgroup: subgroupName }
-                                };
-                                groupNode.children.push(subgroupNode);
-                            });
+                        if (defaultSubgroupsOnlyFor) {
+                            if (defaultSubgroupsOnlyFor.includes(catName) && groupData.subgroups && groupData.subgroups.length > 0) {
+                                groupData.subgroups.forEach((subgroupName: string) => {
+                                    const subgroupNode: TreeNode = {
+                                        id: `sub-${catName}-${groupData.name}-${subgroupName}`,
+                                        name: subgroupName,
+                                        children: [],
+                                        level: 2,
+                                        isSystem: true,
+                                        data: { category: catName, group: groupData.name, subgroup: subgroupName, sub_subgroup: null }
+                                    };
+                                    groupNode.children.push(subgroupNode);
+                                });
+                            }
+                        } else {
+                            // If this is the specific 'Inventory' case with 'Stores and Spares', keep original logic
+                            if (catName === 'Stores and Spares' && defaultGroups === DEFAULT_GROUPS_DATA) {
+                                groupData.subgroups.forEach(subgroupName => {
+                                    const subgroupNode: TreeNode = {
+                                        id: `sub-${catName}-${groupData.name}-${subgroupName}`,
+                                        name: subgroupName,
+                                        children: [],
+                                        level: 2,
+                                        isSystem: true,
+                                        data: { category: catName, group: groupData.name, subgroup: subgroupName, sub_subgroup: null }
+                                    };
+                                    groupNode.children.push(subgroupNode);
+                                });
+                            }
+                            // If custom groups are provided (not the default inventory ones), we apply subgroups to ALL categories
+                            // This allows other modules (like Customer) to have subgroups for all their categories if defined
+                            else if (defaultGroups !== DEFAULT_GROUPS_DATA && groupData.subgroups && groupData.subgroups.length > 0) {
+                                groupData.subgroups.forEach((subgroupName: string) => {
+                                    const subgroupNode: TreeNode = {
+                                        id: `sub-${catName}-${groupData.name}-${subgroupName}`,
+                                        name: subgroupName,
+                                        children: [],
+                                        level: 2,
+                                        isSystem: true,
+                                        data: { category: catName, group: groupData.name, subgroup: subgroupName, sub_subgroup: null }
+                                    };
+                                    groupNode.children.push(subgroupNode);
+                                });
+                            }
                         }
                     }
 
@@ -227,10 +250,11 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                         level: 1,
                         isSystem: false,
                         data: {
-                            id: item.subgroup ? undefined : item.id,
+                            id: (item.subgroup || item.sub_subgroup) ? undefined : item.id,
                             category: catName,
                             group: item.group,
-                            subgroup: null
+                            subgroup: null,
+                            sub_subgroup: null
                         }
                     };
                     rootNode.children.push(groupNode);
@@ -239,31 +263,87 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                 // Process Subgroup under Group
                 if (showSubgroup && item.subgroup && item.subgroup !== '') {
                     // Check if subgroup already exists to avoid duplicates
-                    if (!groupNode.children.find(c => c.name === item.subgroup)) {
-                        const subgroupNode: TreeNode = {
+                    let subgroupNode = groupNode.children.find(c => c.name === item.subgroup);
+                    if (!subgroupNode) {
+                        subgroupNode = {
                             id: `sub-${catName}-${item.group}-${item.subgroup}`,
                             name: item.subgroup,
                             children: [],
                             level: 2,
                             isSystem: false,
-                            data: { id: item.id, category: catName, group: item.group, subgroup: item.subgroup }
+                            data: {
+                                id: item.sub_subgroup ? undefined : item.id,
+                                category: catName,
+                                group: item.group,
+                                subgroup: item.subgroup,
+                                sub_subgroup: null
+                            }
                         };
                         groupNode.children.push(subgroupNode);
+                    }
+
+                    // Process Sub-subgroup (Item) under Subgroup
+                    if (item.sub_subgroup && item.sub_subgroup !== '') {
+                        if (!subgroupNode.children.find(c => c.name === item.sub_subgroup)) {
+                            const subsubNode: TreeNode = {
+                                id: `item-${catName}-${item.group}-${item.subgroup}-${item.sub_subgroup}`,
+                                name: item.sub_subgroup,
+                                children: [],
+                                level: 3,
+                                isSystem: false,
+                                data: {
+                                    id: item.id,
+                                    category: catName,
+                                    group: item.group,
+                                    subgroup: item.subgroup,
+                                    sub_subgroup: item.sub_subgroup
+                                }
+                            };
+                            subgroupNode.children.push(subsubNode);
+                        }
                     }
                 }
             } else if (showSubgroup && item.subgroup && item.subgroup !== '') {
                 // Case 2: Subgroup without Group (direct under category)
                 // Check if subgroup already exists to avoid duplicates
-                if (!rootNode.children.find(c => c.name === item.subgroup)) {
-                    const subgroupNode: TreeNode = {
+                let subgroupNode = rootNode.children.find(c => c.name === item.subgroup);
+                if (!subgroupNode) {
+                    subgroupNode = {
                         id: `sub-${catName}-null-${item.subgroup}`,
                         name: item.subgroup,
                         children: [],
-                        level: 1, // Level 1 since it's directly under category - Wait, if we hide subgroups, this whole branch might be confusing. But for now blindly hiding if !showSubgroup.
+                        level: 1, // Level 1 since it's directly under category
                         isSystem: false,
-                        data: { id: item.id, category: catName, group: null, subgroup: item.subgroup }
+                        data: {
+                            id: item.sub_subgroup ? undefined : item.id,
+                            category: catName,
+                            group: null,
+                            subgroup: item.subgroup,
+                            sub_subgroup: null
+                        }
                     };
                     rootNode.children.push(subgroupNode);
+                }
+
+                // Process Sub-subgroup (Item) under Subgroup
+                if (item.sub_subgroup && item.sub_subgroup !== '') {
+                    if (!subgroupNode.children.find(c => c.name === item.sub_subgroup)) {
+                        const subsubNode: TreeNode = {
+                            id: `item-${catName}-null-${item.subgroup}-${item.sub_subgroup}`,
+                            name: item.sub_subgroup,
+                            children: [],
+                            level: 2, // Level 2 since Parent Subgroup is Level 1
+                            isSystem: false,
+                            data: {
+                                id: item.id,
+                                category: catName,
+                                group: null,
+                                subgroup: item.subgroup,
+                                sub_subgroup: item.sub_subgroup
+                            }
+                        };
+                        subgroupNode.children.push(subsubNode);
+                    }
                 }
             }
         });
@@ -308,7 +388,8 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
         setFormData({
             category: node.data.category,
             group: node.data.group || '',
-            subgroup: node.data.subgroup || ''
+            subgroup: node.data.subgroup || '',
+            sub_subgroup: node.data.sub_subgroup || ''
         });
 
         // Auto-expand if selecting a root/group to make workflow smoother
@@ -351,7 +432,8 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                         id: selectedNode.data.id,
                         category: selectedNode.data.category,
                         group: formData.group.trim(),
-                        subgroup: '' // Pass empty string as subgroup is not used
+                        subgroup: '',
+                        sub_subgroup: ''
                     });
                 } else {
                     // Case 2: Updating Subgroup (e.g. Inventory Portal)
@@ -363,8 +445,9 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                     await onEditCategory({
                         id: selectedNode.data.id,
                         category: selectedNode.data.category,
-                        group: selectedNode.data.group,
-                        subgroup: formData.subgroup.trim()
+                        group: selectedNode.data.group || '',
+                        subgroup: formData.subgroup.trim(),
+                        sub_subgroup: formData.sub_subgroup.trim()
                     });
                 }
 
@@ -386,15 +469,10 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
             }
         }
 
-        if (selectedNode.level === 1 && !formData.subgroup.trim() && showSubgroup) {
-            // Check if level 1 is a subgroup (direct child of category)
-            if (selectedNode.data.subgroup) {
-                // It is a subgroup, we are updating it?
-            } else {
-                // If selected Group, user MUST enter Subgroup
-                showWarning('Please enter a Subgroup Name');
-                return;
-            }
+        if (selectedNode.level === 2 && !formData.sub_subgroup.trim() && showSubgroup) {
+            // Selected Subgroup, user MUST enter Item Name
+            showWarning('Please enter an Item Name');
+            return;
         }
 
         try {
@@ -403,9 +481,10 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                 await onCreateCategory({
                     category: selectedNode.data.category,
                     group: formData.group.trim(),
-                    subgroup: ''
+                    subgroup: '',
+                    sub_subgroup: ''
                 });
-                setFormData(prev => ({ ...prev, group: '', subgroup: '' })); // Clear inputs
+                setFormData(prev => ({ ...prev, group: '', subgroup: '', sub_subgroup: '' })); // Clear inputs
                 showSuccess('Group created successfully!');
             }
             // 2. Create Subgroup (under Group)
@@ -413,10 +492,22 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                 await onCreateCategory({
                     category: selectedNode.data.category,
                     group: selectedNode.data.group || '',
-                    subgroup: formData.subgroup.trim()
+                    subgroup: formData.subgroup.trim(),
+                    sub_subgroup: ''
                 });
-                setFormData(prev => ({ ...prev, group: '', subgroup: '' })); // Clear inputs
+                setFormData(prev => ({ ...prev, group: '', subgroup: '', sub_subgroup: '' })); // Clear inputs
                 showSuccess('Subgroup created successfully!');
+            }
+            // 3. Create Item (under Subgroup)
+            else if (showSubgroup && (selectedNode.level === 2 || (selectedNode.level === 1 && selectedNode.data.subgroup)) && !selectedNode.data.sub_subgroup) {
+                await onCreateCategory({
+                    category: selectedNode.data.category,
+                    group: selectedNode.data.group || '',
+                    subgroup: selectedNode.data.subgroup || '',
+                    sub_subgroup: formData.sub_subgroup.trim()
+                });
+                setFormData(prev => ({ ...prev, group: '', subgroup: '', sub_subgroup: '' })); // Clear inputs
+                showSuccess('Item created successfully!');
             }
 
             // Success
@@ -427,13 +518,13 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
             const errorMsg = error.toString();
             if (errorMsg.includes('Duplicate') || errorMsg.includes('IntegrityError') || errorMsg.includes('already exists')) {
                 // It's a duplicate! Reveal it if it was hidden.
-                const restoreKey = `${selectedNode.data.category}-${formData.group.trim() || 'null'}-${formData.subgroup.trim() || 'null'}`;
+                const restoreKey = `${selectedNode.data.category}-${formData.group.trim() || 'null'}-${formData.subgroup.trim() || 'null'}-${formData.sub_subgroup.trim() || 'null'}`;
 
                 // Add to restored set
                 setRestoredNodes(prev => new Set(prev).add(restoreKey));
 
                 showInfo("Category already exists! It has been restored to the view.");
-                setFormData(prev => ({ ...prev, group: '', subgroup: '' })); // Clear inputs
+                setFormData(prev => ({ ...prev, group: '', subgroup: '', sub_subgroup: '' })); // Clear inputs
                 fetchMasterCategories(); // Re-fetch to ensure the restored item is visible
             } else {
                 handleApiError(error, 'Create/Update Category');
@@ -449,10 +540,15 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
             try {
                 await onDeleteCategory(selectedNode.data.id);
                 setSelectedNode(null);
-                setFormData({ category: '', group: '', subgroup: '' });
+                setFormData({ category: '', group: '', subgroup: '', sub_subgroup: '' });
                 fetchMasterCategories();
             } catch (error: any) {
                 handleApiError(error, 'Delete Category');
+                // Refresh anyway if it looks like the item is already gone
+                if (error.status === 404 || (error.response && error.response.status === 404)) {
+                    setSelectedNode(null);
+                    fetchMasterCategories();
+                }
             }
         }
     };
@@ -469,7 +565,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                         className={`flex items-center py-1.5 px-2 cursor-pointer hover:bg-gray-100 rounded transition-colors ${isSelected ? 'bg-indigo-100 text-slate-700 font-medium border-l-2 border-indigo-500' : ''}`}
                         onClick={() => handleNodeSelect(node)}
                         onDoubleClick={() => {
-                            if (hasChildren || node.level < (showSubgroup ? 2 : 1)) {
+                            if (hasChildren || node.level < 3) {
                                 toggleNode(node.id);
                             }
                         }}
@@ -645,6 +741,44 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                                         )}
                                     </div>
                                 )}
+                                
+                                {/* 4. Item Input - CONDITIONAL */}
+                                {showSubgroup && selectedNode && selectedNode.level >= 2 && (
+                                    <div className="mt-4">
+                                        <label className="label-text">
+                                            ITEM (SUB-SUBGROUP)
+                                        </label>
+
+                                        {(!selectedNode.data.id || (selectedNode.level === 2 && !isEditing)) ? (
+                                            // Case 1: New Item (Selected a Subgroup to create an Item under it)
+                                            <input
+                                                type="text"
+                                                name="sub_subgroup"
+                                                value={formData.sub_subgroup}
+                                                onChange={handleInputChange}
+                                                className="w-full px-3 py-2 border border-blue-500 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder-gray-400 bg-white text-gray-800 text-sm"
+                                                placeholder="Enter Item Name"
+                                                autoFocus
+                                            />
+                                        ) : isEditing ? (
+                                            // Case 2: Editing Existing Item
+                                            <input
+                                                type="text"
+                                                name="sub_subgroup"
+                                                value={formData.sub_subgroup}
+                                                onChange={handleInputChange}
+                                                className="w-full px-3 py-2 border border-teal-500 rounded focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none transition-all placeholder-gray-400 text-sm bg-white text-gray-800 font-medium"
+                                                placeholder="Edit Item Name"
+                                                autoFocus
+                                            />
+                                        ) : (
+                                            // Case 3: Viewing Existing Item
+                                            <div className="text-gray-900 font-semibold text-base py-2">
+                                                {selectedNode.data.sub_subgroup}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
                             <div className="pt-4">
@@ -696,7 +830,8 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                                                     setFormData({
                                                         category: selectedNode.data.category,
                                                         group: selectedNode.data.group || '',
-                                                        subgroup: selectedNode.data.subgroup || ''
+                                                        subgroup: selectedNode.data.subgroup || '',
+                                                        sub_subgroup: selectedNode.data.sub_subgroup || ''
                                                     });
                                                 }
                                             }}
@@ -710,15 +845,24 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                                     // Show Create Subgroup button for new entries
                                     <button
                                         type="submit"
-                                        disabled={!selectedNode || (selectedNode.level === 0 ? !formData.group.trim() : (showSubgroup && selectedNode.level === 1 ? !formData.subgroup.trim() : true))}
-                                        className={`w-full py-2.5 px-4 rounded font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm ${selectedNode && ((selectedNode.level === 0 && formData.group.trim()) || (showSubgroup && selectedNode.level === 1 && formData.subgroup.trim()))
+                                        disabled={!selectedNode || (
+                                            selectedNode.level === 0 ? !formData.group.trim() : 
+                                            (selectedNode.level === 1 && !selectedNode.data.subgroup) ? !formData.subgroup.trim() :
+                                            ((selectedNode.level === 2 || (selectedNode.level === 1 && selectedNode.data.subgroup)) && !selectedNode.data.sub_subgroup) ? !formData.sub_subgroup.trim() :
+                                            true
+                                        )}
+                                        className={`w-full py-2.5 px-4 rounded font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm ${selectedNode && (
+                                            (selectedNode.level === 0 && formData.group.trim()) || 
+                                            (selectedNode.level === 1 && !selectedNode.data.subgroup && formData.subgroup.trim()) ||
+                                            ((selectedNode.level === 2 || (selectedNode.level === 1 && selectedNode.data.subgroup)) && formData.sub_subgroup.trim())
+                                        )
                                             ? 'bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer focus:ring-indigo-500'
                                             : selectedNode
                                                 ? 'bg-gray-300 text-gray-700 hover:bg-gray-400 cursor-pointer focus:ring-gray-400'
                                                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                                             }`}
                                     >
-                                        {selectedNode ? (selectedNode.level === 0 ? "Create Group" : "Create Subgroup") : "Create"}
+                                        {selectedNode ? (selectedNode.level === 0 ? "Create Group" : selectedNode.level === 1 ? "Create Subgroup" : "Create Item") : "Create"}
                                     </button>
                                 )}
                             </div>

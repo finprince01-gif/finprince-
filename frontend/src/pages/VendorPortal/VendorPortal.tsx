@@ -379,7 +379,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const [showCreatePOModal, setShowCreatePOModal] = useState(false);
     const [createPOForm, setCreatePOForm] = useState({
         poSeriesName: '',
-        poNumber: '',
+        poNumber: 'New PO',
         vendorName: '',
         branch: '',
         addressLine1: '',
@@ -513,7 +513,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             setVendorCategory((vendor as any).vendor_category || '');
             setBillingCurrency((vendor as any).billing_currency || '');
             setIsAlsoCustomer(vendor.is_also_customer || false);
-            // setTcsApplicable((vendor as any).tcs_applicable || false);
+            setTcsApplicable((vendor as any).tcs_applicable || false);
 
             showInfo('Loading vendor details...');
 
@@ -1045,7 +1045,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             // Reset form
             setCreatePOForm({
                 poSeriesName: '',
-                poNumber: '',
+                poNumber: 'New PO',
                 vendorName: '',
                 branch: '',
                 addressLine1: '',
@@ -1967,9 +1967,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         try {
             await httpClient.delete(`/api/inventory/master-categories/${id}/`);
             showSuccess('Category deleted successfully!');
-            fetchCategories();
         } catch (error: any) {
             handleApiError(error, 'Delete Category');
+        } finally {
+            fetchCategories();
         }
     };
 
@@ -2004,7 +2005,11 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         } else if (activeTab === 'Master' && activeMasterSubTab === 'PO Settings') {
             fetchPOSeries();
         }
-    }, [activeTab, activeMasterSubTab]);
+        // Always keep PO Series loaded for the Create PO modal dropdown
+        if (activeTab === 'Transaction' && activeTransactionSubTab === 'Purchase Orders') {
+            fetchPOSeries();
+        }
+    }, [activeTab, activeMasterSubTab, activeTransactionSubTab]);
 
     // Derived Preview
     const getPreview = () => {
@@ -2049,9 +2054,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         try {
             await httpClient.delete(`/api/vendors/po-settings/${id}/`);
             showSuccess('PO Series deleted successfully!');
-            fetchPOSeries();
         } catch (error: any) {
             handleApiError(error, 'Delete PO Series');
+        } finally {
+            fetchPOSeries();
         }
     };
 
@@ -2132,6 +2138,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                 allowCreateGroup={false}
                                 systemCategories={VENDOR_SYSTEM_CATEGORIES}
                                 defaultGroups={VENDOR_DEFAULT_GROUPS}
+                                defaultSubgroupsOnlyFor={['Stores and Spares']}
                                 onCreateCategory={async (data) => {
                                     try {
                                         await httpClient.post('/api/vendors/categories/', {
@@ -2656,9 +2663,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         </div>
                                     </div>
 
-                                    {/* Is Also Customer */}
+                                    {/* Is Also Customer & TCS Applicable */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                                        <div className="col-span-2">
+                                        <div className="col-span-1">
                                             <label className="label-text">
                                                 Is this vendor also a customer?
                                             </label>
@@ -2689,6 +2696,34 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     System will search for customer using PAN No & Vendor Name
                                                 </p>
                                             )}
+                                        </div>
+
+                                        <div className="col-span-1">
+                                            <label className="label-text">
+                                                TCS Applicable under GST?
+                                            </label>
+                                            <div className="flex gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setTcsApplicable(true)}
+                                                    className={`px-6 py-1.5 text-sm border-2 rounded focus:outline-none transition-colors ${tcsApplicable
+                                                        ? 'border-teal-500 bg-teal-50 text-teal-700 font-medium'
+                                                        : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                                                        }`}
+                                                >
+                                                    Yes
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setTcsApplicable(false)}
+                                                    className={`px-6 py-1.5 text-sm border-2 rounded focus:outline-none transition-colors ${!tcsApplicable
+                                                        ? 'border-teal-500 bg-teal-50 text-teal-700 font-medium'
+                                                        : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                                                        }`}
+                                                >
+                                                    No
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -3935,7 +3970,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         {/* Create PO Button */}
                                                         <div className="mb-6">
                                                             <button
-                                                                onClick={() => setShowCreatePOModal(true)}
+                                                                onClick={() => {
+                                                                    fetchPOSeries();
+                                                                    setShowCreatePOModal(true);
+                                                                }}
                                                                 className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-[4px] shadow-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors">
                                                                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -4845,9 +4883,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                             onChange={(e) => handleCreatePOFormChange('poSeriesName', e.target.value)}
                                                             className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                                         >
-                                                            <option value="">Select Vendor Settings</option>
-                                                            <option value="series1">Series 1</option>
-                                                            <option value="series2">Series 2</option>
+                                                            <option value="">Select</option>
+                                                            {poSeriesList.map((series) => (
+                                                                <option key={series.id} value={series.id}>
+                                                                    {series.name}
+                                                                </option>
+                                                            ))}
                                                         </select>
                                                     </div>
 
@@ -4856,8 +4897,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         <input
                                                             type="text"
                                                             value={createPOForm.poNumber}
-                                                            onChange={(e) => handleCreatePOFormChange('poNumber', e.target.value)}
-                                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                            readOnly
+                                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] bg-gray-50 text-gray-500 cursor-not-allowed focus:outline-none"
                                                         />
                                                     </div>
 

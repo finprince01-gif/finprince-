@@ -138,7 +138,10 @@ class POSettingsDatabase:
             else:
                 po_setting.delete()
             return True
-        except ObjectDoesNotExist:
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error deleting PO setting {po_setting_id}: {str(e)}")
             return False
     
     @staticmethod

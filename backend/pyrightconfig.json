@@ -2,11 +2,11 @@
     "include": ["."],
     "exclude": ["__pycache__", "migrations"],
     "reportMissingImports": false,
+    "reportMissingModuleSource": false,
     "reportMissingTypeStubs": false,
     "pythonVersion": "3.12",
+    "venvPath": "C:/Users/muthu/AppData/Local/Programs/Python",
+    "pythonPath": "C:/Users/muthu/AppData/Local/Programs/Python/Python314/python.exe",
     "typeCheckingMode": "basic",
-    "useLibraryCodeForTypes": true,
-    "venvPath": ".",
-    "venv": "env",
-    "stubPath": "./stubs"
+    "useLibraryCodeForTypes": true
 }
