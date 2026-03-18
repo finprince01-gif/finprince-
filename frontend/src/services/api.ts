@@ -320,6 +320,14 @@ class ApiService {
     }
 
     /**
+     * Get only Pending Purchase Orders for a specific vendor
+     * @param vendorId - ID of the vendor
+     */
+    async getPendingPOs(vendorId: number | string) {
+        return httpClient.get<any[]>(`/api/get_pending_pos?vendor_id=${vendorId}`);
+    }
+
+    /**
      * Get a specific Purchase Order by ID
      * @param id - Purchase order ID
      */

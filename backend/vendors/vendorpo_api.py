@@ -2,14 +2,14 @@
 API endpoints for Vendor Purchase Order Transactions
 """
 from rest_framework import viewsets, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.core.exceptions import PermissionDenied
 
-from .models import VendorTransactionPO, VendorTransactionPOItem
-from .vendorpo_serializers import VendorPOSerializer, VendorPOCreateSerializer, VendorPOItemSerializer
-from . import vendorpo_database as db
+from vendors.models import VendorTransactionPO, VendorTransactionPOItem
+from vendors.vendorpo_serializers import VendorPOSerializer, VendorPOCreateSerializer, VendorPOItemSerializer
+from vendors import vendorpo_database as db
 
 
 class VendorPOViewSet(viewsets.ModelViewSet):
@@ -200,3 +200,34 @@ class VendorPOViewSet(viewsets.ModelViewSet):
                 'success': False,
                 'error': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_pending_pos(request):
+    """
+    Get all pending purchase orders for a specific vendor
+    Query Parameter: vendor_id
+    """
+    try:
+        user = request.user
+        if not hasattr(user, 'tenant_id'):
+            return Response({'error': 'User has no tenant'}, status=status.HTTP_403_FORBIDDEN)
+            
+        tenant_id = str(user.tenant_id)
+        vendor_id = request.query_params.get('vendor_id')
+        
+        if not vendor_id:
+            return Response([], status=status.HTTP_200_OK)
+            
+        po_list = db.get_pending_pos_for_vendor(tenant_id, vendor_id)
+        
+        # Return in the format requested by user: [{"id": 1, "po_number": "PO000001"}]
+        # No extra fields as requested.
+        return Response(po_list, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

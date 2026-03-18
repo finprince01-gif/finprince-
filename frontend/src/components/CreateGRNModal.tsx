@@ -265,15 +265,17 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
                         setGstin(onlyBranch.gstin || '');
                     }
 
-                    // Fetch Purchase Orders (All created orders)
-                    console.log('[CreateGRNModal] Fetching POs for vendor:', vendorName);
-                    const poResponse = await apiService.getVendorPurchaseOrders(vendorName);
-                    console.log('[CreateGRNModal] PO Fetch Response Raw:', poResponse);
-                    if (poResponse && poResponse.success && Array.isArray(poResponse.data)) {
-                        setPoOptions(poResponse.data);
-                        console.log('[CreateGRNModal] Set poOptions with:', poResponse.data.length, 'records');
+                    // Fetch Pending Purchase Orders specifically for this vendor
+                    console.log('[CreateGRNModal] Fetching pending POs for vendor:', vendorName, 'ID:', vendor.id);
+                    const poResponse = await apiService.getPendingPOs(vendor.id);
+                    console.log('[CreateGRNModal] Pending PO Fetch Response:', poResponse);
+                    
+                    if (Array.isArray(poResponse)) {
+                        setPoOptions(poResponse);
+                    } else if (poResponse && (poResponse as any).success && Array.isArray((poResponse as any).data)) {
+                        setPoOptions((poResponse as any).data);
                     } else {
-                        console.warn('[CreateGRNModal] PO Fetch Response was not successful or data is not an array:', poResponse);
+                        setPoOptions([]);
                     }
 
                     // Fetch Purchase Invoices

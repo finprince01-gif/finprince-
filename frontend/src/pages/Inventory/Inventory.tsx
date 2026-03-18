@@ -1649,12 +1649,12 @@ const InventoryPage: React.FC = () => {
           setOutwardGstin(defaultBranch.gstin || '');
         }
 
-        // Fetch ALL POs for this vendor
-        const poResponse = await apiService.getVendorPurchaseOrders(selectedVendorName);
-        if (poResponse && poResponse.success && Array.isArray(poResponse.data)) {
-          setJobWorkOrderNoOptions(poResponse.data);
-        } else if (Array.isArray(poResponse)) {
-          setJobWorkOrderNoOptions(poResponse as any[]);
+        // Fetch PENDING POs for this vendor using the new specific endpoint
+        const poResponse = await apiService.getPendingPOs(vendor.id);
+        if (Array.isArray(poResponse)) {
+          setJobWorkOrderNoOptions(poResponse);
+        } else if (poResponse && (poResponse as any).success && Array.isArray((poResponse as any).data)) {
+          setJobWorkOrderNoOptions((poResponse as any).data);
         }
       } catch (error) {
         handleApiError(error, "Fetching vendor details");
@@ -1899,9 +1899,12 @@ const InventoryPage: React.FC = () => {
         const branchResponse = await apiService.getVendorGSTDetails(vendor.id);
         setGrnBranchOptions(Array.isArray(branchResponse) ? branchResponse : []);
 
-        const poResponse = await apiService.getVendorPurchaseOrders(selectedVendorName);
-        if (poResponse && poResponse.success && Array.isArray(poResponse.data)) {
-          setGrnReferenceNoOptions(poResponse.data);
+        // Fetch PENDING POs for this vendor using the new specific endpoint
+        const poResponse = await apiService.getPendingPOs(vendor.id);
+        if (Array.isArray(poResponse)) {
+            setGrnReferenceNoOptions(poResponse);
+        } else if (poResponse && (poResponse as any).success && Array.isArray((poResponse as any).data)) {
+            setGrnReferenceNoOptions((poResponse as any).data);
         }
 
         const invResponse = await apiService.getVendorPurchaseInvoices(selectedVendorName);
@@ -3006,9 +3009,13 @@ const InventoryPage: React.FC = () => {
                                 className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                               >
                                 <option value="">Select PO</option>
-                                {jobWorkOrderNoOptions.map((po: any) => (
-                                  <option key={po.id} value={po.po_number}>{po.po_number} ({po.status || 'Active'})</option>
-                                ))}
+                                {jobWorkOrderNoOptions.length === 0 ? (
+                                  <option disabled>No Pending POs</option>
+                                ) : (
+                                  jobWorkOrderNoOptions.map((po: any) => (
+                                    <option key={po.id} value={po.po_number}>{po.po_number}</option>
+                                  ))
+                                )}
 
                               </select>
                             </div>
@@ -5622,9 +5629,13 @@ const InventoryPage: React.FC = () => {
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Purchase Order No.</label>
                           <select value={grnReferenceNo} onChange={(e) => handleGrnReferenceNoChange(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                             <option value="">Select PO</option>
-                            {grnReferenceNoOptions.map((po: any) => (
-                              <option key={po.id} value={po.po_number}>{po.po_number}</option>
-                            ))}
+                            {grnReferenceNoOptions.length === 0 ? (
+                              <option disabled>No Pending POs</option>
+                            ) : (
+                              grnReferenceNoOptions.map((po: any) => (
+                                <option key={po.id} value={po.po_number}>{po.po_number}</option>
+                              ))
+                            )}
                           </select>
                         </div>
                         <div>

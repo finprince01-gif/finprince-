@@ -5,6 +5,9 @@ from django.db import connection, transaction
 from typing import List, Dict, Optional, Any
 from decimal import Decimal
 from datetime import date
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def generate_po_number(tenant_id: str, po_series_id: Optional[int] = None) -> str:
@@ -291,8 +294,11 @@ def get_all_purchase_orders(tenant_id: str, status: Optional[str] = None, vendor
     params = [tenant_id]
     
     if status and status != 'All':
-        query += " AND po.status = %s"
-        params.append(status)
+        if 'pending' in status.lower():
+            query += " AND LOWER(po.status) LIKE '%%pending%%'"
+        else:
+            query += " AND po.status = %s"
+            params.append(status)
         
     if vendor_name:
         # Use case-insensitive matching and allow for slight whitespace variations
@@ -326,3 +332,24 @@ def update_po_status(po_id: int, status: str, updated_by: Optional[str] = None) 
     with connection.cursor() as cursor:
         cursor.execute(query, [status, updated_by, po_id])
         return cursor.rowcount > 0
+def get_pending_pos_for_vendor(tenant_id: str, vendor_id: int) -> List[Dict[str, Any]]:
+    """
+    Get all pending purchase orders for a specific vendor
+    Flexible matching for status containing 'pending' (case-insensitive)
+    
+    Returns:
+        List[Dict]: List of PO id and po_number
+    """
+    query = """
+        SELECT id, po_number
+        FROM vendor_transaction_po
+        WHERE tenant_id = %s 
+          AND vendor_basic_detail_id = %s 
+          AND LOWER(status) LIKE '%%pending%%'
+          AND is_active = 1
+        ORDER BY created_at DESC
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(query, [tenant_id, vendor_id])
+        columns = [col[0] for col in cursor.description]
+        return [dict(zip(columns, row)) for row in cursor.fetchall()]
