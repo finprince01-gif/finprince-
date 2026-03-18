@@ -71,6 +71,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
     const [allCustomerBranches, setAllCustomerBranches] = useState<any[]>([]);
 
     const [contracts, setContracts] = useState<any[]>([]);
+    const [soSeriesList, setSOSeriesList] = useState<any[]>([]);
 
     // Inventory Data
     const [inventoryItems, setInventoryItems] = useState<any[]>([]);
@@ -151,12 +152,22 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
             }
         };
 
+        const fetchSOSeries = async () => {
+            try {
+                const response = await httpClient.get<any[]>('/api/customerportal/sales-orders-series/');
+                setSOSeriesList(Array.isArray(response) ? response : (response as any).results || []);
+            } catch (error) {
+                handleApiError(error, 'Fetch Sales Order Series');
+            }
+        };
+
         const fetchAllData = async () => {
             await Promise.all([
                 fetchQuotations(),
                 fetchContracts(),
                 fetchInventoryItems(),
-                fetchCustomers()
+                fetchCustomers(),
+                fetchSOSeries()
             ]);
             // Call edit fetch after base data is loaded
             if (editId) await fetchOrderForEdit();
@@ -559,13 +570,31 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
                                 </label>
                                 <select
                                     value={soSeries}
-                                    onChange={(e) => setSOSeries(e.target.value)}
+                                    onChange={async (e) => {
+                                        const selectedSeries = e.target.value;
+                                        setSOSeries(selectedSeries);
+                                        
+                                        // Fetch preview number when series changes
+                                        if (selectedSeries && !editId) {
+                                            try {
+                                                const seriesObj = soSeriesList.find(s => s.series_name === selectedSeries);
+                                                if (seriesObj) {
+                                                    const res = await httpClient.get<any>(`/api/customerportal/sales-orders-series/${seriesObj.id}/preview/`);
+                                                    if (res && res.preview) {
+                                                        setSONumber(res.preview);
+                                                    }
+                                                }
+                                            } catch (error) {
+                                                console.error('Error fetching SO preview:', error);
+                                            }
+                                        }
+                                    }}
                                     className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                                 >
                                     <option value="">Select series</option>
-                                    <option value="SO-2024">SO-2024</option>
-                                    <option value="SO-EXP">SO-EXP</option>
-                                    <option value="SO-DOM">SO-DOM</option>
+                                    {soSeriesList.map(s => (
+                                        <option key={s.id} value={s.series_name}>{s.series_name}</option>
+                                    ))}
                                 </select>
                                 <p className="text-xs text-gray-500 mt-1">Data from masters</p>
                             </div>

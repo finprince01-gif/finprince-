@@ -376,6 +376,22 @@ class InventoryOperationOutwardViewSet(viewsets.ModelViewSet):
         tenant_id = get_tenant_from_request(self.request)
         serializer.save(tenant_id=tenant_id)
 
+        # Increment the preview number in the master series
+        series_name = self.request.data.get('issue_slip_series_name')
+        if series_name:
+            import re
+            series = InventoryMasterIssueSlip.objects.filter(tenant_id=tenant_id, name=series_name).first()
+            if series and series.preview:
+                match = re.search(r'(\d+)$', series.preview)
+                if match:
+                    num_str = match.group(1)
+                    num = int(num_str) + 1
+                    prefix = series.preview[:match.start()]
+                    series.preview = f"{prefix}{num:0{len(num_str)}d}"
+                else:
+                    series.preview = f"{series.preview}-1"
+                series.save()
+
 class InventoryOperationNewGRNViewSet(viewsets.ModelViewSet):
     serializer_class = InventoryOperationNewGRNSerializer
     permission_classes = [IsAuthenticated]
@@ -450,4 +466,5 @@ class PendingGRNListView(generics.ListAPIView):
         # Filter out empty strings/nulls from exclusion check to be safe, though usage should be strict
         used_grns = [g for g in used_grns if g]
         
+        return qs.exclude(grn_no__in=used_grns).exclude(grn_no__isnull=True).exclude(grn_no__exact='')
         return qs.exclude(grn_no__in=used_grns).exclude(grn_no__isnull=True).exclude(grn_no__exact='')

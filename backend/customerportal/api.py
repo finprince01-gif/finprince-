@@ -603,7 +603,40 @@ class CustomerTransactionSalesOrderViewSet(viewsets.ModelViewSet):
         user = self.request.user
         tenant_id = getattr(user, 'tenant_id', None)
         created_by = getattr(user, 'full_name', user.username)
+        
+        # Auto-increment logic
+        so_series_name = self.request.data.get('so_series_name')
+        if so_series_name:
+            try:
+                from .database import CustomerMastersSalesOrder
+                series = CustomerMastersSalesOrder.objects.get(
+                    tenant_id=tenant_id, 
+                    series_name=so_series_name,
+                    is_deleted=False
+                )
+                
+                # Fetching again to be safe and format correctly
+                next_number = series.current_number + 1
+                number_str = str(next_number).zfill(series.required_digits)
+                generated_so_number = f"{series.prefix}{number_str}{series.suffix}"
+                
+                # Use the generated number instead of what might be in serializer initial data
+                serializer.save(
+                    tenant_id=tenant_id, 
+                    created_by=created_by,
+                    so_number=generated_so_number
+                )
+                
+                # Increment the series count
+                series.current_number = next_number
+                series.save()
+                return
+            except CustomerMastersSalesOrder.DoesNotExist:
+                pass
+        
+        # Fallback if no series found or provided
         serializer.save(tenant_id=tenant_id, created_by=created_by)
+
 
 class SalesCustomerCreateView(APIView):
     """

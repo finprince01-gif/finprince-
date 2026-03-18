@@ -1,0 +1,100 @@
+﻿ERROR 2026-03-18 14:11:35,759 log 30080 18792 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:11:35,759 basehttp 30080 18792 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:12:34,401 log 30080 19704 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:12:34,401 basehttp 30080 19704 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:12:34,425 log 30080 13424 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:12:34,425 basehttp 30080 13424 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:13:05,875 log 30080 15204 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:13:05,875 basehttp 30080 15204 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:13:06,457 log 30080 20000 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:13:06,457 basehttp 30080 20000 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:13:36,008 log 30080 3472 Internal Server Error: /api/voucher-sales-new/
+ERROR 2026-03-18 14:13:36,009 basehttp 30080 3472 "POST /api/voucher-sales-new/ HTTP/1.1" 500 160
+ERROR 2026-03-18 14:14:06,724 log 30080 29508 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:14:06,724 basehttp 30080 29508 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:14:06,747 log 30080 22220 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:14:06,747 basehttp 30080 22220 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:15:04,706 log 30080 13108 Internal Server Error: /api/voucher-sales-new/
+ERROR 2026-03-18 14:15:04,707 basehttp 30080 13108 "POST /api/voucher-sales-new/ HTTP/1.1" 500 160
+ERROR 2026-03-18 14:15:05,553 log 30080 27880 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:15:05,553 basehttp 30080 27880 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:15:06,428 log 30080 5308 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:15:06,428 basehttp 30080 5308 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:15:06,550 log 30080 18492 Internal Server Error: /api/voucher-sales-new/
+ERROR 2026-03-18 14:15:06,551 basehttp 30080 18492 "POST /api/voucher-sales-new/ HTTP/1.1" 500 160
+ERROR 2026-03-18 14:15:12,562 log 30080 24488 Internal Server Error: /api/voucher-sales-new/
+ERROR 2026-03-18 14:15:12,562 basehttp 30080 24488 "POST /api/voucher-sales-new/ HTTP/1.1" 500 160
+ERROR 2026-03-18 14:16:06,738 log 30080 20120 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:16:06,739 basehttp 30080 20120 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:16:07,414 log 30080 7836 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:16:07,414 basehttp 30080 7836 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:17:18,736 log 30080 9736 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:17:18,736 basehttp 30080 9736 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:17:18,769 log 30080 24296 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:17:18,769 basehttp 30080 24296 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:17:31,290 log 30080 16428 Internal Server Error: /api/voucher-sales-new/
+ERROR 2026-03-18 14:17:31,290 basehttp 30080 16428 "POST /api/voucher-sales-new/ HTTP/1.1" 500 160
+ERROR 2026-03-18 14:18:06,752 log 30080 23372 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:18:06,752 basehttp 30080 23372 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:18:07,437 log 30080 27912 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:18:07,437 basehttp 30080 27912 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:19:15,520 log 17144 24432 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:19:15,524 basehttp 17144 24432 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:19:15,576 log 17144 28448 Internal Server Error: /api/masters/ledger-groups/
+ERROR 2026-03-18 14:19:15,579 log 17144 3640 Internal Server Error: /api/vouchers/
+ERROR 2026-03-18 14:19:15,579 basehttp 17144 28448 "GET /api/masters/ledger-groups/ HTTP/1.1" 500 168
+ERROR 2026-03-18 14:19:15,583 basehttp 17144 3640 "GET /api/vouchers/ HTTP/1.1" 500 156
+ERROR 2026-03-18 14:19:15,735 log 17144 10792 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:19:15,737 basehttp 17144 10792 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:19:15,784 log 17144 1804 Internal Server Error: /api/masters/ledger-groups/
+ERROR 2026-03-18 14:19:15,788 basehttp 17144 1804 "GET /api/masters/ledger-groups/ HTTP/1.1" 500 168
+ERROR 2026-03-18 14:19:15,852 log 17144 9156 Internal Server Error: /api/vouchers/
+ERROR 2026-03-18 14:19:15,919 basehttp 17144 9156 "GET /api/vouchers/ HTTP/1.1" 500 156
+ERROR 2026-03-18 14:20:16,557 log 17144 2616 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:20:16,559 basehttp 17144 2616 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:20:16,612 log 17144 1992 Internal Server Error: /api/masters/ledger-groups/
+ERROR 2026-03-18 14:20:16,618 basehttp 17144 1992 "GET /api/masters/ledger-groups/ HTTP/1.1" 500 168
+ERROR 2026-03-18 14:20:16,625 log 17144 19652 Internal Server Error: /api/vouchers/
+ERROR 2026-03-18 14:20:16,626 basehttp 17144 19652 "GET /api/vouchers/ HTTP/1.1" 500 156
+ERROR 2026-03-18 14:20:16,684 log 17144 3548 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:20:16,687 basehttp 17144 3548 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:20:16,756 log 17144 13576 Internal Server Error: /api/masters/ledger-groups/
+ERROR 2026-03-18 14:20:16,759 basehttp 17144 13576 "GET /api/masters/ledger-groups/ HTTP/1.1" 500 168
+ERROR 2026-03-18 14:20:16,796 log 17144 13592 Internal Server Error: /api/vouchers/
+ERROR 2026-03-18 14:20:16,801 basehttp 17144 13592 "GET /api/vouchers/ HTTP/1.1" 500 156
+ERROR 2026-03-18 14:20:18,695 log 17144 1460 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:20:18,700 basehttp 17144 1460 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:20:18,802 log 17144 16020 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:20:18,804 basehttp 17144 16020 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:20:20,214 log 17144 10020 Internal Server Error: /api/bank-reconciliation/pending_matches/
+ERROR 2026-03-18 14:20:20,215 basehttp 17144 10020 "GET /api/bank-reconciliation/pending_matches/?bank_ledger_id=1005&status=UNMATCHED&page=1&page_size=50&show_historical=false HTTP/1.1" 500 207
+ERROR 2026-03-18 14:20:20,279 log 17144 14456 Internal Server Error: /api/bank-reconciliation/pending_matches/
+ERROR 2026-03-18 14:20:20,279 basehttp 17144 14456 "GET /api/bank-reconciliation/pending_matches/?bank_ledger_id=1005&status=UNMATCHED&page=1&page_size=50&show_historical=false HTTP/1.1" 500 207
+ERROR 2026-03-18 14:20:21,065 log 17144 30908 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:20:21,071 basehttp 17144 30908 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:20:21,145 log 17144 12812 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:20:21,147 basehttp 17144 12812 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:20:22,395 log 17144 21884 Internal Server Error: /api/inventory/units/
+ERROR 2026-03-18 14:20:22,396 basehttp 17144 21884 "GET /api/inventory/units/ HTTP/1.1" 500 162
+ERROR 2026-03-18 14:20:22,670 log 17144 30060 Internal Server Error: /api/inventory/units/
+ERROR 2026-03-18 14:20:22,674 basehttp 17144 30060 "GET /api/inventory/units/ HTTP/1.1" 500 162
+ERROR 2026-03-18 14:20:26,245 log 17144 10388 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:20:26,250 basehttp 17144 10388 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:20:26,333 log 17144 15500 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:20:26,335 basehttp 17144 15500 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:21:17,740 log 17144 17492 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:21:17,740 basehttp 17144 17492 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:21:26,420 log 17144 5504 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:21:26,420 basehttp 17144 5504 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:22:02,218 log 17144 14536 Internal Server Error: /api/inventory/units/
+ERROR 2026-03-18 14:22:02,219 basehttp 17144 14536 "GET /api/inventory/units/ HTTP/1.1" 500 162
+ERROR 2026-03-18 14:22:02,460 log 17144 1684 Internal Server Error: /api/inventory/units/
+ERROR 2026-03-18 14:22:02,465 basehttp 17144 1684 "GET /api/inventory/units/ HTTP/1.1" 500 162
+ERROR 2026-03-18 14:22:04,527 log 17144 10884 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:22:04,530 basehttp 17144 10884 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:22:04,598 log 17144 6080 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:22:04,599 basehttp 17144 6080 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:22:17,745 log 17144 13912 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:22:17,746 basehttp 17144 13912 "GET /api/subscription/usage/ HTTP/1.1" 500 186
+ERROR 2026-03-18 14:23:05,428 log 17144 2804 Internal Server Error: /api/subscription/usage/
+ERROR 2026-03-18 14:23:05,428 basehttp 17144 2804 "GET /api/subscription/usage/ HTTP/1.1" 500 186

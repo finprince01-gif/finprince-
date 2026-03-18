@@ -1199,7 +1199,7 @@ class ApiService {
     }
 
     async linkBankVoucher(txnId: number, voucherId: number, voucherType: string) {
-        return httpClient.post<any>(`/api/bank-reconciliation/${txnId}/link_voucher/`, { 
+        return httpClient.post<any>(`/api/bank-reconciliation/${txnId}/link_voucher/`, {
             voucher_id: voucherId,
             voucher_type: voucherType
         });
