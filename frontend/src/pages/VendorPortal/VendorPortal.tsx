@@ -902,15 +902,32 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         { id: 6, poNumber: 'PO-2023-006', poDate: '2023-10-15', vendorName: 'Old World Imports', address: '88 Antiques Rd, Old Town', status: 'Closed', category: 'Raw Material', branch: 'West Wing', deliveryDate: '2023-10-30', amount: '9800.00' },
     ]);
 
-    const handleApproveAndMail = (poId: number) => {
-        setPurchaseOrders(prevOrders => prevOrders.map(po => {
-            if (po.id === poId) {
-                return { ...po, status: 'Mailed' };
-            }
-            return po;
-        }));
-        // Use global toast if available, or just log for now since showToast was commented out
-        console.log(`PO #${poId} approved and mailed.`);
+    const handleApproveAndMail = async (poId: number) => {
+        try {
+            const po = purchaseOrders.find(p => p.id === poId);
+            if (!po) return;
+
+            const nextStatus = po.status === 'Approved' ? 'Mailed' : 'Approved';
+
+            // Sync with backend
+            await httpClient.post(`/api/vendors/purchase-orders/${poId}/update_status/`, {
+                status: nextStatus
+            });
+
+            // Update local state
+            setPurchaseOrders(prevOrders => prevOrders.map(p => {
+                if (p.id === poId) {
+                    return { ...p, status: nextStatus };
+                }
+                return p;
+            }));
+
+            // Switch to the Mail PO tab
+            setActiveCreatePOSubTab('Mail PO');
+            showSuccess(`PO status updated successfully to ${nextStatus}.`);
+        } catch (error) {
+            handleApiError(error, 'Update PO Status');
+        }
     };
 
     // PO Item Handlers
