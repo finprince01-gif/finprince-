@@ -105,78 +105,65 @@ class VendorMasterCategoryViewSet(viewsets.ModelViewSet):
         # Build tree structure
         tree = {}
         for item in queryset:
-<<<<<<< muthu
-            category = item.category
-            group = item.group
-            subgroup = item.subgroup
-            sub_subgroup = item.sub_subgroup
-            
-            if category not in tree:
-                tree[category] = {'groups': {}, 'id': None if group else item.id}
-            
-            if group:
-                if group not in tree[category]['groups']:
-                    tree[category]['groups'][group] = {'subgroups': {}, 'id': None if subgroup else item.id}
-                
-                if subgroup:
-                    if subgroup not in tree[category]['groups'][group]['subgroups']:
-                        tree[category]['groups'][group]['subgroups'][subgroup] = {'items': [], 'id': None if sub_subgroup else item.id}
-                    
-                    if sub_subgroup:
-                        tree[category]['groups'][group]['subgroups'][subgroup]['items'].append({
-                            'name': sub_subgroup,
-=======
+            # Hierarchy: Category -> Group -> Subgroup -> Sub-subgroup
             category_name = item.category or "Unknown"
             group_name = item.group
             subgroup_name = item.subgroup
+            sub_subgroup_name = item.sub_subgroup
             
-            # Ensure category node exists
+            # Ensures Category node exists
             if category_name not in tree:
                 tree[category_name] = {'groups': {}, 'id': None}
             
-            cat_node = tree[category_name]
-            
-            # If this is purely a category record (no group or subgroup)
-            if not group_name and not subgroup_name:
-                cat_node['id'] = item.id
+            node = tree.get(category_name)
+            if not isinstance(node, dict):
                 continue
-            
-            # Process groups and subgroups
-            groups_dict = cat_node.get('groups')
-            if groups_dict is None:
-                groups_dict = {}
-                cat_node['groups'] = groups_dict
 
-            if group_name:
-                if group_name not in groups_dict:
-                    groups_dict[group_name] = {'subgroups': [], 'id': None}
+            if not group_name:
+                node['id'] = item.id
+                continue
+
+            # Process Group level
+            groups_dict = node.get('groups', {})
+            if not isinstance(groups_dict, dict):
+                groups_dict = {}
+                node['groups'] = groups_dict
                 
-                group_node = groups_dict[group_name]
-                if group_node:
-                    if not subgroup_name:
-                        # This record defines the group itself
-                        group_node['id'] = item.id
-                    else:
-                        # This record defines a subgroup under the group
-                        subgroups_list = group_node.get('subgroups')
-                        if isinstance(subgroups_list, list):
-                            subgroups_list.append({
-                                'name': subgroup_name,
-                                'id': item.id
-                            })
-            elif subgroup_name:
-                # Edge case: subgroup exists without a group
-                if "Direct Subgroups" not in groups_dict:
-                    groups_dict["Direct Subgroups"] = {'subgroups': [], 'id': None}
+            if group_name not in groups_dict:
+                groups_dict[group_name] = {'subgroups': {}, 'id': None}
+            
+            group_node = groups_dict.get(group_name)
+            if not isinstance(group_node, dict):
+                continue
+
+            if not subgroup_name:
+                group_node['id'] = item.id
+                continue
                 
-                direct_node = groups_dict["Direct Subgroups"]
-                if direct_node:
-                    subgroups_list = direct_node.get('subgroups')
-                    if isinstance(subgroups_list, list):
-                        subgroups_list.append({
-                            'name': subgroup_name,
->>>>>>> main
-                            'id': item.id
-                        })
+            # Process Subgroup level
+            subgroups_dict = group_node.get('subgroups', {})
+            if not isinstance(subgroups_dict, dict):
+                subgroups_dict = {}
+                group_node['subgroups'] = subgroups_dict
+                
+            if subgroup_name not in subgroups_dict:
+                subgroups_dict[subgroup_name] = {'items': [], 'id': None}
+            
+            subgroup_node = subgroups_dict.get(subgroup_name)
+            if not isinstance(subgroup_node, dict):
+                continue
+
+            if not sub_subgroup_name:
+                subgroup_node['id'] = item.id
+                continue
+                
+            # Process Sub-subgroup (terminal level)
+            if sub_subgroup_name:
+                items_list = subgroup_node.get('items', [])
+                if isinstance(items_list, list):
+                    items_list.append({
+                        'name': sub_subgroup_name,
+                        'id': item.id
+                    })
         
         return Response(tree)

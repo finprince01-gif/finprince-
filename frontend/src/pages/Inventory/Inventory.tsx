@@ -4626,7 +4626,6 @@ const InventoryPage: React.FC = () => {
                           <input
                             type="text"
                             readOnly
-                            placeholder="Fetch from Material Issue Slip"
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-100 cursor-not-allowed"
                           />
                         </div>
