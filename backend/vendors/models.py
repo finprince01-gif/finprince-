@@ -27,6 +27,12 @@ class VendorMasterCategory(models.Model):
         blank=True,
         help_text="Subgroup under group (optional)"
     )
+    sub_subgroup = models.CharField(
+        max_length=255,
+        default='',
+        blank=True,
+        help_text="Level 3 item under subgroup (optional)"
+    )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -34,8 +40,8 @@ class VendorMasterCategory(models.Model):
     class Meta:
         managed = False
         db_table = 'vendor_master_category'
-        unique_together = ('tenant_id', 'category', 'group', 'subgroup')
-        ordering = ['category', 'group', 'subgroup']
+        unique_together = ('tenant_id', 'category', 'group', 'subgroup', 'sub_subgroup')
+        ordering = ['category', 'group', 'subgroup', 'sub_subgroup']
         indexes = [
             models.Index(fields=['tenant_id', 'is_active']),
             models.Index(fields=['category']),
@@ -47,6 +53,8 @@ class VendorMasterCategory(models.Model):
             parts.append(self.group)
         if self.subgroup:
             parts.append(self.subgroup)
+        if self.sub_subgroup:
+            parts.append(self.sub_subgroup)
         return " > ".join(parts)
     
     @property

@@ -86,7 +86,10 @@ class SalaryComponentViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         tenant_id = get_tenant_id(self.request)
-        return SalaryComponent.objects.filter(tenant_id=tenant_id, is_active=True).order_by('component_type', 'component_name')
+        queryset = SalaryComponent.objects.filter(tenant_id=tenant_id).order_by('component_type', 'component_name')
+        if self.action == 'list':
+            return queryset.filter(is_active=True)
+        return queryset
 
     def perform_create(self, serializer):
         tenant_id = get_tenant_id(self.request)
@@ -99,7 +102,10 @@ class SalaryTemplateViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         tenant_id = get_tenant_id(self.request)
-        return SalaryTemplate.objects.filter(tenant_id=tenant_id, is_active=True).order_by('-created_at')
+        queryset = SalaryTemplate.objects.filter(tenant_id=tenant_id).order_by('-created_at')
+        if self.action == 'list':
+            return queryset.filter(is_active=True)
+        return queryset
 
     def perform_create(self, serializer):
         # Priority: payload tenant_id > JWT user tenant_id
@@ -289,7 +295,10 @@ class StatutoryConfigurationViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         tenant_id = get_tenant_id(self.request)
-        return StatutoryConfiguration.objects.filter(tenant_id=tenant_id, is_active=True)
+        queryset = StatutoryConfiguration.objects.filter(tenant_id=tenant_id)
+        if self.action == 'list':
+            return queryset.filter(is_active=True)
+        return queryset
 
     def perform_create(self, serializer):
         tenant_id = get_tenant_id(self.request)

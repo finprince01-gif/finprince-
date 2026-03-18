@@ -45,7 +45,10 @@ class BaseVoucherMasterViewSet(viewsets.ModelViewSet):
         """Filter by tenant_id"""
         try:
             tenant_id = self.get_tenant_id(self.request)
-            return self.queryset.filter(tenant_id=tenant_id, is_active=True)
+            queryset = self.queryset.filter(tenant_id=tenant_id)
+            if self.action == 'list':
+                return queryset.filter(is_active=True)
+            return queryset
         except:
             return self.queryset.none()
     
