@@ -866,12 +866,54 @@ class CustomerTransactionSalesOrderSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'tenant_id', 'so_series_name', 'so_number', 'date', 
             'customer_po_number', 'customer_name', 'gst_no', 'branch', 'address', 
-            'email', 'contact_number',
+            'email', 'contact_number', 'status',
             'is_active', 'is_deleted', 'created_at', 'updated_at', 
             'created_by', 'updated_by', 'items', 'delivery_terms', 
             'payment_and_salesperson', 'quotation_details'
         ]
-        read_only_fields = ['id', 'tenant_id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'tenant_id', 'created_at', 'updated_at', 'status']
+
+    def to_representation(self, instance):
+        repr = super().to_representation(instance)
+        
+        # If address is missing, fallback to Customer master's branch address
+        if not repr.get('address'):
+            try:
+                from .models import CustomerMasterCustomerBasicDetails, CustomerMasterCustomerGSTDetails
+                customer = CustomerMasterCustomerBasicDetails.objects.filter(
+                    tenant_id=instance.tenant_id, 
+                    customer_name=instance.customer_name
+                ).first()
+                
+                if customer:
+                    branch_qs = CustomerMasterCustomerGSTDetails.objects.filter(
+                        customer_basic_detail=customer
+                    )
+                    branch_match = None
+                    if instance.branch:
+                        branch_match = branch_qs.filter(branch_reference_name=instance.branch).first()
+                    
+                    if not branch_match:
+                        branch_match = branch_qs.first()
+                        
+                    if branch_match:
+                        # Return address, either from address_line_1 or parse legacy JSON branch_address
+                        address_val = branch_match.address_line_1
+                        if not address_val and branch_match.branch_address:
+                            import json
+                            try:
+                                parsed = json.loads(branch_match.branch_address)
+                                address_val = parsed.get("addressLine1") or parsed.get("address") or branch_match.branch_address
+                            except:
+                                address_val = branch_match.branch_address
+                                
+                        repr['address'] = address_val or ''
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error fetching address fallback for SO: {str(e)}")
+                
+        return repr
 
     def create(self, validated_data):
         """

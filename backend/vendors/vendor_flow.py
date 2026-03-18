@@ -4,7 +4,9 @@ This module contains business logic and workflows for vendors.
 """
 
 from decimal import Decimal
+import logging
 from django.db import transaction
+from django.db.models import Q
 from .vendor_database import VendorDatabase
 from .models import Vendor
 
@@ -237,32 +239,111 @@ class VendorFlow:
     @staticmethod
     def can_delete_vendor(vendor_id):
         """
-        Check if a vendor can be deleted based on business rules.
-        
-        Args:
-            vendor_id: ID of the vendor
-            
-        Returns:
-            Tuple of (can_delete: bool, reason: str)
+        Check if a legacy vendor can be deleted based on business rules.
         """
         try:
             vendor = VendorDatabase.get_vendor_by_id(vendor_id)
             if not vendor:
                 return False, "Vendor not found"
             
-            # Business rule: Cannot delete vendor with outstanding balance
-            if vendor.current_balance > 0:
-                return False, f"Cannot delete vendor with outstanding balance of {vendor.current_balance}"
+            # Rule 1: Cannot delete vendor with outstanding balance
+            if float(vendor.current_balance or 0) != 0 or float(vendor.opening_balance or 0) != 0:
+                return False, "Unable to delete vendor as this vendor is currently live"
             
-            # TODO: Check if vendor has any transactions
-            # has_transactions = check_vendor_transactions(vendor_id)
-            # if has_transactions:
-            #     return False, "Cannot delete vendor with existing transactions"
-            
+            # Rule 2: Check for transactions (if any linked models exist)
+            # This is a generic check for the legacy model
             return True, "Vendor can be deleted"
             
         except Exception as e:
-            return False, str(e)
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error checking vendor deletion eligibility: {e}")
+            return False, "Unable to delete vendor as this vendor is currently live"
+
+    @staticmethod
+    def can_delete_vendor_basic_detail(instance):
+        """
+        Check if a vendor basic detail can be deleted based on business rules.
+        A vendor cannot be deleted if it has:
+        1. Associated transactions (Purchase Orders, Purchase Vouchers)
+        2. Non-zero opening or current balance in accounting system
+        """
+        try:
+            # 1. Check for associated transactions in the new system
+            # Check Purchase Orders
+            if hasattr(instance, 'purchase_orders') and instance.purchase_orders.exists():
+                return False, "Unable to delete vendor as this vendor is currently live"
+                
+            # Check Purchase Vouchers (using related_name from VoucherPurchaseSupplierDetails)
+            if hasattr(instance, 'purchase_vouchers') and instance.purchase_vouchers.exists():
+                return False, "Unable to delete vendor as this vendor is currently live"
+                
+            # 2. Check for balance in TransactionFile (Accounting records)
+            from accounting.models_transaction import TransactionFile
+            
+            vendor_code = instance.vendor_code
+            tenant_id = instance.tenant_id
+            
+            # Check by vendor_code
+            if vendor_code:
+                ledger = TransactionFile.objects.filter(
+                    tenant_id=tenant_id,
+                    ledger_code=vendor_code
+                ).first()
+                
+                if ledger:
+                    if (ledger.opening_balance and float(ledger.opening_balance) != 0) or \
+                       (ledger.current_balance and float(ledger.current_balance) != 0):
+                        return False, "Unable to delete vendor as this vendor is currently live"
+            
+            # Also check by name for safety (since ledger_name is mandatory in TransactionFile)
+            ledger_by_name = TransactionFile.objects.filter(
+                tenant_id=tenant_id,
+                ledger_name=instance.vendor_name
+            ).first()
+            
+            if ledger_by_name:
+                if (ledger_by_name.opening_balance and float(ledger_by_name.opening_balance) != 0) or \
+                   (ledger_by_name.current_balance and float(ledger_by_name.current_balance) != 0):
+                    return False, "Unable to delete vendor as this vendor is currently live"
+
+            # 3. Check for Accounting Ledgers and Journal Entries
+            from accounting.models import MasterLedger, JournalEntry, AmountTransaction
+            
+            # Check by name in MasterLedger
+            ledger = MasterLedger.objects.filter(
+                tenant_id=tenant_id,
+                name=instance.vendor_name
+            ).first()
+            
+            if ledger:
+                # Check for Journal Entries
+                if JournalEntry.objects.filter(tenant_id=tenant_id, ledger=ledger.name).exists():
+                    return False, "Unable to delete vendor as this vendor is currently live"
+                    
+                # Check for Amount Transactions (Bank/Cash related)
+                if AmountTransaction.objects.filter(tenant_id=tenant_id, ledger=ledger).exists():
+                    return False, "Unable to delete vendor as this vendor is currently live"
+
+            # 4. Check Legacy Vendor model (if synced and has balances)
+            from .models import Vendor
+            if vendor_code:
+                legacy_vendor = Vendor.objects.filter(
+                    tenant_id=tenant_id, 
+                    vendor_code=vendor_code
+                ).first()
+                
+                if legacy_vendor:
+                    if (legacy_vendor.opening_balance and float(legacy_vendor.opening_balance) != 0) or \
+                       (legacy_vendor.current_balance and float(legacy_vendor.current_balance) != 0):
+                        return False, "Unable to delete vendor as this vendor is currently live"
+
+            return True, ""
+            
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error checking vendor basic detail deletion eligibility: {e}")
+            # If check fails technically, return live for safety
+            return False, "Unable to delete vendor as this vendor is currently live"
     
     @staticmethod
     def get_vendor_aging_report(tenant_id, days_buckets=None):
@@ -284,14 +365,15 @@ class VendorFlow:
         
         vendors = VendorDatabase.get_vendors_with_outstanding_balance(tenant_id)
         
+        vendors_list: list = []
         aging_report = {
             'total_vendors': vendors.count(),
             'total_outstanding': sum(v.current_balance for v in vendors),
-            'vendors': []
+            'vendors': vendors_list
         }
         
         for vendor in vendors:
-            aging_report['vendors'].append({
+            vendors_list.append({
                 'vendor_id': vendor.id,
                 'vendor_code': vendor.vendor_code,
                 'vendor_name': vendor.vendor_name,
@@ -315,41 +397,45 @@ class VendorFlow:
         Returns:
             Dictionary with import results
         """
+        success_list: list = []
+        failed_list: list = []
         results = {
-            'success': [],
-            'failed': [],
+            'success': success_list,
+            'failed': failed_list,
             'total': len(vendors_data)
         }
         
         for idx, vendor_data in enumerate(vendors_data):
             try:
-                success, result = VendorFlow.create_vendor_with_validation(
+                is_success, result = VendorFlow.create_vendor_with_validation(
                     tenant_id=tenant_id,
                     vendor_data=vendor_data,
                     created_by=created_by
                 )
                 
-                if success:
-                    results['success'].append({
+                if is_success:
+                    vendor = result  # result is a Vendor instance on success
+                    success_list.append({
                         'row': idx + 1,
-                        'vendor_code': result.vendor_code,
-                        'vendor_name': result.vendor_name
+                        'vendor_code': vendor.vendor_code,  # type: ignore[union-attr]
+                        'vendor_name': vendor.vendor_name   # type: ignore[union-attr]
                     })
                 else:
-                    results['failed'].append({
+                    error_msg = result  # result is an error string on failure
+                    failed_list.append({
                         'row': idx + 1,
                         'data': vendor_data,
-                        'error': result
+                        'error': error_msg
                     })
             except Exception as e:
-                results['failed'].append({
+                failed_list.append({
                     'row': idx + 1,
                     'data': vendor_data,
                     'error': str(e)
                 })
         
-        results['success_count'] = len(results['success'])
-        results['failed_count'] = len(results['failed'])
+        results['success_count'] = len(success_list)
+        results['failed_count'] = len(failed_list)
         
         return results
     

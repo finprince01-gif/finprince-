@@ -64,6 +64,35 @@ class VendorMasterCategoryViewSet(viewsets.ModelViewSet):
             instance.save()
             return Response(status=status.HTTP_204_NO_CONTENT)
     
+    def create(self, request, *args, **kwargs):
+        """
+        Create a new category with idempotency and reactivation logic.
+        If a duplicate is found:
+        - If is_active=False, reactivate and return 200 OK.
+        - If is_active=True, just return 200 OK (exists).
+        """
+        tenant_id = get_tenant_from_request(request)
+        category = request.data.get('category')
+        group = request.data.get('group', '')
+        subgroup = request.data.get('subgroup', '')
+        
+        # Check for existing record (including inactive ones)
+        existing = VendorMasterCategory.objects.filter(
+            tenant_id=tenant_id,
+            category=category,
+            group=group,
+            subgroup=subgroup
+        ).first()
+        
+        if existing:
+            if not existing.is_active:
+                existing.is_active = True
+                existing.save()
+            serializer = self.get_serializer(existing)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+            
+        return super().create(request, *args, **kwargs)
+    
     @action(detail=False, methods=['get'])
     def tree(self, request):
         """
@@ -76,6 +105,7 @@ class VendorMasterCategoryViewSet(viewsets.ModelViewSet):
         # Build tree structure
         tree = {}
         for item in queryset:
+<<<<<<< muthu
             category = item.category
             group = item.group
             subgroup = item.subgroup
@@ -95,6 +125,57 @@ class VendorMasterCategoryViewSet(viewsets.ModelViewSet):
                     if sub_subgroup:
                         tree[category]['groups'][group]['subgroups'][subgroup]['items'].append({
                             'name': sub_subgroup,
+=======
+            category_name = item.category or "Unknown"
+            group_name = item.group
+            subgroup_name = item.subgroup
+            
+            # Ensure category node exists
+            if category_name not in tree:
+                tree[category_name] = {'groups': {}, 'id': None}
+            
+            cat_node = tree[category_name]
+            
+            # If this is purely a category record (no group or subgroup)
+            if not group_name and not subgroup_name:
+                cat_node['id'] = item.id
+                continue
+            
+            # Process groups and subgroups
+            groups_dict = cat_node.get('groups')
+            if groups_dict is None:
+                groups_dict = {}
+                cat_node['groups'] = groups_dict
+
+            if group_name:
+                if group_name not in groups_dict:
+                    groups_dict[group_name] = {'subgroups': [], 'id': None}
+                
+                group_node = groups_dict[group_name]
+                if group_node:
+                    if not subgroup_name:
+                        # This record defines the group itself
+                        group_node['id'] = item.id
+                    else:
+                        # This record defines a subgroup under the group
+                        subgroups_list = group_node.get('subgroups')
+                        if isinstance(subgroups_list, list):
+                            subgroups_list.append({
+                                'name': subgroup_name,
+                                'id': item.id
+                            })
+            elif subgroup_name:
+                # Edge case: subgroup exists without a group
+                if "Direct Subgroups" not in groups_dict:
+                    groups_dict["Direct Subgroups"] = {'subgroups': [], 'id': None}
+                
+                direct_node = groups_dict["Direct Subgroups"]
+                if direct_node:
+                    subgroups_list = direct_node.get('subgroups')
+                    if isinstance(subgroups_list, list):
+                        subgroups_list.append({
+                            'name': subgroup_name,
+>>>>>>> main
                             'id': item.id
                         })
         

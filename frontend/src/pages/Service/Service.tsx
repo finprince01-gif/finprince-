@@ -428,13 +428,16 @@ const ServicePage: React.FC<ServicePageProps> = () => {
       rootMap.set(`root-${catName}`, categoryNode);
     });
 
-    // Add API data categories (no extra groups beyond Direct/Indirect)
+    // 4. Add API data (ensure categories exist and add subgroups)
     data.forEach(item => {
       if (!item.category || !item.category.trim()) return;
 
       const categoryKey = `root-${item.category}`;
-      if (!rootMap.has(categoryKey)) {
-        const categoryNode: TreeNode = {
+      let categoryNode = rootMap.get(categoryKey);
+
+      // If category doesn't exist, create it with default groups
+      if (!categoryNode) {
+        categoryNode = {
           id: categoryKey,
           name: item.category,
           children: [],
@@ -442,8 +445,9 @@ const ServicePage: React.FC<ServicePageProps> = () => {
           isSystem: false,
           data: { category: item.category, group: null, subgroup: null }
         };
+
         DEFAULT_GROUPS.forEach(groupName => {
-          categoryNode.children.push({
+          categoryNode!.children.push({
             id: `group-${item.category}-${groupName}`,
             name: groupName,
             children: [],
@@ -453,6 +457,25 @@ const ServicePage: React.FC<ServicePageProps> = () => {
           });
         });
         rootMap.set(categoryKey, categoryNode);
+      }
+
+      // If there's a group and a subgroup, add the subgroup node
+      if (item.group && item.subgroup) {
+        const groupNode = categoryNode.children.find(child => child.name === item.group);
+        if (groupNode) {
+          // Check if subgroup already exists to avoid duplicates
+          const subgroupKey = `subgroup-${item.category}-${item.group}-${item.subgroup}`;
+          if (!groupNode.children.find(child => child.id === subgroupKey)) {
+            groupNode.children.push({
+              id: subgroupKey,
+              name: item.subgroup,
+              children: [],
+              level: 2,
+              isSystem: false,
+              data: { category: item.category, group: item.group, subgroup: item.subgroup }
+            });
+          }
+        }
       }
     });
 
@@ -836,9 +859,19 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                     }`}
                 >
                   <option value="">Select service group</option>
+                  {/* System Categories */}
                   {DEFAULT_SYSTEM_CATEGORIES.map(cat => (
                     <option key={cat} value={cat}>{cat}</option>
                   ))}
+                  {/* API Loaded Groups/Subgroups */}
+                  {apiData.map(group => {
+                    const label = [group.category, group.group, group.subgroup].filter(Boolean).join(' > ');
+                    return (
+                      <option key={group.id} value={label}>
+                        {label}
+                      </option>
+                    );
+                  })}
                 </select>
                 {formErrors.serviceGroup && (
                   <p className="text-red-500 text-xs col-span-3">{formErrors.serviceGroup}</p>
@@ -1029,6 +1062,14 @@ const ServicePage: React.FC<ServicePageProps> = () => {
                     {DEFAULT_SYSTEM_CATEGORIES.map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
+                    {apiData.map(group => {
+                      const label = [group.category, group.group, group.subgroup].filter(Boolean).join(' > ');
+                      return (
+                        <option key={group.id} value={label}>
+                          {label}
+                        </option>
+                      );
+                    })}
                   </select>
                 ) : (
                   <input

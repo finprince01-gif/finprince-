@@ -16,7 +16,7 @@ type VendorTab = 'Master' | 'Transaction';
 type MasterSubTab = 'Category' | 'PO Settings' | 'Vendor Creation' | 'Basic Details' | 'Branch details' | 'Products/Services' | 'TDS & Other Statutory' | 'Banking Info' | 'Terms & Conditions';
 type TransactionSubTab = 'Purchase Orders' | 'Procurement' | 'Payment';
 type POSubTab = 'Dashboard' | 'Create PO' | 'Pending PO' | 'Executed PO';
-type CreatePOSubTab = 'Draft PO' | 'Pending for Approval' | 'Mail PO';
+type CreatePOSubTab = 'Pending for Approval' | 'Mail PO';
 type ProcurementSubTab = 'Dashboard' | 'Raw Material' | 'Stock-in Trade' | 'Consumables' | 'Stores & Spares' | 'Services';
 
 // Category Interface (Mirrors Inventory)
@@ -26,6 +26,8 @@ const VENDOR_SYSTEM_CATEGORIES = [
     'Packing Material',
     'Stock in Trade',
     'Fixed Assets',
+    'Capital Goods',
+    'Consumables',
     'Service',
     'Jobwork'
 ];
@@ -170,7 +172,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const [activeMasterSubTab, setActiveMasterSubTab] = useState<MasterSubTab>('Category');
     const [activeTransactionSubTab, setActiveTransactionSubTab] = useState<TransactionSubTab>('Purchase Orders');
     const [activePOSubTab, setActivePOSubTab] = useState<POSubTab>('Dashboard');
-    const [activeCreatePOSubTab, setActiveCreatePOSubTab] = useState<CreatePOSubTab>('Draft PO');
+    const [activeCreatePOSubTab, setActiveCreatePOSubTab] = useState<CreatePOSubTab>('Pending for Approval');
     const [activeProcurementSubTab, setActiveProcurementSubTab] = useState<ProcurementSubTab>('Dashboard');
     const [activePaymentSubTab, setActivePaymentSubTab] = useState<ProcurementSubTab>('Dashboard');
 
@@ -453,6 +455,34 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const [vendorCategoryFilter, setVendorCategoryFilter] = useState('All Categories');
     const [isCreatingVendor, setIsCreatingVendor] = useState(false);
 
+    const fetchPurchaseOrders = async () => {
+        try {
+            const response: any = await httpClient.get('/api/vendors/purchase-orders/');
+            const payload = response?.data?.data || response?.data || response || [];
+            if (Array.isArray(payload)) {
+                 const mapped = payload.map((po: any) => ({
+                    id: po.id,
+                    poNumber: po.po_number,
+                    poDate: po.created_at ? po.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+                    vendorName: po.vendor_name,
+                    address: po.address_line1 || '',
+                    status: po.status || 'Pending Approval',
+                    receiveBy: po.receive_by,
+                    receiveAt: po.receive_at,
+                    deliveryTerms: po.delivery_terms,
+                    amount: po.total_value ? po.total_value.toString() : '0.00'
+                }));
+                // Combine with hardcoded if needed, or just replace
+                // For now, let's keep hardcoded as fallback if empty
+                if (mapped.length > 0) {
+                    setPurchaseOrders(mapped);
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching POs:', error);
+        }
+    };
+
     // Fetch Vendors
     const fetchVendors = async () => {
         try {
@@ -470,6 +500,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
     useEffect(() => {
         fetchVendors();
+        fetchPurchaseOrders();
     }, []);
 
     // Filtered Vendors for Management List
@@ -863,7 +894,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     }
 
     const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([
-        { id: 1, poNumber: 'PO-2023-001', poDate: '2023-10-26', vendorName: 'Tech Solutions Inc.', address: '123 Innovation Dr, Tech City', status: 'Draft', category: 'Raw Material', branch: 'Main Branch', deliveryDate: '2023-11-10', amount: '12500.00' },
+        { id: 1, poNumber: 'PO-2023-001', poDate: '2023-10-26', vendorName: 'Tech Solutions Inc.', address: '123 Innovation Dr, Tech City', status: 'Pending Approval', category: 'Raw Material', branch: 'Main Branch', deliveryDate: '2023-11-10', amount: '12500.00' },
         { id: 2, poNumber: 'PO-2023-002', poDate: '2023-10-27', vendorName: 'Global Supplies Ltd.', address: '456 Logistics Way, Port Town', status: 'Pending Approval', category: 'Stock-in Trade', branch: 'West Wing', deliveryDate: '2023-11-15', amount: '8750.50' },
         { id: 3, poNumber: 'PO-2023-003', poDate: '2023-10-28', vendorName: 'Quality Materials Co.', address: '789 Industrial Park, Mfg Zone', status: 'Approved', category: 'Consumables', branch: 'East Warehouse', deliveryDate: '2023-11-20', amount: '3400.00' },
         { id: 4, poNumber: 'PO-2023-004', poDate: '2023-10-29', vendorName: 'Office Depot', address: '101 Corporate Blvd, Biz Dist', status: 'Mailed', category: 'Stores & Spares', branch: 'HQ', deliveryDate: '2023-11-05', amount: '1200.00' },
@@ -989,11 +1020,16 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 invoice_value: parseFloat(item.netValue) || 0
             }));
 
+            const selectedVendorObj = vendorList.find(v => v.vendor_name === createPOForm.vendorName);
+            const vendorId = selectedVendorObj ? selectedVendorObj.id : null;
+            const vendorName = selectedVendorObj ? selectedVendorObj.vendor_name : createPOForm.vendorName;
+
             // Prepare PO payload
             const payload = {
                 po_series_id: createPOForm.poSeriesName ? parseInt(createPOForm.poSeriesName) : null,
-                vendor_id: createPOForm.vendorName ? parseInt(createPOForm.vendorName) : null,
-                vendor_name: createPOForm.vendorName,
+                vendor_id: vendorId,
+                vendor_name: vendorName,
+                status: 'Pending Approval',
                 branch: createPOForm.branch,
                 address_line1: createPOForm.addressLine1,
                 address_line2: createPOForm.addressLine2,
@@ -1914,7 +1950,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const fetchCategories = async () => {
         try {
             setLoadingCategories(true);
-            const response = await httpClient.get('/api/inventory/master-categories/');
+            const response = await httpClient.get('/api/vendors/categories/');
             setCategories(Array.isArray(response) ? response : []);
         } catch (error) {
             handleApiError(error, 'Fetch Categories');
@@ -1941,10 +1977,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
         try {
             if (isEditModeCategory && selectedCategory) {
-                await httpClient.put(`/api/inventory/master-categories/${selectedCategory.id}/`, payload);
+                await httpClient.put(`/api/vendors/categories/${selectedCategory.id}/`, payload);
                 showSuccess('Category updated successfully!');
             } else {
-                await httpClient.post('/api/inventory/master-categories/', payload);
+                await httpClient.post('/api/vendors/categories/', payload);
                 showSuccess('Category created successfully!');
             }
             fetchCategories();
@@ -1965,7 +2001,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const handleDeleteCategory = async (id: number) => {
         if (!await confirm('Are you sure you want to delete this category?')) return;
         try {
-            await httpClient.delete(`/api/inventory/master-categories/${id}/`);
+            await httpClient.delete(`/api/vendors/categories/${id}/`);
             showSuccess('Category deleted successfully!');
         } catch (error: any) {
             handleApiError(error, 'Delete Category');
@@ -1998,12 +2034,15 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         }
     };
 
-    // Load on tab switch
+    // Load categories on tab switch to Category or Vendor Creation
     useEffect(() => {
-        if (activeTab === 'Master' && (activeMasterSubTab === 'Category' || activeMasterSubTab === 'Vendor Creation')) {
-            fetchCategories();
-        } else if (activeTab === 'Master' && activeMasterSubTab === 'PO Settings') {
-            fetchPOSeries();
+        if (activeTab === 'Master') {
+            if (activeMasterSubTab === 'Category' || activeMasterSubTab === 'Vendor Creation' || activeMasterSubTab === 'PO Settings') {
+                fetchCategories();
+            }
+            if (activeMasterSubTab === 'PO Settings') {
+                fetchPOSeries();
+            }
         }
         // Always keep PO Series loaded for the Create PO modal dropdown
         if (activeTab === 'Transaction' && activeTransactionSubTab === 'Purchase Orders') {
@@ -2035,6 +2074,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             digits: poDigits,
             is_active: true
         };
+
+        console.log("Submitting PO settings payload:", payload);
 
         try {
             if (isEditModePO && selectedPOSeries) {
@@ -3911,38 +3952,51 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                                 {['Create PO', 'Pending PO', 'Executed PO']
                                                     .filter(tab => isSuperuser || hasTabAccess('Vendor Portal', tab))
-                                                    .map((tab) => (
-                                                        <button
-                                                            key={tab}
-                                                            onClick={() => setActivePOSubTab(tab as POSubTab)}
-                                                            className="p-6 border-2 border-gray-200 rounded-[4px] hover:border-indigo-500 hover:bg-indigo-50/50 transition-all text-left group"
-                                                        >
-                                                            <div className="flex items-center justify-between mb-4">
-                                                                <div className={`p-3 rounded-[4px] ${tab === 'Create PO' ? 'bg-blue-100 text-indigo-600' :
-                                                                    tab === 'Pending PO' ? 'bg-indigo-50 text-indigo-600' :
-                                                                        'bg-slate-100 text-indigo-600'
-                                                                    }`}>
-                                                                    {/* Icons based on tab */}
-                                                                    {tab === 'Create PO' && (
-                                                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                                                                    )}
-                                                                    {tab === 'Pending PO' && (
-                                                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                                                    )}
-                                                                    {tab === 'Executed PO' && (
-                                                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                                                    )}
+                                                    .map((tab) => {
+                                                        const count = tab === 'Pending PO' 
+                                                            ? purchaseOrders.filter(po => ['Pending Approval', 'Approved', 'Mailed', 'Draft'].includes(po.status)).length
+                                                            : tab === 'Executed PO'
+                                                            ? purchaseOrders.filter(po => po.status === 'Closed').length
+                                                            : 0;
+
+                                                        return (
+                                                            <button
+                                                                key={tab}
+                                                                onClick={() => setActivePOSubTab(tab as POSubTab)}
+                                                                className="p-6 border-2 border-gray-200 rounded-[4px] hover:border-indigo-500 hover:bg-indigo-50/50 transition-all text-left group relative"
+                                                            >
+                                                                {count > 0 && (
+                                                                    <span className="absolute -top-2 -right-2 bg-indigo-600 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg z-10">
+                                                                        {count}
+                                                                    </span>
+                                                                )}
+                                                                <div className="flex items-center justify-between mb-4">
+                                                                    <div className={`p-3 rounded-[4px] ${tab === 'Create PO' ? 'bg-blue-100 text-indigo-600' :
+                                                                        tab === 'Pending PO' ? 'bg-indigo-50 text-indigo-600' :
+                                                                            'bg-slate-100 text-indigo-600'
+                                                                        }`}>
+                                                                        {/* Icons based on tab */}
+                                                                        {tab === 'Create PO' && (
+                                                                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                                                                        )}
+                                                                        {tab === 'Pending PO' && (
+                                                                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                                        )}
+                                                                        {tab === 'Executed PO' && (
+                                                                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                                        )}
+                                                                    </div>
+                                                                    <svg className="w-5 h-5 text-gray-400 group-hover:text-indigo-500 transform group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                                                                 </div>
-                                                                <svg className="w-5 h-5 text-gray-400 group-hover:text-indigo-500 transform group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                                                            </div>
-                                                            <div className="font-semibold text-gray-900 text-lg">{tab}</div>
-                                                            <div className="helper-text mt-2">
-                                                                {tab === 'Create PO' ? 'Create new purchase orders' :
-                                                                    tab === 'Pending PO' ? 'View and manage pending orders' :
-                                                                        'History of completed orders'}
-                                                            </div>
-                                                        </button>
-                                                    ))}
+                                                                <div className="font-semibold text-gray-900 text-lg">{tab}</div>
+                                                                <div className="helper-text mt-2">
+                                                                    {tab === 'Create PO' ? 'Create new purchase orders' :
+                                                                        tab === 'Pending PO' ? 'View and manage pending orders' :
+                                                                            'History of completed orders'}
+                                                                </div>
+                                                            </button>
+                                                        );
+                                                    })}
                                             </div>
                                         </div>
                                     )}
@@ -4002,7 +4056,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         </nav>
                                                     </div>
 
-                                                    {/* Content for Create PO Sub-tabs */}
+                                                     {/* Content for Create PO Sub-tabs */}
                                                     <div className="p-4 bg-gray-50 border border-slate-200 rounded-[4px]">
 
                                                         {activeCreatePOSubTab === 'Pending for Approval' && (
@@ -4020,14 +4074,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                         </tr>
                                                                     </thead>
                                                                     <tbody className="bg-white divide-y divide-gray-200">
-                                                                        {purchaseOrders.filter(po => po.status === 'Pending Approval').length === 0 ? (
+                                                                        {purchaseOrders.filter(po => ['Pending Approval', 'Draft'].includes(po.status)).length === 0 ? (
                                                                             <tr>
                                                                                 <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                                                                                     No purchase orders pending approval.
                                                                                 </td>
                                                                             </tr>
                                                                         ) : (
-                                                                            purchaseOrders.filter(po => po.status === 'Pending Approval').map((po) => (
+                                                                            purchaseOrders.filter(po => ['Pending Approval', 'Draft'].includes(po.status)).map((po) => (
                                                                                 <tr key={po.id} className="hover:bg-gray-50 transition-colors">
                                                                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{po.poNumber}</td>
                                                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(po.poDate)}</td>
@@ -4109,7 +4163,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         )}
                                                     </div>
                                                 </>
-                                            )}          {activePOSubTab === 'Pending PO' && (
+                                            )}
+
+                                            {activePOSubTab === 'Pending PO' && (
                                                 <div className="erp-card overflow-hidden border border-slate-200">
                                                     <table className="erp-table min-w-full">
                                                         <thead className="bg-slate-50/50">
@@ -4120,19 +4176,19 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                 <th className="table-header">Branch</th>
                                                                 <th className="table-header">Delivery Date</th>
                                                                 <th className="table-header">Amount</th>
-                                                                <th className="table-header">Status</th>
+                                                                <th className="table-header text-center">Status</th>
                                                                 <th className="px-6 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Action</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody className="bg-white divide-y divide-gray-200">
-                                                            {purchaseOrders.filter(po => po.status === 'Mailed').length === 0 ? (
+                                                            {purchaseOrders.filter(po => ['Pending Approval', 'Approved', 'Mailed', 'Draft'].includes(po.status)).length === 0 ? (
                                                                 <tr>
                                                                     <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
-                                                                        No pending purchase orders found (Mailed).
+                                                                        No pending purchase orders found.
                                                                     </td>
                                                                 </tr>
                                                             ) : (
-                                                                purchaseOrders.filter(po => po.status === 'Mailed').map((po) => (
+                                                                purchaseOrders.filter(po => ['Pending Approval', 'Approved', 'Mailed', 'Draft'].includes(po.status)).map((po) => (
                                                                     <tr key={po.id} className="hover:bg-gray-50 transition-colors">
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{po.poNumber}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(po.poDate)}</td>
@@ -4140,8 +4196,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                         <td className="px-6 py-4 text-sm text-gray-500">{po.branch || '-'}</td>
                                                                         <td className="px-6 py-4 text-sm text-gray-500">{po.deliveryDate ? formatDate(po.deliveryDate) : '-'}</td>
                                                                         <td className="px-6 py-4 text-sm text-gray-500">{po.amount ? `₹${po.amount}` : '-'}</td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap">
-                                                                            <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] bg-slate-100 text-slate-700 border border-amber-200">
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                                                                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] border ${
+                                                                                po.status === 'Draft' ? 'bg-slate-100 text-slate-700 border-slate-200' :
+                                                                                po.status === 'Pending Approval' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                                                                'bg-green-50 text-green-700 border-green-200'
+                                                                            }`}>
                                                                                 {po.status}
                                                                             </span>
                                                                         </td>

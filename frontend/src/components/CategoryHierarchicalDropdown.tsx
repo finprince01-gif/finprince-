@@ -87,34 +87,14 @@ const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
                     full_path: [c.category, c.group, c.subgroup].filter(Boolean).join(' > ')
                 }));
 
-                // 2. Ensure Default Categories exist (if missing from API)
-                const existingNames = new Set(processed.map(c => c.category));
-
-                let idCounter = 10000;
-                const missingDefaults = systemCategories.filter(name => !existingNames.has(name)).map(name => ({
-                    id: idCounter++,
-                    category: name,
-                    group: null,
-                    subgroup: null,
-                    is_active: true,
-                    full_path: name
-                }));
-
-                // 3. Combine API data + Missing Defaults
-                setCategories([...missingDefaults, ...processed]);
+                // 2. Set categories from API data only to ensure valid database IDs are used
+                console.log("Category dropdown options (from DB):", processed);
+                setCategories(processed);
 
             } catch (error) {
                 console.error('Error fetching categories:');
-                // Fallback mock data matching systemCategories
-                const mockCategories: Category[] = systemCategories.map((name, idx) => ({
-                    id: idx + 1,
-                    category: name,
-                    is_active: true,
-                    group: null,
-                    subgroup: null,
-                    full_path: name
-                }));
-                setCategories(mockCategories);
+                // No fallback to mock data as it causes invalid IDs
+                setCategories([]);
             } finally {
                 setLoading(false);
             }

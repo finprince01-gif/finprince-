@@ -37,6 +37,9 @@ from .serializers import (
     CustomerMastersSalesOrderSerializer
 )
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 class CustomerMasterViewSet(viewsets.ModelViewSet):
     """
@@ -430,11 +433,33 @@ class CustomerMasterLongTermContractViewSet(viewsets.ModelViewSet):
             return CustomerMasterLongTermContractBasicDetail.objects.filter(tenant_id=tenant_id, is_deleted=False)
         return CustomerMasterLongTermContractBasicDetail.objects.none()
     
+    def create(self, request, *args, **kwargs):
+        """Override create to add logging for debugging 400 errors"""
+        logger.info(f"📥 Received Long-term Contract creation request")
+        # logger.debug(f"Request data: {request.data}")
+        
+        try:
+            serializer = self.get_serializer(data=request.data)
+            if not serializer.is_valid():
+                logger.warning(f"⚠️ Validation errors: {serializer.errors}")
+                return Response(
+                    {'error': 'Invalid input data', 'details': serializer.errors},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            self.perform_create(serializer)
+            headers = self.get_success_headers(serializer.data)
+            logger.info("✅ Long-term Contract created successfully")
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        except Exception as e:
+            logger.error(f"❌ Error creating contract: {str(e)}", exc_info=True)
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
     def perform_create(self, serializer):
-        """
-        Set tenant_id and created_by when creating
-        Save data to all three tables: BasicDetail, ProductServices, and TermsCondition
-        """
+        """Set tenant_id and created_by when creating"""
         user = self.request.user
         tenant_id = getattr(user, 'tenant_id', None)
         
@@ -442,47 +467,68 @@ class CustomerMasterLongTermContractViewSet(viewsets.ModelViewSet):
             from rest_framework.exceptions import ValidationError
             raise ValidationError({'error': 'User does not have a tenant_id. Please contact administrator.'})
         
-        # Save basic details
         basic_detail = serializer.save(
             tenant_id=tenant_id,
             created_by=user.username if hasattr(user, 'username') else None
         )
+        self._save_related_data(basic_detail, tenant_id, user)
+
+    def perform_update(self, serializer):
+        """Set updated_by and update related data when updating"""
+        user = self.request.user
+        tenant_id = getattr(user, 'tenant_id', None)
         
-        # Save products/services if provided
-        products_data = self.request.data.get('products_services', [])
-        if products_data:
+        basic_detail = serializer.save(
+            updated_by=user.username if hasattr(user, 'username') else None
+        )
+        self._save_related_data(basic_detail, tenant_id, user)
+
+    def _save_related_data(self, basic_detail, tenant_id, user):
+        """Helper to save products/services and terms/conditions"""
+        # Save products/services
+        products_data = self.request.data.get('products_services')
+        if products_data is not None:
             from .models import CustomerMasterLongTermContractProductService
+            # Clear existing products and recreate
+            CustomerMasterLongTermContractProductService.objects.filter(contract_basic_detail=basic_detail).delete()
+            
             for product in products_data:
-                CustomerMasterLongTermContractProductService.objects.create(
-                    tenant_id=tenant_id,
-                    contract_basic_detail=basic_detail,
-                    item_code=product.get('item_code'),
-                    item_name=product.get('item_name'),
-                    customer_item_name=product.get('customer_item_name'),
-                    qty_min=product.get('qty_min'),
-                    qty_max=product.get('qty_max'),
-                    price_min=product.get('price_min'),
-                    price_max=product.get('price_max'),
-                    acceptable_price_deviation=product.get('acceptable_price_deviation'),
-                    created_by=user.username if hasattr(user, 'username') else None
-                )
+                # Only create if at least item_code or item_name is provided
+                item_code = product.get('item_code')
+                item_name = product.get('item_name')
+                if item_code or item_name:
+                    CustomerMasterLongTermContractProductService.objects.create(
+                        tenant_id=tenant_id,
+                        contract_basic_detail=basic_detail,
+                        item_code=item_code or '',
+                        item_name=item_name or '',
+                        customer_item_name=product.get('customer_item_name'),
+                        qty_min=product.get('qty_min'),
+                        qty_max=product.get('qty_max'),
+                        price_min=product.get('price_min'),
+                        price_max=product.get('price_max'),
+                        acceptable_price_deviation=product.get('acceptable_price_deviation'),
+                        created_by=user.username if hasattr(user, 'username') else None
+                    )
         
-        # Save terms & conditions if provided
-        terms_data = self.request.data.get('terms_conditions', {})
-        if terms_data:
+        # Save terms & conditions
+        terms_data = self.request.data.get('terms_conditions')
+        if terms_data is not None:
             from .models import CustomerMasterLongTermContractTermsCondition
-            CustomerMasterLongTermContractTermsCondition.objects.create(
-                tenant_id=tenant_id,
+            CustomerMasterLongTermContractTermsCondition.objects.update_or_create(
                 contract_basic_detail=basic_detail,
-                payment_terms=terms_data.get('payment_terms'),
-                penalty_terms=terms_data.get('penalty_terms'),
-                force_majeure=terms_data.get('force_majeure'),
-                termination_clause=terms_data.get('termination_clause'),
-                dispute_terms=terms_data.get('dispute_terms'),
-                others=terms_data.get('others'),
-                created_by=user.username if hasattr(user, 'username') else None
+                defaults={
+                    'tenant_id': tenant_id,
+                    'payment_terms': terms_data.get('payment_terms'),
+                    'penalty_terms': terms_data.get('penalty_terms'),
+                    'force_majeure': terms_data.get('force_majeure'),
+                    'termination_clause': terms_data.get('termination_clause'),
+                    'dispute_terms': terms_data.get('dispute_terms'),
+                    'others': terms_data.get('others'),
+                    'created_by': user.username if hasattr(user, 'username') else None
+                }
             )
-    
+
     @action(detail=True, methods=['post'])
     def deactivate(self, request, pk=None):
         """Soft delete a contract"""
@@ -538,9 +584,20 @@ class CustomerTransactionSalesOrderViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         tenant_id = getattr(user, 'tenant_id', None)
-        if tenant_id:
-            return CustomerTransactionSalesOrderBasicDetails.objects.filter(tenant_id=tenant_id).order_by('-created_at')
-        return CustomerTransactionSalesOrderBasicDetails.objects.none()
+        if not tenant_id:
+            return CustomerTransactionSalesOrderBasicDetails.objects.none()
+            
+        queryset = CustomerTransactionSalesOrderBasicDetails.objects.filter(tenant_id=tenant_id, is_deleted=False)
+        
+        # Status filtering
+        status_param = self.request.query_params.get('status')
+        if status_param == 'pending':
+            # Returns 'pending' OR 'approved' as per requirement
+            queryset = queryset.filter(status__in=['pending', 'approved'])
+        elif status_param:
+            queryset = queryset.filter(status=status_param)
+            
+        return queryset.order_by('-created_at')
     
     def perform_create(self, serializer):
         user = self.request.user

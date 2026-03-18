@@ -271,6 +271,33 @@ class InventoryOperationProductionSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['tenant_id', 'id', 'created_at', 'updated_at']
 
+    def validate(self, data):
+        """
+        Recalculate amount for all items before saving as a safety measure.
+        """
+        items = data.get('items', [])
+        if items:
+            for item in items:
+                qty = 0
+                # Check for various quantity keys used across different production types/tabs
+                for k in ['qty_issued', 'quantity', 'quantityIssued', 'quantityProduced', 'issueQty']:
+                    if k in item and item[k]:
+                        try:
+                            qty = float(item[k])
+                            break
+                        except (ValueError, TypeError):
+                            continue
+                
+                rate = 0
+                if 'rate' in item and item['rate']:
+                    try:
+                        rate = float(item['rate'])
+                    except (ValueError, TypeError):
+                        pass
+                
+                item['amount'] = round(qty * rate, 2)
+        return data
+
     def create(self, validated_data):
         dc_data = validated_data.get('delivery_challan', None)
 
