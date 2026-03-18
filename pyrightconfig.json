@@ -7,15 +7,19 @@
         "**/__pycache__",
         "**/migrations"
     ],
-    "pythonVersion": "3.12",
+    "pythonVersion": "3.14",
     "pythonPlatform": "Windows",
     "reportMissingImports": "none",
     "reportMissingModuleSource": "none",
     "reportMissingTypeStubs": "none",
     "typeCheckingMode": "off",
     "useLibraryCodeForTypes": true,
-    "venvPath": "backend",
-    "venv": "venv",
+    "extraPaths": [
+        "backend",
+        "C:/Python314/Lib/site-packages",
+        "C:/Users/Dharun/AppData/Roaming/Python/Python314/site-packages",
+        "."
+    ],
     "executionEnvironments": [
         {
             "root": "backend",

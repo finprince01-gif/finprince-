@@ -1188,18 +1188,18 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                     force_majeure: draftForceMajeure || null,
                     dispute_terms: draftDisputeTerms || null
                 };
-                
+
                 // Call API to update customer master records in the backend
                 await httpClient.patch(`/api/customerportal/customer-master/${masterTermsData.id}/`, payload);
                 showSuccess('Customer terms updated in Master');
-                
+
                 // Update local states so changes persist in this session
                 const updatedMasterData = { ...masterTermsData, ...payload };
                 setMasterTermsData(updatedMasterData);
-                
+
                 // Update the customer in the master list so if it's re-selected it has the new data
                 setMasterCustomers(prev => prev.map(c => c.id === masterTermsData.id ? { ...c, ...payload } : c));
-                
+
             } catch (error) {
                 console.error('Error updating master terms:', error);
                 showError('Failed to update customer master terms');
@@ -3220,11 +3220,10 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                             }
                                         }}
                                         disabled={!!outwardSlipError}
-                                        className={`px-6 py-2 rounded-[4px] transition-colors flex items-center gap-2 font-medium shadow-none border border-slate-200-none border border-slate-200 ${
-                                            outwardSlipError 
-                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                                            : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                                        }`}
+                                        className={`px-6 py-2 rounded-[4px] transition-colors flex items-center gap-2 font-medium shadow-none border border-slate-200-none border border-slate-200 ${outwardSlipError
+                                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                                : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                                            }`}
                                     >
                                         NEXT
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3671,11 +3670,10 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                             }
                                         }}
                                         disabled={!!outwardSlipError}
-                                        className={`px-6 py-2 rounded-[4px] transition-colors flex items-center gap-2 font-medium ${
-                                            outwardSlipError
-                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                            : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                                        }`}
+                                        className={`px-6 py-2 rounded-[4px] transition-colors flex items-center gap-2 font-medium ${outwardSlipError
+                                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                                : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                                            }`}
                                     >
                                         NEXT
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
