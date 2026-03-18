@@ -15,6 +15,8 @@ from accounting.sales_excel_api import (
     SalesExcelWorkflowUploadView, SalesExcelWorkflowUpdateView, SalesExcelWorkflowFinalizeView
 )
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
+from vendors.vendorpo_api import get_pending_pos
+from vendors.vendor_api import PurchaseVendorValidateView, PurchaseVendorCreateView, PurchaseVendorResolveConflictView
 import threading
 import sys
 
@@ -24,6 +26,9 @@ import sys
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    
+    # Pendings POs for Vendor
+    path('api/get_pending_pos', get_pending_pos, name='get_pending_pos'),
     
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
@@ -58,9 +63,9 @@ urlpatterns = [
     path('api/vendors/', include('vendors.urls')),
     
     # Custom Vendor Validation for Purchase
-    path('api/purchase/vendors/validate/', __import__('vendors.vendor_api').vendor_api.PurchaseVendorValidateView.as_view(), name='purchase-vendors-validate'),
-    path('api/purchase/vendors/create/', __import__('vendors.vendor_api').vendor_api.PurchaseVendorCreateView.as_view(), name='purchase-vendors-create'),
-    path('api/purchase/vendors/resolve-conflict/', __import__('vendors.vendor_api').vendor_api.PurchaseVendorResolveConflictView.as_view(), name='purchase-vendors-resolve-conflict'),
+    path('api/purchase/vendors/validate/', PurchaseVendorValidateView.as_view(), name='purchase-vendors-validate'),
+    path('api/purchase/vendors/create/', PurchaseVendorCreateView.as_view(), name='purchase-vendors-create'),
+    path('api/purchase/vendors/resolve-conflict/', PurchaseVendorResolveConflictView.as_view(), name='purchase-vendors-resolve-conflict'),
     
     # Customer Portal
     path('api/customerportal/', include('customerportal.urls')),

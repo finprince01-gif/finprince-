@@ -686,11 +686,12 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
   useEffect(() => {
     const fetchPOs = async () => {
-      // Fetch all POs when on Purchase Voucher, without needing vendor filter
+      // Fetch only PENDING POs when on Purchase Voucher
       if (voucherType === 'Purchase') {
         setIsFetchingPOs(true);
         try {
-          const res = await apiService.getVendorPurchaseOrders(); // Fetch all
+          // If a party (vendor) is selected, filter by it. Status is filtered to 'Pending Approval'.
+          const res = await apiService.getVendorPurchaseOrders(party || undefined, 'Pending Approval');
           if (res?.data) {
             setAvailablePOs(res.data);
           } else if (Array.isArray(res)) {
@@ -709,9 +710,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       }
     };
 
-    // Always trigger a fetch on mount and whenever the user switches between tabs on Purchase Voucher
+    // Refetch when voucherType, tab, OR party changes
     fetchPOs();
-  }, [voucherType, purchaseActiveTab]);
+  }, [voucherType, purchaseActiveTab, party]);
 
   const [currentPOItems, setCurrentPOItems] = useState<any[]>([]);
 

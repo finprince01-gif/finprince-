@@ -14,16 +14,55 @@ class VendorMasterCategoryViewSet(viewsets.ModelViewSet):
     serializer_class = VendorMasterCategorySerializer
     
     def get_queryset(self):
-        """Filter by tenant_id from request"""
+        """Filter by tenant_id from request. Only filter is_active for list/tree."""
         tenant_id = get_tenant_from_request(self.request)
-        if tenant_id:
-            return VendorMasterCategory.objects.filter(tenant_id=tenant_id, is_active=True)
-        return VendorMasterCategory.objects.filter(is_active=True)
+        qs = VendorMasterCategory.objects.filter(tenant_id=tenant_id) if tenant_id else VendorMasterCategory.objects.all()
+        
+        if self.action in ['list', 'tree']:
+            return qs.filter(is_active=True)
+        return qs
     
     def perform_create(self, serializer):
         """Set tenant_id from request"""
         tenant_id = get_tenant_from_request(self.request)
         serializer.save(tenant_id=tenant_id)
+
+    def destroy(self, request, *args, **kwargs):
+        """
+        Hard delete if possible. If record is referenced by other data (IntegrityError),
+        soft delete (deactivate) and rename to allow immediate reuse of the name.
+        """
+        from django.db import IntegrityError, transaction
+        from django.db.models.deletion import ProtectedError
+        import time
+        
+        instance = self.get_object()
+        try:
+            with transaction.atomic():
+                instance.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except (IntegrityError, ProtectedError):
+            # If referenced, perform soft delete (deactivate)
+            if not instance.is_active:
+                # Already deactivated, just return success
+                return Response(status=status.HTTP_204_NO_CONTENT)
+
+            timestamp = int(time.time())
+            
+            # 1. Rename to allow reuse of original unique identifier
+            if instance.sub_subgroup:
+                instance.sub_subgroup = f"{instance.sub_subgroup}_rem_{timestamp}"
+            elif instance.subgroup:
+                instance.subgroup = f"{instance.subgroup}_rem_{timestamp}"
+            elif instance.group:
+                instance.group = f"{instance.group}_rem_{timestamp}"
+            else:
+                instance.category = f"{instance.category}_rem_{timestamp}"
+                
+            # 2. Mark as inactive
+            instance.is_active = False
+            instance.save()
+            return Response(status=status.HTTP_204_NO_CONTENT)
     
     def create(self, request, *args, **kwargs):
         """
@@ -66,6 +105,27 @@ class VendorMasterCategoryViewSet(viewsets.ModelViewSet):
         # Build tree structure
         tree = {}
         for item in queryset:
+<<<<<<< muthu
+            category = item.category
+            group = item.group
+            subgroup = item.subgroup
+            sub_subgroup = item.sub_subgroup
+            
+            if category not in tree:
+                tree[category] = {'groups': {}, 'id': None if group else item.id}
+            
+            if group:
+                if group not in tree[category]['groups']:
+                    tree[category]['groups'][group] = {'subgroups': {}, 'id': None if subgroup else item.id}
+                
+                if subgroup:
+                    if subgroup not in tree[category]['groups'][group]['subgroups']:
+                        tree[category]['groups'][group]['subgroups'][subgroup] = {'items': [], 'id': None if sub_subgroup else item.id}
+                    
+                    if sub_subgroup:
+                        tree[category]['groups'][group]['subgroups'][subgroup]['items'].append({
+                            'name': sub_subgroup,
+=======
             category_name = item.category or "Unknown"
             group_name = item.group
             subgroup_name = item.subgroup
@@ -115,6 +175,7 @@ class VendorMasterCategoryViewSet(viewsets.ModelViewSet):
                     if isinstance(subgroups_list, list):
                         subgroups_list.append({
                             'name': subgroup_name,
+>>>>>>> main
                             'id': item.id
                         })
         

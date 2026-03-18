@@ -40,7 +40,10 @@ class InventoryMasterCategoryViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         tenant_id = get_tenant_from_request(self.request)
-        return InventoryMasterCategory.objects.filter(tenant_id=tenant_id, is_active=True)
+        queryset = InventoryMasterCategory.objects.filter(tenant_id=tenant_id)
+        if self.action == 'list':
+            return queryset.filter(is_active=True)
+        return queryset
     
     def perform_create(self, serializer):
         tenant_id = get_tenant_from_request(self.request)
@@ -104,13 +107,15 @@ class InventoryUnitViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        # Units might be global or tenant specific. Assuming tenant specific for now or global if no tenant_id
-        # Actually InventoryUnit model doesn't have tenant_id in the simple version I saw, but BaseModel has.
-        # Let's assume BaseModel usage.
         tenant_id = get_tenant_from_request(self.request)
         if tenant_id:
-            return InventoryUnit.objects.filter(tenant_id=tenant_id, is_active=True)
-        return InventoryUnit.objects.filter(is_active=True)
+            queryset = InventoryUnit.objects.filter(tenant_id=tenant_id)
+        else:
+            queryset = InventoryUnit.objects.all()
+        
+        if self.action == 'list':
+            return queryset.filter(is_active=True)
+        return queryset
 
     def perform_create(self, serializer):
         tenant_id = get_tenant_from_request(self.request)
