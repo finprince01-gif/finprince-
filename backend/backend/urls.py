@@ -80,7 +80,7 @@ urlpatterns = [
     path('api/services/', include('services.urls')),
     
     # Vouchers - NEW refactored module
-    # path('api/', include('vouchers.urls')),  # Commented out - vouchers module being rebuilt
+    path('api/', include('vouchers.urls')),
     
     # Settings - NEW refactored module
     path('api/', include('settings.urls')),

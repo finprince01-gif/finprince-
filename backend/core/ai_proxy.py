@@ -354,9 +354,9 @@ def process_ai_request(request_data: dict) -> dict:
 
 
 def execute_with_retry(prompt: str, request_data: dict, api_key: str) -> str:
-    """Execute AI request with exponential backoff, retry-after respect, and model fallback"""
-    max_attempts = 5
-    base_delay = 5
+    """Execute AI request with exponential backoff, retry-after respect, and model fallback."""
+    max_attempts = 3 # 1 initial + 2 retries
+    base_delay = 2
     api_key_used = api_key
     
     candidate_models = [
@@ -385,7 +385,7 @@ def execute_with_retry(prompt: str, request_data: dict, api_key: str) -> str:
                 try:
                     logger.info(f"Attempting with model: {model_name} (Key: {api_key_used[:4]}...)")
                     model = genai.GenerativeModel(model_name)
-                    response = model.generate_content(prompt)
+                    response = model.generate_content(prompt, request_options={"timeout": 15.0})
                     return response.text.strip()
                 except exceptions.NotFound:
                     logger.warning(f"Model {model_name} not found, trying next...")
@@ -454,8 +454,8 @@ class AIServiceProxy:
     """Main AI service interface with direct processing (no Redis queue)"""
 
     def __init__(self):
-        # Concurrency limiter for direct processing
-        self.concurrency_semaphore = threading.Semaphore(5)
+        # Concurrency limiter for direct processing (Increased to 20)
+        self.concurrency_semaphore = threading.Semaphore(20)
 
     def make_request(self, request_type: str, request_data: dict,
                     user_id: str, tenant_id: str = None) -> dict:
@@ -520,10 +520,10 @@ class AIServiceProxy:
             'cache_key': cache_key
         })
 
-        # Process directly - limit concurrency
-        if not self.concurrency_semaphore.acquire(blocking=False):
-            logger.warning(f"Concurrency limit reached, rejecting direct request for user {user_id}")
-            return {'error': 'AI service busy. Please try again later.', 'code': 'CONCURRENCY_LIMIT'}
+        # Process directly - limit concurrency (queue up to 30s)
+        if not self.concurrency_semaphore.acquire(blocking=True, timeout=30):
+            logger.warning(f"Concurrency limit reached (30s timeout), rejecting direct request for user {user_id}")
+            return {'error': 'AI service is currently busy handling other requests. Please try again in 30 seconds.', 'code': 'CONCURRENCY_LIMIT'}
 
         try:
             logger.info(f"Processing {request_type} request directly for user {user_id}")

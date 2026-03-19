@@ -291,6 +291,16 @@ class VendorMasterBasicDetail(models.Model):
     is_also_customer = models.BooleanField(default=False, help_text="Is this vendor also a customer?")
     tcs_applicable = models.BooleanField(default=False, help_text="Is TCS applicable for this vendor?")
     
+    # Linked Accounting Ledger
+    ledger = models.ForeignKey(
+        'accounting.MasterLedger', 
+        on_delete=models.RESTRICT, 
+        null=True, 
+        blank=True, 
+        related_name='vendors_basic',
+        db_column='ledger_id'
+    )
+    
     # Metadata
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)

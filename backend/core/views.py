@@ -341,6 +341,7 @@ class AIProxyView(views.APIView):
             file_obj = request.FILES['file']
             voucher_type = request.data.get('voucher_type', 'Purchase')
             table_name = request.data.get('table_name', voucher_type)
+            extraction_mode = request.data.get('extraction_mode', 'finpixe')
             
             import json as _json
             columns_data = request.data.get('columns', '[]')
@@ -359,8 +360,10 @@ class AIProxyView(views.APIView):
                 columns=columns_list,
                 mime_type=file_obj.content_type,
                 user_id=user_id,
-                tenant_id=tenant_id
+                tenant_id=tenant_id,
+                extraction_mode=extraction_mode
             )
+
 
             if 'error' in result:
                 raise ExternalServiceError(result.get('error', 'AI service is temporarily unavailable.'))

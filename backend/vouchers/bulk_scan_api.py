@@ -111,110 +111,157 @@ class BulkScanAPIView(APIView):
         }
 
     def post(self, request):
-        files = request.FILES.getlist('files')
-        voucher_type = request.data.get('voucher_type', 'Purchase')
-        upload_session_id = request.data.get('upload_session_id')
-        tenant_id = request.user.tenant_id
-        user_id = request.user.id
+        import threading
+        try: # Step 6: Catch Full Failure
+            files = request.FILES.getlist('files')
+            # Step 1: Add Debug Logs
+            print("FILES RECEIVED:", len(files))
 
-        if not files:
-            return Response({'error': 'No files uploaded'}, status=status.HTTP_400_BAD_REQUEST)
+            # Step 4: Limit Batch Size
+            if len(files) > 5:
+                return Response({"error": "Too many files. Max 5 allowed."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if not upload_session_id:
-            return Response({'error': 'upload_session_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+            voucher_type = request.data.get('voucher_type', 'Purchase')
+            upload_session_id = request.data.get('upload_session_id')
+            tenant_id = request.user.tenant_id
+            user_id = request.user.id
 
-        scan_id = str(uuid.uuid4())
-        results = []
+            if not files:
+                return Response({'error': 'No files uploaded'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Columns for extraction
-        HEADER_FIELDS = [
-            'Voucher Date', 'Supplier Invoice No', 'Vendor Name', 'GSTIN',
-            'Bill From - Address Line 1', 'Place of Supply', 'Grand Total',
-            'Subtotal', 'Bill From - City', 'Bill From - State', 'Branch'
-        ]
-        LINE_ITEM_FIELDS = [
-            'Item Name', 'HSN/SAC', 'Qty', 'UOM', 'Item Rate',
-            'Taxable Value', 'Invoice Value', 'IGST', 'CGST', 'SGST/UTGST', 'Cess'
-        ]
-        all_columns = HEADER_FIELDS + LINE_ITEM_FIELDS
+            if not upload_session_id:
+                return Response({'error': 'upload_session_id is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        api_key = api_key_manager.get_healthy_key()
-        if not api_key:
-            return Response({'error': 'AI service busy'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            scan_id = str(uuid.uuid4())
+            
+            # Prepare files for background processing (read into memory)
+            files_data = []
+            for f in files:
+                # Step 5: Add Safe Guard
+                if not f:
+                    continue
+                f.seek(0)
+                content = f.read()
+                if not content:
+                    continue
+                files_data.append({
+                    'name': f.name,
+                    'content': content,
+                    'content_type': f.content_type
+                })
 
-        for uploaded_file in files:
-            file_name = uploaded_file.name
-            try:
-                uploaded_file.seek(0)
-                file_bytes = uploaded_file.read()
-                uploaded_file.seek(0)
+            # Parameters for the background task
+            # Columns for extraction (moved from post to be accessible in task)
+            HEADER_FIELDS = [
+                'Voucher Date', 'Supplier Invoice No', 'Vendor Name', 'GSTIN',
+                'Bill From - Address Line 1', 'Place of Supply', 'Grand Total',
+                'Subtotal', 'Bill From - City', 'Bill From - State', 'Branch'
+            ]
+            LINE_ITEM_FIELDS = [
+                'Item Name', 'HSN/SAC', 'Qty', 'UOM', 'Item Rate',
+                'Taxable Value', 'Invoice Value', 'IGST', 'CGST', 'SGST/UTGST', 'Cess'
+            ]
+            all_columns = HEADER_FIELDS + LINE_ITEM_FIELDS
 
-                # ── MULTI-INVOICE PDF SPLITTING (preprocessing layer) ────────
-                if self._is_pdf(uploaded_file) and len(file_bytes) > 0:
-                    from core.pdf_splitter import split_pdf_into_invoice_files, cleanup_temp_pdf
+            # Step 3: Prevent Blocking (Return immediate response)
+            def _background_task():
+                results_map = {}
+                for file_info in files_data:
+                    file_name = file_info['name']
+                    # Step 1: Add Debug Logs
+                    print("Processing file:", file_name)
+                    
+                    try:
+                        # Step 2: Add Timeout/Error Handling wrapper
+                        # (The timeout itself is now in core/ai_proxy.py)
+                        file_bytes = file_info['content']
+                        
+                        # ── MULTI-INVOICE PDF SPLITTING (preprocessing layer) ────────
+                        if (file_info['content_type'] == 'application/pdf' or file_name.lower().endswith('.pdf')) and len(file_bytes) > 0:
+                            from core.pdf_splitter import split_pdf_into_invoice_files, cleanup_temp_pdf
 
-                    split_results = split_pdf_into_invoice_files(
-                        pdf_bytes=file_bytes,
-                        original_filename=file_name,
-                    )
+                            split_results = split_pdf_into_invoice_files(
+                                pdf_bytes=file_bytes,
+                                original_filename=file_name,
+                            )
 
-                    for inv_number, tmp_path, group in split_results:
-                        try:
-                            with open(tmp_path, 'rb') as fh:
-                                split_bytes = fh.read()
+                            for inv_number, tmp_path, group in split_results:
+                                try:
+                                    with open(tmp_path, 'rb') as fh:
+                                        split_bytes = fh.read()
 
-                            # Give a unique descriptive name when multi-invoice
-                            if len(split_results) > 1:
-                                inv_label = f"{file_name} [Inv {inv_number}]"
-                            else:
-                                inv_label = file_name
+                                    # Give a unique descriptive name when multi-invoice
+                                    if len(split_results) > 1:
+                                        inv_label = f"{file_name} [Inv {inv_number}]"
+                                    else:
+                                        inv_label = file_name
 
+                                    result = self._run_ocr_and_detect_vendor(
+                                        file_bytes=split_bytes,
+                                        file_name=inv_label,
+                                        mime_type='application/pdf',
+                                        voucher_type=voucher_type,
+                                        all_columns=all_columns,
+                                        tenant_id=tenant_id,
+                                        user_id=user_id,
+                                        upload_session_id=upload_session_id,
+                                    )
+                                    results_map[inv_label] = result
+                                    print("Completed file") # Step 1 log
+                                except Exception as split_exc:
+                                    print("AI ERROR:", str(split_exc)) # Step 2 log
+                                    results_map[f"{file_name} [Inv {inv_number}]"] = {
+                                        'file_name': f"{file_name} [Inv {inv_number}]",
+                                        'vendor_status': 'ERROR',
+                                        'error': str(split_exc),
+                                    }
+                                finally:
+                                    cleanup_temp_pdf(tmp_path)
+                        else:
+                            # ── Non-PDF (images) ──
                             result = self._run_ocr_and_detect_vendor(
-                                file_bytes=split_bytes,
-                                file_name=inv_label,
-                                mime_type='application/pdf',
+                                file_bytes=file_bytes,
+                                file_name=file_name,
+                                mime_type=file_info['content_type'] or 'application/octet-stream',
                                 voucher_type=voucher_type,
                                 all_columns=all_columns,
                                 tenant_id=tenant_id,
                                 user_id=user_id,
                                 upload_session_id=upload_session_id,
                             )
-                            results.append(result)
-                        except Exception as split_exc:
-                            results.append({
-                                'file_name': f"{file_name} [Inv {inv_number}]",
-                                'vendor_status': 'ERROR',
-                                'error': str(split_exc),
-                            })
-                        finally:
-                            cleanup_temp_pdf(tmp_path)
+                            results_map[file_name] = result
+                            print("Completed file") # Step 1 log
 
-                else:
-                    # ── Non-PDF (images) → original single-file flow ─────────
-                    result = self._run_ocr_and_detect_vendor(
-                        file_bytes=file_bytes,
-                        file_name=file_name,
-                        mime_type=uploaded_file.content_type or 'application/octet-stream',
-                        voucher_type=voucher_type,
-                        all_columns=all_columns,
-                        tenant_id=tenant_id,
-                        user_id=user_id,
-                        upload_session_id=upload_session_id,
-                    )
-                    results.append(result)
+                    except Exception as e:
+                        print("AI ERROR:", str(e)) # Step 2 log
+                        results_map[file_name] = {
+                            'file_name': file_name,
+                            'vendor_status': 'ERROR',
+                            'error': str(e)
+                        }
+                        continue # Step 2 requirement
 
-            except Exception as e:
-                results.append({
-                    'file_name': file_name,
-                    'vendor_status': 'ERROR',
-                    'error': str(e)
-                })
+                # Save all results to cache so Finalize API can pick them up
+                cache_key = f"scan_{scan_id}"
+                cache.set(cache_key, {
+                    'tenant_id': tenant_id,
+                    'data': results_map
+                }, timeout=3600)
+                # Final log as requested
+                print("Completed batch")
 
-        # ── Return results list (scan_id kept for legacy compat) ──
-        return Response({
-            'scan_id': scan_id,
-            'results': results
-        })
+            threading.Thread(target=_background_task).start()
+
+            return Response({
+                "status": "processing_started",
+                "scan_id": scan_id,
+                "files": len(files_data)
+            })
+
+        except Exception as e:
+            return Response({
+                "error": str(e)
+            }, status=500)
 
 class BulkScanUpdateVendorAPIView(APIView):
     permission_classes = [IsAuthenticated]

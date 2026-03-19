@@ -2852,11 +2852,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     No
                                                 </button>
                                             </div>
-                                            {isAlsoCustomer && (
-                                                <p className="mt-2 text-xs text-teal-600">
-                                                    System will search for customer using PAN No & Vendor Name
-                                                </p>
-                                            )}
+
                                         </div>
 
                                         <div className="col-span-1">

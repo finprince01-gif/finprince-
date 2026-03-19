@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models_voucher_contra import VoucherContra
 from .models_voucher_journal import VoucherJournal
+from .models import Voucher
 from core.tenant import get_tenant_from_request
 import uuid
 
@@ -22,8 +23,29 @@ class VoucherContraSerializer(serializers.ModelSerializer):
         
         if not validated_data.get('voucher_number'):
             validated_data['voucher_number'] = f"CN-{uuid.uuid4().hex[:6].upper()}"
-            
-        return super().create(validated_data)
+
+        contra = super().create(validated_data)
+
+        voucher = Voucher.objects.create(
+            tenant_id=contra.tenant_id,
+            type='contra',
+            date=contra.date,
+            voucher_number=contra.voucher_number,
+            amount=contra.amount,
+            total=contra.amount,
+            narration=contra.narration,
+            from_account=contra.from_account,
+            to_account=contra.to_account,
+            source='contra_voucher',
+            reference_id=contra.id,
+        )
+
+        setattr(contra, '_accounting_voucher_id', voucher.id)
+        if any(field.name == 'voucher_id' for field in contra._meta.fields):
+            contra.voucher_id = voucher.id
+            contra.save(update_fields=['voucher_id'])
+
+        return contra
 
 class VoucherJournalSerializer(serializers.ModelSerializer):
     # Map frontend camelCase to backend snake_case
@@ -43,4 +65,26 @@ class VoucherJournalSerializer(serializers.ModelSerializer):
         if not validated_data.get('voucher_number'):
             validated_data['voucher_number'] = f"JN-{uuid.uuid4().hex[:6].upper()}"
 
-        return super().create(validated_data)
+        journal = super().create(validated_data)
+        total_amount = journal.total_debit or journal.total_credit
+
+        voucher = Voucher.objects.create(
+            tenant_id=journal.tenant_id,
+            type='journal',
+            date=journal.date,
+            voucher_number=journal.voucher_number,
+            total=total_amount,
+            total_debit=journal.total_debit,
+            total_credit=journal.total_credit,
+            narration=journal.narration,
+            items_data=journal.entries,
+            source='journal_voucher',
+            reference_id=journal.id,
+        )
+
+        setattr(journal, '_accounting_voucher_id', voucher.id)
+        if any(field.name == 'voucher_id' for field in journal._meta.fields):
+            journal.voucher_id = voucher.id
+            journal.save(update_fields=['voucher_id'])
+
+        return journal

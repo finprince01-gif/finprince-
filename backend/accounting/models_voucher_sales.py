@@ -21,6 +21,7 @@ class VoucherSalesInvoiceDetails(BaseModel):
     customer_name = models.CharField(max_length=255, help_text="Customer Name as entered/selected")
     customer_id = models.BigIntegerField(null=True, blank=True, help_text="Link to customer master")
     customer_branch = models.CharField(max_length=100, null=True, blank=True)
+    voucher_id = models.BigIntegerField(null=True, blank=True, help_text="Link to voucher master table")
     
     # Addresses
     bill_to = models.TextField(null=True, blank=True, help_text="Billing Address")

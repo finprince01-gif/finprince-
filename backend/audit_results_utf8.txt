@@ -1,0 +1,180 @@
+﻿python : C:\Users\ulaganathan
+\AppData\Local\Programs\Pytho
+n\Python312\Lib\site-packages
+\django\db\backends\utils.py:
+98: RuntimeWarning: 
+Accessing the database 
+during app initialization is 
+discouraged. To fix this 
+warning, avoid executing 
+queries in AppConfig.ready() 
+or when your app modules are 
+imported.
+At line:1 char:1
++ python audit_journal.py > 
+audit_full_results.txt 2>&1
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo           
+   : NotSpecified: (C:\User  
+  s\ulagan...s are importe   
+ d.:String) [], RemoteExc    
+eption
+    + FullyQualifiedErrorId  
+   : NativeCommandError
+ 
+  warnings.warn(self.APPS_NOT
+_READY_WARNING_MSG, 
+category=RuntimeWarning)
+
+======================================================================
+  PART 1: STRUCTURE VALIDATION
+======================================================================
+
+COLUMN                    TYPE                      NULLABLE   DEFAULT         KEY
+-------------------------------------------------------------------------------------
+id                        bigint                    NO         None            PRI
+tenant_id                 varchar(36)               NO         None            MUL
+created_at                datetime(6)               YES        None            
+updated_at                datetime(6)               YES        None            
+voucher_id                bigint                    NO         None            MUL
+voucher_number            varchar(50)               YES        None            
+transaction_date          date                      YES        None            
+narration                 text                      YES        None            
+voucher_type              varchar(50)               NO         None            
+ledger_id                 bigint                    NO         None            MUL
+ledger_name               varchar(255)              YES        None            
+debit                     decimal(15,2)             NO         0.00            
+credit                    decimal(15,2)             NO         0.00            
+
+--- Column Checks ---
+  [PASS] 'id' ù bigint | nullable=NO
+  [PASS] 'tenant_id' ù varchar(36) | nullable=NO
+  [PASS] 'voucher_id' ù bigint | nullable=NO
+  [PASS] 'voucher_type' ù varchar(50) | nullable=NO
+  [PASS] 'ledger_id' ù bigint | nullable=NO
+  [PASS] 'debit' ù decimal(15,2) | nullable=NO
+  [PASS] 'credit' ù decimal(15,2) | nullable=NO
+  [PASS] 'created_at' ù datetime(6) | nullable=YES
+  [PASS] ledger_id is integer FK (not string)
+
+  Structure Result: [PASS]
+
+======================================================================
+  PART 2: ROW-LEVEL VALIDATION (sample 20 rows)
+======================================================================
+
+ID     VOUCHER_ID                           TYPE            LEDGER_ID                            DEBIT          CREDIT         ROW STATUS
+------------------------------------------------------------------------------------------------------------------------
+22     12                                   SALES           2198                                 12928.0        0.0            [PASS]
+23     12                                   SALES           2222                                 0.0            12928.0        [PASS]
+24     14                                   receipt         2195                                 12928.0        0.0            [PASS]
+25     14                                   receipt         2198                                 0.0            12928.0        [PASS]
+26     15                                   SALES           2198                                 29088.0        0.0            [PASS]
+27     15                                   SALES           2222                                 0.0            29088.0        [PASS]
+28     16                                   SALES           2199                                 9696.0         0.0            [PASS]
+29     16                                   SALES           2222                                 0.0            9696.0         [PASS]
+30     17                                   SALES           2233                                 193920.0       0.0            [PASS]
+31     17                                   SALES           2222                                 0.0            193920.0       [PASS]
+32     18                                   SALES           2232                                 22624.0        0.0            [PASS]
+33     18                                   SALES           2222                                 0.0            22624.0        [PASS]
+34     19                                   receipt         2195                                 9696.0         0.0            [PASS]
+35     19                                   receipt         2199                                 0.0            9696.0         [PASS]
+36     21                                   SALES           2199                                 6464.0         0.0            [PASS]
+37     21                                   SALES           2222                                 0.0            6464.0         [PASS]
+38     22                                   receipt         2197                                 6464.0         0.0            [PASS]
+39     22                                   receipt         2199                                 0.0            6464.0         [PASS]
+40     23                                   SALES           2199                                 9696.0         0.0            [PASS]
+41     23                                   SALES           2222                                 0.0            9696.0         [PASS]
+
+  [PASS] All 20 sample rows pass row-level validation
+
+======================================================================
+  PART 3: VOUCHER-LEVEL BALANCE (CRITICAL)
+======================================================================
+
+VOUCHER_ID                               TYPE             ENTRIES            DEBIT         CREDIT    IMBALANCE STATUS
+------------------------------------------------------------------------------------------------------------------------
+12                                       SALES            2               12928.00       12928.00       0.0000 [PASS]
+14                                       receipt          2               12928.00       12928.00       0.0000 [PASS]
+15                                       SALES            2               29088.00       29088.00       0.0000 [PASS]
+16                                       SALES            2                9696.00        9696.00       0.0000 [PASS]
+17                                       SALES            2              193920.00      193920.00       0.0000 [PASS]
+18                                       SALES            2               22624.00       22624.00       0.0000 [PASS]
+19                                       receipt          2                9696.00        9696.00       0.0000 [PASS]
+21                                       SALES            2                6464.00        6464.00       0.0000 [PASS]
+22                                       receipt          2                6464.00        6464.00       0.0000 [PASS]
+23                                       SALES            2                9696.00        9696.00       0.0000 [PASS]
+24                                       SALES            2              180992.00      180992.00       0.0000 [PASS]
+25                                       SALES            2              319968.00      319968.00       0.0000 [PASS]
+
+  Total Vouchers Audited (max 100): 12
+  Balanced:       12
+  BROKEN:         0
+
+======================================================================
+  PART 4: LEDGER INTEGRITY
+======================================================================
+  [PASS] All ledger_ids are valid ù no orphaned entries.
+
+======================================================================
+  PART 5: VOUCHER INTEGRITY
+======================================================================
+  [FAIL] 20 out of 20 sampled entries reference non-existent vouchers:
+     Journal Entry ID=24, voucher_id=14, type=receipt
+     Journal Entry ID=25, voucher_id=14, type=receipt
+     Journal Entry ID=34, voucher_id=19, type=receipt
+     Journal Entry ID=35, voucher_id=19, type=receipt
+     Journal Entry ID=38, voucher_id=22, type=receipt
+
+======================================================================
+  PART 6: ZERO ENTRY CHECK
+======================================================================
+  [PASS] No zero-entry rows found.
+
+======================================================================
+  PART 7: CHECK CONSTRAINTS AUDIT
+======================================================================
+
+  --- CHECK Constraints ---
+  [WARN] No CHECK constraints found on journal_entries
+
+  --- Indexes ---
+    fk_ledger on (ledger_id)
+    idx_ledger on (tenant_id, ledger_id)
+    idx_voucher on (tenant_id, voucher_type, voucher_id)
+    journal_ent_voucher_73bcf1_idx on (voucher_id, tenant_id)
+    journal_entries_tenant_id_ce8858b9 on (tenant_id)
+    PRIMARY on (id)
+
+  --- Foreign Keys ---
+    [PASS] voucher_id -> vouchers.id
+    [PASS] ledger_id -> master_ledgers.id
+    [PASS] voucher_id -> vouchers.id
+
+======================================================================
+  PART 8: SAMPLE DATA (5 rows)
+======================================================================
+  id                   | tenant_id            | created_at           | updated_at           | voucher_id           | voucher_number       | transaction_date     | narration            | voucher_type         | ledger_id            | ledger_name          | debit                | credit              
+  ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  22                   | 88fe4389-58a9-4244-  | 2026-03-18 18:10:43  | 2026-03-18 18:10:43  | 12                   | fdsa000144           | 2026-03-18           | None                 | SALES                | 2198                 | None                 | 12928.00             | 0.00                
+  23                   | 88fe4389-58a9-4244-  | 2026-03-18 18:10:43  | 2026-03-18 18:10:43  | 12                   | fdsa000144           | 2026-03-18           | None                 | SALES                | 2222                 | None                 | 0.00                 | 12928.00            
+  24                   | 88fe4389-58a9-4244-  | 2026-03-18 18:38:56  | 2026-03-18 18:38:56  | 14                   | REC-20260319000856   | 2026-03-18           | Receipt against Inv  | receipt              | 2195                 | hdfc                 | 12928.00             | 0.00                
+  25                   | 88fe4389-58a9-4244-  | 2026-03-18 18:38:56  | 2026-03-18 18:38:56  | 14                   | REC-20260319000856   | 2026-03-18           | Receipt against Inv  | receipt              | 2198                 | K Ulaganathan        | 0.00                 | 12928.00            
+  26                   | 88fe4389-58a9-4244-  | 2026-03-19 05:09:51  | 2026-03-19 05:09:51  | 15                   | None                 | None                 | None                 | SALES                | 2198                 | None                 | 29088.00             | 0.00                
+
+======================================================================
+  FINAL VERDICT
+======================================================================
+
+  Total journal entries : 24
+  Imbalanced vouchers   : 0
+  Zero-entry rows       : 0
+  Double-sided rows     : 0  (debit>0 AND credit>0 simultaneously)
+  Missing DB CHECK      : YES
+  Missing FK constraints: NO
+
+  VERDICT: [PASS] FULL DOUBLE-ENTRY SYSTEM (data-level) [WARN] + missing DB constraints
+
+======================================================================
+

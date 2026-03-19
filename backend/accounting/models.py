@@ -271,6 +271,7 @@ class Voucher(BaseModel):
     to_account = models.CharField(max_length=255, null=True, blank=True)
     
     items_data = models.JSONField(null=True, blank=True, help_text="Line items with qty, rate, etc")
+    reference_id = models.BigIntegerField(null=True, blank=True, help_text="ID of the source document (Invoice/Order)")
     dummy_force = models.IntegerField(null=True, blank=True)
 
     class Meta:
@@ -284,8 +285,19 @@ class Voucher(BaseModel):
         ]
 
 class JournalEntry(BaseModel):
-    voucher = models.ForeignKey(Voucher, on_delete=models.CASCADE, related_name='journal_entries')
-    ledger = models.CharField(max_length=255)
+    voucher_type = models.CharField(max_length=50)
+    voucher_id = models.BigIntegerField()
+    voucher_number = models.CharField(max_length=50, null=True, blank=True)
+    transaction_date = models.DateField(null=True, blank=True)
+    narration = models.TextField(null=True, blank=True)
+    
+    ledger = models.ForeignKey(
+        MasterLedger, 
+        on_delete=models.RESTRICT, 
+        related_name='journal_entries',
+        db_column='ledger_id'
+    )
+    ledger_name = models.CharField(max_length=255, null=True, blank=True)
     debit = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     credit = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     
@@ -293,7 +305,8 @@ class JournalEntry(BaseModel):
         managed = False
         db_table = 'journal_entries'
         indexes = [
-            models.Index(fields=['voucher', 'tenant_id']),
+            models.Index(fields=['tenant_id', 'voucher_type', 'voucher_id']),
+            models.Index(fields=['tenant_id', 'ledger']),
         ]
 
 

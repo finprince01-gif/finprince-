@@ -163,6 +163,21 @@ class VendorCreateSerializer(serializers.ModelSerializer):
             return 0.00
         return value
 
+    def create(self, validated_data):
+        """Create vendor and link ledger"""
+        from accounting.utils_ledger import get_or_create_entity_ledger
+        from django.db import transaction
+        
+        with transaction.atomic():
+            ledger = get_or_create_entity_ledger(
+                tenant_id=validated_data.get('tenant_id'),
+                entity_name=validated_data.get('vendor_name'),
+                entity_type='vendor',
+                created_by=validated_data.get('created_by')
+            )
+            validated_data['ledger'] = ledger
+            return super().create(validated_data)
+
 
 class VendorUpdateSerializer(serializers.ModelSerializer):
     """
@@ -212,7 +227,22 @@ class VendorUpdateSerializer(serializers.ModelSerializer):
             'is_active',
             'is_verified'
         ]
-    
+
+    def update(self, instance, validated_data):
+        """Update vendor and ensure ledger link"""
+        from accounting.utils_ledger import get_or_create_entity_ledger
+        from django.db import transaction
+        
+        with transaction.atomic():
+            ledger = get_or_create_entity_ledger(
+                tenant_id=instance.tenant_id,
+                entity_name=validated_data.get('vendor_name', instance.vendor_name),
+                entity_type='vendor',
+                created_by=validated_data.get('updated_by', instance.updated_by)
+            )
+            validated_data['ledger'] = ledger
+            return super().update(instance, validated_data)
+
     def validate_vendor_name(self, value):
         """Validate vendor name"""
         if not value or not value.strip():

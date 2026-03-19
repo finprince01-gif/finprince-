@@ -11,6 +11,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { httpClient } from '../services/httpClient';
 import { apiService } from '../services/api';
+import { getXLSX } from '../utils/xlsx';
 import { showError, showSuccess, showInfo } from '../utils/toast';
 import CreateVendorModal from './CreateVendorModal';
 import { VOUCHER_COLUMN_SCHEMAS } from '../services/mappingEngine';
@@ -991,6 +992,89 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
         }
     };
 
+    /**
+     * handleDownloadExcel - Export current scan session to Excel.
+     * Maps extracted data + line items to rows.
+     */
+    const handleDownloadExcel = async () => {
+        try {
+            const XLSX = await getXLSX();
+            if (scanResults.length === 0) {
+                showInfo('No data available to export.');
+                return;
+            }
+
+            const allExportRows: any[] = [];
+            scanResults.forEach((row, idx) => {
+                const data = row.extracted_data || {};
+                const items = data.items || data.line_items || [{}];
+                const header = data.invoice || data.header || data;
+
+                items.forEach((item: any) => {
+                    allExportRows.push({
+                        'S.No': allExportRows.length + 1,
+                        'Invoice Number': header.invoice_number || row.invoice_number || header['Invoice Number'] || '—',
+                        'Invoice Date': header.invoice_date || row.invoice_date || header['Invoice Date'] || '—',
+                        'Vendor Name': header.vendor_name || row.vendor_name || header['Vendor Name'] || '—',
+                        'Vendor GSTIN': header.vendor_gstin || row.vendor_gstin || header['Vendor GSTIN'] || '—',
+                        'Place of Supply': header.place_of_supply || header['Place of Supply'] || '—',
+                        'Currency': header.currency || header['Currency'] || 'INR',
+                        'Conversion Rate': header.exchange_rate || header['Conversion Rate'] || '1',
+                        'Item Name': item['Item Name'] || item['Description'] || '—',
+                        'HSN/SAC': item['HSN/SAC'] || '—',
+                        'Quantity': item['Qty'] || item['Quantity'] || '—',
+                        'UOM': item['UOM'] || '—',
+                        'Rate': item['Item Rate'] || item['Rate'] || '—',
+                        'Taxable Val': item['Taxable Value'] || item['Taxable Amount'] || '—',
+                        'IGST': item['IGST'] || '0',
+                        'CGST': item['CGST'] || '0',
+                        'SGST': item['SGST/UTGST'] || item['SGST'] || '0',
+                        'Cess': item['Cess'] || '0',
+                        'Item Total': item['Invoice Value'] || item['Amount'] || item['Item Amount'] || '—',
+                        'Grand Total': header.total_amount || row.total_amount || header['Total Amount'] || '—',
+                        'Matching Method': row.matchedBy || '—'
+                    });
+                });
+            });
+
+            const ws = XLSX.utils.json_to_sheet(allExportRows);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Scanned Data');
+
+            // Apply basic styling/column widths
+            const colWidths = [
+                { wch: 6 },  // S.No
+                { wch: 15 }, // Invoice Number
+                { wch: 12 }, // Invoice Date
+                { wch: 25 }, // Vendor Name
+                { wch: 15 }, // Vendor GSTIN
+                { wch: 15 }, // Place of Supply
+                { wch: 10 }, // Currency
+                { wch: 10 }, // Conversion Rate
+                { wch: 30 }, // Item Name
+                { wch: 10 }, // HSN/SAC
+                { wch: 10 }, // Quantity
+                { wch: 8 },  // UOM
+                { wch: 12 }, // Rate
+                { wch: 12 }, // Taxable Val
+                { wch: 8 },  // IGST
+                { wch: 8 },  // CGST
+                { wch: 8 },  // SGST
+                { wch: 8 },  // Cess
+                { wch: 12 }, // Item Total
+                { wch: 12 }, // Grand Total
+                { wch: 15 }  // Matching Method
+            ];
+            ws['!cols'] = colWidths;
+
+            XLSX.writeFile(wb, `Finpixe_Bulk_Scan_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+            showSuccess('Excel export successful');
+        } catch (err) {
+            console.error('Excel Export Error:', err);
+            showError('Failed to generate Excel file');
+        }
+    };
+
 
 
     // ── Render ────────────────────────────────────────────────────────────────
@@ -1587,6 +1671,15 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                 className="px-6 py-2.5 text-sm font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
                                             >
                                                 ← Back
+                                            </button>
+                                            <button
+                                                onClick={handleDownloadExcel}
+                                                className="px-6 py-2.5 bg-white text-indigo-700 border border-indigo-200 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-50 transition-all flex items-center gap-2"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                                </svg>
+                                                Download Excel
                                             </button>
                                             <button onClick={handleFinalize} disabled={!canFinalize || finalizing} className="px-8 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl text-sm font-bold shadow-xl disabled:opacity-40 flex items-center gap-2">
                                                 {finalizing ? 'Saving...' : 'Finalize & Save Vouchers'}

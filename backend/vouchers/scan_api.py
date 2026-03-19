@@ -4,14 +4,21 @@ import json
 import tempfile
 import uuid
 import base64
+import traceback
+
 from datetime import datetime
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
+from django.core.cache import cache
+from django.db import transaction
+from vendors.models import VendorMasterBasicDetail, VendorMasterGSTDetails
+from accounting.serializers_voucher_purchase import VoucherPurchaseSupplierDetailsSerializer
 import google.generativeai as genai
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill
+
 
 # Configure Gemini
 GEN_API_KEY = os.environ.get('GEMINI_API_KEY')
@@ -735,7 +742,7 @@ def bulk_finalize_vouchers(request):
     
     for res in results:
         if res.get('vendor_status') == 'MISSING' or res.get('vendor_status') == 'FAILED':
-            summary['failed_count'] += 1
+            summary['failed_count'] = int(summary['failed_count']) + 1
             summary['errors'].append({
                 'file_name': res.get('file_name'),
                 'error': 'Vendor unresolved or scan failed'
@@ -791,16 +798,15 @@ def bulk_finalize_vouchers(request):
                 serializer = VoucherPurchaseSupplierDetailsSerializer(data=payload, context={'request': request})
                 if serializer.is_valid():
                     instance = serializer.save(tenant_id=tenant_id)
-                    summary['created_count'] += 1
+                    summary['created_count'] = int(summary['created_count']) + 1
                 else:
-                    summary['failed_count'] += 1
+                    summary['failed_count'] = int(summary['failed_count']) + 1
                     summary['errors'].append({
                         'file_name': res.get('file_name'),
                         'error': serializer.errors
                     })
-                    
         except Exception as e:
-            summary['failed_count'] += 1
+            summary['failed_count'] = int(summary['failed_count']) + 1
             summary['errors'].append({
                 'file_name': res.get('file_name'),
                 'error': str(e)
