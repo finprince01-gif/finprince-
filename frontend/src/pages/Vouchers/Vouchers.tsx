@@ -6887,7 +6887,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             {isTallySubmenuOpen && (
                               <div className="bg-gray-100/50 py-0.5 shadow-inner">
                                 <button
-                                  onClick={() => { openScanner('tally'); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); setIsTallySubmenuOpen(false); }}
+                                  onClick={() => { openScanner('tally', 'bulk'); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); setIsTallySubmenuOpen(false); }}
                                   className="flex items-center w-full text-left px-12 py-1.5 text-xs text-gray-500 hover:bg-gray-200"
                                   role="menuitem"
                                 >

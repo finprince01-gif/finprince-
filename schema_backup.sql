@@ -411,6 +411,10 @@ CREATE TABLE `company_informations` (
     `branch_contact_person` varchar(100) DEFAULT NULL COMMENT 'Branch contact person',
     `branch_email` varchar(255) DEFAULT NULL COMMENT 'Branch email',
     `branch_contact_no` varchar(20) DEFAULT NULL COMMENT 'Branch contact number',
+    `branch_pincode` varchar(10) DEFAULT NULL COMMENT 'Branch pincode',
+    `branch_city` varchar(100) DEFAULT NULL COMMENT 'Branch city',
+    `branch_state` varchar(100) DEFAULT NULL COMMENT 'Branch state',
+    `branch_country` varchar(100) DEFAULT NULL COMMENT 'Branch country',
     PRIMARY KEY (`id`),
     UNIQUE KEY `vendor_gstdetails_tenant_gstin_ref_unique` (`tenant_id`,`gstin`,`reference_name`),
     KEY `vendor_gstdetails_tenant_id_idx` (`tenant_id`),
@@ -486,6 +490,7 @@ CREATE TABLE `company_informations` (
     `category` VARCHAR(255) NOT NULL,
     `group` VARCHAR(255) NOT NULL DEFAULT '',
     `subgroup` VARCHAR(255) NOT NULL DEFAULT '',
+    `sub_subgroup` VARCHAR(255) NOT NULL DEFAULT '',
     `is_active` TINYINT(1) NOT NULL DEFAULT 1,
     `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     `updated_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
@@ -498,7 +503,8 @@ CREATE TABLE `company_informations` (
       `tenant_id`,
       `category`(100),
       `group`(100),
-      `subgroup`(100)
+      `subgroup`(100),
+      `sub_subgroup`(100)
     ),
 
     KEY `inventory_master_category_tenant_id_idx` (`tenant_id`),
@@ -578,6 +584,7 @@ CREATE TABLE `company_informations` (
     
     `hsn_code` VARCHAR(20) DEFAULT NULL,
     `gst_rate` DECIMAL(5,2) DEFAULT NULL,
+    `cess_rate` DECIMAL(5,2) DEFAULT NULL,
     
     `reorder_level` VARCHAR(255) DEFAULT NULL COMMENT 'Reorder Level Information',
     `is_saleable` TINYINT(1) NOT NULL DEFAULT 0,
@@ -602,29 +609,6 @@ CREATE TABLE `company_informations` (
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_unicode_ci
   COMMENT='Inventory Master Items';
-
-
-  -- Table: inventory_unit
-
-  CREATE TABLE IF NOT EXISTS `inventory_unit` (
-    `id` BIGINT NOT NULL AUTO_INCREMENT,
-    `tenant_id` CHAR(36) NOT NULL,
-    `name` VARCHAR(100) NOT NULL DEFAULT 'Number',
-    `symbol` VARCHAR(50) NOT NULL DEFAULT 'nos',
-    `is_active` TINYINT(1) NOT NULL DEFAULT 1,
-    `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    `updated_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
-      ON UPDATE CURRENT_TIMESTAMP(6),
-
-    PRIMARY KEY (`id`),
-    KEY `inventory_unit_tenant_id_idx` (`tenant_id`)
-  )
-  ENGINE=InnoDB
-  DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_unicode_ci
-  COMMENT='Inventory Units of Measure';
-
-
 
 
   --
@@ -1057,7 +1041,6 @@ CREATE TABLE `customer_master_longtermcontracts_basicdetails` (
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   `created_by` varchar(100) DEFAULT NULL,
-  `updated_by` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `cust_ltc_basic_tenant_contract_unique` (`tenant_id`,`contract_number`),
   KEY `cust_ltc_basic_tenant_id_idx` (`tenant_id`),
@@ -1084,7 +1067,6 @@ CREATE TABLE `customer_master_longtermcontracts_productservices` (
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   `created_by` varchar(100) DEFAULT NULL,
-  `updated_by` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `cust_ltc_prod_tenant_item_idx` (`tenant_id`, `item_code`),
   KEY `cust_ltc_prod_contract_idx` (`contract_basic_detail_id`),
@@ -1107,7 +1089,6 @@ CREATE TABLE `customer_master_longtermcontracts_termscondition` (
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   `created_by` varchar(100) DEFAULT NULL,
-  `updated_by` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `cust_ltc_terms_contract_unique` (`contract_basic_detail_id`),
   KEY `cust_ltc_terms_tenant_idx` (`tenant_id`),
@@ -1340,9 +1321,7 @@ CREATE TABLE `customer_transaction_salesorder_items` (
   `gst_rate` decimal(5,2) DEFAULT '0.00' COMMENT 'GST Rate (%)',
   `net_value` decimal(15,2) NOT NULL DEFAULT '0.00' COMMENT 'Net Value (Taxable + GST)',
   `uom` varchar(50) DEFAULT NULL COMMENT 'Unit of Measure',
-  `packing_notes` text DEFAULT NULL COMMENT 'Packing notes for this item',
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   PRIMARY KEY (`id`),
   KEY `cust_trans_so_items_tenant_idx` (`tenant_id`),
@@ -2405,17 +2384,17 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_outward` (
 
 
 
-CREATE TABLE `service_group` (
-    `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    `tenant_id` VARCHAR(36) NOT NULL,
-    `category` VARCHAR(100) NOT NULL,
+CREATE TABLE service_group (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id VARCHAR(36) NOT NULL,
+    category VARCHAR(100) NOT NULL,
     `group` VARCHAR(100) NOT NULL DEFAULT '',
     `subgroup` VARCHAR(100) NOT NULL DEFAULT '',
-    `is_active` BOOLEAN DEFAULT TRUE,
-    `created_at` DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
-    `updated_at` DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
 
-    INDEX `idx_tenant` (`tenant_id`)
+    INDEX idx_tenant (tenant_id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE service_list (
@@ -2617,6 +2596,7 @@ MODIFY COLUMN `subgroup` VARCHAR(100) NOT NULL DEFAULT '';
 -- used by the UI tree (which builds roots from systemCategories constants).
 DELETE FROM `inventory_master_category` WHERE `group` = '' AND `subgroup` = '';
 DELETE FROM `vendor_master_category`    WHERE `group` = '' AND `subgroup` = '';
+DELETE FROM `customer_master_category`  WHERE `group` = '' AND `subgroup` = '';
 DELETE FROM `service_group`             WHERE `group` = '' AND `subgroup` = '';
 
 -----------------------------------------------------
@@ -2905,58 +2885,65 @@ CREATE TABLE journal_entries (
     INDEX idx_tenant (tenant_id)
 );
 
--- Schema Updates
-ALTER TABLE inventory_master_inventoryitems ADD COLUMN cess_rate DECIMAL(5, 2) DEFAULT NULL AFTER gst_rate;
-
-ALTER TABLE voucher_purchase_supplier_details
-MODIFY vendor_basic_detail_id BIGINT;
 
 
--- Vendor Category Hierarchy Fixes (2026-03-16)
-ALTER TABLE vendor_master_category CHANGE COLUMN name category VARCHAR(255) NOT NULL;
-ALTER TABLE vendor_master_category ADD COLUMN is_system TINYINT(1) DEFAULT 0;
-ALTER TABLE vendor_master_category ADD COLUMN `group` VARCHAR(255) DEFAULT '';
-ALTER TABLE vendor_master_category ADD COLUMN subgroup VARCHAR(255) DEFAULT '';
-ALTER TABLE vendor_master_category DROP INDEX IF EXISTS uq_vendor_category_name_per_tenant;
-ALTER TABLE vendor_master_category DROP INDEX IF EXISTS vendor_category_tenant_unique;
-ALTER TABLE vendor_master_category ADD UNIQUE KEY vendor_category_tenant_unique (tenant_id, category(100), `group`(100), subgroup(100));
-
+-- Alter the customer_master_customer_productservice table by added a new column packing_notes
 ALTER TABLE customer_master_customer_productservice
 ADD COLUMN packing_notes VARCHAR(255) DEFAULT NULL COMMENT 'Packing Notes';
 
-CREATE TABLE `customer_masters_salesorder` (
-              `id` int(11) NOT NULL AUTO_INCREMENT,
-              `tenant_id` varchar(36) NOT NULL,
-              `series_name` varchar(100) NOT NULL,
-              `customer_category` varchar(100) DEFAULT NULL,
-              `prefix` varchar(20) DEFAULT 'SO/',
-              `suffix` varchar(20) DEFAULT '/24-25',
-              `required_digits` int(11) DEFAULT '4',
-              `current_number` int(11) DEFAULT '0',
-              `auto_year` tinyint(1) DEFAULT '0',
-              `is_active` tinyint(1) NOT NULL DEFAULT '1',
-              `is_deleted` tinyint(1) NOT NULL DEFAULT '0',
-              `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-              `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-              `created_by` varchar(100) DEFAULT NULL,
-              PRIMARY KEY (`id`),
-              UNIQUE KEY `customer_so_tenant_series_unique` (`tenant_id`,`series_name`),
-              KEY `customer_so_tenant_id_idx` (`tenant_id`),
-              KEY `customer_so_category_idx` (`customer_category`),
-              KEY `customer_so_is_active_idx` (`is_active`),
-              KEY `customer_so_is_deleted_idx` (`is_deleted`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Service Group Hierarchy Fixes (2026-03-17)
--- Ensuring all columns exist for service group hierarchy
-ALTER TABLE `service_group` ADD COLUMN `category` VARCHAR(100) NOT NULL AFTER `tenant_id`;
-ALTER TABLE `service_group` ADD COLUMN `group` VARCHAR(100) NOT NULL DEFAULT '' AFTER `category`;
-ALTER TABLE `service_group` ADD COLUMN `subgroup` VARCHAR(100) NOT NULL DEFAULT '' AFTER `group`;
 
--- Updates for Customer Master Long-term Contracts (2026-03-17)
-ALTER TABLE `customer_master_longtermcontracts_basicdetails` ADD COLUMN `updated_by` VARCHAR(100) DEFAULT NULL AFTER `created_by`;
-ALTER TABLE `customer_master_longtermcontracts_productservices` ADD COLUMN `updated_by` VARCHAR(100) DEFAULT NULL AFTER `created_by`;
-ALTER TABLE `customer_master_longtermcontracts_termscondition` ADD COLUMN `updated_by` VARCHAR(100) DEFAULT NULL AFTER `created_by`;
-ALTER TABLE `service_group` DROP COLUMN IF EXISTS `category_id`;
-ALTER TABLE `service_group` DROP COLUMN IF EXISTS `parent_group_id`;
+--Alter the customer_transaction_salesorder_items table by adding a new column packing_notes
+ALTER TABLE customer_transaction_salesorder_items
+ADD COLUMN packing_notes TEXT DEFAULT NULL COMMENT 'Packing Notes';
 
+CREATE TABLE hsn_gst_master (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    hsn_code VARCHAR(20) NOT NULL,
+    description TEXT,
+    sgst_utgst DECIMAL(5,2),
+    igst DECIMAL(5,2),
+    cgst DECIMAL(5,2),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_hsn_code (hsn_code)
+);
+
+  -- Table: bulk_invoice_jobs
+  -- Tracks bulk upload units for processing 300+ invoices in the background.
+
+  CREATE TABLE IF NOT EXISTS `bulk_invoice_jobs` (
+    `id` bigint NOT NULL AUTO_INCREMENT,
+    `tenant_id` char(36) NOT NULL,
+    `total_files` int NOT NULL DEFAULT '0',
+    `processed_count` int NOT NULL DEFAULT '0',
+    `failed_count` int NOT NULL DEFAULT '0',
+    `status` varchar(20) NOT NULL DEFAULT 'pending' COMMENT 'pending, processing, completed',
+    `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (`id`),
+    KEY `bulk_invoice_jobs_tenant_id_idx` (`tenant_id`),
+    KEY `bulk_invoice_jobs_status_idx` (`status`)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Bulk invoice processing jobs tracker';
+
+  -- Table: invoice_processing_items
+  -- Individual files within a bulk processing job.
+
+  CREATE TABLE IF NOT EXISTS `invoice_processing_items` (
+    `id` bigint NOT NULL AUTO_INCREMENT,
+    `job_id` bigint NOT NULL,
+    `file_path` varchar(500) NOT NULL,
+    `file_hash` varchar(64) DEFAULT NULL COMMENT 'SHA-256 hash to prevent duplicate AI calls',
+    `status` varchar(20) NOT NULL DEFAULT 'pending' COMMENT 'pending, processing, done, failed',
+    `result_json` JSON DEFAULT NULL COMMENT 'Extracted OCR data from AI',
+    `error_message` longtext DEFAULT NULL,
+    `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (`id`),
+    KEY `invoice_processing_items_job_id_idx` (`job_id`),
+    KEY `invoice_processing_items_hash_idx` (`file_hash`),
+    KEY `invoice_processing_items_status_idx` (`status`),
+    CONSTRAINT `invoice_processing_items_job_fk` FOREIGN KEY (`job_id`) REFERENCES `bulk_invoice_jobs` (`id`) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Individual invoices within a bulk processing job';

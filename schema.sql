@@ -411,6 +411,10 @@ CREATE TABLE `company_informations` (
     `branch_contact_person` varchar(100) DEFAULT NULL COMMENT 'Branch contact person',
     `branch_email` varchar(255) DEFAULT NULL COMMENT 'Branch email',
     `branch_contact_no` varchar(20) DEFAULT NULL COMMENT 'Branch contact number',
+    `branch_pincode` varchar(10) DEFAULT NULL COMMENT 'Branch pincode',
+    `branch_city` varchar(100) DEFAULT NULL COMMENT 'Branch city',
+    `branch_state` varchar(100) DEFAULT NULL COMMENT 'Branch state',
+    `branch_country` varchar(100) DEFAULT NULL COMMENT 'Branch country',
     PRIMARY KEY (`id`),
     UNIQUE KEY `vendor_gstdetails_tenant_gstin_ref_unique` (`tenant_id`,`gstin`,`reference_name`),
     KEY `vendor_gstdetails_tenant_id_idx` (`tenant_id`),
@@ -2889,3 +2893,54 @@ ADD COLUMN packing_notes VARCHAR(255) DEFAULT NULL COMMENT 'Packing Notes';
 --Alter the customer_transaction_salesorder_items table by adding a new column packing_notes
 ALTER TABLE customer_transaction_salesorder_items
 ADD COLUMN packing_notes TEXT DEFAULT NULL COMMENT 'Packing Notes';
+
+CREATE TABLE hsn_gst_master (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    hsn_code VARCHAR(20) NOT NULL,
+    description TEXT,
+    sgst_utgst DECIMAL(5,2),
+    igst DECIMAL(5,2),
+    cgst DECIMAL(5,2),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_hsn_code (hsn_code)
+);
+
+  -- Table: bulk_invoice_jobs
+  -- Tracks bulk upload units for processing 300+ invoices in the background.
+
+  CREATE TABLE IF NOT EXISTS `bulk_invoice_jobs` (
+    `id` bigint NOT NULL AUTO_INCREMENT,
+    `tenant_id` char(36) NOT NULL,
+    `total_files` int NOT NULL DEFAULT '0',
+    `processed_count` int NOT NULL DEFAULT '0',
+    `failed_count` int NOT NULL DEFAULT '0',
+    `status` varchar(20) NOT NULL DEFAULT 'pending' COMMENT 'pending, processing, completed',
+    `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (`id`),
+    KEY `bulk_invoice_jobs_tenant_id_idx` (`tenant_id`),
+    KEY `bulk_invoice_jobs_status_idx` (`status`)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Bulk invoice processing jobs tracker';
+
+  -- Table: invoice_processing_items
+  -- Individual files within a bulk processing job.
+
+  CREATE TABLE IF NOT EXISTS `invoice_processing_items` (
+    `id` bigint NOT NULL AUTO_INCREMENT,
+    `job_id` bigint NOT NULL,
+    `file_path` varchar(500) NOT NULL,
+    `file_hash` varchar(64) DEFAULT NULL COMMENT 'SHA-256 hash to prevent duplicate AI calls',
+    `status` varchar(20) NOT NULL DEFAULT 'pending' COMMENT 'pending, processing, done, failed',
+    `result_json` JSON DEFAULT NULL COMMENT 'Extracted OCR data from AI',
+    `error_message` longtext DEFAULT NULL,
+    `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (`id`),
+    KEY `invoice_processing_items_job_id_idx` (`job_id`),
+    KEY `invoice_processing_items_hash_idx` (`file_hash`),
+    KEY `invoice_processing_items_status_idx` (`status`),
+    CONSTRAINT `invoice_processing_items_job_fk` FOREIGN KEY (`job_id`) REFERENCES `bulk_invoice_jobs` (`id`) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Individual invoices within a bulk processing job';

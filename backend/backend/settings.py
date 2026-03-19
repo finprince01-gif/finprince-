@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'reports',
     'drf_spectacular',
+    'vouchers',
 ]
 
 MIDDLEWARE = [
