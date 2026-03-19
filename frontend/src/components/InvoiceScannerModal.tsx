@@ -45,7 +45,7 @@ interface InvoiceScannerModalProps {
     onUpload?: (data: any[]) => void;
     initialFiles?: FileList | null;
     voucherType: string;
-    extractionMode?: 'finpixe' | 'tally';
+    extractionMode?: 'finpixe' | 'tally' | 'zoho' | 'sap';
     scanType?: 'single' | 'bulk';
     onExtractionSuccess?: (extractedData: any) => void;
 }
@@ -311,12 +311,15 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
     const LINE_ITEM_FIELDS = [
         // ── Core item identification ──────────────────────────────────────────
         "Item Code", "Item Name", "HSN/SAC", "HSN Description", "Description", "Sales Ledger",
+        "Item Description",
         // ── Quantity / Unit ───────────────────────────────────────────────────
         "Qty", "Quantity", "UOM", "UQC", "Alternate Unit",
+        "Actual Quantity", "Billed Quantity", "Quantity UOM",
         // ── Foreign currency ──────────────────────────────────────────────────
         "Rate (FC)", "Amount (FC)",
         // ── INR pricing ───────────────────────────────────────────────────────
         "Item Rate", "Rate", "Taxable Value",
+        "Item Rate per", "Disc%",
         // ── Tax columns ───────────────────────────────────────────────────────
         "CGST", "SGST", "SGST/UTGST", "IGST", "CESS", "Cess",
         "IGST Rate", "CGST Rate", "SGST/UTGST Rate",
@@ -324,8 +327,10 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         // ── Row total ─────────────────────────────────────────────────────────
         "Invoice Value", "Item Amount",
         // ── Tally-specific per-row fields ────────────────────────────────────
-        "GST Rate Details", "GST Taxability Type"
+        "GST Rate Details", "GST Taxability Type",
+        "Item Allocations - Tracking No.", "Item Allocations - Order No.", "Item Allocations - Batch/Lot No."
     ].filter(f => ALL_COLUMNS.includes(f));
+
 
     const HEADER_FIELDS = ALL_COLUMNS.filter(col => !LINE_ITEM_FIELDS.includes(col));
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -355,7 +360,9 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         }
 
         const checkVendor = async () => {
+            if (extractionMode !== 'finpixe') return;
             const firstRow = invoiceResults[0].invoice;
+
             const vendorName = firstRow['Vendor Name'] || firstRow['Bill From'] || firstRow['Buyer/Supplier - Mailing Name'] || '';
             if (!vendorName) return;
 
@@ -488,7 +495,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         try {
             const allResults: InvoiceResult[] = [];
             let batchProcessedCount = 0;
-            const CONCURRENCY_LIMIT = 5;
+            const CONCURRENCY_LIMIT = 4;
 
             for (let i = 0; i < newFiles.length; i += CONCURRENCY_LIMIT) {
                 const batch = newFiles.slice(i, i + CONCURRENCY_LIMIT);
@@ -509,6 +516,8 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                     formData.append('voucher_type', voucherType);
                     formData.append('table_name', voucherType);
                     formData.append('columns', JSON.stringify(ALL_COLUMNS));
+                    formData.append('extraction_mode', extractionMode || 'finpixe');
+
 
                     try {
                         const result = await httpClient.postFormData<any>('/api/ai/extract-invoice/', formData);
@@ -563,7 +572,11 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
                         // Build a CLEAN flat rawHeader: invoice fields + summary totals only
                         // Do NOT spread resData (which contains container keys like "invoice", "items")
-                        const rawHeader: Record<string, any> = { ...invoicePart, ...summaryTotals };
+                        const rawHeader: Record<string, any> = { 
+                            ...invoicePart, 
+                            ...summaryTotals,
+                            voucher_type: resData.voucher_type || res.voucher_type || voucherType
+                        };
 
                         // Strip any nested objects or arrays (keep only scalar values)
                         Object.keys(rawHeader).forEach(k => {
@@ -572,6 +585,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                                 delete rawHeader[k];
                             }
                         });
+
 
                         // Items come from resData, not from invoicePart
                         const rawItems: any[] = resData.items || resData.line_items || resData.lineItems ||
@@ -617,6 +631,23 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                             }
                             normalizedHeader[field] = (val !== undefined && val !== null) ? String(val) : '';
                         });
+
+                        // ── 7.5 Tally-specific field fallbacks (to fill common missing fields) ──
+                        if (extractionMode === 'tally') {
+                            // Mirror Date -> Reference Date if only one exists
+                            if (!normalizedHeader['Reference Date'] && normalizedHeader['Voucher Date']) {
+                                normalizedHeader['Reference Date'] = normalizedHeader['Voucher Date'];
+                            } else if (normalizedHeader['Reference Date'] && !normalizedHeader['Voucher Date']) {
+                                normalizedHeader['Voucher Date'] = normalizedHeader['Reference Date'];
+                            }
+                            // Mirror Number -> Reference No if only one exists (common for supplier invoices)
+                            if (!normalizedHeader['Reference No.'] && normalizedHeader['Voucher Number']) {
+                                normalizedHeader['Reference No.'] = normalizedHeader['Voucher Number'];
+                            } else if (normalizedHeader['Reference No.'] && !normalizedHeader['Voucher Number']) {
+                                normalizedHeader['Voucher Number'] = normalizedHeader['Reference No.'];
+                            }
+                        }
+
 
                         // ── Build normalized items ──
                         const normalizedItems = rawItems.map((item: any, idx: number) => {
@@ -877,20 +908,23 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             });
         });
 
-        // Keep only columns that have at least one non-empty value (mirrors what's visible)
-        const activeCols = ALL_COLUMNS.filter(col =>
-            allRows.some(row => row[col] !== '' && row[col] !== undefined && row[col] !== null)
-        );
+        // For Tally: always export ALL columns so the file matches the exact Tally schema.
+        // For other modes: keep only columns that have at least one non-empty value.
+        const exportCols = extractionMode === 'tally'
+            ? ALL_COLUMNS
+            : ALL_COLUMNS.filter(col =>
+                allRows.some(row => row[col] !== '' && row[col] !== undefined && row[col] !== null)
+            );
 
-        // Rebuild rows with only the active columns — no '#' column
+        // Rebuild rows with the chosen columns
         const excelRows = allRows.map(row => {
             const out: Record<string, string> = {};
-            activeCols.forEach(col => { out[col] = row[col]; });
+            exportCols.forEach(col => { out[col] = row[col] ?? ''; });
             return out;
         });
 
-        const ws = XLSX.utils.json_to_sheet(excelRows, { header: activeCols });
-        ws['!cols'] = activeCols.map((h) => ({ wch: Math.max(h.length, 14) }));
+        const ws = XLSX.utils.json_to_sheet(excelRows, { header: exportCols });
+        ws['!cols'] = exportCols.map((h) => ({ wch: Math.max(h.length, 14) }));
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Invoices');
         XLSX.writeFile(wb, `Extracted_Invoices_${Date.now()}.xlsx`);
@@ -914,14 +948,17 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             });
         });
 
-        // Keep only columns with actual data — no '#' column
-        const activeCols = ALL_COLUMNS.filter(col =>
-            allRows.some(row => row[col] !== '' && row[col] !== undefined)
-        );
-        let csvContent = activeCols.map(h => `"${h.replace(/"/g, '""')}"`).join(',') + '\n';
+        // For Tally: always export ALL columns. For other modes: active columns only.
+        const exportCols = extractionMode === 'tally'
+            ? ALL_COLUMNS
+            : ALL_COLUMNS.filter(col =>
+                allRows.some(row => row[col] !== '' && row[col] !== undefined)
+            );
+
+        let csvContent = exportCols.map(h => `"${h.replace(/"/g, '""')}"`).join(',') + '\n';
 
         allRows.forEach(row => {
-            const cells = activeCols.map(col => {
+            const cells = exportCols.map(col => {
                 const val = String(row[col] ?? '');
                 return `"${val.replace(/"/g, '""')}"`;
             });
@@ -1145,7 +1182,8 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                                         <Icon name="download" className="w-5 h-5 mr-2" />
                                         Download CSV
                                     </button>
-                                    {extractionMode !== 'tally' && (
+                                    {extractionMode === 'finpixe' && (
+
                                         <div className="flex items-center">
                                             <button
                                                 onClick={handleUploadToFinpixe}
