@@ -131,6 +131,7 @@ class VendorPOViewSet(viewsets.ModelViewSet):
         except Exception as e:
             import traceback
             traceback.print_exc()
+            with open('err.txt', 'w') as f2: f2.write(str(e) + '\n' + traceback.format_exc())
             return Response({
                 'success': False,
                 'error': str(e)

@@ -20,7 +20,7 @@ def generate_po_number(tenant_id: str, po_series_id: Optional[int] = None) -> st
     if po_series_id:
         # Get series settings
         query = """
-            SELECT prefix, current_number, required_digits, suffix
+            SELECT prefix, current_number, digits, suffix
             FROM vendor_master_posettings
             WHERE id = %s AND tenant_id = %s
         """
@@ -30,7 +30,7 @@ def generate_po_number(tenant_id: str, po_series_id: Optional[int] = None) -> st
             row = cursor.fetchone()
             
             if row:
-                prefix, current_number, required_digits, suffix = row
+                prefix, current_number, digits, suffix = row
                 next_number = current_number + 1
                 
                 # Update current number
@@ -42,7 +42,7 @@ def generate_po_number(tenant_id: str, po_series_id: Optional[int] = None) -> st
                 cursor.execute(update_query, [next_number, po_series_id])
                 
                 # Format PO number
-                number_str = str(next_number).zfill(required_digits)
+                number_str = str(next_number).zfill(digits)
                 return f"{prefix}{number_str}{suffix}"
     
     # Fallback: generate simple sequential number

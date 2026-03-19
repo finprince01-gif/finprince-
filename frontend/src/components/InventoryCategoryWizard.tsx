@@ -472,7 +472,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
             }
         }
 
-        if (selectedNode.level === 2 && !formData.sub_subgroup.trim() && showSubgroup) {
+        if (selectedNode.level === 2 && !formData.sub_subgroup.trim() && showSubgroup && selectedNode.data.category === 'Stores and Spares') {
             // Selected Subgroup, user MUST enter Item Name
             showWarning('Please enter an Item Name');
             return;
@@ -502,7 +502,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                 showSuccess('Subgroup created successfully!');
             }
             // 3. Create Item (under Subgroup)
-            else if (showSubgroup && (selectedNode.level === 2 || (selectedNode.level === 1 && selectedNode.data.subgroup)) && !selectedNode.data.sub_subgroup) {
+            else if (showSubgroup && selectedNode.data.category === 'Stores and Spares' && (selectedNode.level === 2 || (selectedNode.level === 1 && selectedNode.data.subgroup)) && !selectedNode.data.sub_subgroup) {
                 await onCreateCategory({
                     category: selectedNode.data.category,
                     group: selectedNode.data.group || '',
@@ -768,7 +768,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                                 )}
                                 
                                 {/* 4. Item Input - CONDITIONAL */}
-                                {showSubgroup && selectedNode && selectedNode.level >= 2 && (
+                                {showSubgroup && selectedNode && selectedNode.level >= 2 && selectedNode.data.category === 'Stores and Spares' && (
                                     <div className="mt-4">
                                         <label className="label-text">
                                             ITEM (SUB-SUBGROUP)
@@ -873,13 +873,13 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                                         disabled={!selectedNode || (
                                             selectedNode.level === 0 ? !formData.group.trim() : 
                                             (selectedNode.level === 1 && !selectedNode.data.subgroup) ? !formData.subgroup.trim() :
-                                            ((selectedNode.level === 2 || (selectedNode.level === 1 && selectedNode.data.subgroup)) && !selectedNode.data.sub_subgroup) ? !formData.sub_subgroup.trim() :
+                                            (selectedNode.data.category === 'Stores and Spares' && (selectedNode.level === 2 || (selectedNode.level === 1 && selectedNode.data.subgroup)) && !selectedNode.data.sub_subgroup) ? !formData.sub_subgroup.trim() :
                                             true
                                         )}
                                         className={`w-full py-2.5 px-4 rounded font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm ${selectedNode && (
                                             (selectedNode.level === 0 && formData.group.trim()) || 
                                             (selectedNode.level === 1 && !selectedNode.data.subgroup && formData.subgroup.trim()) ||
-                                            ((selectedNode.level === 2 || (selectedNode.level === 1 && selectedNode.data.subgroup)) && formData.sub_subgroup.trim())
+                                            (selectedNode.data.category === 'Stores and Spares' && (selectedNode.level === 2 || (selectedNode.level === 1 && selectedNode.data.subgroup)) && formData.sub_subgroup.trim())
                                         )
                                             ? 'bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer focus:ring-indigo-500'
                                             : selectedNode

@@ -34,7 +34,11 @@ class VendorGSTDetailsSerializer(serializers.ModelSerializer):
             'branch_address',
             'branch_contact_person',
             'branch_email',
-            'branch_contact_no'
+            'branch_contact_no',
+            'branch_pincode',
+            'branch_city',
+            'branch_state',
+            'branch_country'
         ]
         read_only_fields = ['id', 'tenant_id', 'created_at', 'updated_at']
 
@@ -56,7 +60,11 @@ class VendorGSTDetailsCreateSerializer(serializers.ModelSerializer):
             'branch_address',
             'branch_contact_person',
             'branch_email',
-            'branch_contact_no'
+            'branch_contact_no',
+            'branch_pincode',
+            'branch_city',
+            'branch_state',
+            'branch_country'
         ]
     
     def validate_gstin(self, value):
@@ -102,6 +110,10 @@ class VendorGSTDetailsUpdateSerializer(serializers.ModelSerializer):
             'branch_contact_person',
             'branch_email',
             'branch_contact_no',
+            'branch_pincode',
+            'branch_city',
+            'branch_state',
+            'branch_country',
             'is_active'
         ]
     
@@ -131,6 +143,10 @@ class VendorGSTDetailsListSerializer(serializers.ModelSerializer):
             'branch_contact_person',
             'branch_email',
             'branch_contact_no',
+            'branch_pincode',
+            'branch_city',
+            'branch_state',
+            'branch_country',
             'gst_state',
             'gst_state_code',
             'is_active'

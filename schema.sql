@@ -486,6 +486,7 @@ CREATE TABLE `company_informations` (
     `category` VARCHAR(255) NOT NULL,
     `group` VARCHAR(255) NOT NULL DEFAULT '',
     `subgroup` VARCHAR(255) NOT NULL DEFAULT '',
+    `sub_subgroup` VARCHAR(255) NOT NULL DEFAULT '',
     `is_active` TINYINT(1) NOT NULL DEFAULT 1,
     `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     `updated_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
@@ -498,7 +499,8 @@ CREATE TABLE `company_informations` (
       `tenant_id`,
       `category`(100),
       `group`(100),
-      `subgroup`(100)
+      `subgroup`(100),
+      `sub_subgroup`(100)
     ),
 
     KEY `inventory_master_category_tenant_id_idx` (`tenant_id`),
@@ -578,6 +580,7 @@ CREATE TABLE `company_informations` (
     
     `hsn_code` VARCHAR(20) DEFAULT NULL,
     `gst_rate` DECIMAL(5,2) DEFAULT NULL,
+    `cess_rate` DECIMAL(5,2) DEFAULT NULL,
     
     `reorder_level` VARCHAR(255) DEFAULT NULL COMMENT 'Reorder Level Information',
     `is_saleable` TINYINT(1) NOT NULL DEFAULT 0,
