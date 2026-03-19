@@ -727,6 +727,7 @@ class SalesCustomerCreateView(APIView):
                     customer_category=cat,
                     created_by=username
                 )
+                print("CUSTOMER CREATED - NO LEDGER SHOULD BE CREATED")
                 
                 # 2. GST Details
                 if gstin or branch:

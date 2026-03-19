@@ -545,7 +545,6 @@ class InventoryOperationNewGRN(BaseModel):
     
     # References
     reference_no = models.CharField(max_length=100, null=True, blank=True) # PO No / Sales Voucher No
-    secondary_ref_no = models.CharField(max_length=100, null=True, blank=True) # Supplier Inv No / Debit Note No
     
     # Sales Return Specific
     return_reason = models.TextField(null=True, blank=True)
@@ -560,3 +559,15 @@ class InventoryOperationNewGRN(BaseModel):
     class Meta:
         managed = False
         db_table = 'inventory_operation_new_grn'
+
+class HsnGstMaster(models.Model):
+    hsn_code = models.CharField(max_length=20, null=True, blank=True)
+    description = models.TextField(null=True, blank=True)
+    sgst_utgst = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    igst = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    cgst = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+
+    class Meta:
+        managed = False
+        db_table = 'hsn_gst_master'
+

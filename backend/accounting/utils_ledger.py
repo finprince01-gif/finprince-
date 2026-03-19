@@ -3,11 +3,18 @@ from .models import MasterLedger
 
 def get_or_create_entity_ledger(tenant_id, entity_name, entity_type, created_by=None):
     """
-    Ensures a ledger exists for a Customer or Vendor.
-    entity_type: 'customer' or 'vendor'
+    Ensures a ledger exists for a Vendor.
+    Customer auto-ledger creation is intentionally disabled.
     """
-    category = 'Asset' if entity_type == 'customer' else 'Liability'
-    group = 'Sundry Debtors' if entity_type == 'customer' else 'Sundry Creditors'
+    if entity_type == 'customer':
+        return MasterLedger.objects.filter(
+            tenant_id=tenant_id,
+            name=entity_name,
+            group='Sundry Debtors'
+        ).first()
+
+    category = 'Liability'
+    group = 'Sundry Creditors'
     
     with transaction.atomic():
         ledger, created = MasterLedger.objects.update_or_create(
