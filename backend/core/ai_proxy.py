@@ -454,8 +454,8 @@ class AIServiceProxy:
     """Main AI service interface with direct processing (no Redis queue)"""
 
     def __init__(self):
-        # Concurrency limiter for direct processing
-        self.concurrency_semaphore = threading.Semaphore(5)
+        # Concurrency limiter for direct processing (Increased to 20)
+        self.concurrency_semaphore = threading.Semaphore(20)
 
     def make_request(self, request_type: str, request_data: dict,
                     user_id: str, tenant_id: str = None) -> dict:
@@ -520,10 +520,10 @@ class AIServiceProxy:
             'cache_key': cache_key
         })
 
-        # Process directly - limit concurrency
-        if not self.concurrency_semaphore.acquire(blocking=False):
-            logger.warning(f"Concurrency limit reached, rejecting direct request for user {user_id}")
-            return {'error': 'AI service busy. Please try again later.', 'code': 'CONCURRENCY_LIMIT'}
+        # Process directly - limit concurrency (queue up to 30s)
+        if not self.concurrency_semaphore.acquire(blocking=True, timeout=30):
+            logger.warning(f"Concurrency limit reached (30s timeout), rejecting direct request for user {user_id}")
+            return {'error': 'AI service is currently busy handling other requests. Please try again in 30 seconds.', 'code': 'CONCURRENCY_LIMIT'}
 
         try:
             logger.info(f"Processing {request_type} request directly for user {user_id}")
