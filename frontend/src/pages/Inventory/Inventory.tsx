@@ -7097,24 +7097,32 @@ const InventoryPage: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Conversion</label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="text"
-                      placeholder="1 UOM"
-                      value="1"
-                      readOnly
-                      disabled={!editFormData?.isNew && !editFormData?.isEditMode}
-                      className="flex-1 px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed bg-gray-50"
-                    />
-                    <span className="text-xl font-bold text-gray-700">=</span>
-                    <input
-                      type="text"
-                      placeholder="? Alternate Unit"
-                      value={editFormData?.conversionFactor || ''}
-                      onChange={(e) => handleFormChange('conversionFactor', e.target.value)}
-                      disabled={!editFormData?.isNew && !editFormData?.isEditMode}
-                      className="flex-1 px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                    />
+                  <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value="1"
+                        readOnly
+                        disabled={!editFormData?.isNew && !editFormData?.isEditMode}
+                        className="w-32 px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed bg-gray-50 text-center font-bold shadow-sm"
+                      />
+                      <span className="text-sm font-semibold text-indigo-700 bg-indigo-50 px-4 py-2 rounded border border-indigo-100 min-w-[100px] text-center shadow-sm">
+                        {unitOptions.find(u => u.value === editFormData?.uom)?.label || 'UOM'}
+                      </span>
+                    </div>
+                    <span className="text-xl font-bold text-gray-400">=</span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={editFormData?.conversionFactor || ''}
+                        onChange={(e) => handleFormChange('conversionFactor', e.target.value)}
+                        disabled={!editFormData?.isNew && !editFormData?.isEditMode}
+                        className="w-48 px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed hover:border-slate-400 transition-colors"
+                      />
+                      <span className="text-sm font-semibold text-emerald-700 bg-emerald-50 px-4 py-2 rounded border border-emerald-100 min-w-[100px] text-center shadow-sm">
+                        {unitOptions.find(u => u.value === editFormData?.altUnit)?.label || 'Alt Unit'}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -7192,13 +7200,40 @@ const InventoryPage: React.FC = () => {
                 {editFormData?.categoryPath && ['raw material', 'stock-in-trade', 'stock in trade', 'stores & spares', 'stores and spares', 'packing material'].some(cat => editFormData.categoryPath.toLowerCase().includes(cat)) && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Reorder Level</label>
-                    <input
-                      type="text"
-                      value={editFormData?.reorderLevel || ''}
-                      onChange={(e) => handleFormChange('reorderLevel', e.target.value)}
-                      placeholder="Enter reorder level"
-                      className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
+                    <div className="flex items-center gap-6">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={editFormData?.reorderLevel || ''}
+                          onChange={(e) => handleFormChange('reorderLevel', e.target.value)}
+                          className="w-48 px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+                        />
+                        <span className="text-sm font-semibold text-indigo-700 bg-indigo-50 px-4 py-2 rounded border border-indigo-100 min-w-[100px] text-center shadow-sm">
+                          {unitOptions.find(u => u.value === editFormData?.uom)?.label || 'UOM'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={
+                            editFormData?.reorderLevel && editFormData?.conversionFactor
+                              ? (parseFloat(editFormData.reorderLevel) * parseFloat(editFormData.conversionFactor)).toFixed(2)
+                              : ''
+                          }
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val && editFormData?.conversionFactor) {
+                              const primaryVal = (parseFloat(val) / parseFloat(editFormData.conversionFactor)).toFixed(2);
+                              handleFormChange('reorderLevel', primaryVal);
+                            }
+                          }}
+                          className="w-48 px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+                        />
+                        <span className="text-sm font-semibold text-emerald-700 bg-emerald-50 px-4 py-2 rounded border border-emerald-100 min-w-[100px] text-center shadow-sm">
+                          {unitOptions.find(u => u.value === editFormData?.altUnit)?.label || 'Alt Unit'}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 )}
                 {editFormData?.categoryPath?.includes('Work in Progress') && (
