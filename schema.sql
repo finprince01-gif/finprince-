@@ -173,7 +173,7 @@ CREATE TABLE `company_informations` (
     `ledger` varchar(255) DEFAULT NULL,
     `additional_data` json DEFAULT NULL,
     PRIMARY KEY (`id`),
-    UNIQUE KEY `master_ledgers_name_tenant_unique` (`name`,`tenant_id`),
+    UNIQUE KEY `idx_unique_ledger_name` (`tenant_id`, `name`, `group`),
     UNIQUE KEY `master_ledgers_ledger_code_tenant_id_ef0135d0_uniq` (`ledger_code`,`tenant_id`),
     KEY `master_ledgers_tenant_id_idx` (`tenant_id`),
     KEY `master_ledgers_category_idx` (`category`),
@@ -305,6 +305,7 @@ CREATE TABLE `company_informations` (
     `category` VARCHAR(255) NOT NULL COMMENT 'Top-level category',
     `group` VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'Group under category',
     `subgroup` VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'Subgroup under group',
+    `sub_subgroup` VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'Sub-subgroup under subgroup',
     `is_active` TINYINT(1) NOT NULL DEFAULT 1 COMMENT 'Whether this category is active',
     `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     `updated_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
@@ -317,7 +318,8 @@ CREATE TABLE `company_informations` (
       `tenant_id`,
       `category`(100),
       `group`(100),
-      `subgroup`(100)
+      `subgroup`(100),
+      `sub_subgroup`(100)
     ),
 
     KEY `vendor_category_tenant_id_idx` (`tenant_id`),
@@ -378,7 +380,9 @@ CREATE TABLE `company_informations` (
     `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
     `created_by` varchar(100) DEFAULT NULL COMMENT 'Created by user',
     `updated_by` varchar(100) DEFAULT NULL COMMENT 'Updated by user',
+    `ledger_id` bigint NOT NULL COMMENT 'FK to master_ledgers',
     PRIMARY KEY (`id`),
+    CONSTRAINT `fk_vendor_ledger` FOREIGN KEY (`ledger_id`) REFERENCES `master_ledgers` (`id`) ON DELETE RESTRICT,
     UNIQUE KEY `vendor_basicdetail_tenant_code_unique` (`tenant_id`,`vendor_code`),
     KEY `vendor_basicdetail_tenant_id_idx` (`tenant_id`),
     KEY `vendor_basicdetail_tenant_name_idx` (`tenant_id`,`vendor_name`),
@@ -1110,7 +1114,9 @@ CREATE TABLE `customer_master_customer_basicdetails` (
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   `created_by` varchar(100) DEFAULT NULL,
   `updated_by` varchar(100) DEFAULT NULL,
+  `ledger_id` bigint NOT NULL COMMENT 'FK to master_ledgers',
   PRIMARY KEY (`id`),
+  CONSTRAINT `fk_customer_ledger` FOREIGN KEY (`ledger_id`) REFERENCES `master_ledgers` (`id`) ON DELETE RESTRICT,
   UNIQUE KEY `customer_basic_tenant_code_uniq` (`tenant_id`,`customer_code`),
   UNIQUE KEY `customer_basic_tenant_id_uniq` (`tenant_id`, `id`),
   KEY `customer_basic_tenant_id_idx` (`tenant_id`),
@@ -1635,6 +1641,7 @@ CREATE TABLE `voucher_sales_invoicedetails` (
   `customer_name` VARCHAR(255),
   `customer_id` BIGINT DEFAULT NULL COMMENT 'Link to customer_master_customer_basicdetails.id',
   `customer_branch` VARCHAR(100) DEFAULT NULL,
+  `voucher_id` BIGINT DEFAULT NULL COMMENT 'Link to unified vouchers table',
 
   `bill_to` LONGTEXT,
   `ship_to` LONGTEXT,
@@ -1713,11 +1720,14 @@ CREATE TABLE `voucher_sales_items_foreign` (
   `created_at` DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
 
+  `item_name` VARCHAR(255),
   `description` LONGTEXT,
   `quantity` DECIMAL(18,4) DEFAULT 0.0000,
   `uqc` VARCHAR(50),
   `rate` DECIMAL(18,2) DEFAULT 0.00,
   `amount` DECIMAL(18,2) DEFAULT 0.00,
+  `alternate_unit` VARCHAR(50),
+  `sales_ledger` VARCHAR(255),
 
   `invoice_id` BIGINT,
 
@@ -1783,9 +1793,11 @@ CREATE TABLE IF NOT EXISTS `voucher_payment_single` (
   `bank_reconcile_date` date DEFAULT NULL,
   `bank_statement_id` bigint DEFAULT NULL,
   `bank_reference_number` varchar(100) DEFAULT NULL,
+  `voucher_id` bigint DEFAULT NULL COMMENT 'Link to unified vouchers.id',
   PRIMARY KEY (`id`),
   KEY `voucher_payment_single_tenant_id_idx` (`tenant_id`),
   KEY `voucher_payment_single_date_idx` (`date`),
+  KEY `idx_voucher_payment_single_voucher_id` (`voucher_id`),
   CONSTRAINT `voucher_payment_single_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_vps_pay_from` FOREIGN KEY (`pay_from_ledger_id`) REFERENCES `master_ledgers` (`id`) ON DELETE RESTRICT,
   CONSTRAINT `fk_vps_pay_to` FOREIGN KEY (`pay_to_ledger_id`) REFERENCES `master_ledgers` (`id`) ON DELETE RESTRICT
@@ -1811,9 +1823,11 @@ CREATE TABLE IF NOT EXISTS `voucher_payment_bulk` (
   `bank_reconcile_date` date DEFAULT NULL,
   `bank_statement_id` bigint DEFAULT NULL,
   `bank_reference_number` varchar(100) DEFAULT NULL,
+  `voucher_id` bigint DEFAULT NULL COMMENT 'Link to unified vouchers.id',
   PRIMARY KEY (`id`),
   KEY `voucher_payment_bulk_tenant_id_idx` (`tenant_id`),
   KEY `voucher_payment_bulk_date_idx` (`date`),
+  KEY `idx_voucher_payment_bulk_voucher_id` (`voucher_id`),
   CONSTRAINT `voucher_payment_bulk_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_vpb_pay_from` FOREIGN KEY (`pay_from_ledger_id`) REFERENCES `master_ledgers` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -1832,9 +1846,11 @@ CREATE TABLE IF NOT EXISTS `voucher_expenses` (
   `uploaded_files` json DEFAULT NULL,
   `created_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `voucher_id` bigint DEFAULT NULL COMMENT 'Link to unified vouchers.id',
   PRIMARY KEY (`id`),
   KEY `voucher_expenses_tenant_id_idx` (`tenant_id`),
   KEY `voucher_expenses_date_idx` (`date`),
+  KEY `idx_voucher_expenses_voucher_id` (`voucher_id`),
   CONSTRAINT `voucher_expenses_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -1850,9 +1866,11 @@ CREATE TABLE `voucher_contra` (
   `to_account` VARCHAR(255) NOT NULL,
   `amount` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
   `narration` LONGTEXT,
+  `voucher_id` BIGINT DEFAULT NULL COMMENT 'Link to unified vouchers.id',
   PRIMARY KEY (`id`),
   INDEX `idx_voucher_contra_tenant` (`tenant_id`),
-  INDEX `idx_voucher_contra_voucher` (`voucher_number`)
+  INDEX `idx_voucher_contra_voucher` (`voucher_number`),
+  INDEX `idx_voucher_contra_voucher_id` (`voucher_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `voucher_journal` (
@@ -1866,9 +1884,11 @@ CREATE TABLE `voucher_journal` (
   `total_credit` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
   `narration` LONGTEXT,
   `entries` JSON NOT NULL,
+  `voucher_id` BIGINT DEFAULT NULL COMMENT 'Link to unified vouchers.id',
   PRIMARY KEY (`id`),
   INDEX `idx_voucher_journal_tenant` (`tenant_id`),
-  INDEX `idx_voucher_journal_voucher` (`voucher_number`)
+  INDEX `idx_voucher_journal_voucher` (`voucher_number`),
+  INDEX `idx_voucher_journal_voucher_id` (`voucher_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE voucher_purchase_supplier_details (
@@ -1888,8 +1908,10 @@ CREATE TABLE voucher_purchase_supplier_details (
   input_type VARCHAR(50),
   invoice_in_foreign_currency VARCHAR(10),
   supporting_document VARCHAR(100),
+  voucher_id BIGINT DEFAULT NULL COMMENT 'Link to unified vouchers.id',
   PRIMARY KEY (id),
-  KEY idx_vpsd_tenant (tenant_id)
+  KEY idx_vpsd_tenant (tenant_id),
+  KEY idx_vpsd_voucher_id (voucher_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE voucher_purchase_due_details (
@@ -2824,11 +2846,13 @@ CREATE TABLE IF NOT EXISTS `voucher_receipt_single` (
   `bank_reconcile_date` date DEFAULT NULL,
   `bank_statement_id` bigint DEFAULT NULL,
   `bank_reference_number` varchar(100) DEFAULT NULL,
+  `voucher_id` bigint DEFAULT NULL COMMENT 'Link to unified vouchers.id',
   `receive_in_ledger_id` bigint NOT NULL COMMENT 'FK to master_ledgers (Bank/Cash account)',
   `receive_from_ledger_id` bigint NOT NULL COMMENT 'FK to master_ledgers (Customer/Party)',
   PRIMARY KEY (`id`),
   KEY `voucher_receipt_single_tenant_id_idx` (`tenant_id`),
   KEY `voucher_receipt_single_date_idx` (`date`),
+  KEY `idx_voucher_receipt_single_voucher_id` (`voucher_id`),
   KEY `fk_vrs_receive_in` (`receive_in_ledger_id`),
   KEY `fk_vrs_receive_from` (`receive_from_ledger_id`),
   CONSTRAINT `fk_vrs_receive_from` FOREIGN KEY (`receive_from_ledger_id`) REFERENCES `master_ledgers` (`id`) ON DELETE RESTRICT,
@@ -2857,29 +2881,71 @@ CREATE TABLE IF NOT EXISTS `voucher_receipt_bulk` (
   `bank_reconcile_date` date DEFAULT NULL,
   `bank_statement_id` bigint DEFAULT NULL,
   `bank_reference_number` varchar(100) DEFAULT NULL,
+  `voucher_id` bigint DEFAULT NULL COMMENT 'Link to unified vouchers.id',
   `receive_in_ledger_id` bigint NOT NULL COMMENT 'FK to master_ledgers (Bank/Cash account)',
   PRIMARY KEY (`id`),
   KEY `voucher_receipt_bulk_tenant_id_idx` (`tenant_id`),
   KEY `voucher_receipt_bulk_date_idx` (`date`),
+  KEY `idx_voucher_receipt_bulk_voucher_id` (`voucher_id`),
   KEY `fk_vrb_receive_in` (`receive_in_ledger_id`),
   CONSTRAINT `fk_vrb_receive_in` FOREIGN KEY (`receive_in_ledger_id`) REFERENCES `master_ledgers` (`id`) ON DELETE RESTRICT,
   CONSTRAINT `voucher_receipt_bulk_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 COMMENT='Bulk receipt vouchers. One voucher can receive from multiple parties.';
 
+CREATE TABLE `vouchers` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `tenant_id` VARCHAR(36) NOT NULL,
+  `created_at` DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `type` VARCHAR(20) NOT NULL COMMENT 'sales, purchase, payment, receipt, contra, journal',
+  `voucher_number` VARCHAR(50) NOT NULL,
+  `date` DATE NOT NULL,
+  `party` VARCHAR(255) DEFAULT NULL,
+  `account` VARCHAR(255) DEFAULT NULL,
+  `amount` DECIMAL(15,2) DEFAULT NULL,
+  `total` DECIMAL(15,2) DEFAULT 0.00,
+  `narration` TEXT DEFAULT NULL,
+  `source` VARCHAR(100) DEFAULT 'manual',
+  `invoice_no` VARCHAR(50) DEFAULT NULL,
+  `reference_id` BIGINT DEFAULT NULL COMMENT 'ID of source document',
+  PRIMARY KEY (`id`),
+  INDEX `idx_vouchers_tenant` (`tenant_id`),
+  INDEX `idx_vouchers_type_number` (`tenant_id`, `type`, `voucher_number`),
+  INDEX `idx_vouchers_date` (`date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE journal_entries (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     tenant_id VARCHAR(36) NOT NULL,
     created_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
     updated_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    
+    voucher_type VARCHAR(50) NOT NULL COMMENT 'Sales/Purchase/Payment/etc',
     voucher_id BIGINT NOT NULL,
-    ledger VARCHAR(255) NOT NULL,
-    debit DECIMAL(15,2) DEFAULT 0.00,
-    credit DECIMAL(15,2) DEFAULT 0.00,
+    voucher_number VARCHAR(50) DEFAULT NULL,
+    transaction_date DATE DEFAULT NULL,
+    narration TEXT DEFAULT NULL,
+    
+    ledger_id BIGINT NOT NULL COMMENT 'FK to master_ledgers',
+    ledger_name VARCHAR(255) DEFAULT NULL,
+    
+    debit DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+    credit DECIMAL(15,2) NOT NULL DEFAULT 0.00,
 
-    INDEX idx_voucher (voucher_id),
+    -- Mutual Exclusion Constraint
+    CONSTRAINT chk_debit_credit_mutual_exclusive 
+    CHECK ((debit > 0 AND credit = 0) OR (credit > 0 AND debit = 0)),
+
+    -- Foreign Key
+    CONSTRAINT fk_je_ledger FOREIGN KEY (ledger_id) REFERENCES master_ledgers(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_je_voucher FOREIGN KEY (voucher_id) REFERENCES vouchers(id) ON DELETE CASCADE,
+
+    -- Indexes
+    INDEX idx_voucher_composite (tenant_id, voucher_type, voucher_id),
+    INDEX idx_ledger_date (tenant_id, ledger_id, created_at),
     INDEX idx_tenant (tenant_id)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 

@@ -8,6 +8,7 @@ from .models_voucher_purchase import (
     VoucherPurchaseDueDetails, 
     VoucherPurchaseTransitDetails
 )
+from .models import Voucher
 
 class VoucherPurchaseSupplyForeignDetailsSerializer(serializers.ModelSerializer):
     purchase_order_no = serializers.CharField(required=False, allow_blank=True, allow_null=True)
@@ -154,6 +155,30 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):
 
         supplier_instance = VoucherPurchaseSupplierDetails.objects.create(**validated_data)
         tenant_id = supplier_instance.tenant_id
+
+        purchase_voucher_number = (
+            supplier_instance.purchase_voucher_no
+            or supplier_instance.supplier_invoice_no
+            or f"PUR-{supplier_instance.id}"
+        )
+        purchase_total = due_data.get('to_pay') if isinstance(due_data, dict) else None
+
+        voucher = Voucher.objects.create(
+            tenant_id=tenant_id,
+            type='purchase',
+            date=supplier_instance.date,
+            voucher_number=purchase_voucher_number,
+            invoice_no=supplier_instance.supplier_invoice_no,
+            party=supplier_instance.vendor_name,
+            total=purchase_total,
+            source='purchase_voucher',
+            reference_id=supplier_instance.id,
+        )
+
+        setattr(supplier_instance, '_accounting_voucher_id', voucher.id)
+        if any(field.name == 'voucher_id' for field in supplier_instance._meta.fields):
+            supplier_instance.voucher_id = voucher.id
+            supplier_instance.save(update_fields=['voucher_id'])
 
         if supply_foreign_data is not None:
             valid_fields = {'purchase_order_no', 'purchase_ledger', 'exchange_rate', 'description', 'items'}

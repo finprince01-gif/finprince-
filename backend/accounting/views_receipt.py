@@ -35,7 +35,8 @@ class VoucherReceiptSingleViewSet(viewsets.ModelViewSet):
         
         with db_transaction.atomic():
             self.perform_create(serializer)
-            voucher = serializer.instance
+            voucher_record = serializer.instance
+            accounting_voucher_id = getattr(voucher_record, '_accounting_voucher_id', voucher_record.id)
             
             # Link to bank transaction if ID provided
             reconciliation_link_created = False
@@ -49,7 +50,7 @@ class VoucherReceiptSingleViewSet(viewsets.ModelViewSet):
                         bank_transaction=st_txn,
                         defaults=dict(
                             tenant_id=tenant_id,
-                            voucher_id=voucher.id,
+                            voucher_id=accounting_voucher_id,
                             voucher_type='receipt',
                             reconciliation_type='manual',
                             reconciliation_date=datetime.date.today(),
@@ -61,7 +62,7 @@ class VoucherReceiptSingleViewSet(viewsets.ModelViewSet):
                         )
                     )
                     if not created:
-                        link.voucher_id = voucher.id
+                        link.voucher_id = accounting_voucher_id
                         link.voucher_type = 'receipt'
                         link.reconciliation_type = 'manual'
                         link.reconciliation_date = datetime.date.today()
@@ -74,13 +75,13 @@ class VoucherReceiptSingleViewSet(viewsets.ModelViewSet):
 
                     # Update staging transaction status to MANUAL_MATCHED
                     st_txn.status = 'MANUAL_MATCHED'
-                    st_txn.matched_voucher_id = voucher.id
+                    st_txn.matched_voucher_id = accounting_voucher_id
                     st_txn.reconciled_at = timezone.now()
                     st_txn.is_ignored = False
                     st_txn.save(update_fields=['status', 'matched_voucher_id', 'reconciled_at', 'is_ignored'])
 
                     # Mark voucher itself as bank-reconciled
-                    VoucherReceiptSingle.objects.filter(id=voucher.id).update(
+                    VoucherReceiptSingle.objects.filter(id=voucher_record.id).update(
                         bank_reconciled=True,
                         bank_reconcile_date=st_txn.transaction_date,
                         bank_statement_id=st_txn.id,

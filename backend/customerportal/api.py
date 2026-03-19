@@ -55,7 +55,7 @@ class CustomerMasterViewSet(viewsets.ModelViewSet):
         user = self.request.user
         tenant_id = getattr(user, 'tenant_id', None)
         if tenant_id:
-            return CustomerMasterCustomer.objects.filter(tenant_id=tenant_id, is_deleted=False)
+            return CustomerMasterCustomer.objects.select_related('customer_category').filter(tenant_id=tenant_id, is_deleted=False)
         return CustomerMasterCustomer.objects.none()
 
     def perform_create(self, serializer):
@@ -222,7 +222,7 @@ class CustomerMasterCustomerViewSet(viewsets.ModelViewSet):
         user = self.request.user
         tenant_id = getattr(user, 'tenant_id', None)
         if tenant_id:
-            return CustomerMasterCustomer.objects.filter(tenant_id=tenant_id, is_deleted=False)
+            return CustomerMasterCustomer.objects.select_related('customer_category').filter(tenant_id=tenant_id, is_deleted=False)
         return CustomerMasterCustomer.objects.none()
     
     def create(self, request, *args, **kwargs):
@@ -246,11 +246,11 @@ class CustomerMasterCustomerViewSet(viewsets.ModelViewSet):
         
         try:
             response = super().create(request, *args, **kwargs)
-            logger.info("✅ Customer created successfully!")
+            logger.info("[OK] Customer created successfully!")
             logger.info(f"Response: {response.data}")
             return response
         except Exception as e:
-            logger.error(f"❌ Error creating customer: {str(e)}")
+            logger.error(f"[ERROR] Error creating customer: {str(e)}")
             import traceback
             logger.error(traceback.format_exc())
             raise

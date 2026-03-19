@@ -1,6 +1,14 @@
 from rest_framework import serializers  # type: ignore[import]
 from .models_voucher_receipt import VoucherReceiptSingle, VoucherReceiptBulk  # type: ignore[import]
-from .models import MasterLedger  # type: ignore[import]
+from .models import MasterLedger, Voucher  # type: ignore[import]
+from decimal import Decimal, InvalidOperation
+
+
+def _safe_decimal(value):
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return Decimal("0")
 
 
 class VoucherReceiptSingleSerializer(serializers.ModelSerializer):
@@ -62,6 +70,29 @@ class VoucherReceiptSingleSerializer(serializers.ModelSerializer):
 
         return attrs
 
+    def create(self, validated_data):
+        receipt = super().create(validated_data)
+
+        voucher = Voucher.objects.create(
+            tenant_id=receipt.tenant_id,
+            type='receipt',
+            date=receipt.date,
+            voucher_number=receipt.voucher_number,
+            party=receipt.receive_from.name if receipt.receive_from else None,
+            account=receipt.receive_in.name if receipt.receive_in else None,
+            amount=receipt.total_receipt,
+            total=receipt.total_receipt,
+            source=receipt.source or 'manual',
+            reference_id=receipt.id,
+        )
+
+        setattr(receipt, '_accounting_voucher_id', voucher.id)
+        if any(field.name == 'voucher_id' for field in receipt._meta.fields):
+            receipt.voucher_id = voucher.id
+            receipt.save(update_fields=['voucher_id'])
+
+        return receipt
+
 
 class VoucherReceiptBulkSerializer(serializers.ModelSerializer):
     receive_in_name = serializers.CharField(source='receive_in.name', read_only=True)
@@ -101,3 +132,33 @@ class VoucherReceiptBulkSerializer(serializers.ModelSerializer):
             attrs['receive_in'] = self._resolve_ledger(receive_in_val, tenant_id)
 
         return attrs
+
+    def create(self, validated_data):
+        receipt = super().create(validated_data)
+
+        receipt_rows = receipt.receipt_rows if isinstance(receipt.receipt_rows, list) else []
+        total_amount = sum(
+            (_safe_decimal(row.get('amount')) for row in receipt_rows if isinstance(row, dict)),
+            Decimal("0"),
+        )
+
+        voucher = Voucher.objects.create(
+            tenant_id=receipt.tenant_id,
+            type='receipt',
+            date=receipt.date,
+            voucher_number=receipt.voucher_number,
+            account=receipt.receive_in.name if receipt.receive_in else None,
+            amount=total_amount,
+            total=total_amount,
+            narration=receipt.posting_note,
+            source='manual',
+            items_data=receipt_rows or None,
+            reference_id=receipt.id,
+        )
+
+        setattr(receipt, '_accounting_voucher_id', voucher.id)
+        if any(field.name == 'voucher_id' for field in receipt._meta.fields):
+            receipt.voucher_id = voucher.id
+            receipt.save(update_fields=['voucher_id'])
+
+        return receipt

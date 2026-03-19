@@ -734,22 +734,43 @@ export const KEYWORD_RULES: Record<string, string[]> = EXACT_TALLY_COLUMNS.reduc
 const CRITICAL_HEADER_FIELDS = ['Buyer/Supplier - Mailing Name', 'Customer Name', 'Vendor Name', 'Supplier Invoice No', 'Date'];
 const CRITICAL_LINE_ITEM_FIELDS: string[] = [];
 
-KEYWORD_RULES['Buyer/Supplier - Mailing Name']?.push('seller', 'vendor name', 'bill from', 'merchant');
-KEYWORD_RULES['Buyer/Supplier - GSTIN/UIN']?.push('seller gstin', 'vendor gstin', 'supplier gstin', 'gstin');
+KEYWORD_RULES['Buyer/Supplier - Mailing Name']?.push('seller', 'vendor name', 'bill from', 'merchant', 'vendor_name', 'seller_name');
+KEYWORD_RULES['Buyer/Supplier - GSTIN/UIN']?.push('seller gstin', 'vendor gstin', 'supplier gstin', 'gstin', 'gst_no', 'gst_number');
 KEYWORD_RULES['GSTIN'] = ['gstin', 'gst number', 'gst registration', 'gst no', 'gstin/uin'];
 KEYWORD_RULES['Buyer/Supplier - State'] = ['state', 'place of supply', 'pos', 'billing state', 'supply state'];
+KEYWORD_RULES['Buyer/Supplier - Address'] = ['address', 'mailing address', 'bill from address', 'vendor address'];
 KEYWORD_RULES['Supplier Invoice No.'] = ['invoice no', 'bill no', 'inv no', 'reference', 'ref no'];
+KEYWORD_RULES['Reference No.'] = ['invoice no', 'bill no', 'inv no', 'reference', 'ref no', 'supplier invoice no', 'invoice_number', 'bill_no', 'supplier_invoice_number'];
+KEYWORD_RULES['Reference Date'] = ['invoice date', 'bill date', 'dated', 'reference date', 'invoice_date', 'bill_date'];
 KEYWORD_RULES['Sales Invoice No.'] = ['invoice no', 'bill no', 'inv no', 'reference', 'ref no'];
 KEYWORD_RULES['Sales Voucher No.'] = ['voucher no', 'voucher number', 'vch no'];
 KEYWORD_RULES['Sales Voucher Series'] = ['series', 'prefix', 'category'];
 KEYWORD_RULES['Purchase Voucher No.'] = ['voucher no', 'voucher number', 'vch no'];
 KEYWORD_RULES['Purchase Voucher Series'] = ['series', 'prefix', 'category'];
+KEYWORD_RULES['Voucher Number'] = ['vch no', 'voucher no', 'vch_number', 'tally_vch_no', 'voucher_number'];
 KEYWORD_RULES['Amount Due'] = ['grand total', 'invoice total', 'total payable', 'net amount', 'invoice value', 'bill amount', 'balance due', 'payable amount', 'total', 'grandtotal'];
 KEYWORD_RULES['Round Off'] = ['round off', 'round-off', 'rounding', 'adjustment', 'roundoff'];
 KEYWORD_RULES['Date'] = ['invoice date', 'bill date', 'dated', 'voucher date', 'bill date'];
-KEYWORD_RULES['Voucher Date'] = ['date', 'invoice date', 'bill date', 'dated'];
+KEYWORD_RULES['Voucher Date'] = ['voucher date', 'voucher_date', 'vch_date', 'doc_date', 'date'];
+KEYWORD_RULES['Voucher Type Name'] = ['voucher type', 'voucher_type_name', 'transaction type', 'vch_type'];
+KEYWORD_RULES['Voucher Narration'] = ['narration', 'remarks', 'notes', 'header narration', 'header_narration'];
 KEYWORD_RULES['Customer Name'] = ['customer', 'party', 'client', 'buyer', 'name', 'bill to', 'bill_to', 'buyer name', 'buyer_name', 'consignee', 'recipient'];
 KEYWORD_RULES['Vendor Name'] = ['vendor', 'supplier', 'party', 'seller', 'merchant', 'name', 'bill from', 'bill_from', 'seller name', 'seller_name', 'merchant name'];
+KEYWORD_RULES['Item Name'] = ['particulars', 'description', 'service', 'product', 'item_name', 'line item'];
+KEYWORD_RULES['Actual Quantity'] = ['qty', 'quantity', 'actual_qty'];
+KEYWORD_RULES['Billed Quantity'] = ['qty', 'quantity', 'billed_qty'];
+KEYWORD_RULES['Quantity UOM'] = ['uom', 'unit', 'uqc', 'pcs', 'nos', 'mrs', 'kg'];
+KEYWORD_RULES['Item Rate'] = ['rate', 'unit price', 'item_rate', 'price'];
+KEYWORD_RULES['Item Amount'] = ['amount', 'item total', 'line total', 'item_amount'];
+KEYWORD_RULES['Disc%'] = ['disc', 'discount', 'discount percent'];
+KEYWORD_RULES['Taxable Value'] = ['taxable', 'taxable_value', 'assessable value', 'assessable_amount'];
+KEYWORD_RULES['IGST Rate'] = ['igst%', 'igst rate', 'igstrate'];
+KEYWORD_RULES['CGST Rate'] = ['cgst%', 'cgst rate', 'cgstrate'];
+KEYWORD_RULES['SGST/UTGST Rate'] = ['sgst%', 'sgst rate', 'sgstrate', 'utgst rate'];
+KEYWORD_RULES['IGST Amount'] = ['igst', 'integrated tax'];
+KEYWORD_RULES['CGST Amount'] = ['cgst', 'central tax'];
+KEYWORD_RULES['SGST Amount'] = ['sgst', 'state tax', 'utgst'];
+
 
 const POSITIVE_NUMERIC_FIELDS = [
     'Taxable Value',
@@ -863,8 +884,18 @@ const applyContextBoost = (
 ): { score: number; reason: string } => {
     if (targetGroup === 'misc' || sourceGroup === 'misc') return { score: baseScore, reason: 'no_context' };
     if (sourceGroup === targetGroup) return { score: Math.min(100, baseScore + 5), reason: 'same_group_boost' };
+
+    // ── INTEROP COMPATIBILITY ──
+    // Allow mapping between AI standard keys and Tally schema without cross-group penalty.
+    const isInterop = (
+        (sourceGroup === 'finpixe_standard' && targetGroup === 'tally_contract') ||
+        (sourceGroup === 'tally_contract' && targetGroup === 'finpixe_standard')
+    );
+    if (isInterop) return { score: baseScore, reason: 'interop_compatibility' };
+
     // Penalty for cross-group
     return { score: Math.max(0, baseScore - 20), reason: 'cross_group_penalty' };
+
 };
 
 // ────────────────────────────────────────────────────────────────────────────────
@@ -944,9 +975,14 @@ export const runMappingEngine = (
                 if (kwExact) {
                     score = 85; method = 'keyword';
                 } else {
-                    // Fuzzy ONLY allowed within same group
-                    const sameGroup = targetGroup !== 'misc' && sourceGroup === targetGroup;
-                    if (sameGroup) {
+                    // Fuzzy ONLY allowed within same group or across Interop groups
+                    const isInterop = (
+                        (sourceGroup === 'finpixe_standard' && targetGroup === 'tally_contract') ||
+                        (sourceGroup === 'tally_contract' && targetGroup === 'finpixe_standard')
+                    );
+                    const canFuzzy = (targetGroup !== 'misc' && sourceGroup === targetGroup) || isInterop;
+                    if (canFuzzy) {
+
                         const sim = getSimilarity(sourceSanitized, targetSanitized);
                         const kwSim = keywords.reduce((mx, kw) => Math.max(mx, getSimilarity(sourceSanitized, sanitize(kw))), 0);
                         const rawFuzzy = Math.floor(Math.max(sim, kwSim) * 80);
