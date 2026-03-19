@@ -448,4 +448,31 @@ class PendingGRNListView(generics.ListAPIView):
         used_grns = [g for g in used_grns if g]
         
         return qs.exclude(grn_no__in=used_grns).exclude(grn_no__isnull=True).exclude(grn_no__exact='')
-        return qs.exclude(grn_no__in=used_grns).exclude(grn_no__isnull=True).exclude(grn_no__exact='')
+
+
+from rest_framework.views import APIView
+
+class HsnDetailsAPIView(APIView):
+    """
+    GET /api/hsn-details/?hsn_code=XXXX
+    Looks up igst from hsn_gst_master by hsn_code.
+    Returns {"igst": value} on match, 404 {"error": "Invalid HSN"} otherwise.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        hsn_code = request.query_params.get('hsn_code', '')
+        if not hsn_code:
+            return Response({'error': 'Invalid HSN'}, status=status.HTTP_404_NOT_FOUND)
+
+        hsn_code = str(hsn_code).strip()
+
+        try:
+            from .models import HsnGstMaster
+            hsn_record = HsnGstMaster.objects.filter(hsn_code=hsn_code).first()
+            if hsn_record and hsn_record.igst is not None:
+                return Response({'igst': str(hsn_record.igst)}, status=status.HTTP_200_OK)
+            else:
+                return Response({'error': 'Invalid HSN'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception:
+            return Response({'error': 'Invalid HSN'}, status=status.HTTP_404_NOT_FOUND)

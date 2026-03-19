@@ -130,6 +130,7 @@ const InventoryPage: React.FC = () => {
   const [locPincode, setLocPincode] = useState('');
   const [locationGstin, setLocationGstin] = useState('');
   const [isEditModeLocation, setIsEditModeLocation] = useState(false);
+  const [isViewModeLocation, setIsViewModeLocation] = useState(false);
   const [loadingLocations, setLoadingLocations] = useState(false);
   const [locationSearchQuery, setLocationSearchQuery] = useState('');
 
@@ -720,6 +721,34 @@ const InventoryPage: React.FC = () => {
     setIsEditModeLocation(true);
   };
 
+  const handleViewLocation = () => {
+    if (!selectedLocation) return;
+    setLocationName(selectedLocation.name);
+    const predefinedType = locationTypes.find(t => t.value === selectedLocation.location_type);
+    if (predefinedType) {
+      setLocationType(selectedLocation.location_type);
+      setIsCustomLocationType(false);
+      setCustomLocationTypeValue('');
+    } else {
+      setLocationType('custom');
+      setIsCustomLocationType(true);
+      setCustomLocationTypeValue(selectedLocation.location_type);
+    }
+    setLocAddressLine1(selectedLocation.address_line1);
+    setLocAddressLine2(selectedLocation.address_line2 || '');
+    setLocAddressLine3(selectedLocation.address_line3 || '');
+    setLocCity(selectedLocation.city);
+    setLocState(selectedLocation.state);
+    setLocCountry(selectedLocation.country || 'India');
+    setLocPincode(selectedLocation.pincode);
+    setLocationGstin(selectedLocation.gstin || '');
+    setVendorName('');
+    setCustomerName('');
+    setLocationAddress(selectedLocation.location_address || '');
+    setIsEditModeLocation(false); // read-only: NOT edit mode
+    setIsViewModeLocation(true);
+  };
+
   const handleDeleteLocation = async () => {
     if (!selectedLocation) return;
     if (!await confirm(`Are you sure you want to delete "${selectedLocation.name}"?`)) return;
@@ -752,6 +781,7 @@ const InventoryPage: React.FC = () => {
     setLocPincode('');
     setLocationGstin('');
     setIsEditModeLocation(false);
+    setIsViewModeLocation(false);
     setSelectedLocation(null);
     setSelectedVendorId(null);
     setSelectedCustomerId(null);
@@ -981,6 +1011,45 @@ const InventoryPage: React.FC = () => {
     });
   };
 
+  // HSN debounce timer ref
+  const hsnDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastFetchedHsn = React.useRef<string>('');
+
+  // HSN live auto-fill: debounced onChange, fires 500ms after typing stops
+  const handleHsnChange = (value: string) => {
+    handleFormChange('hsnCode', value);
+
+    const hsn = value.trim();
+    // Clear GST if HSN is too short
+    if (hsn.length < 4) {
+      setEditFormData((prev: any) => ({ ...prev, gstRate: '' }));
+      lastFetchedHsn.current = '';
+      return;
+    }
+    // Skip if same HSN already fetched
+    if (hsn === lastFetchedHsn.current) return;
+
+    // Cancel previous timer
+    if (hsnDebounceRef.current) clearTimeout(hsnDebounceRef.current);
+
+    // Fire after 500ms pause
+    hsnDebounceRef.current = setTimeout(async () => {
+      try {
+        const response = await httpClient.get<{ igst: string }>(
+          '/api/hsn-details/',
+          { hsn_code: hsn }
+        );
+        if (response && response.igst !== undefined) {
+          lastFetchedHsn.current = hsn;
+          setEditFormData((prev: any) => ({ ...prev, gstRate: response.igst }));
+        }
+      } catch {
+        setEditFormData((prev: any) => ({ ...prev, gstRate: '' }));
+        lastFetchedHsn.current = '';
+      }
+    }, 500);
+  };
+
   const resetItemForm = () => {
     setItemCode('');
     setItemName('');
@@ -1010,8 +1079,11 @@ const InventoryPage: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left Column - Create/Edit Form */}
         <div className="bg-white p-6 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-300">
-          <h3 className="text-lg font-semibold text-gray-800 mb-6">{isEditModeLocation ? 'Edit Location' : 'Create Location'}</h3>
+          <h3 className="text-lg font-semibold text-gray-800 mb-6">
+            {isViewModeLocation ? '👁 View Location' : isEditModeLocation ? 'Edit Location' : 'Create Location'}
+          </h3>
           <form onSubmit={handleLocationSubmit} className="space-y-4">
+            <fieldset disabled={isViewModeLocation} className="contents">
             {/* ... Location inputs ... */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Location Name <span className="text-red-500">*</span></label>
@@ -1275,9 +1347,16 @@ const InventoryPage: React.FC = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">GSTIN (Optional)</label>
               <input type="text" value={locationGstin} onChange={(e) => setLocationGstin(e.target.value)} className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter GSTIN (15 characters)" maxLength={15} />
             </div>
+            </fieldset>
             <div className="flex gap-3 pt-4">
-              <button type="submit" className="flex-1 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">{isEditModeLocation ? 'Update Location' : 'Create Location'}</button>
-              {isEditModeLocation && <button type="button" onClick={resetLocationForm} className="px-4 py-2 border border-gray-300 text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none">Cancel</button>}
+              {isViewModeLocation ? (
+                <button type="button" onClick={resetLocationForm} className="flex-1 px-4 py-2 border border-gray-300 text-sm font-medium rounded-[4px] text-gray-700 bg-white hover:bg-gray-50">Close</button>
+              ) : (
+                <>
+                  <button type="submit" className="flex-1 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">{isEditModeLocation ? 'Update Location' : 'Create Location'}</button>
+                  {isEditModeLocation && <button type="button" onClick={resetLocationForm} className="px-4 py-2 border border-gray-300 text-sm font-medium rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none">Cancel</button>}
+                </>
+              )}
             </div>
           </form>
         </div>
@@ -1304,6 +1383,7 @@ const InventoryPage: React.FC = () => {
                         <td className="px-6 py-4 text-right">
                           {isSelected && (
                             <div className="inline-flex gap-2">
+                              <button onClick={handleViewLocation} className="text-white bg-gray-500 px-2 py-1 rounded text-xs hover:bg-gray-600">View</button>
                               <button onClick={handleEditLocation} className="text-white bg-indigo-600 px-2 py-1 rounded text-xs">Edit</button>
                               <button onClick={handleDeleteLocation} className="text-white bg-red-600 px-2 py-1 rounded text-xs">Del</button>
                             </div>
@@ -5863,15 +5943,6 @@ const InventoryPage: React.FC = () => {
                             )}
                           </select>
                         </div>
-                        <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-2">Supplier Invoice No.</label>
-                          <select value={grnSecondaryRefNo} onChange={(e) => handleGrnSecondaryRefNoChange(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                            <option value="">Select Invoice</option>
-                            {grnSecondaryRefNoOptions.map((inv: any) => (
-                              <option key={inv.id} value={inv.supplier_invoice_no}>{inv.supplier_invoice_no}</option>
-                            ))}
-                          </select>
-                        </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-5 mt-4">
@@ -6106,8 +6177,8 @@ const InventoryPage: React.FC = () => {
                                 <input
                                   type="number"
                                   value={item.secondaryQty || ''}
-                                  readOnly
-                                  className="w-16 px-2 py-1 border border-gray-300 rounded text-xs bg-gray-100 cursor-not-allowed"
+                                  onChange={(e) => handleGrnItemChange(index, 'secondaryQty', e.target.value)}
+                                  className="w-16 px-2 py-1 border border-gray-300 rounded text-xs"
                                 />
                               </td>
                               <td className="px-3 py-2">
@@ -7164,7 +7235,7 @@ const InventoryPage: React.FC = () => {
                   <input
                     type="text"
                     value={editFormData?.hsnCode || ''}
-                    onChange={(e) => handleFormChange('hsnCode', e.target.value)}
+                    onChange={(e) => handleHsnChange(e.target.value)}
                     disabled={!editFormData?.isNew && !editFormData?.isEditMode}
                     placeholder="Enter HSN code"
                     className="w-full px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
