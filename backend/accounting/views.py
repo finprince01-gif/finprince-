@@ -139,6 +139,16 @@ class MasterLedgerViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
             logger.error(f"❌ Error updating ledger: {type(e).__name__}: {str(e)}", exc_info=True)
             raise
 
+    @action(detail=False, methods=['get'], url_path='cash-bank')
+    def cash_bank(self, request):
+        """Get only Cash and Bank ledgers for dropdowns"""
+        queryset = self.get_queryset().filter(
+            category__icontains='Asset',
+            group__icontains='Cash and Bank Balances'
+        )
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
 
 # MasterVoucherConfigViewSet removed (deprecated)
 

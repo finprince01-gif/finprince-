@@ -309,7 +309,7 @@ def create_sales_voucher(data: Dict, tenant_id: str, user_state: str) -> 'SalesV
     Supports resolving voucher type from VoucherConfiguration.
     """
     from accounting.models import (
-        SalesVoucher, SalesVoucherItem, MasterLedger
+        SalesVoucher, SalesVoucherItem, MasterLedger, Voucher
     )
     from masters.voucher_master_models import MasterVoucherSales as VoucherConfiguration
     from masters.voucher_master_models import MasterVoucherReceipts as ReceiptVoucherType
@@ -367,7 +367,7 @@ def create_sales_voucher(data: Dict, tenant_id: str, user_state: str) -> 'SalesV
         # Create sales voucher (Mapped to VoucherSalesInvoiceDetails)
         # We only save fields that exist in the table `voucher_sales_invoicedetails`
         
-        voucher = SalesVoucher.objects.create(
+        sales_voucher = SalesVoucher.objects.create(
             tenant_id=tenant_id,
             date=data['date'],
             voucher_name=voucher_name,
@@ -391,6 +391,22 @@ def create_sales_voucher(data: Dict, tenant_id: str, user_state: str) -> 'SalesV
             # Fields NOT in schema header:
             # - status, current_step, totals...
         )
+
+        accounting_voucher = Voucher.objects.create(
+            tenant_id=tenant_id,
+            type='sales',
+            date=data['date'],
+            voucher_number=invoice_number,
+            party=customer_info['customer_name'],
+            total=totals.get('grand_total') or 0,
+            invoice_no=invoice_number,
+            source='sales_invoice',
+            reference_id=sales_voucher.id,
+        )
+
+        if any(field.name == 'voucher_id' for field in sales_voucher._meta.fields):
+            sales_voucher.voucher_id = accounting_voucher.id
+            sales_voucher.save(update_fields=['voucher_id'])
         
         # Create items if provided
         for idx, item_data in enumerate(data.get('items', []), start=1):
@@ -418,7 +434,7 @@ def create_sales_voucher(data: Dict, tenant_id: str, user_state: str) -> 'SalesV
             
             SalesVoucherItem.objects.create(
                 tenant_id=tenant_id,
-                invoice=voucher, # Field name is 'invoice' (FK)
+                invoice=sales_voucher, # Field name is 'invoice' (FK)
                 item_name=item_data['item_name'],
                 hsn_sac=item_data.get('hsn_code', ''),
                 qty=qty,
@@ -432,4 +448,4 @@ def create_sales_voucher(data: Dict, tenant_id: str, user_state: str) -> 'SalesV
                 invoice_value=total_invoice_value
             )
     
-    return voucher
+    return sales_voucher

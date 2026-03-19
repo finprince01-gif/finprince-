@@ -223,6 +223,16 @@ class CustomerMasterCustomerBasicDetails(models.Model):
     is_also_vendor = models.BooleanField(default=False)
     gst_tds_applicable = models.BooleanField(default=False, help_text='TDS Applicable under GST')
     
+    # Linked Accounting Ledger
+    ledger = models.ForeignKey(
+        'accounting.MasterLedger', 
+        on_delete=models.RESTRICT, 
+        null=True, 
+        blank=True, 
+        related_name='customers_basic',
+        db_column='ledger_id'
+    )
+    
     # Status and Metadata
     is_active = models.BooleanField(default=True)
     is_deleted = models.BooleanField(default=False)
