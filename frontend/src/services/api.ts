@@ -300,6 +300,18 @@ class ApiService {
     }
 
     /**
+     * Get Production Slips (for reference in Inter-process transfer or FG production)
+     * @param type - Optional production_type filter ('materials_issued', 'inter_process', etc.)
+     */
+    async getProductionSlips(type?: string) {
+        let url = '/api/inventory/operations/production/';
+        if (type) {
+            url += `?production_type=${type}`;
+        }
+        return httpClient.get<any[]>(url);
+    }
+
+    /**
      * Get Purchase Orders for a specific vendor
      * @param vendorName - Vendor name to filter by (optional)
      * @param status - Optional status filter (e.g. 'Draft', 'Pending', 'Closed')
@@ -323,8 +335,12 @@ class ApiService {
      * Get only Pending Purchase Orders for a specific vendor
      * @param vendorId - ID of the vendor
      */
-    async getPendingPOs(vendorId: number | string) {
-        return httpClient.get<any[]>(`/api/get_pending_pos?vendor_id=${vendorId}`);
+    async getPendingPOs(vendorId: number | string, vendorName?: string) {
+        let url = `/api/get_pending_pos?vendor_id=${vendorId}`;
+        if (vendorName) {
+            url += `&vendor_name=${encodeURIComponent(vendorName)}`;
+        }
+        return httpClient.get<any[]>(url);
     }
 
     /**
