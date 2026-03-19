@@ -20,7 +20,7 @@ def generate_po_number(tenant_id: str, po_series_id: Optional[int] = None) -> st
     if po_series_id:
         # Get series settings
         query = """
-            SELECT prefix, current_number, required_digits, suffix
+            SELECT prefix, current_number, digits, suffix
             FROM vendor_master_posettings
             WHERE id = %s AND tenant_id = %s
         """
@@ -30,7 +30,7 @@ def generate_po_number(tenant_id: str, po_series_id: Optional[int] = None) -> st
             row = cursor.fetchone()
             
             if row:
-                prefix, current_number, required_digits, suffix = row
+                prefix, current_number, digits, suffix = row
                 next_number = current_number + 1
                 
                 # Update current number
@@ -42,7 +42,7 @@ def generate_po_number(tenant_id: str, po_series_id: Optional[int] = None) -> st
                 cursor.execute(update_query, [next_number, po_series_id])
                 
                 # Format PO number
-                number_str = str(next_number).zfill(required_digits)
+                number_str = str(next_number).zfill(digits)
                 return f"{prefix}{number_str}{suffix}"
     
     # Fallback: generate simple sequential number
@@ -332,24 +332,35 @@ def update_po_status(po_id: int, status: str, updated_by: Optional[str] = None) 
     with connection.cursor() as cursor:
         cursor.execute(query, [status, updated_by, po_id])
         return cursor.rowcount > 0
-def get_pending_pos_for_vendor(tenant_id: str, vendor_id: int) -> List[Dict[str, Any]]:
+def get_pending_pos_for_vendor(tenant_id: str, vendor_id: Any, vendor_name: Optional[str] = None) -> List[Dict[str, Any]]:
     """
-    Get all pending purchase orders for a specific vendor
-    Flexible matching for status containing 'pending' (case-insensitive)
-    
-    Returns:
-        List[Dict]: List of PO id and po_number
+    Get all pending, approved, or mailed purchase orders for a specific vendor.
+    Matches by vendor_id OR vendor_name (denormalized field).
     """
+    v_id = None
+    try:
+        if vendor_id and str(vendor_id).isdigit():
+            v_id = int(vendor_id)
+    except (ValueError, TypeError):
+        pass
+
     query = """
         SELECT id, po_number
         FROM vendor_transaction_po
         WHERE tenant_id = %s 
-          AND vendor_basic_detail_id = %s 
-          AND LOWER(status) LIKE '%%pending%%'
+          AND (
+            (vendor_basic_detail_id = %s)
+            OR (LOWER(TRIM(vendor_name)) = LOWER(TRIM(%s)))
+          )
+          AND (
+            LOWER(status) NOT LIKE '%%closed%%'
+            AND LOWER(status) NOT LIKE '%%rejected%%'
+            AND LOWER(status) NOT LIKE '%%cancelled%%'
+          )
           AND is_active = 1
         ORDER BY created_at DESC
     """
     with connection.cursor() as cursor:
-        cursor.execute(query, [tenant_id, vendor_id])
+        cursor.execute(query, [tenant_id, v_id, vendor_name or ''])
         columns = [col[0] for col in cursor.description]
         return [dict(zip(columns, row)) for row in cursor.fetchall()]

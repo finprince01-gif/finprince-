@@ -916,7 +916,7 @@ const CustomerContent: React.FC = () => {
         setCustomerFormData({
             customer_name: customer.customer_name,
             customer_code: customer.customer_code,
-            customer_category: customer.customer_category || '', // Use ID if available
+            customer_category: customer.customer_category ? String(customer.customer_category) : '', // Use ID as string for select compatibility
             pan_number: customer.pan_number || '',
             contact_person: customer.contact_person || '',
             email_address: customer.email_address || '',
@@ -1220,7 +1220,7 @@ const CustomerContent: React.FC = () => {
                                     className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-gray-600 bg-white">
                                     <option value="">Select Category</option>
                                     {categories.map((cat) => (
-                                        <option key={cat.id} value={cat.id}>
+                                        <option key={cat.id} value={String(cat.id)}>
                                             {cat.full_path || [cat.category, cat.group, cat.subgroup].filter(Boolean).join(' > ')}
                                         </option>
                                     ))}
@@ -4232,11 +4232,12 @@ const LongTermContractsContent: React.FC = () => {
 const ReceiptContent: React.FC = () => {
     const [showPostModal, setShowPostModal] = useState(false);
     const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
+    const [availableLedgers, setAvailableLedgers] = useState<any[]>([]);
     const [postFormData, setPostFormData] = useState({
-        dateOfReceipt: '',
+        dateOfReceipt: new Date().toISOString().split('T')[0],
         methodOfReceipt: '',
         bankAccount: '',
-        bankReferenceNo: ''
+        bankReferenceNo: '',
     });
 
     // Filter States
@@ -4248,8 +4249,51 @@ const ReceiptContent: React.FC = () => {
     const toggleFilter = (filterName: string) => {
         setActiveFilter(activeFilter === filterName ? null : filterName);
     };
-    // Mock receipt data - sorted by most recent first
-    const receipts: any[] = [];
+    const [isLoading, setIsLoading] = useState(true);
+    const [receipts, setReceipts] = useState<any[]>([]);
+
+    const fetchDueInvoices = async () => {
+        try {
+            setIsLoading(true);
+            console.log('DEBUG: Fetching due invoices from /api/voucher-sales-new/');
+            const data = await httpClient.get<any[]>('/api/voucher-sales-new/');
+            console.log('DEBUG: Received invoices:', data);
+            
+            if (!Array.isArray(data)) {
+                console.error('DEBUG: Expected array from /api/voucher-sales-new/, got:', data);
+                setReceipts([]);
+                return;
+            }
+
+            const transformed = data.map((inv: any) => ({
+                id: inv.id,
+                date: inv.date,
+                customerRefName: inv.customer_name || 'N/A',
+                voucherNo: inv.sales_invoice_no,
+                amount: parseFloat(inv.payment_details?.payment_payable) || 0
+            }));
+            setReceipts(transformed);
+        } catch (error) {
+            console.error('DEBUG: Fetch error:', error);
+            handleApiError(error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const fetchLedgers = async () => {
+        try {
+            const data = await httpClient.get<any[]>('/api/masters/ledgers/cash-bank/');
+            setAvailableLedgers(data);
+        } catch (error) {
+            console.error('DEBUG: Error fetching ledgers:', error);
+        }
+    };
+
+    useEffect(() => {
+        fetchDueInvoices();
+        fetchLedgers();
+    }, []);
 
     const filteredReceipts = useMemo(() => {
         return receipts.filter(receipt => {
@@ -4268,22 +4312,13 @@ const ReceiptContent: React.FC = () => {
         });
     }, [receipts, dateFilter, customerFilter, amountFilter]);
 
-    // Mock bank accounts - includes both Bank accounts and Bank OD/CC accounts
-    const bankAccounts = [
-        'HDFC Bank - Current Account ****1234',
-        'ICICI Bank - Savings Account ****5678',
-        'State Bank of India - Current Account ****9012',
-        'Axis Bank OD Account - ****3456',
-        'HDFC Bank CC Account - ****7890'
-    ];
-
     const handlePostClick = (receipt: any) => {
         setSelectedReceipt(receipt);
         setPostFormData({
-            dateOfReceipt: new Date().toISOString().split('T')[0], // Today's date
+            dateOfReceipt: new Date().toISOString().split('T')[0],
             methodOfReceipt: '',
             bankAccount: '',
-            bankReferenceNo: ''
+            bankReferenceNo: '',
         });
         setShowPostModal(true);
     };
@@ -4295,44 +4330,50 @@ const ReceiptContent: React.FC = () => {
             dateOfReceipt: '',
             methodOfReceipt: '',
             bankAccount: '',
-            bankReferenceNo: ''
+            bankReferenceNo: '',
         });
     };
 
     const handleFormChange = (field: string, value: string) => {
         setPostFormData(prev => ({
             ...prev,
-            [field]: value,
-            // Clear bank-specific fields when switching to Cash
-            ...(field === 'methodOfReceipt' && value === 'Cash' ? {
-                bankAccount: '',
-                bankReferenceNo: ''
-            } : {})
+            [field]: value
         }));
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Basic validation
         if (!postFormData.dateOfReceipt || !postFormData.methodOfReceipt) {
             showError('Please fill in all required fields');
             return;
         }
 
-        if (postFormData.methodOfReceipt === 'Bank' && (!postFormData.bankAccount || !postFormData.bankReferenceNo)) {
-            showError('Please fill in Bank Account and Bank Reference No for Bank payment method');
+        if (postFormData.methodOfReceipt === 'Bank' && !postFormData.bankAccount) {
+            showError('Please select a Bank Account');
             return;
         }
 
-        // Here you would typically make an API call to post the receipt
-        console.log('Posting receipt:', {
-            receipt: selectedReceipt,
-            postData: postFormData
-        });
+        if (postFormData.methodOfReceipt === 'Bank' && !postFormData.bankReferenceNo) {
+            showError('Please enter Bank Reference No');
+            return;
+        }
 
-        showSuccess('Receipt posted successfully!');
-        handleCloseModal();
+        try {
+            showInfo('Posting receipt...');
+            const result = await httpClient.post(`/api/voucher-sales-new/${selectedReceipt.id}/post-receipt/`, {
+                ...postFormData,
+                amount: selectedReceipt.amount
+            });
+            
+            showSuccess('Receipt posted successfully!');
+            handleCloseModal();
+            // Refresh the list - the posted invoice should now be excluded by backend get_queryset
+            fetchDueInvoices();
+        } catch (error: any) {
+            console.error('Error posting receipt:', error);
+            showError(error.response?.data?.error || 'Failed to post receipt');
+        }
     };
 
     return (
@@ -4341,7 +4382,7 @@ const ReceiptContent: React.FC = () => {
                 <h3 className="text-lg font-medium text-gray-900">Receipt</h3>
             </div>
 
-            {/* Receipt Listing Table */}
+            {/* Invoices Listing Table */}
             <div className="bg-white border border-gray-200 rounded-[4px] overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
@@ -4404,7 +4445,7 @@ const ReceiptContent: React.FC = () => {
                                     </div>
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Voucher No
+                                    Invoice No
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     <div className="flex items-center justify-between relative">
@@ -4438,7 +4479,23 @@ const ReceiptContent: React.FC = () => {
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                            {filteredReceipts.map((receipt) => (
+                            {isLoading ? (
+                                <tr>
+                                    <td colSpan={5} className="px-6 py-20 text-center">
+                                        <div className="flex flex-col items-center justify-center">
+                                            <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+                                            <p className="text-gray-500 font-medium">Loading due invoices...</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ) : filteredReceipts.length === 0 ? (
+                                <tr>
+                                    <td colSpan={5} className="px-6 py-12 text-center text-sm text-gray-500 font-medium">
+                                        No due invoices found matching the selected filters.
+                                    </td>
+                                </tr>
+                            ) : (
+                                filteredReceipts.map((receipt) => (
                                 <tr key={receipt.id} className="hover:bg-gray-50">
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                         {receipt.date}
@@ -4461,14 +4518,7 @@ const ReceiptContent: React.FC = () => {
                                         </button>
                                     </td>
                                 </tr>
-                            ))}
-                            {filteredReceipts.length === 0 && (
-                                <tr>
-                                    <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
-                                        No receipts found matching the selected filters.
-                                    </td>
-                                </tr>
-                            )}
+                            )))}
                         </tbody>
                     </table>
                 </div>
@@ -4479,8 +4529,8 @@ const ReceiptContent: React.FC = () => {
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 max-w-md w-full animate-fade-in">
                         {/* Modal Header */}
-                        <div className="px-6 py-4 border-b border-gray-200">
-                            <h2 className="text-xl font-semibold text-gray-900">Post Receipt</h2>
+                        <div className="px-6 py-4 border-b border-gray-100">
+                            <h2 className="text-xl font-bold text-gray-900">Post Receipt</h2>
                         </div>
 
                         {/* Modal Body */}
@@ -4488,7 +4538,7 @@ const ReceiptContent: React.FC = () => {
                             <div className="space-y-4">
                                 {/* Date of Receipt */}
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
                                         Date of Receipt <span className="text-red-500">*</span>
                                     </label>
                                     <input
@@ -4496,20 +4546,20 @@ const ReceiptContent: React.FC = () => {
                                         value={postFormData.dateOfReceipt}
                                         onChange={(e) => handleFormChange('dateOfReceipt', e.target.value)}
                                         max={new Date().toISOString().split('T')[0]}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                        className="w-full px-4 py-2 border border-gray-200 rounded-[4px] focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                                         required
                                     />
                                 </div>
 
                                 {/* Method of Receipt */}
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
                                         Method of Receipt <span className="text-red-500">*</span>
                                     </label>
                                     <select
                                         value={postFormData.methodOfReceipt}
                                         onChange={(e) => handleFormChange('methodOfReceipt', e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                        className="w-full px-4 py-2 border border-gray-200 rounded-[4px] focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                                         required
                                     >
                                         <option value="">Select method</option>
@@ -4518,41 +4568,39 @@ const ReceiptContent: React.FC = () => {
                                     </select>
                                 </div>
 
-                                {/* Bank Account - Visible only when Bank is selected */}
+                                {/* Bank Account Selection - Visible only when Bank is selected */}
                                 {postFormData.methodOfReceipt === 'Bank' && (
                                     <>
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
                                                 Bank Account <span className="text-red-500">*</span>
                                             </label>
                                             <select
                                                 value={postFormData.bankAccount}
                                                 onChange={(e) => handleFormChange('bankAccount', e.target.value)}
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                className="w-full px-4 py-2 border border-gray-200 rounded-[4px] focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                                                 required
                                             >
                                                 <option value="">Select bank account</option>
-                                                {bankAccounts.map((account, index) => (
-                                                    <option key={index} value={account}>
-                                                        {account}
-                                                    </option>
-                                                ))}
+                                                {availableLedgers
+                                                    .filter(l => (l.group || '').toLowerCase().includes('bank') || (l.name || '').toLowerCase().includes('bank'))
+                                                    .map(ledger => (
+                                                        <option key={ledger.id} value={ledger.id}>
+                                                            {ledger.name}
+                                                        </option>
+                                                    ))}
                                             </select>
-                                            <p className="text-xs text-gray-500 mt-1">
-                                                Includes Bank accounts and Bank OD/CC accounts
-                                            </p>
                                         </div>
 
-                                        {/* Bank Reference No - Visible only when Bank is selected */}
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
                                                 Bank Reference No <span className="text-red-500">*</span>
                                             </label>
                                             <input
                                                 type="text"
                                                 value={postFormData.bankReferenceNo}
                                                 onChange={(e) => handleFormChange('bankReferenceNo', e.target.value)}
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                className="w-full px-4 py-2 border border-gray-200 rounded-[4px] focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                                                 placeholder="Enter bank reference number"
                                                 required
                                             />
@@ -4562,19 +4610,19 @@ const ReceiptContent: React.FC = () => {
                             </div>
 
                             {/* Modal Footer */}
-                            <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200">
+                            <div className="flex justify-end gap-3 mt-6 pt-4">
                                 <button
                                     type="button"
                                     onClick={handleCloseModal}
-                                    className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-[4px] hover:bg-gray-50 transition-colors"
+                                    className="px-6 py-2 border border-gray-200 text-gray-500 text-sm font-bold rounded-[4px] hover:bg-gray-50 transition-colors uppercase tracking-widest"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
-                                    className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-[4px] hover:bg-indigo-700 transition-colors"
+                                    className="px-6 py-2 bg-indigo-600 text-white text-sm font-bold rounded-[4px] hover:bg-indigo-700 transition-colors uppercase tracking-widest"
                                 >
-                                    Submit
+                                    Post Receipt
                                 </button>
                             </div>
                         </form>
@@ -4584,7 +4632,6 @@ const ReceiptContent: React.FC = () => {
         </div>
     );
 };
-
 // Net-off Modal Component
 interface PurchaseVoucher {
     id: string;
@@ -5496,41 +5543,52 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
         setActiveFilter(prev => prev === filterName ? null : filterName);
     };
 
-    // Mock ledger data
-    const mockLedgerData: LedgerEntry[] = [
-        // April 2025
-        { id: 'a1', date: '2025-04-05', postFrom: 'Sales', ledger: 'INV-2025-001', status: 'Not Due', debit: 50000, credit: 0, runningBalance: 50000 },
-        { id: 'a2', date: '2025-04-12', postFrom: 'Receipt', ledger: 'RCP-2025-001', status: 'Received', debit: 0, credit: 30000, runningBalance: 20000 },
-        { id: 'a3', date: '2025-04-20', postFrom: 'Sales', ledger: 'INV-2025-002', status: 'Due', debit: 100000, credit: 0, runningBalance: 120000 },
-        { id: 'a4', date: '2025-04-28', postFrom: 'Receipt', ledger: 'RCP-2025-002', status: 'Received', debit: 0, credit: 90000, runningBalance: 30000 },
+    const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
-        // May 2025
-        { id: 'm1', date: '2025-05-03', postFrom: 'Sales', ledger: 'INV-2025-003', status: 'Not Due', debit: 80000, credit: 0, runningBalance: 110000 },
-        { id: 'm2', date: '2025-05-10', postFrom: 'Receipt', ledger: 'RCP-2025-003', status: 'Received', debit: 0, credit: 60000, runningBalance: 50000 },
-        { id: 'm3', date: '2025-05-18', postFrom: 'Sales', ledger: 'INV-2025-004', status: 'Due', debit: 120000, credit: 0, runningBalance: 170000 },
-        { id: 'm4', date: '2025-05-25', postFrom: 'Receipt', ledger: 'RCP-2025-004', status: 'Received', debit: 0, credit: 120000, runningBalance: 50000 },
+    useEffect(() => {
+        const fetchLedgerData = async () => {
+            try {
+                // Fetch sales invoices for this customer
+                // Using the specific endpoint for sales vouchers
+                const data = await httpClient.get<any[]>(`/api/voucher-sales-new/`);
+                
+                // Filter for this customer in JS if the backend doesn't support filter
+                // (Backend supports tenant filtering, let's filter customer here)
+                const customerInvoices = data.filter(inv => inv.customer_id.toString() === customer.id.toString());
+                
+                const entries: LedgerEntry[] = customerInvoices.map((inv: any) => ({
+                    id: `inv-${inv.id}`,
+                    date: inv.date,
+                    postFrom: 'Sales' as TransactionType,
+                    ledger: inv.sales_invoice_no,
+                    status: 'Not Due' as SalesStatus,
+                    debit: parseFloat(inv.payment_details?.payment_invoice_value || inv.total || 0),
+                    credit: 0,
+                    runningBalance: 0 // Simple view, running balance usually requires complex logic
+                }));
+                
+                setLedgerEntries(entries);
+            } catch (error) {
+                handleApiError(error, 'Fetch Ledger Data');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchLedgerData();
+    }, [customer.id]);
 
-        // June 2025
-        { id: 'j1', date: '2025-06-05', postFrom: 'Sales', ledger: 'INV-2025-005', status: 'Not Due', debit: 90000, credit: 0, runningBalance: 140000 },
-        { id: 'j2', date: '2025-06-15', postFrom: 'Receipt', ledger: 'RCP-2025-005', status: 'Received', debit: 0, credit: 40000, runningBalance: 100000 },
-        { id: 'j3', date: '2025-06-22', postFrom: 'Sales', ledger: 'INV-2025-006', status: 'Due', debit: 90000, credit: 0, runningBalance: 190000 },
-        { id: 'j4', date: '2025-06-30', postFrom: 'Receipt', ledger: 'RCP-2025-006', status: 'Received', debit: 0, credit: 60000, runningBalance: 130000 },
+    // Recalculate running balance
+    const processedEntries = useMemo(() => {
+        let balance = 0;
+        return [...ledgerEntries].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+            .map(entry => {
+                balance += entry.debit - entry.credit;
+                return { ...entry, runningBalance: balance };
+            });
+    }, [ledgerEntries]);
 
-        // July 2025
-        { id: 'jl1', date: '2025-07-08', postFrom: 'Sales', ledger: 'INV-2025-007', status: 'Not Due', debit: 110000, credit: 0, runningBalance: 240000 },
-        { id: 'jl2', date: '2025-07-14', postFrom: 'Receipt', ledger: 'RCP-2025-007', status: 'Received', debit: 0, credit: 90000, runningBalance: 150000 },
-        { id: 'jl3', date: '2025-07-20', postFrom: 'Sales', ledger: 'INV-2025-008', status: 'Due', debit: 110000, credit: 0, runningBalance: 260000 },
-        { id: 'jl4', date: '2025-07-28', postFrom: 'Receipt', ledger: 'RCP-2025-008', status: 'Received', debit: 0, credit: 110000, runningBalance: 150000 },
-
-        // January 2026
-        { id: '1', date: '2026-01-05', postFrom: 'Sales', ledger: 'INV-2026-001', status: 'Not Due', debit: 50000, credit: 0, runningBalance: 50000 },
-        { id: '2', date: '2026-01-10', postFrom: 'Receipt', ledger: 'RCP-2026-001', status: 'Received', debit: 0, credit: 25000, runningBalance: 25000 },
-        { id: '3', date: '2026-01-12', postFrom: 'Sales', ledger: 'INV-2026-002', status: 'Due', debit: 35000, credit: 0, runningBalance: 60000 },
-        { id: '4', date: '2026-01-15', postFrom: 'Receipt', ledger: 'RCP-2026-002', status: 'Received', debit: 0, credit: 20000, runningBalance: 40000 },
-        { id: '5', date: '2026-01-18', postFrom: 'Credit Note', ledger: 'CN-2026-001', status: 'Received', debit: 0, credit: 5000, runningBalance: 35000 },
-    ];
-
-    // Mock Month Ledger Data
+    // Month Ledger Data Calculation
     interface MonthLedgerEntry {
         month: string;
         debit: number;
@@ -5538,21 +5596,29 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
         closingBalance: number;
     }
 
-    const mockMonthLedgerData: MonthLedgerEntry[] = [
-        { month: 'April 2025', debit: 150000, credit: 120000, closingBalance: 30000 },
-        { month: 'May 2025', debit: 200000, credit: 180000, closingBalance: 50000 },
-        { month: 'June 2025', debit: 180000, credit: 100000, closingBalance: 130000 },
-        { month: 'July 2025', debit: 220000, credit: 200000, closingBalance: 150000 },
-        { month: 'August 2025', debit: 160000, credit: 140000, closingBalance: 170000 },
-        { month: 'September 2025', debit: 190000, credit: 160000, closingBalance: 200000 },
-        { month: 'October 2025', debit: 210000, credit: 190000, closingBalance: 220000 },
-        { month: 'November 2025', debit: 250000, credit: 220000, closingBalance: 250000 },
-        { month: 'December 2025', debit: 180000, credit: 150000, closingBalance: 280000 },
-        { month: 'January 2026', debit: 85000, credit: 50000, closingBalance: 315000 },
-    ];
+    const monthLedgerData: MonthLedgerEntry[] = useMemo(() => {
+        const months: Record<string, { debit: number; credit: number }> = {};
+        processedEntries.forEach(entry => {
+            const date = new Date(entry.date);
+            const monthName = date.toLocaleString('default', { month: 'long', year: 'numeric' });
+            if (!months[monthName]) months[monthName] = { debit: 0, credit: 0 };
+            months[monthName].debit += entry.debit;
+            months[monthName].credit += entry.credit;
+        });
+        
+        let cumulativeBalance = 0;
+        return Object.entries(months).map(([month, data]) => {
+            cumulativeBalance += data.debit - data.credit;
+            return {
+                month,
+                debit: data.debit,
+                credit: data.credit,
+                closingBalance: cumulativeBalance
+            };
+        });
+    }, [processedEntries]);
 
     const handleMonthClick = (month: string) => {
-        // Parse month to get date range
         const monthMap: { [key: string]: string } = {
             'January': '01', 'February': '02', 'March': '03', 'April': '04',
             'May': '05', 'June': '06', 'July': '07', 'August': '08',
@@ -5576,7 +5642,7 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
     };
 
     const MonthLedgerView: React.FC = () => {
-        const filteredMonthData = mockMonthLedgerData.filter(entry =>
+        const filteredMonthData = monthLedgerData.filter(entry =>
             monthFilter.length === 0 || monthFilter.includes(entry.month)
         );
 
@@ -5633,19 +5699,16 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
         );
     };
 
-    // Store original data for running balance calculation
-    const [originalData] = useState(mockLedgerData);
-
     // Filter data based on current filters
     const getFilteredData = () => {
-        return originalData.filter(entry => {
+        return processedEntries.filter(entry => {
             if (dateFilter.start && entry.date < dateFilter.start) return false;
             if (dateFilter.end && entry.date > dateFilter.end) return false;
             if (postFromFilter && entry.postFrom !== postFromFilter) return false;
             if (ledgerFilter && !entry.ledger.toLowerCase().includes(ledgerFilter.toLowerCase())) return false;
             if (statusFilter && entry.status !== statusFilter) return false;
-            if (debitFilter && entry.debit === 0) return false;
-            if (creditFilter && entry.credit === 0) return false;
+            if (debitFilter && entry.debit < parseFloat(debitFilter)) return false;
+            if (creditFilter && entry.credit < parseFloat(creditFilter)) return false;
             return true;
         });
     };
@@ -5701,10 +5764,10 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
                                         <label className="flex items-center px-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer">
                                             <input
                                                 type="checkbox"
-                                                checked={monthFilter.length === mockMonthLedgerData.length}
+                                                checked={monthFilter.length === monthLedgerData.length}
                                                 onChange={(e) => {
                                                     if (e.target.checked) {
-                                                        setMonthFilter(mockMonthLedgerData.map(m => m.month));
+                                                        setMonthFilter(monthLedgerData.map(m => m.month));
                                                     } else {
                                                         setMonthFilter([]);
                                                     }
@@ -5714,7 +5777,7 @@ const CustomerLedgerView: React.FC<CustomerLedgerViewProps> = ({ customer, onBac
                                             <span className="text-sm font-medium">Select All</span>
                                         </label>
                                         <div className="border-t border-gray-200 my-1"></div>
-                                        {mockMonthLedgerData.map((entry, index) => (
+                                        {monthLedgerData.map((entry, index) => (
                                             <label key={index} className="flex items-center px-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer">
                                                 <input
                                                     type="checkbox"
@@ -5980,15 +6043,100 @@ const SalesContent: React.FC = () => {
     const [activeCategory, setActiveCategory] = useState<SalesCategory>('Export');
     const [showLedgerView, setShowLedgerView] = useState(false);
     const [selectedCustomer, setSelectedCustomer] = useState<{ id: string, name: string, is_also_vendor?: boolean } | null>(null);
-
     const [searchTerm, setSearchTerm] = useState('');
 
-    // Mock data for demonstration - same structure for all categories
-    const getMockData = (category: SalesCategory): AgingData[] => {
-        // In a real app, this would fetch data based on category
-        const baseData: AgingData[] = [];
+    const [invoices, setInvoices] = useState<any[]>([]);
+    const [customers, setCustomers] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
-        return baseData;
+    useEffect(() => {
+        const fetchSalesData = async () => {
+            try {
+                const [invData, custData] = await Promise.all([
+                    httpClient.get('/api/voucher-sales-new/'),
+                    httpClient.get('/api/customerportal/customer-master/')
+                ]);
+                setInvoices((invData as any[]) || []);
+                setCustomers((custData as any[]) || []);
+            } catch (error) {
+                handleApiError(error, 'Fetch Sales Data');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchSalesData();
+    }, []);
+
+    const getAgingData = (category: SalesCategory): AgingData[] => {
+        if (!invoices.length || !customers.length) return [];
+
+        const customerGroups: Record<string, AgingData> = {};
+
+        invoices.forEach(inv => {
+            const custId = inv.customer_id;
+            if (!custId) return; // Skip if no customer linked
+
+            const customer = customers.find((c: any) => c.id === custId);
+            if (!customer) return;
+
+            // Get the customer's assigned category name (from master record)
+            const custCategoryName: string = (customer.customer_category_name || '').toLowerCase();
+
+            // Match customer to the selected category card
+            // 'Export'              -> category name contains 'export'
+            // 'Within Country (B2B)' -> category name contains 'b2b' (NOT 'b2c')
+            // 'Within Country (B2C)' -> category name contains 'b2c'
+            let matchesCategory = false;
+            if (category === 'Export') {
+                matchesCategory = custCategoryName.includes('export');
+            } else if (category === 'Within Country (B2B)') {
+                matchesCategory = custCategoryName.includes('b2b') && !custCategoryName.includes('b2c');
+            } else if (category === 'Within Country (B2C)') {
+                matchesCategory = custCategoryName.includes('b2c');
+            }
+
+            if (!matchesCategory) return;
+
+            const custName = customer.customer_name || inv.customer_name || 'Unknown Customer';
+            const custCode = customer.customer_code || `CUST-${custId}`;
+            const subCategory = customer.customer_category_name || 'General';
+
+            if (!customerGroups[custId]) {
+                customerGroups[custId] = {
+                    customerId: custId.toString(),
+                    customerCode: custCode,
+                    customerName: custName,
+                    subCategory: subCategory,
+                    notDue: 0,
+                    days0to45: 0,
+                    days45to90: 0,
+                    months6: 0,
+                    year1: 0,
+                    is_also_vendor: customer?.is_also_vendor
+                };
+            }
+
+            // Extract total amount from invoice
+            const amount = parseFloat(inv.payment_details?.payment_invoice_value || inv.total || 0);
+
+            // Basic Aging Logic — bucket by days outstanding
+            const invDate = new Date(inv.date);
+            const today = new Date();
+            const diffTime = Math.abs(today.getTime() - invDate.getTime());
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            if (diffDays <= 45) {
+                customerGroups[custId].days0to45 += amount;
+            } else if (diffDays <= 90) {
+                customerGroups[custId].days45to90 += amount;
+            } else if (diffDays <= 180) {
+                customerGroups[custId].months6 += amount;
+            } else {
+                customerGroups[custId].year1 += amount;
+            }
+        });
+
+        return Object.values(customerGroups);
     };
 
     const formatCurrency = (amount: number): string => {
@@ -6007,17 +6155,11 @@ const SalesContent: React.FC = () => {
     };
 
     const handleSendMail = (customer: AgingData) => {
-        // TODO: Auto-draft reminder email
         const totalDue = customer.days0to45 + customer.days45to90 + customer.months6 + customer.year1;
         showInfo(
             `Draft Reminder Email for ${customer.customerName}\n\n` +
             `Customer Code: ${customer.customerCode}\n` +
             `Total Outstanding: ${formatCurrency(totalDue)}\n\n` +
-            `Aging Breakdown:\n` +
-            `• 0-45 Days: ${formatCurrency(customer.days0to45)}\n` +
-            `• 45-90 Days: ${formatCurrency(customer.days45to90)}\n` +
-            `• 6 Months: ${formatCurrency(customer.months6)}\n` +
-            `• 1 Year+: ${formatCurrency(customer.year1)}\n\n` +
             `This email would be editable before sending.`
         );
     };
@@ -6028,7 +6170,7 @@ const SalesContent: React.FC = () => {
     };
 
     const categories: SalesCategory[] = ['Export', 'Within Country (B2B)', 'Within Country (B2C)'];
-    const currentData = getMockData(activeCategory);
+    const currentData = getAgingData(activeCategory);
 
     // Filter data based on search term
     const filteredData = currentData.filter(customer =>
@@ -6037,6 +6179,15 @@ const SalesContent: React.FC = () => {
     );
 
     // Show ledger view if customer is selected
+    if (isLoading) {
+        return (
+            <div className="flex flex-col items-center justify-center p-20 bg-white rounded-[4px] border border-gray-200 min-h-[400px]">
+                <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+                <p className="text-gray-500 font-medium">Loading transactions...</p>
+            </div>
+        );
+    }
+
     if (showLedgerView && selectedCustomer) {
         return <CustomerLedgerView customer={selectedCustomer} onBack={handleBackToAging} />;
     }

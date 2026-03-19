@@ -17,7 +17,7 @@ type MasterSubTab = 'Category' | 'PO Settings' | 'Vendor Creation' | 'Basic Deta
 type TransactionSubTab = 'Purchase Orders' | 'Procurement' | 'Payment';
 type POSubTab = 'Dashboard' | 'Create PO' | 'Pending PO' | 'Executed PO';
 type CreatePOSubTab = 'Pending for Approval' | 'Mail PO';
-type ProcurementSubTab = 'Dashboard' | 'Raw Material' | 'Stock-in Trade' | 'Consumables' | 'Stores & Spares' | 'Services';
+type ProcurementSubTab = string;
 
 // Category Interface (Mirrors Inventory)
 const VENDOR_SYSTEM_CATEGORIES = [
@@ -137,6 +137,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         contactPerson: string;
         email: string;
         contactNumber: string;
+        pincode: string;
+        city: string;
+        state: string;
+        country: string;
         isExpanded?: boolean;
     }
 
@@ -319,6 +323,23 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         { month: 'December', debit: '-', credit: '-', closingBalance: '35,000 Cr' },
     ];
 
+    // Helper: map month name → zero-padded month number string (for date filtering)
+    const monthNameToNumber: Record<string, string> = {
+        'January': '01', 'February': '02', 'March': '03', 'April': '04',
+        'May': '05', 'June': '06', 'July': '07', 'August': '08',
+        'September': '09', 'October': '10', 'November': '11', 'December': '12'
+    };
+
+    // Handler: clicking a month row → switch to bill-wise ledger view filtered by that month
+    const handleMonthRowClick = (monthName: string) => {
+        const monthNum = monthNameToNumber[monthName];
+        if (monthNum) {
+            // Filter date column: dates are YYYY-MM-DD, so match on "-MM-"
+            setLedgerFilters(prev => ({ ...prev, date: `-${monthNum}-` }));
+        }
+        setProcurementViewMode('ledger');
+    };
+
     // Defaulting logic for sub-tabs
     const availableMasterSubTabs = ['Category', 'PO Settings', 'Vendor Creation'].filter(subTab => isSuperuser || hasTabAccess('Vendor Portal', subTab));
     const availableTransactionSubTabs = ['Purchase Orders', 'Procurement', 'Payment'].filter(subTab => isSuperuser || hasTabAccess('Vendor Portal', subTab));
@@ -395,7 +416,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         contractNo: '',
         receiveBy: '',
         receiveAt: '',
-        deliveryTerms: ''
+        deliveryTerms: '',
+        supplyType: 'intrastate'  // 'intrastate' => CGST+SGST, 'interstate' => IGST
     });
 
     // PO Items State
@@ -408,12 +430,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         negotiatedRate: string;
         finalRate: string;
         taxableValue: string;
-        igst: string;
-        cgst: string;
-        sgst: string;
-        cess: string;
+        igst: string;     // IGST Amount (auto-calculated)
+        cgst: string;     // CGST Amount (auto-calculated)
+        sgst: string;     // SGST/UTGST Amount (auto-calculated)
+        cess: string;     // Cess Amount (auto-calculated)
         netValue: string;
         uom: string;
+        gstRate: string;  // GST Rate % from Item Master
+        cessRate: string; // Cess Rate % from Item Master
     }
 
     const [poItems, setPOItems] = useState<POItem[]>([
@@ -431,7 +455,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             sgst: '',
             cess: '',
             netValue: '',
-            uom: ''
+            uom: '',
+            gstRate: '',
+            cessRate: ''
         }
     ]);
 
@@ -769,6 +795,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                 contactPerson: 'John Doe',
                                 email: 'john@example.com',
                                 contactNumber: '9876543210',
+                                pincode: '600001',
+                                city: 'Tech City',
+                                state: 'Tamil Nadu',
+                                country: 'India',
                                 isExpanded: true
                             },
                             {
@@ -778,6 +808,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                 contactPerson: 'Jane Smith',
                                 email: 'jane@example.com',
                                 contactNumber: '9876541111',
+                                pincode: '600002',
+                                city: 'Tech City',
+                                state: 'Tamil Nadu',
+                                country: 'India',
                                 isExpanded: false
                             }
                         ]
@@ -835,6 +869,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                             contactPerson: '',
                             email: '',
                             contactNumber: '',
+                            pincode: '',
+                            city: '',
+                            state: '',
+                            country: '',
                             isExpanded: true
                         }
                     ]
@@ -946,7 +984,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             sgst: '',
             cess: '',
             netValue: '',
-            uom: ''
+            uom: '',
+            gstRate: '',
+            cessRate: ''
         };
         setPOItems([...poItems, newItem]);
     };
@@ -958,28 +998,35 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     };
 
     const handlePOItemChange = (id: number, field: keyof POItem, value: string) => {
+        const supplyType = createPOForm.supplyType || 'intrastate';
         setPOItems(prevItems => prevItems.map(item => {
             if (item.id === id) {
                 const updatedItem = { ...item, [field]: value };
 
-                // Conversions for calculation
                 const quantity = parseFloat(field === 'quantity' ? value : item.quantity) || 0;
                 const finalRate = parseFloat(field === 'finalRate' ? value : item.finalRate) || 0;
+                const gstRateVal = parseFloat(item.gstRate) || 0;
+                const cessRateVal = parseFloat(item.cessRate) || 0;
 
-                const igstRate = parseFloat(field === 'igst' ? value : item.igst) || 0;
-                const cgstRate = parseFloat(field === 'cgst' ? value : item.cgst) || 0;
-                const sgstRate = parseFloat(field === 'sgst' ? value : item.sgst) || 0;
-                const cessRate = parseFloat(field === 'cess' ? value : item.cess) || 0;
-
-                // Calculate Taxable Value: Quantity * Final Rate
+                // Taxable Value = Quantity × Final Rate
                 const taxableVal = quantity * finalRate;
                 updatedItem.taxableValue = taxableVal.toFixed(2);
 
-                // Calculate Net Value: Taxable Value + Total GST Amount
-                const totalTaxRate = igstRate + cgstRate + sgstRate + cessRate;
-                const gstAmount = (taxableVal * totalTaxRate) / 100;
-                const netVal = taxableVal + gstAmount;
-                updatedItem.netValue = netVal.toFixed(2);
+                // GST Amounts from Item Master Rate
+                let igstAmt = 0, cgstAmt = 0, sgstAmt = 0;
+                if (supplyType === 'interstate') {
+                    igstAmt = (taxableVal * gstRateVal) / 100;
+                } else {
+                    cgstAmt = (taxableVal * gstRateVal) / 2 / 100;
+                    sgstAmt = (taxableVal * gstRateVal) / 2 / 100;
+                }
+                const cessAmt = (taxableVal * cessRateVal) / 100;
+
+                updatedItem.igst = igstAmt.toFixed(2);
+                updatedItem.cgst = cgstAmt.toFixed(2);
+                updatedItem.sgst = sgstAmt.toFixed(2);
+                updatedItem.cess = cessAmt.toFixed(2);
+                updatedItem.netValue = (taxableVal + igstAmt + cgstAmt + sgstAmt + cessAmt).toFixed(2);
 
                 return updatedItem;
             }
@@ -1008,6 +1055,11 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                     updated.addressLine1 = selectedBranch.branch_address || '';
                     updated.emailAddress = selectedBranch.branch_email || '';
                     updated.state = selectedBranch.gst_state || '';
+                    updated.pincode = selectedBranch.branch_pincode || selectedBranch.pincode || '';
+                    updated.city = selectedBranch.branch_city || selectedBranch.city || '';
+                    updated.state = selectedBranch.branch_state || selectedBranch.state || selectedBranch.gst_state || '';
+                    updated.country = selectedBranch.branch_country || selectedBranch.country || '';
+                    updated.contractNo = selectedBranch.branch_contact_no || selectedBranch.contactNumber || '';
                     // Reset other address fields or try to parse if possible, for now just basic fill
                 }
             }
@@ -1032,8 +1084,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 negotiated_rate: parseFloat(item.negotiatedRate) || 0,
                 final_rate: parseFloat(item.finalRate) || 0,
                 taxable_value: parseFloat(item.taxableValue) || 0,
-                gst_rate: (parseFloat(item.igst) || 0) + (parseFloat(item.cgst) || 0) + (parseFloat(item.sgst) || 0) + (parseFloat(item.cess) || 0),
-                gst_amount: (parseFloat(item.taxableValue) || 0) * ((parseFloat(item.igst) || 0) + (parseFloat(item.cgst) || 0) + (parseFloat(item.sgst) || 0) + (parseFloat(item.cess) || 0)) / 100,
+                gst_rate: parseFloat(item.gstRate) || 0,
+                igst_amount: parseFloat(item.igst) || 0,
+                cgst_amount: parseFloat(item.cgst) || 0,
+                sgst_amount: parseFloat(item.sgst) || 0,
+                cess_amount: parseFloat(item.cess) || 0,
+                gst_amount: (parseFloat(item.igst) || 0) + (parseFloat(item.cgst) || 0) + (parseFloat(item.sgst) || 0) + (parseFloat(item.cess) || 0),
                 invoice_value: parseFloat(item.netValue) || 0
             }));
 
@@ -1112,7 +1168,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 contractNo: '',
                 receiveBy: '',
                 receiveAt: '',
-                deliveryTerms: ''
+                deliveryTerms: '',
+                supplyType: 'intrastate'
             });
 
             setPOItems([{
@@ -1129,7 +1186,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 sgst: '',
                 cess: '',
                 netValue: '',
-                uom: ''
+                uom: '',
+                gstRate: '',
+                cessRate: ''
             }]);
 
             setShowCreatePOModal(false);
@@ -1278,7 +1337,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         amount: string;
         status: 'Pending' | 'Approved' | 'Posted' | 'Initiated';
         actionLog?: LogEntry[];
-        category: 'Raw Material' | 'Stock-in Trade' | 'Consumables' | 'Stores & Spares' | 'Services';
+        category: string;
     }
 
     const [paymentBills, setPaymentBills] = useState<PaymentBill[]>([
@@ -1301,6 +1360,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const [paymentSortOrder, setPaymentSortOrder] = useState<'recent' | 'earliest'>('recent');
     const [showPostPaymentModal, setShowPostPaymentModal] = useState(false);
     const [selectedBillForPayment, setSelectedBillForPayment] = useState<PaymentBill | null>(null);
+    const [selectedVoucherForView, setSelectedVoucherForView] = useState<PaymentBill | null>(null);
 
     // Payment Bills Filters State
     const [paymentBillFilters, setPaymentBillFilters] = useState({
@@ -1311,6 +1371,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         amount: '',
         status: ''
     });
+
+    const handleViewVoucher = (bill: PaymentBill) => {
+        setSelectedVoucherForView(bill);
+    };
 
     const [postPaymentForm, setPostPaymentForm] = useState({
         dateOfPayment: '',
@@ -1564,7 +1628,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
                     const branches = gst.placesOfBusiness && gst.placesOfBusiness.length > 0
                         ? gst.placesOfBusiness
-                        : [{ referenceName: '', address: '', contactPerson: '', email: '', contactNumber: '' }];
+                        : [{ referenceName: '', address: '', contactPerson: '', email: '', contactNumber: '', pincode: '' }];
 
                     for (const branch of branches) {
                         const mapRegistrationType = (type: string) => {
@@ -1591,7 +1655,11 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                             branch_address: branch.address || '',
                             branch_contact_person: branch.contactPerson || '',
                             branch_email: branch.email || '',
-                            branch_contact_no: branch.contactNumber || ''
+                            branch_contact_no: branch.contactNumber || '',
+                            branch_pincode: branch.pincode || '',
+                            branch_city: branch.city || '',
+                            branch_state: branch.state || '',
+                            branch_country: branch.country || ''
                         };
 
                         const existingRecord = existingGstList.find((g: any) =>
@@ -1863,7 +1931,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         item_name: string;
         hsn_code?: string;
         uom?: string;
+        alternate_uom?: string;
         unit?: string;
+        gst_rate?: number | string;
+        cess_rate?: number | string;
     }
 
     const [inventoryItems, setInventoryItems] = useState<SimplifiedInventoryItem[]>([]);
@@ -1884,6 +1955,38 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         };
         fetchItems();
     }, []);
+
+    // Recalculate GST amounts when supply type changes (Intrastate ↔ Interstate)
+    useEffect(() => {
+        if (!showCreatePOModal) return;
+        const supplyType = createPOForm.supplyType || 'intrastate';
+        setPOItems(prevItems => prevItems.map(item => {
+            const quantity = parseFloat(item.quantity) || 0;
+            const finalRate = parseFloat(item.finalRate) || 0;
+            const gstRateVal = parseFloat(item.gstRate) || 0;
+            const cessRateVal = parseFloat(item.cessRate) || 0;
+            const taxableVal = quantity * finalRate;
+
+            let igstAmt = 0, cgstAmt = 0, sgstAmt = 0;
+            if (supplyType === 'interstate') {
+                igstAmt = (taxableVal * gstRateVal) / 100;
+            } else {
+                cgstAmt = (taxableVal * gstRateVal) / 2 / 100;
+                sgstAmt = (taxableVal * gstRateVal) / 2 / 100;
+            }
+            const cessAmt = (taxableVal * cessRateVal) / 100;
+
+            return {
+                ...item,
+                taxableValue: taxableVal.toFixed(2),
+                igst: igstAmt.toFixed(2),
+                cgst: cgstAmt.toFixed(2),
+                sgst: sgstAmt.toFixed(2),
+                cess: cessAmt.toFixed(2),
+                netValue: (taxableVal + igstAmt + cgstAmt + sgstAmt + cessAmt).toFixed(2),
+            };
+        }));
+    }, [createPOForm.supplyType]);
 
     const handleAddItem = () => {
         setItems([...items, {
@@ -2749,11 +2852,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     No
                                                 </button>
                                             </div>
-                                            {isAlsoCustomer && (
-                                                <p className="mt-2 text-xs text-teal-600">
-                                                    System will search for customer using PAN No & Vendor Name
-                                                </p>
-                                            )}
+
                                         </div>
 
                                         <div className="col-span-1">
@@ -2997,6 +3096,32 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                             className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm"
                                                                                             placeholder="Numeric only"
                                                                                         />
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">Pincode</label>
+                                                                                        <input
+                                                                                            type="text"
+                                                                                            value={pob.pincode || ''}
+                                                                                            onChange={(e) => {
+                                                                                                const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+                                                                                                updatePobField(record.id, pob.id, 'pincode', val);
+                                                                                            }}
+                                                                                            className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm"
+                                                                                            placeholder="6-digit pincode"
+                                                                                            maxLength={6}
+                                                                                        />
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">City</label>
+                                                                                        <input type="text" value={pob.city || ''} onChange={(e) => updatePobField(record.id, pob.id, 'city', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" />
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">State</label>
+                                                                                        <input type="text" value={pob.state || ''} onChange={(e) => updatePobField(record.id, pob.id, 'state', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" />
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <label className="block text-xs font-medium text-gray-500 mb-1">Country</label>
+                                                                                        <input type="text" value={pob.country || ''} onChange={(e) => updatePobField(record.id, pob.id, 'country', e.target.value)} className="w-full px-3 py-1.5 border border-slate-200 rounded text-sm" />
                                                                                     </div>
                                                                                 </div>
                                                                             )}
@@ -4304,13 +4429,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             </div>
 
                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                                {[
-                                                    { name: 'Raw Material', desc: 'Manage raw material procurement', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /> },
-                                                    { name: 'Stock-in Trade', desc: 'Manage stock-in trade items', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /> },
-                                                    { name: 'Consumables', desc: 'Manage consumable items', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /> },
-                                                    { name: 'Stores & Spares', desc: 'Manage stores and spares', icon: <g><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></g> },
-                                                    { name: 'Services', desc: 'Manage service procurement', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /> },
-                                                ]
+                                                {(categories.length > 0
+                                                    ? categories.filter(c => c.is_active).map(c => ({ name: c.category, desc: `Manage ${c.category.toLowerCase()} procurement` }))
+                                                    : VENDOR_SYSTEM_CATEGORIES.map(name => ({ name, desc: `Manage ${name.toLowerCase()} procurement` }))
+                                                )
                                                     .filter(item => isSuperuser || hasTabAccess('Vendor Portal', item.name))
                                                     .map((item) => {
                                                         const activeOrders = purchaseOrders.filter(po =>
@@ -4331,7 +4453,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                 <div className="flex items-center justify-between mb-4">
                                                                     <div className="w-12 h-12 bg-indigo-50/50 rounded-[4px] flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
                                                                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                            {item.icon}
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
                                                                         </svg>
                                                                     </div>
                                                                     <svg className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -4649,11 +4771,21 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                 </thead>
                                                                 <tbody className="bg-white divide-y divide-gray-200">
                                                                     {filteredMonthData.map((entry, idx) => (
-                                                                        <tr key={idx} className="hover:bg-gray-50 transition-colors">
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-lg font-medium text-gray-900">{entry.month}</td>
+                                                                        <tr
+                                                                            key={idx}
+                                                                            className="hover:bg-indigo-50 transition-colors cursor-pointer group"
+                                                                            onClick={() => handleMonthRowClick(entry.month)}
+                                                                            title={`Click to view ${entry.month} transactions in Bill-wise View`}
+                                                                        >
+                                                                            <td className="px-6 py-4 whitespace-nowrap text-lg font-medium text-indigo-700 group-hover:underline">{entry.month}</td>
                                                                             <td className="px-6 py-4 whitespace-nowrap text-base text-gray-500">{entry.debit !== '-' ? `₹${entry.debit}` : '-'}</td>
                                                                             <td className="px-6 py-4 whitespace-nowrap text-base text-gray-500">{entry.credit !== '-' ? `₹${entry.credit}` : '-'}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-base font-bold text-gray-900">{entry.closingBalance !== '-' ? `₹${entry.closingBalance}` : '-'}</td>
+                                                                            <td className="px-6 py-4 whitespace-nowrap text-base font-bold text-gray-900">
+                                                                                <span className="flex items-center gap-2">
+                                                                                    {entry.closingBalance !== '-' ? `₹${entry.closingBalance}` : '-'}
+                                                                                    <svg className="w-4 h-4 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                                                                                </span>
+                                                                            </td>
                                                                         </tr>
                                                                     ))}
                                                                 </tbody>
@@ -4685,13 +4817,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             </div>
 
                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                                {[
-                                                    { name: 'Raw Material', desc: 'Manage raw material procurement', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /> },
-                                                    { name: 'Stock-in Trade', desc: 'Manage stock-in trade items', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /> },
-                                                    { name: 'Consumables', desc: 'Manage consumable items', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /> },
-                                                    { name: 'Stores & Spares', desc: 'Manage stores and spares', icon: <g><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></g> },
-                                                    { name: 'Services', desc: 'Manage service procurement', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /> },
-                                                ].map((item) => {
+                                                {(categories.length > 0
+                                                    ? categories.filter(c => c.is_active).map(c => ({ name: c.category, desc: `Manage ${c.category.toLowerCase()} procurement` }))
+                                                    : VENDOR_SYSTEM_CATEGORIES.map(name => ({ name, desc: `Manage ${name.toLowerCase()} procurement` }))
+                                                ).map((item) => {
                                                     const totalPendingAmount = paymentBills
                                                         .filter(bill => bill.status !== 'Posted' && bill.category === item.name)
                                                         .reduce((sum, bill) => {
@@ -4699,23 +4828,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                             return sum + amount;
                                                         }, 0);
                                                     const formattedTotal = totalPendingAmount.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
-
                                                     return (
                                                         <button
                                                             key={item.name}
                                                             onClick={() => setActivePaymentSubTab(item.name as ProcurementSubTab)}
-                                                            className="p-6 border-2 border-gray-200 rounded-[4px] hover:border-indigo-500 hover:shadow-none border border-slate-200 transition-all duration-200 text-left group bg-white relative"
+                                                            className="p-6 border-2 border-gray-200 rounded-[4px] hover:border-indigo-500 transition-all duration-200 text-left group bg-white"
                                                         >
-                                                            <div className="flex items-center justify-between mb-4">
-                                                                <div className="w-12 h-12 bg-indigo-50/50 rounded-[4px] flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                                                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                        {item.icon}
-                                                                    </svg>
-                                                                </div>
-                                                                <svg className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                                                </svg>
-                                                            </div>
                                                             <div className="flex justify-between items-end">
                                                                 <div>
                                                                     <h3 className="text-lg font-bold text-gray-800 group-hover:text-indigo-600 transition-colors">{item.name}</h3>
@@ -4731,7 +4849,209 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 })}
                                             </div>
                                         </div>
+                                    ) : selectedVoucherForView ? (
+                                        /* ───────── INLINE VOUCHER DETAIL VIEW ───────── */
+                                        <div className="space-y-6">
+                                            {/* Header */}
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center space-x-4">
+                                                    <button
+                                                        onClick={() => setSelectedVoucherForView(null)}
+                                                        className="p-2 hover:bg-gray-100 rounded-full transition-colors group"
+                                                        title="Back to transactions"
+                                                    >
+                                                        <svg className="w-6 h-6 text-gray-500 group-hover:text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                                                        </svg>
+                                                    </button>
+                                                    <div>
+                                                        <div className="flex items-center space-x-2 text-sm text-gray-500 mb-1">
+                                                            <button onClick={() => setActivePaymentSubTab('Dashboard')} className="hover:text-indigo-600 hover:underline">Payment</button>
+                                                            <span>/</span>
+                                                            <button onClick={() => setSelectedVoucherForView(null)} className="hover:text-indigo-600 hover:underline">{activePaymentSubTab}</button>
+                                                            <span>/</span>
+                                                            <span className="text-indigo-600 font-semibold">{selectedVoucherForView.voucherNo}</span>
+                                                        </div>
+                                                        <h2 className="text-2xl font-bold text-gray-800">Voucher Details</h2>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => window.print()}
+                                                    className="px-4 py-2 border border-slate-200 rounded-[4px] text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 flex items-center gap-2"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                                    </svg>
+                                                    Print
+                                                </button>
+                                            </div>
+
+                                            {/* Voucher Card */}
+                                            <div className="bg-white rounded-xl border border-slate-200 shadow-lg overflow-hidden">
+                                                <div className="h-2 bg-gradient-to-r from-indigo-600 to-indigo-400"></div>
+                                                <div className="p-8">
+                                                    {/* Voucher Header Row */}
+                                                    <div className="flex justify-between items-start mb-8 pb-8 border-b border-slate-100">
+                                                        <div>
+                                                            <div className="flex items-center gap-3 mb-3">
+                                                                <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-black text-lg shadow">V</div>
+                                                                <div>
+                                                                    <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Payment Voucher</h3>
+                                                                    <p className="text-xs text-slate-400 uppercase tracking-widest font-bold">{selectedVoucherForView.category}</p>
+                                                                </div>
+                                                            </div>
+                                                            <span className={`inline-flex px-3 py-1 text-xs font-bold rounded-full uppercase tracking-wider ${
+                                                                selectedVoucherForView.status === 'Posted' ? 'bg-emerald-100 text-emerald-800' :
+                                                                selectedVoucherForView.status === 'Approved' ? 'bg-blue-100 text-blue-800' :
+                                                                selectedVoucherForView.status === 'Initiated' ? 'bg-purple-100 text-purple-800' :
+                                                                'bg-amber-100 text-amber-800'
+                                                            }`}>
+                                                                {selectedVoucherForView.status}
+                                                            </span>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Voucher Number</p>
+                                                            <p className="text-3xl font-black text-indigo-600 tabular-nums">{selectedVoucherForView.voucherNo}</p>
+                                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-3 mb-1">Date</p>
+                                                            <p className="text-base font-bold text-slate-900">{formatDate(selectedVoucherForView.date)}</p>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Payee and Amount */}
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                                                        <div className="bg-slate-50 rounded-xl p-6 border border-slate-100">
+                                                            <h4 className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-4">Payee Details</h4>
+                                                            <p className="text-xl font-black text-slate-900 mb-4">{selectedVoucherForView.vendorReferenceName}</p>
+                                                            <div className="space-y-3 pt-4 border-t border-slate-200">
+                                                                <div className="flex justify-between items-center">
+                                                                    <span className="text-sm text-slate-500">Supplier Invoice No.</span>
+                                                                    <span className="text-sm font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">{selectedVoucherForView.supplierInvoiceNo}</span>
+                                                                </div>
+                                                                <div className="flex justify-between items-center">
+                                                                    <span className="text-sm text-slate-500">Procurement Category</span>
+                                                                    <span className="text-sm font-bold text-slate-800">{selectedVoucherForView.category}</span>
+                                                                </div>
+                                                                <div className="flex justify-between items-center">
+                                                                    <span className="text-sm text-slate-500">Voucher Date</span>
+                                                                    <span className="text-sm font-bold text-slate-800">{formatDate(selectedVoucherForView.date)}</span>
+                                                                </div>
+                                                                <div className="flex justify-between items-center">
+                                                                    <span className="text-sm text-slate-500">Status</span>
+                                                                    <span className="text-sm font-bold text-slate-800">{selectedVoucherForView.status}</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="bg-indigo-600 rounded-xl p-6 text-white flex flex-col justify-center items-center text-center shadow-lg shadow-indigo-200">
+                                                            <p className="text-[10px] font-black opacity-70 uppercase tracking-widest mb-2">Net Payable Amount</p>
+                                                            <p className="text-5xl font-black tracking-tight tabular-nums">{selectedVoucherForView.amount}</p>
+                                                            <div className="mt-4 flex items-center gap-2">
+                                                                <div className="w-2 h-2 rounded-full bg-indigo-300 animate-pulse"></div>
+                                                                <p className="text-[10px] font-bold opacity-60 uppercase">Ready for disbursement</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Transaction Breakdown Table */}
+                                                    <div className="mb-8">
+                                                        <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-3">
+                                                            <span className="flex-grow h-px bg-slate-100 block"></span>
+                                                            Transaction Breakdown
+                                                            <span className="flex-grow h-px bg-slate-100 block"></span>
+                                                        </h4>
+                                                        <div className="rounded-xl border border-slate-100 overflow-hidden">
+                                                            <table className="w-full text-sm">
+                                                                <thead>
+                                                                    <tr className="bg-slate-50">
+                                                                        <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Particulars</th>
+                                                                        <th className="px-6 py-4 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">Document Ref</th>
+                                                                        <th className="px-6 py-4 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Amount</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody className="divide-y divide-slate-100">
+                                                                    <tr className="hover:bg-indigo-50/30 transition-colors">
+                                                                        <td className="px-6 py-5">
+                                                                            <p className="font-bold text-slate-900 mb-1">Settlement of Purchase Invoice</p>
+                                                                            <p className="text-xs text-slate-500">Vendor: {selectedVoucherForView.vendorReferenceName}</p>
+                                                                        </td>
+                                                                        <td className="px-6 py-5 text-center">
+                                                                            <span className="px-3 py-1 bg-slate-100 rounded text-xs font-bold text-slate-600">{selectedVoucherForView.supplierInvoiceNo}</span>
+                                                                        </td>
+                                                                        <td className="px-6 py-5 text-right font-black text-slate-900">{selectedVoucherForView.amount}</td>
+                                                                    </tr>
+                                                                    <tr className="bg-slate-50">
+                                                                        <td colSpan={2} className="px-6 py-4 text-right text-xs font-bold text-slate-500 uppercase">Gross Total</td>
+                                                                        <td className="px-6 py-4 text-right font-black text-slate-900">{selectedVoucherForView.amount}</td>
+                                                                    </tr>
+                                                                    <tr className="bg-slate-900 text-white">
+                                                                        <td colSpan={2} className="px-6 py-5 text-right font-black text-sm uppercase tracking-widest">Grand Total</td>
+                                                                        <td className="px-6 py-5 text-right text-2xl font-black">{selectedVoucherForView.amount}</td>
+                                                                    </tr>
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Audit Trail */}
+                                                    {selectedVoucherForView.actionLog && selectedVoucherForView.actionLog.length > 0 && (
+                                                        <div className="mb-8">
+                                                            <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-3">
+                                                                <span className="flex-grow h-px bg-slate-100 block"></span>
+                                                                Audit Trail
+                                                                <span className="flex-grow h-px bg-slate-100 block"></span>
+                                                            </h4>
+                                                            <div className="space-y-3">
+                                                                {selectedVoucherForView.actionLog.slice().reverse().map((log, i) => (
+                                                                    <div key={i} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-indigo-200 transition-colors">
+                                                                        <div className="flex items-center gap-3">
+                                                                            <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-black text-xs uppercase">
+                                                                                {log.user.charAt(0)}
+                                                                            </div>
+                                                                            <div>
+                                                                                <p className="text-xs font-black text-slate-800 uppercase tracking-tight">{log.action}</p>
+                                                                                <p className="text-[10px] text-slate-400">By {log.user}</p>
+                                                                            </div>
+                                                                        </div>
+                                                                        <p className="text-xs font-bold text-slate-500">{log.date}</p>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Signature Footer */}
+                                                    <div className="mt-10 pt-8 border-t border-slate-100 grid grid-cols-3 gap-8 text-center">
+                                                        <div>
+                                                            <div className="h-px bg-slate-200 w-full mb-6"></div>
+                                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Authorized Signatory</p>
+                                                        </div>
+                                                        <div>
+                                                            <div className="h-px bg-slate-200 w-full mb-6"></div>
+                                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Receiver's Signature</p>
+                                                        </div>
+                                                        <div>
+                                                            <div className="h-px bg-slate-200 w-full mb-6"></div>
+                                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Voucher Verified By</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Back link */}
+                                            <div className="text-center pb-8">
+                                                <button
+                                                    onClick={() => setSelectedVoucherForView(null)}
+                                                    className="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-800 font-bold text-sm transition-colors"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                                                    </svg>
+                                                    Back to Transactions
+                                                </button>
+                                            </div>
+                                        </div>
                                     ) : (
+                                        /* ───────── TRANSACTION LIST ───────── */
                                         <div>
                                             <div className="flex items-center justify-between mb-6">
                                                 <div>
@@ -4779,11 +5099,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                     { label: 'Amount', key: 'amount' },
                                                                     { label: 'Approve', key: 'approve' },
                                                                     { label: 'Action', key: 'action' },
-                                                                    { label: 'Status', key: 'status' }
+                                                                    { label: 'Status', key: 'status' },
+                                                                    { label: 'View', key: 'view' }
                                                                 ].map((header) => (
                                                                     <th key={header.key} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider align-top">
                                                                         <div className="mb-2">{header.label}</div>
-                                                                        {!['approve', 'action'].includes(header.key) && (
+                                                                        {!['approve', 'action', 'view'].includes(header.key) && (
                                                                             <input
                                                                                 type="text"
                                                                                 placeholder={`Filter ${header.label}`}
@@ -4799,19 +5120,13 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         <tbody className="bg-white divide-y divide-gray-200">
                                                             {[...paymentBills]
                                                                 .filter(bill => {
-                                                                    // Filter by category and exclude Posted
-                                                                    if (bill.status === 'Posted' || bill.category !== activePaymentSubTab) {
-                                                                        return false;
-                                                                    }
-
-                                                                    // Apply user filters
+                                                                    if (bill.status === 'Posted' || bill.category !== activePaymentSubTab) return false;
                                                                     const matchesDate = bill.date.toLowerCase().includes(paymentBillFilters.date.toLowerCase());
                                                                     const matchesVendor = bill.vendorReferenceName.toLowerCase().includes(paymentBillFilters.vendorReferenceName.toLowerCase());
                                                                     const matchesVoucher = bill.voucherNo.toLowerCase().includes(paymentBillFilters.voucherNo.toLowerCase());
                                                                     const matchesInvoice = bill.supplierInvoiceNo.toLowerCase().includes(paymentBillFilters.supplierInvoiceNo.toLowerCase());
                                                                     const matchesAmount = bill.amount.toLowerCase().includes(paymentBillFilters.amount.toLowerCase());
                                                                     const matchesStatus = bill.status.toLowerCase().includes(paymentBillFilters.status.toLowerCase());
-
                                                                     return matchesDate && matchesVendor && matchesVoucher && matchesInvoice && matchesAmount && matchesStatus;
                                                                 })
                                                                 .sort((a, b) => {
@@ -4832,29 +5147,17 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                             {bill.status !== 'Posted' && (
                                                                                 <button
                                                                                     onClick={() => {
-                                                                                        // Toggle between Pending and Approved
                                                                                         const now = new Date();
                                                                                         const formattedDate = now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                                                                                         const newStatus = bill.status === 'Approved' ? 'Pending' : 'Approved';
                                                                                         const actionType = newStatus === 'Approved' ? 'Approved' : 'Unapproved';
-
                                                                                         setPaymentBills(paymentBills.map(b =>
                                                                                             b.id === bill.id
-                                                                                                ? {
-                                                                                                    ...b,
-                                                                                                    status: newStatus,
-                                                                                                    actionLog: [
-                                                                                                        ...(b.actionLog || []),
-                                                                                                        { action: actionType, user: 'Current User', date: formattedDate }
-                                                                                                    ]
-                                                                                                }
+                                                                                                ? { ...b, status: newStatus, actionLog: [...(b.actionLog || []), { action: actionType, user: 'Current User', date: formattedDate }] }
                                                                                                 : b
                                                                                         ));
                                                                                     }}
-                                                                                    className={`px-3 py-1 text-white text-xs rounded ${bill.status === 'Approved' || bill.status === 'Initiated'
-                                                                                        ? 'bg-red-600 hover:bg-red-700'
-                                                                                        : 'bg-indigo-600 hover:bg-indigo-700'
-                                                                                        }`}
+                                                                                    className={`px-3 py-1 text-white text-xs rounded ${bill.status === 'Approved' || bill.status === 'Initiated' ? 'bg-red-600 hover:bg-red-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}
                                                                                     title={bill.status === 'Approved' || bill.status === 'Initiated' ? "Unapprove" : "Approve (Super users only)"}
                                                                                 >
                                                                                     {bill.status === 'Approved' || bill.status === 'Initiated' ? 'Unapprove' : 'Approve'}
@@ -4868,22 +5171,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                 {bill.status !== 'Posted' && (
                                                                                     <>
                                                                                         <button
-                                                                                            onClick={() => {
-                                                                                                setSelectedBillForPayment(bill);
-                                                                                                setShowPostPaymentModal(true);
-                                                                                            }}
+                                                                                            onClick={() => { setSelectedBillForPayment(bill); setShowPostPaymentModal(true); }}
                                                                                             className="px-3 py-1 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700"
-                                                                                            title="Initiate & Post"
                                                                                         >
-                                                                                            Initiate & Post
+                                                                                            Initiate &amp; Post
                                                                                         </button>
                                                                                         <button
-                                                                                            onClick={() => {
-                                                                                                setSelectedBillForPayment(bill);
-                                                                                                setShowPostPaymentModal(true);
-                                                                                            }}
+                                                                                            onClick={() => { setSelectedBillForPayment(bill); setShowPostPaymentModal(true); }}
                                                                                             className="px-3 py-1 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700"
-                                                                                            title="Post Payment"
                                                                                         >
                                                                                             Post
                                                                                         </button>
@@ -4892,34 +5187,46 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                             </div>
                                                                         </td>
 
+                                                                        {/* Status Column */}
                                                                         <td className="px-6 py-4 whitespace-nowrap">
                                                                             <div className="flex items-center space-x-2">
-                                                                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${bill.status === 'Posted' ? 'bg-slate-100 text-slate-700' :
+                                                                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${
+                                                                                    bill.status === 'Posted' ? 'bg-slate-100 text-slate-700' :
                                                                                     bill.status === 'Approved' ? 'bg-blue-100 text-slate-700' :
-                                                                                        bill.status === 'Initiated' ? 'bg-purple-100 text-purple-800' :
-                                                                                            'bg-yellow-100 text-yellow-800'
-                                                                                    }`}>
+                                                                                    bill.status === 'Initiated' ? 'bg-purple-100 text-purple-800' :
+                                                                                    'bg-yellow-100 text-yellow-800'
+                                                                                }`}>
                                                                                     {bill.status}
                                                                                 </span>
                                                                                 {bill.actionLog && bill.actionLog.length > 0 && (
                                                                                     <button
                                                                                         onClick={() => {
-                                                                                            const logMessages = bill.actionLog?.map(log =>
-                                                                                                `${log.action} by ${log.user} on ${log.date}`
-                                                                                            ).join('\n');
+                                                                                            const logMessages = bill.actionLog?.map(log => `${log.action} by ${log.user} on ${log.date}`).join('\n');
                                                                                             showInfo(`Action History:\n\n${logMessages}`);
                                                                                         }}
-
                                                                                         className="text-gray-500 hover:text-indigo-600 focus:outline-none transition-colors"
                                                                                         title="View Action History"
                                                                                     >
-                                                                                        <span className="sr-only">View info</span>
                                                                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                                                                                             <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                                                                                         </svg>
                                                                                     </button>
                                                                                 )}
                                                                             </div>
+                                                                        </td>
+
+                                                                        {/* View Voucher Column */}
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                                            <button
+                                                                                onClick={() => handleViewVoucher(bill)}
+                                                                                className="text-indigo-600 hover:text-indigo-900 transition-colors p-1 rounded-full hover:bg-indigo-50"
+                                                                                title="View Voucher Detail"
+                                                                            >
+                                                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                                                </svg>
+                                                                            </button>
                                                                         </td>
                                                                     </tr>
                                                                 ))}
@@ -5105,7 +5412,34 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 {/* Items Section */}
                                                 <div>
                                                     <div className="flex justify-between items-center mb-4">
-                                                        <h4 className="section-title">Items</h4>
+                                                        <div className="flex items-center space-x-6">
+                                                            <h4 className="section-title mb-0">Items</h4>
+                                                            <div className="flex items-center space-x-4 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
+                                                                <span className="text-sm font-medium text-gray-700">Supply Type:</span>
+                                                                <label className="inline-flex items-center cursor-pointer">
+                                                                    <input
+                                                                        type="radio"
+                                                                        className="form-radio text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                                                                        name="supplyType"
+                                                                        value="intrastate"
+                                                                        checked={createPOForm.supplyType === 'intrastate'}
+                                                                        onChange={(e) => handleCreatePOFormChange('supplyType', e.target.value)}
+                                                                    />
+                                                                    <span className="ml-2 text-sm text-gray-700">Intrastate (CGST/SGST)</span>
+                                                                </label>
+                                                                <label className="inline-flex items-center cursor-pointer">
+                                                                    <input
+                                                                        type="radio"
+                                                                        className="form-radio text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                                                                        name="supplyType"
+                                                                        value="interstate"
+                                                                        checked={createPOForm.supplyType === 'interstate'}
+                                                                        onChange={(e) => handleCreatePOFormChange('supplyType', e.target.value)}
+                                                                    />
+                                                                    <span className="ml-2 text-sm text-gray-700">Interstate (IGST)</span>
+                                                                </label>
+                                                            </div>
+                                                        </div>
                                                         <button
                                                             onClick={handleAddPOItem}
                                                             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-[4px] text-white bg-indigo-600 hover:bg-indigo-700"
@@ -5125,14 +5459,19 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Name</th>
                                                                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Supplier Item Code</th>
                                                                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
-                                                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit</th>
+                                                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">UQC</th>
                                                                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Base Price</th>
                                                                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Final Rate</th>
                                                                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Taxable Value</th>
-                                                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">IGST%</th>
-                                                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CGST%</th>
-                                                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SGST%</th>
-                                                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cess%</th>
+                                                                    {createPOForm.supplyType === 'interstate' ? (
+                                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">IGST</th>
+                                                                    ) : (
+                                                                        <>
+                                                                            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CGST</th>
+                                                                            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SGST/UTGST</th>
+                                                                        </>
+                                                                    )}
+                                                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cess</th>
                                                                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice Value</th>
                                                                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
                                                                 </tr>
@@ -5146,13 +5485,34 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                 onChange={(e) => {
                                                                                     const selectedCode = e.target.value;
                                                                                     const selectedInvItem = inventoryItems.find(i => i.item_code === selectedCode);
+                                                                                    const supplyType = createPOForm.supplyType || 'intrastate';
                                                                                     setPOItems(prevItems => prevItems.map(pItem => {
                                                                                         if (pItem.id === item.id) {
+                                                                                            const gstRateVal = selectedInvItem ? parseFloat(selectedInvItem.gst_rate as string) || 0 : 0;
+                                                                                            const cessRateVal = selectedInvItem ? parseFloat(selectedInvItem.cess_rate as string) || 0 : 0;
+                                                                                            const taxableVal = parseFloat(pItem.taxableValue) || 0;
+                                                                                            
+                                                                                            let igstAmt = 0, cgstAmt = 0, sgstAmt = 0;
+                                                                                            if (supplyType === 'interstate') {
+                                                                                                igstAmt = (taxableVal * gstRateVal) / 100;
+                                                                                            } else {
+                                                                                                cgstAmt = (taxableVal * gstRateVal) / 2 / 100;
+                                                                                                sgstAmt = (taxableVal * gstRateVal) / 2 / 100;
+                                                                                            }
+                                                                                            const cessAmt = (taxableVal * cessRateVal) / 100;
+
                                                                                             return {
                                                                                                 ...pItem,
                                                                                                 itemCode: selectedCode,
                                                                                                 itemName: selectedInvItem ? (selectedInvItem.item_name || '') : '',
                                                                                                 uom: selectedInvItem ? (selectedInvItem.uom || selectedInvItem.unit || '') : '',
+                                                                                                gstRate: gstRateVal.toString(),
+                                                                                                cessRate: cessRateVal.toString(),
+                                                                                                igst: igstAmt.toFixed(2),
+                                                                                                cgst: cgstAmt.toFixed(2),
+                                                                                                sgst: sgstAmt.toFixed(2),
+                                                                                                cess: cessAmt.toFixed(2),
+                                                                                                netValue: (taxableVal + igstAmt + cgstAmt + sgstAmt + cessAmt).toFixed(2),
                                                                                             };
                                                                                         }
                                                                                         return pItem;
@@ -5174,13 +5534,34 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                 onChange={(e) => {
                                                                                     const selectedName = e.target.value;
                                                                                     const selectedInvItem = inventoryItems.find(i => i.item_name === selectedName);
+                                                                                    const supplyType = createPOForm.supplyType || 'intrastate';
                                                                                     setPOItems(prevItems => prevItems.map(pItem => {
                                                                                         if (pItem.id === item.id) {
+                                                                                            const gstRateVal = selectedInvItem ? parseFloat(selectedInvItem.gst_rate as string) || 0 : 0;
+                                                                                            const cessRateVal = selectedInvItem ? parseFloat(selectedInvItem.cess_rate as string) || 0 : 0;
+                                                                                            const taxableVal = parseFloat(pItem.taxableValue) || 0;
+                                                                                            
+                                                                                            let igstAmt = 0, cgstAmt = 0, sgstAmt = 0;
+                                                                                            if (supplyType === 'interstate') {
+                                                                                                igstAmt = (taxableVal * gstRateVal) / 100;
+                                                                                            } else {
+                                                                                                cgstAmt = (taxableVal * gstRateVal) / 2 / 100;
+                                                                                                sgstAmt = (taxableVal * gstRateVal) / 2 / 100;
+                                                                                            }
+                                                                                            const cessAmt = (taxableVal * cessRateVal) / 100;
+
                                                                                             return {
                                                                                                 ...pItem,
                                                                                                 itemCode: selectedInvItem ? (selectedInvItem.item_code || '') : '',
                                                                                                 itemName: selectedName,
                                                                                                 uom: selectedInvItem ? (selectedInvItem.uom || selectedInvItem.unit || '') : '',
+                                                                                                gstRate: gstRateVal.toString(),
+                                                                                                cessRate: cessRateVal.toString(),
+                                                                                                igst: igstAmt.toFixed(2),
+                                                                                                cgst: cgstAmt.toFixed(2),
+                                                                                                sgst: sgstAmt.toFixed(2),
+                                                                                                cess: cessAmt.toFixed(2),
+                                                                                                netValue: (taxableVal + igstAmt + cgstAmt + sgstAmt + cessAmt).toFixed(2),
                                                                                             };
                                                                                         }
                                                                                         return pItem;
@@ -5214,8 +5595,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                         </td>
                                                                         <td className="px-3 py-2">
                                                                             {(() => {
-                                                                                const selectedItem = availableVendorItems.find(i => i.item_code === item.itemCode);
-                                                                                const units = selectedItem ? [selectedItem.unit, selectedItem.alternate_unit].filter(Boolean) : [];
+                                                                                const selectedInvItem = inventoryItems.find(i => i.item_code === item.itemCode);
+                                                                                const units = selectedInvItem
+                                                                                    ? [selectedInvItem.uom, selectedInvItem.alternate_uom].filter((u): u is string => Boolean(u))
+                                                                                    : [];
 
                                                                                 return (
                                                                                     <select
@@ -5223,11 +5606,11 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                         onChange={(e) => handlePOItemChange(item.id, 'uom', e.target.value)}
                                                                                         className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
                                                                                     >
-                                                                                        <option value="">Unit</option>
+                                                                                        <option value="">Select UQC</option>
                                                                                         {units.length > 0 ? (
                                                                                             units.map((u, i) => <option key={i} value={u}>{u}</option>)
                                                                                         ) : (
-                                                                                            <option value="PCS">PCS</option>
+                                                                                            item.uom ? <option value={item.uom}>{item.uom}</option> : null
                                                                                         )}
                                                                                     </select>
                                                                                 );
@@ -5257,41 +5640,30 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                 className="w-full px-2 py-1 text-sm border border-slate-200 rounded bg-gray-50 focus:outline-none"
                                                                             />
                                                                         </td>
+                                                                        {createPOForm.supplyType === 'interstate' ? (
+                                                                            <td className="px-3 py-2">
+                                                                                <div className="w-full px-2 py-1 text-sm border border-slate-200 rounded bg-gray-50 text-gray-700 min-h-[28px] flex items-center">
+                                                                                    {item.igst || '0.00'}
+                                                                                </div>
+                                                                            </td>
+                                                                        ) : (
+                                                                            <>
+                                                                                <td className="px-3 py-2">
+                                                                                    <div className="w-full px-2 py-1 text-sm border border-slate-200 rounded bg-gray-50 text-gray-700 min-h-[28px] flex items-center">
+                                                                                        {item.cgst || '0.00'}
+                                                                                    </div>
+                                                                                </td>
+                                                                                <td className="px-3 py-2">
+                                                                                    <div className="w-full px-2 py-1 text-sm border border-slate-200 rounded bg-gray-50 text-gray-700 min-h-[28px] flex items-center">
+                                                                                        {item.sgst || '0.00'}
+                                                                                    </div>
+                                                                                </td>
+                                                                            </>
+                                                                        )}
                                                                         <td className="px-3 py-2">
-                                                                            <input
-                                                                                type="text"
-                                                                                value={item.igst}
-                                                                                onChange={(e) => handlePOItemChange(item.id, 'igst', e.target.value)}
-                                                                                className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                                                placeholder="0"
-                                                                            />
-                                                                        </td>
-                                                                        <td className="px-3 py-2">
-                                                                            <input
-                                                                                type="text"
-                                                                                value={item.cgst}
-                                                                                onChange={(e) => handlePOItemChange(item.id, 'cgst', e.target.value)}
-                                                                                className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                                                placeholder="0"
-                                                                            />
-                                                                        </td>
-                                                                        <td className="px-3 py-2">
-                                                                            <input
-                                                                                type="text"
-                                                                                value={item.sgst}
-                                                                                onChange={(e) => handlePOItemChange(item.id, 'sgst', e.target.value)}
-                                                                                className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                                                placeholder="0"
-                                                                            />
-                                                                        </td>
-                                                                        <td className="px-3 py-2">
-                                                                            <input
-                                                                                type="text"
-                                                                                value={item.cess}
-                                                                                onChange={(e) => handlePOItemChange(item.id, 'cess', e.target.value)}
-                                                                                className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                                                placeholder="0"
-                                                                            />
+                                                                            <div className="w-full px-2 py-1 text-sm border border-slate-200 rounded bg-gray-50 text-gray-700 min-h-[28px] flex items-center">
+                                                                                {item.cess || '0.00'}
+                                                                            </div>
                                                                         </td>
                                                                         <td className="px-3 py-2">
                                                                             <input
@@ -5577,27 +5949,35 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 <div className="flex space-x-4">
                                                     {/* Show Edit button only for Pending Approval status when not editing */}
                                                     {!isEditingPO && selectedPO.status === 'Pending Approval' && (
-                                                        <button
-                                                            onClick={handleEditPODetails}
-                                                            className="px-6 py-2 border border-indigo-600 text-indigo-600 rounded-[4px] hover:bg-indigo-50/50"
-                                                        >
-                                                            Edit
-                                                        </button>
+                                                        <>
+                                                            <button
+                                                                onClick={handleEditPODetails}
+                                                                className="px-6 py-2 border border-indigo-600 text-indigo-600 rounded-[4px] hover:bg-indigo-50/50 font-medium"
+                                                            >
+                                                                EDIT
+                                                            </button>
+                                                            <button
+                                                                onClick={handleCancelPOClick}
+                                                                className="px-6 py-2 border border-red-500 text-red-600 rounded-[4px] hover:bg-red-50 font-medium"
+                                                            >
+                                                                CANCEL PO
+                                                            </button>
+                                                        </>
                                                     )}
                                                     {/* Show Cancel and Save when editing */}
                                                     {isEditingPO && (
                                                         <>
                                                             <button
                                                                 onClick={handleCancelEditPO}
-                                                                className="px-6 py-2 border border-slate-200 rounded-[4px] text-gray-700 hover:bg-gray-50"
+                                                                className="px-6 py-2 border border-slate-200 rounded-[4px] text-gray-700 hover:bg-gray-50 font-medium"
                                                             >
-                                                                Cancel
+                                                                CANCEL
                                                             </button>
                                                             <button
                                                                 onClick={handleSavePODetails}
-                                                                className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] hover:bg-indigo-700"
+                                                                className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] hover:bg-indigo-700 font-medium"
                                                             >
-                                                                Save
+                                                                SAVE
                                                             </button>
                                                         </>
                                                     )}
@@ -5605,33 +5985,33 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     {!isEditingPO && selectedPO.status === 'Approved' && (
                                                         <button
                                                             onClick={handleCancelPOClick}
-                                                            className="px-6 py-2 border border-red-500 text-red-600 rounded-[4px] hover:bg-red-50"
+                                                            className="px-6 py-2 border border-red-500 text-red-600 rounded-[4px] hover:bg-red-50 font-medium"
                                                         >
-                                                            Cancel PO
+                                                            CANCEL PO
                                                         </button>
                                                     )}
                                                 </div>
                                                 <div className="flex space-x-4">
                                                     <button
                                                         onClick={() => setShowViewPOModal(false)}
-                                                        className="px-6 py-2 border border-slate-200 rounded-[4px] text-gray-700 hover:bg-gray-50"
+                                                        className="px-6 py-2 border border-slate-200 rounded-[4px] text-gray-700 hover:bg-gray-50 font-medium"
                                                     >
-                                                        Close
+                                                        CLOSE
                                                     </button>
                                                     {!isEditingPO && selectedPO.status === 'Pending Approval' && (
                                                         <button
                                                             onClick={handleApprovePO}
-                                                            className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] hover:bg-indigo-700"
+                                                            className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] hover:bg-indigo-700 font-medium"
                                                         >
-                                                            Approve PO
+                                                            APPROVE PO
                                                         </button>
                                                     )}
                                                     {!isEditingPO && selectedPO.status === 'Approved' && (
                                                         <button
                                                             onClick={handleMailPO}
-                                                            className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] hover:bg-indigo-700"
+                                                            className="px-6 py-2 bg-indigo-600 text-white rounded-[4px] hover:bg-indigo-700 font-medium"
                                                         >
-                                                            Mail PO
+                                                            MAIL PO
                                                         </button>
                                                     )}
                                                 </div>

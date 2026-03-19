@@ -170,7 +170,9 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
 
             setDate(prefilledData.invoiceDate || new Date().toISOString().split('T')[0]);
             setSalesInvoiceNo(prefilledData.invoiceNumber || '');
-            setCustomerName(prefilledData.sellerName || ''); // Maps Seller/Party -> Customer Name
+            const sellerName = prefilledData.sellerName || '';
+            setCustomerName(sellerName);
+            if (sellerName) handleCustomerChange(sellerName);
             if (prefilledData.gstin) setGstin(prefilledData.gstin);
             if (prefilledData.placeOfSupply) setPlaceOfSupply(prefilledData.placeOfSupply);
             if (prefilledData.invoiceType) setInvoiceType(prefilledData.invoiceType);
@@ -419,6 +421,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
     }, [fetchOutwardSlips]);
 
     const [customerName, setCustomerName] = useState('');
+    const [customerId, setCustomerId] = useState<number | string | null>(null);
     const [customerBranch, setCustomerBranch] = useState('');
     const [masterCustomers, setMasterCustomers] = useState<any[]>([]);
     const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
@@ -508,12 +511,14 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
     // Handle Customer Selection
     const handleCustomerChange = (val: string) => {
         setCustomerName(val);
+        setCustomerId(null); // Reset
         setCustomerBranch(''); // reset branch on customer change
         setCustomerBillingCurrency('');
 
         const allCustomers = [...(customers || []), ...(masterCustomers || [])];
         const customer = allCustomers.find(c => c.customer_name === val);
         if (customer) {
+            setCustomerId(customer.id);
             const branches: any[] = customer.gst_details?.branches || [];
             const refs = branches.map((b: any) => b.defaultRef || b.referenceName || '').filter(Boolean);
 
@@ -1018,6 +1023,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 }
                 if (!customerName && customerToSet) {
                     handleCustomerChange(customerToSet);
+                    if (fullDoc.customer_id) setCustomerId(fullDoc.customer_id);
                 }
             }
         } catch (error) {
@@ -1623,6 +1629,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 voucher_name: voucherName,
                 outward_slip_no: outwardSlipNo,
                 customer_name: customerName,
+                customer_id: customerId,
                 bill_to: JSON.stringify(billTo),
                 ship_to: JSON.stringify(shipTo),
                 gstin,
@@ -1805,7 +1812,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
 
             const payload = {
                 date: formatDate(date), sales_invoice_no: salesInvoiceNo, voucher_name: voucherName, outward_slip_no: outwardSlipNo,
-                customer_name: customerName, bill_to: JSON.stringify(billTo), ship_to: JSON.stringify(shipTo), gstin, contact, tax_type: taxType,
+                customer_name: customerName, customer_id: customerId, bill_to: JSON.stringify(billTo), ship_to: JSON.stringify(shipTo), gstin, contact, tax_type: taxType,
                 state_type: stateType, export_type: exportType, exchange_rate: exchangeRate, supporting_document: supportingDocument,
                 sales_order_no: salesOrderNos.join(', '), place_of_supply: placeOfSupply || null, reverse_charge: reverseCharge, invoice_type: invoiceType,
                 gst_export_type: stateType === 'export' ? gstExportType : null, port_code: stateType === 'export' ? portCode : null,
@@ -2272,48 +2279,22 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
     }, [itemRows, customerTcsRate, customerTdsRate]);
 
     // Auto-calculate TDS/TCS under GST
-    // Condition 1: Basic Details (gst_tds_applicable) YES AND TDS & Statutory (tds_enabled) YES (or equivalent derived config via rates or TCS) - Rate: 2%
-    // Condition 2: TDS & Statutory (tds_enabled) YES AND Taxable Value > 2,50,000 - Rate: 2%
-    // Condition 3: Sales through E-Commerce Operator (Yes) AND TCS Configuration Active (customerTcsEnabled or customerTcsRate > 0) - Rate: 1%
+    // Rule 1 (2% TDS): "TDS Applicable" is "Yes" in Master AND Taxable Value > 2,50,000
+    // Rule 2 (1% TCS): "Sales through E-Commerce Operator" is "Yes" in the voucher
     React.useEffect(() => {
         const taxableVal = calculateTotals().taxableValue;
+        
+        const isTdsApplicable = customerGstTdsApplicable && taxableVal > 250000;
+        const isEcommerceTcs = isEcommerceSales === 'Yes';
 
-        // Treat as enabled if the toggle is ON or a valid rate has been configured
-        const isTdsOrTcsEnabled = customerTdsEnabled || customerTcsEnabled || customerTdsRate > 0 || customerTcsRate > 0;
-        const isTcsActive = customerTcsEnabled || customerTcsRate > 0;
-
-        const condition1 = customerGstTdsApplicable && isTdsOrTcsEnabled;
-        const condition2 = isTdsOrTcsEnabled && taxableVal > 250000;
-        const condition3 = isEcommerceSales === 'Yes' && isTcsActive;
-
-        console.log('TDS Calculation Debug:', {
-            taxableVal,
-            customerGstTdsApplicable,
-            customerTdsEnabled,
-            customerTcsEnabled,
-            customerTdsRate,
-            customerTcsRate,
-            isTdsOrTcsEnabled,
-            isTcsActive,
-            isEcommerceSales,
-            condition1,
-            condition2,
-            condition3
-        });
-
-        if (condition3) {
-            const tcsAmount = taxableVal * 0.01;
-            console.log('Setting paymentTdsGst (E-Commerce TCS 1%):', tcsAmount.toFixed(2));
-            setPaymentTdsGst(tcsAmount.toFixed(2));
-        } else if (condition1 || condition2) {
-            const tdsGstAmount = taxableVal * 0.02;
-            console.log('Setting paymentTdsGst (Regular TDS 2%):', tdsGstAmount.toFixed(2));
-            setPaymentTdsGst(tdsGstAmount.toFixed(2));
+        if (isTdsApplicable) {
+            setPaymentTdsGst((taxableVal * 0.02).toFixed(2));
+        } else if (isEcommerceTcs) {
+            setPaymentTdsGst((taxableVal * 0.01).toFixed(2));
         } else {
-            console.log('Resetting paymentTdsGst to 0.00');
             setPaymentTdsGst('0.00');
         }
-    }, [itemRows, customerGstTdsApplicable, customerTdsEnabled, customerTcsEnabled, customerTdsRate, customerTcsRate, isEcommerceSales]);
+    }, [itemRows, customerGstTdsApplicable, isEcommerceSales]);
 
     // Sync qty, description, and INR rate from Foreign Currency tab → INR tab whenever foreign rows change
     React.useEffect(() => {
@@ -2433,11 +2414,6 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                 title={isDisabled ? outwardSlipError : ""}
                             >
                                 {tab.label}
-                                {isDisabled && (
-                                    <span className="ml-1.5 text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-tighter">
-                                        Locked
-                                    </span>
-                                )}
                             </button>
                         );
                     })}
