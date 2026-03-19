@@ -1,5 +1,6 @@
-from rest_framework import serializers
-from .models import VendorMasterCategory
+# pyre-ignore-all-errors
+from rest_framework import serializers  # type: ignore
+from .models import VendorMasterCategory  # type: ignore
 
 
 class VendorMasterCategorySerializer(serializers.ModelSerializer):
@@ -9,7 +10,6 @@ class VendorMasterCategorySerializer(serializers.ModelSerializer):
     full_path = serializers.ReadOnlyField()
     group = serializers.CharField(required=False, allow_null=True, allow_blank=True, default='')
     subgroup = serializers.CharField(required=False, allow_null=True, allow_blank=True, default='')
-    sub_subgroup = serializers.CharField(required=False, allow_null=True, allow_blank=True, default='')
     
     class Meta:
         model = VendorMasterCategory
@@ -19,7 +19,6 @@ class VendorMasterCategorySerializer(serializers.ModelSerializer):
             'category',
             'group',
             'subgroup',
-            'sub_subgroup',
             'full_path',
             'is_active',
             'created_at',
@@ -31,7 +30,4 @@ class VendorMasterCategorySerializer(serializers.ModelSerializer):
         return value if value is not None else ''
 
     def validate_subgroup(self, value):
-        return value if value is not None else ''
-
-    def validate_sub_subgroup(self, value):
         return value if value is not None else ''

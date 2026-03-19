@@ -561,13 +561,14 @@ const InventoryPage: React.FC = () => {
   };
 
   // Helper function for Creating Category from Wizard
-  const handleCreateCategory = async (data: { category: string; group: string; subgroup: string }) => {
+  const handleCreateCategory = async (data: { category: string; group: string; subgroup: string; sub_subgroup?: string }) => {
     try {
       // Create only the exact record requested — no extra placeholder rows
       await httpClient.post('/api/inventory/master-categories/', {
         category: data.category,
         group: data.group || '',
-        subgroup: data.subgroup || ''
+        subgroup: data.subgroup || '',
+        sub_subgroup: data.sub_subgroup || ''
       });
       setCategoryUpdateCount(prev => prev + 1);
     } catch (error) {
@@ -576,9 +577,14 @@ const InventoryPage: React.FC = () => {
     }
   };
 
-  const handleEditCategory = async (data: { id: number; category: string; group: string | null; subgroup: string }) => {
+  const handleEditCategory = async (data: { id: number; category: string; group: string | null; subgroup: string; sub_subgroup?: string }) => {
     try {
-      await httpClient.put(`/api/inventory/master-categories/${data.id}/`, data);
+      await httpClient.put(`/api/inventory/master-categories/${data.id}/`, {
+        category: data.category,
+        group: data.group || '',
+        subgroup: data.subgroup || '',
+        sub_subgroup: data.sub_subgroup || ''
+      });
       setCategoryUpdateCount(prev => prev + 1);
     } catch (error) {
       console.error("Error updating category:");

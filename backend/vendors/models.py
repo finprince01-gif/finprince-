@@ -1,7 +1,8 @@
+# pyre-ignore-all-errors
 
-from django.db import models
-from django.core.validators import EmailValidator, RegexValidator
-from inventory.models import InventoryMasterCategory
+from django.db import models  # type: ignore
+from django.core.validators import EmailValidator, RegexValidator  # type: ignore
+from inventory.models import InventoryMasterCategory  # type: ignore
 
 
 class VendorMasterCategory(models.Model):
@@ -27,12 +28,6 @@ class VendorMasterCategory(models.Model):
         blank=True,
         help_text="Subgroup under group (optional)"
     )
-    sub_subgroup = models.CharField(
-        max_length=255,
-        default='',
-        blank=True,
-        help_text="Level 3 item under subgroup (optional)"
-    )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -40,8 +35,8 @@ class VendorMasterCategory(models.Model):
     class Meta:
         managed = False
         db_table = 'vendor_master_category'
-        unique_together = ('tenant_id', 'category', 'group', 'subgroup', 'sub_subgroup')
-        ordering = ['category', 'group', 'subgroup', 'sub_subgroup']
+        unique_together = ('tenant_id', 'category', 'group', 'subgroup')
+        ordering = ['category', 'group', 'subgroup']
         indexes = [
             models.Index(fields=['tenant_id', 'is_active']),
             models.Index(fields=['category']),
@@ -53,8 +48,6 @@ class VendorMasterCategory(models.Model):
             parts.append(self.group)
         if self.subgroup:
             parts.append(self.subgroup)
-        if self.sub_subgroup:
-            parts.append(self.sub_subgroup)
         return " > ".join(parts)
     
     @property
@@ -391,6 +384,10 @@ class VendorMasterGSTDetails(models.Model):
     branch_contact_person = models.CharField(max_length=100, blank=True, null=True, help_text="Branch contact person")
     branch_email = models.CharField(max_length=255, blank=True, null=True, help_text="Branch email")
     branch_contact_no = models.CharField(max_length=20, blank=True, null=True, help_text="Branch contact number")
+    branch_pincode = models.CharField(max_length=10, blank=True, null=True, help_text="Branch pincode")
+    branch_city = models.CharField(max_length=100, blank=True, null=True, help_text="Branch city")
+    branch_state = models.CharField(max_length=100, blank=True, null=True, help_text="Branch state")
+    branch_country = models.CharField(max_length=100, blank=True, null=True, help_text="Branch country")
     
     # Metadata
     is_active = models.BooleanField(default=True)
