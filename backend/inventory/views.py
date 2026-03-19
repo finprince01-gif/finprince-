@@ -160,57 +160,10 @@ class InventoryMasterGRNViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'], url_path='next-number')
     def next_number(self, request, pk=None):
         """
-        Returns the next auto-generated GRN number for this series.
-        Counts existing GRNs that start with the series prefix to determine the next sequence.
+        Returns the next auto-generated GRN number for this series from the master preview.
         """
         series = self.get_object()
-        tenant_id = get_tenant_from_request(request)
-
-        prefix = series.prefix or ''
-        suffix = series.suffix or ''
-        year = series.year or ''
-        required_digits = series.required_digits or 4
-
-        # Use the separator from preview if available, otherwise default to '-'
-        preview = str(series.preview or '')
-        # Detect separator from preview
-        sep: str = '-'
-        for s in ['/', '_', '-', ' ']:
-            if s in preview:
-                sep = s
-                break
-
-        # Build the pattern prefix used in number
-        number_parts: list[str] = []
-        if prefix:
-            number_parts.append(str(prefix))
-        if year:
-            number_parts.append(str(year))
-        
-        number_prefix: str = f"{str(sep).join(number_parts)}{sep}" if number_parts else ''
-
-        # Count existing GRNs for this tenant that match this series pattern
-        existing_count = InventoryOperationNewGRN.objects.filter(
-            tenant_id=tenant_id,
-            grn_no__startswith=number_prefix
-        ).count()
-
-        next_seq = existing_count + 1
-        seq_str = str(next_seq).zfill(required_digits)
-
-        # Compose the GRN number
-        parts: list[str] = []
-        if prefix:
-            parts.append(str(prefix))
-        if year:
-            parts.append(str(year))
-        parts.append(str(seq_str))
-        if suffix:
-            parts.append(str(suffix))
-
-        grn_no: str = str(sep).join(parts)
-
-        return Response({'grn_no': grn_no, 'series_name': series.name})
+        return Response({'grn_no': series.preview, 'series_name': series.name})
 
 
 class InventoryMasterIssueSlipViewSet(viewsets.ModelViewSet):
@@ -337,7 +290,14 @@ class InventoryOperationProductionViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         tenant_id = get_tenant_from_request(self.request)
-        return InventoryOperationProduction.objects.filter(tenant_id=tenant_id)
+        queryset = InventoryOperationProduction.objects.filter(tenant_id=tenant_id)
+        
+        # Support filtering by production_type (e.g., materials_issued, inter_process)
+        production_type = self.request.query_params.get('production_type')
+        if production_type:
+            queryset = queryset.filter(production_type=production_type)
+            
+        return queryset.order_by('-id')
 
     def perform_create(self, serializer):
         tenant_id = get_tenant_from_request(self.request)
@@ -407,7 +367,23 @@ class InventoryOperationNewGRNViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         tenant_id = get_tenant_from_request(self.request)
-        serializer.save(tenant_id=tenant_id)
+        instance = serializer.save(tenant_id=tenant_id)
+        
+        # Increment the preview number in the GRN master series
+        series_name = self.request.data.get('grn_series_name')
+        if series_name:
+            series = InventoryMasterGRN.objects.filter(tenant_id=tenant_id, name=series_name).first()
+            if series and series.preview:
+                import re
+                match = re.search(r'(\d+)$', series.preview)
+                if match:
+                    num_str = match.group(1)
+                    num = int(num_str) + 1
+                    prefix = series.preview[:match.start()]
+                    series.preview = f"{prefix}{num:0{len(num_str)}d}"
+                else:
+                    series.preview = f"{series.preview}-1"
+                series.save()
 
     @action(detail=False, methods=['get'], url_path='next-grn-number')
     def next_grn_number(self, request):

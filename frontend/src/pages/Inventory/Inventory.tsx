@@ -270,6 +270,7 @@ const InventoryPage: React.FC = () => {
   const [issueSlipTime, setIssueSlipTime] = useState('');
   const [goodsFromLocation, setGoodsFromLocation] = useState('');
   const [goodsToLocation, setGoodsToLocation] = useState('');
+  const [interProcessToLocation, setInterProcessToLocation] = useState('');
   const [jobWorkOrderNo, setJobWorkOrderNo] = useState('');
   const [jobWorkOrderNoOptions, setJobWorkOrderNoOptions] = useState<any[]>([]); // Options for Job Work POs
   const [jobWorkReceiptNo, setJobWorkReceiptNo] = useState('');
@@ -289,6 +290,10 @@ const InventoryPage: React.FC = () => {
   const [outwardSalesOrderOptions, setOutwardSalesOrderOptions] = useState<any[]>([]);
   const [outwardSupplierInvoiceOptions, setOutwardSupplierInvoiceOptions] = useState<any[]>([]);
   const [materialIssueSlipNo, setMaterialIssueSlipNo] = useState('');
+  const [materialIssueSlipOptions, setMaterialIssueSlipOptions] = useState<any[]>([]);
+  const [selectedMaterialIssueSlips, setSelectedMaterialIssueSlips] = useState<string[]>([]);
+  const [processTransferSlipOptions, setProcessTransferSlipOptions] = useState<any[]>([]);
+  const [selectedProcessTransferSlips, setSelectedProcessTransferSlips] = useState<string[]>([]);
   const [processTransferSlipNo, setProcessTransferSlipNo] = useState('');
   const [prodItemTab, setProdItemTab] = useState<'materials_issued' | 'converted_output'>('materials_issued');
   const [issueSlipItems, setIssueSlipItems] = useState<any[]>([{ itemCode: '', itemName: '', uom: '', quantity: '', rate: '', value: 0, noOfBoxes: '' }]);
@@ -317,6 +322,11 @@ const InventoryPage: React.FC = () => {
   const [grnReferenceNoOptions, setGrnReferenceNoOptions] = useState<any[]>([]);
   const [grnSecondaryRefNo, setGrnSecondaryRefNo] = useState(''); // Supplier Invoice or Debit Note
   const [grnSecondaryRefNoOptions, setGrnSecondaryRefNoOptions] = useState<any[]>([]);
+
+  // Document Upload State
+  const [grnDocument, setGrnDocument] = useState<File | null>(null);
+  const [grnDocumentPreview, setGrnDocumentPreview] = useState<string | null>(null);
+  const [isGrnDocumentModalOpen, setIsGrnDocumentModalOpen] = useState(false);
   const [grnItems, setGrnItems] = useState<any[]>([{
     itemCode: '', itemName: '', uom: '', refQty: '', secondaryQty: '', receivedQty: '', acceptedQty: '', rejectedQty: '', shortExcessQty: '', remarks: ''
   }]);
@@ -398,6 +408,9 @@ const InventoryPage: React.FC = () => {
 
   // Dispatch Details State
   const [dispatchFrom, setDispatchFrom] = useState('');
+  const [receiptDocument, setReceiptDocument] = useState<File | null>(null);
+  const [showReceiptPreview, setShowReceiptPreview] = useState(false);
+  const [receiptPreviewUrl, setReceiptPreviewUrl] = useState<string | null>(null);
   const [modeOfTransport, setModeOfTransport] = useState('');
   const [dispatchDate, setDispatchDate] = useState('');
   const [dispatchTime, setDispatchTime] = useState('');
@@ -560,14 +573,37 @@ const InventoryPage: React.FC = () => {
     }
   };
 
+  const fetchProcessTransferSlips = async () => {
+    try {
+      const slips = await apiService.getProductionSlips('inter_process');
+      if (Array.isArray(slips)) {
+        setProcessTransferSlipOptions(slips);
+      }
+    } catch (error) {
+      console.error('Error fetching process transfer slips:', error);
+    }
+  };
+
+  const fetchMaterialIssueSlips = async () => {
+    try {
+      const slips = await apiService.getProductionSlips('materials_issued');
+      if (Array.isArray(slips)) {
+        setMaterialIssueSlipOptions(slips);
+      }
+    } catch (error) {
+      console.error('Error fetching material issue slips:', error);
+    }
+  };
+
   // Helper function for Creating Category from Wizard
-  const handleCreateCategory = async (data: { category: string; group: string; subgroup: string }) => {
+  const handleCreateCategory = async (data: { category: string; group: string; subgroup: string; sub_subgroup?: string }) => {
     try {
       // Create only the exact record requested — no extra placeholder rows
       await httpClient.post('/api/inventory/master-categories/', {
         category: data.category,
         group: data.group || '',
-        subgroup: data.subgroup || ''
+        subgroup: data.subgroup || '',
+        sub_subgroup: data.sub_subgroup || ''
       });
       setCategoryUpdateCount(prev => prev + 1);
     } catch (error) {
@@ -576,9 +612,14 @@ const InventoryPage: React.FC = () => {
     }
   };
 
-  const handleEditCategory = async (data: { id: number; category: string; group: string | null; subgroup: string }) => {
+  const handleEditCategory = async (data: { id: number; category: string; group: string | null; subgroup: string; sub_subgroup?: string }) => {
     try {
-      await httpClient.put(`/api/inventory/master-categories/${data.id}/`, data);
+      await httpClient.put(`/api/inventory/master-categories/${data.id}/`, {
+        category: data.category,
+        group: data.group || '',
+        subgroup: data.subgroup || '',
+        sub_subgroup: data.sub_subgroup || ''
+      });
       setCategoryUpdateCount(prev => prev + 1);
     } catch (error) {
       console.error("Error updating category:");
@@ -761,6 +802,16 @@ const InventoryPage: React.FC = () => {
       if (locations.length === 0) fetchLocations();
     }
   }, [issueSlipTab]);
+
+  useEffect(() => {
+    if (showIssueSlipForm && issueSlipTab === 'production') {
+      if (productionType === 'inter_process') {
+        fetchMaterialIssueSlips();
+      } else if (productionType === 'finished_goods') {
+        fetchProcessTransferSlips();
+      }
+    }
+  }, [showIssueSlipForm, issueSlipTab, productionType]);
 
   // Fetch GRN series when GRN form is opened
   useEffect(() => {
@@ -1001,9 +1052,10 @@ const InventoryPage: React.FC = () => {
                         // Map to common structure
                         const mapped = Array.isArray(details) ? details.map((d: any) => ({
                           id: d.id,
-                          address: d.branch_address,
+                          reference_name: d.reference_name || 'Main Branch',
+                          address: d.branch_address || '',
                           gstin: d.gstin,
-                          state: d.gst_state_code,
+                          state: d.gst_state_code || d.gst_state || '',
                           fullObj: d
                         })) : [];
                         setVendorAddresses(mapped);
@@ -1019,9 +1071,11 @@ const InventoryPage: React.FC = () => {
                   required
                 >
                   <option value="">Select {locationType === 'job_worker_location' ? 'Job Worker' : 'Vendor/Agent'}</option>
-                  {vendors.map(v => (
-                    <option key={v.id} value={v.id}>{v.vendor_name} ({v.vendor_code})</option>
-                  ))}
+                  {vendors
+                    .filter(v => locationType !== 'job_worker_location' || (v.vendor_category || '').toLowerCase().includes('jobwork'))
+                    .map(v => (
+                      <option key={v.id} value={v.id}>{v.vendor_name} ({v.vendor_code})</option>
+                    ))}
                 </select>
               </div>
             )}
@@ -1041,9 +1095,16 @@ const InventoryPage: React.FC = () => {
                     if (c && c.gst_details && Array.isArray(c.gst_details.branches)) {
                       setCustomerAddresses(c.gst_details.branches.map((b: any) => ({
                         id: b.id,
-                        address: b.address,
-                        gstin: b.gstin,
-                        defaultRef: b.defaultRef
+                        reference_name: b.defaultRef || b.branch_reference_name || 'Main Branch',
+                        address: b.addressLine1 || b.address || '',
+                        addressLine1: b.addressLine1 || '',
+                        addressLine2: b.addressLine2 || '',
+                        addressLine3: b.addressLine3 || '',
+                        city: b.city || '',
+                        pincode: b.pincode || '',
+                        state: b.state || '',
+                        country: b.country || 'India',
+                        gstin: b.gstin || ''
                       })));
                     } else {
                       setCustomerAddresses([]);
@@ -1099,19 +1160,27 @@ const InventoryPage: React.FC = () => {
                   onChange={(e) => {
                     const val = e.target.value;
                     setLocationAddress(val);
-                    setLocAddressLine1(val);
 
                     // Try to find more details
-                    if (locationType.includes('customer')) {
-                      const addrObj = customerAddresses.find(a => a.address === val);
+                    if (locationType === 'customer_location' || locationType === 'customs_warehouse' || locationType === 'other_third_party') {
+                      // Check for both address match or reference name match (legacy vs new)
+                      const addrObj = customerAddresses.find(a => a.address === val || a.reference_name === val);
                       if (addrObj) {
+                        setLocAddressLine1(addrObj.addressLine1 || addrObj.address || '');
+                        setLocAddressLine2(addrObj.addressLine2 || '');
+                        setLocAddressLine3(addrObj.addressLine3 || '');
+                        setLocCity(addrObj.city || '');
+                        setLocState(addrObj.state || '');
+                        setLocCountry(addrObj.country || 'India');
+                        setLocPincode(addrObj.pincode || '');
                         if (addrObj.gstin) setLocationGstin(addrObj.gstin);
                       }
                     } else if (locationType.includes('vendor') || locationType.includes('agent') || locationType.includes('job') || locationType.includes('distributor')) {
-                      const addrObj = vendorAddresses.find(a => a.address === val);
+                      const addrObj = vendorAddresses.find(a => a.reference_name === val || a.address === val);
                       if (addrObj) {
+                        setLocAddressLine1(addrObj.address || '');
                         if (addrObj.gstin) setLocationGstin(addrObj.gstin);
-                        if (addrObj.state) setLocState(addrObj.state); // Might be code, but better than nothing
+                        if (addrObj.state) setLocState(addrObj.state);
                       }
                     }
                   }}
@@ -1121,12 +1190,12 @@ const InventoryPage: React.FC = () => {
                   {/* Vendor Addresses */}
                   {(locationType === 'vendor_location' || locationType === 'agent_location' || locationType === 'distributor_location' || locationType === 'job_worker_location') &&
                     vendorAddresses.map((addr, idx) => (
-                      <option key={addr.id || idx} value={addr.address}>{addr.address} {addr.gstin ? `(GST: ${addr.gstin})` : ''}</option>
+                      <option key={addr.id || idx} value={addr.reference_name}>{addr.reference_name} {addr.gstin ? `(GST: ${addr.gstin})` : ''}</option>
                     ))}
                   {/* Customer Addresses */}
                   {(locationType === 'customer_location' || locationType === 'customs_warehouse' || locationType === 'other_third_party') &&
                     customerAddresses.map((addr, idx) => (
-                      <option key={addr.id || idx} value={addr.address}>{addr.address} {addr.gstin ? `(GST: ${addr.gstin})` : ''}</option>
+                      <option key={addr.id || idx} value={addr.reference_name}>{addr.reference_name} {addr.gstin ? `(GST: ${addr.gstin})` : ''}</option>
                     ))}
                 </select>
               </div>
@@ -1456,17 +1525,17 @@ const InventoryPage: React.FC = () => {
         }
 
         const productionPayload = {
-          issue_slip_no: issueSlipNumber, // Production Entry No can basically use this field
+          issue_slip_no: productionType === 'materials_issued' ? materialIssueSlipNo : (productionType === 'inter_process' ? processTransferSlipNo : fgReceiptSlipNo), // Use correct slip no. state based on type
           date: issueSlipDate || null,
           time: issueSlipTime || null,
           status: 'Posted',
-          goods_from_location: goodsFromLocation,
-          goods_to_location: goodsToLocation,
+          goods_from_location: productionType === 'inter_process' ? goodsToLocation : goodsFromLocation,
+          goods_to_location: productionType === 'inter_process' ? interProcessToLocation : goodsToLocation,
           posting_note: postingNote,
 
           production_type: productionType,
-          material_issue_slip_no: materialIssueSlipNo,
-          process_transfer_slip_no: processTransferSlipNo,
+          material_issue_slip_no: productionType === 'inter_process' ? selectedMaterialIssueSlips.join(',') : '',
+          process_transfer_slip_no: productionType === 'finished_goods' ? selectedProcessTransferSlips.join(',') : (productionType === 'inter_process' ? processTransferSlipNo : ''),
           // finished_goods_production_no: ... (add if variable exists, else map to issueSlipNumber)
 
           items: productionItems,
@@ -1694,16 +1763,22 @@ const InventoryPage: React.FC = () => {
       console.log("Selected Order:", so); // Mandatory log for debugging
       if (so.customer_name) {
         setOutwardCustomerName(so.customer_name);
-        
+
         // Populate branch options safely without an external async handler
         const customer = customers.find(c => c.customer_name === so.customer_name);
         if (customer && customer.gst_details && Array.isArray(customer.gst_details.branches)) {
-          const branches = customer.gst_details.branches.map((b: any) => ({
-            ...b,
-            reference_name: b.defaultRef || b.branch_reference_name || 'Main',
-            branch_address: b.address || b.branch_address,
-            gstin: b.gstin
-          }));
+          const branches = customer.gst_details.branches.map((b: any) => {
+            // Concatenate address lines if separate fields are provided instead of a single address field
+            const lines = [b.address_line1 || b.addressLine1, b.address_line2 || b.addressLine2, b.address_line3 || b.addressLine3];
+            const fullAddress = lines.filter(Boolean).join(', ');
+            
+            return {
+              ...b,
+              reference_name: b.defaultRef || b.branch_reference_name || 'Main',
+              branch_address: b.address || b.branch_address || fullAddress || '',
+              gstin: b.gstin
+            };
+          });
           setOutwardBranchOptions(branches);
         } else {
           setOutwardBranchOptions([]);
@@ -1765,12 +1840,17 @@ const InventoryPage: React.FC = () => {
     if (customer) {
       // Set branches from customer object
       if (customer.gst_details && Array.isArray(customer.gst_details.branches)) {
-        const branches = customer.gst_details.branches.map((b: any) => ({
-          ...b,
-          reference_name: b.defaultRef || b.branch_reference_name || 'Main',
-          branch_address: b.address || b.branch_address,
-          gstin: b.gstin
-        }));
+        const branches = customer.gst_details.branches.map((b: any) => {
+          const lines = [b.address_line1 || b.addressLine1, b.address_line2 || b.addressLine2, b.address_line3 || b.addressLine3];
+          const fullAddress = lines.filter(Boolean).join(', ');
+
+          return {
+            ...b,
+            reference_name: b.defaultRef || b.branch_reference_name || 'Main',
+            branch_address: b.address || b.branch_address || fullAddress || '',
+            gstin: b.gstin
+          };
+        });
         setOutwardBranchOptions(branches);
 
         if (branches.length > 0) {
@@ -1869,6 +1949,9 @@ const InventoryPage: React.FC = () => {
     const series = grnSeriesList.find((s: any) => s.id === id);
     if (series) {
       setGrnSelectedSeriesName(series.name);
+      if (series.preview) {
+        setGrnNumber(series.preview);
+      }
     }
     try {
       const response = await httpClient.get<{ grn_no: string; series_name: string }>(
@@ -1892,6 +1975,8 @@ const InventoryPage: React.FC = () => {
     setGrnReferenceNoOptions([]);
     setGrnSecondaryRefNo('');
     setGrnSecondaryRefNoOptions([]);
+    setGrnDocument(null);
+    setGrnDocumentPreview(null);
 
     const vendor = vendors.find(v => v.vendor_name === selectedVendorName);
     if (vendor) {
@@ -1900,11 +1985,11 @@ const InventoryPage: React.FC = () => {
         setGrnBranchOptions(Array.isArray(branchResponse) ? branchResponse : []);
 
         // Fetch PENDING POs for this vendor using the new specific endpoint
-        const poResponse = await apiService.getPendingPOs(vendor.id);
+        const poResponse = await apiService.getPendingPOs(vendor.id, vendor.vendor_name);
         if (Array.isArray(poResponse)) {
-            setGrnReferenceNoOptions(poResponse);
+          setGrnReferenceNoOptions(poResponse);
         } else if (poResponse && (poResponse as any).success && Array.isArray((poResponse as any).data)) {
-            setGrnReferenceNoOptions((poResponse as any).data);
+          setGrnReferenceNoOptions((poResponse as any).data);
         }
 
         const invResponse = await apiService.getVendorPurchaseInvoices(selectedVendorName);
@@ -1934,12 +2019,17 @@ const InventoryPage: React.FC = () => {
     if (customer) {
       // Set branches from customer object (similar to renderLocation logic)
       if (customer.gst_details && Array.isArray(customer.gst_details.branches)) {
-        const branches = customer.gst_details.branches.map((b: any) => ({
-          id: b.id,
-          reference_name: b.defaultRef || b.branch_reference_name || 'Main',
-          branch_address: b.address || b.branch_address,
-          gstin: b.gstin
-        }));
+        const branches = customer.gst_details.branches.map((b: any) => {
+          const lines = [b.address_line1 || b.addressLine1, b.address_line2 || b.addressLine2, b.address_line3 || b.addressLine3];
+          const fullAddress = lines.filter(Boolean).join(', ');
+
+          return {
+            id: b.id,
+            reference_name: b.defaultRef || b.branch_reference_name || 'Main',
+            branch_address: b.address || b.branch_address || fullAddress || '',
+            gstin: b.gstin
+          };
+        });
         setGrnBranchOptions(branches);
       }
 
@@ -1969,23 +2059,34 @@ const InventoryPage: React.FC = () => {
   };
 
 
-  const handleGrnReferenceNoChange = (poNumber: string) => {
+  const handleGrnReferenceNoChange = async (poNumber: string) => {
     setGrnReferenceNo(poNumber);
-    const selectedPO = grnReferenceNoOptions.find(po => po.po_number === poNumber);
-    if (selectedPO && selectedPO.items) {
-      const newGrnItems = selectedPO.items.map((poItem: any) => ({
-        itemCode: poItem.item_code,
-        itemName: poItem.item_name,
-        uom: poItem.uom,
-        refQty: poItem.quantity,
-        secondaryQty: '',
-        receivedQty: poItem.quantity,
-        acceptedQty: poItem.quantity,
-        rejectedQty: '0',
-        shortExcessQty: '0',
-        remarks: ''
-      }));
-      setGrnItems(newGrnItems);
+    const selectedOption = grnReferenceNoOptions.find(po => po.po_number === poNumber);
+
+    if (selectedOption) {
+      try {
+        const fullPOResponse = await apiService.getVendorPurchaseOrderById(selectedOption.id);
+        if (fullPOResponse && fullPOResponse.success && fullPOResponse.data) {
+          const fullPO = fullPOResponse.data;
+          if (fullPO.items && fullPO.items.length > 0) {
+            const newGrnItems = fullPO.items.map((poItem: any) => ({
+              itemCode: poItem.item_code,
+              itemName: poItem.item_name,
+              uom: poItem.uom,
+              refQty: poItem.quantity,
+              secondaryQty: '',
+              receivedQty: poItem.quantity, // Default to full qty
+              acceptedQty: poItem.quantity,
+              rejectedQty: '0',
+              shortExcessQty: '0',
+              remarks: ''
+            }));
+            setGrnItems(newGrnItems);
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching full PO details:", err);
+      }
     }
   };
 
@@ -2025,6 +2126,18 @@ const InventoryPage: React.FC = () => {
     }
   };
 
+  const handleGrnDocumentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setGrnDocument(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setGrnDocumentPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleAddGrnItem = () => {
     setGrnItems([...grnItems, { itemCode: '', itemName: '', uom: '', refQty: '', secondaryQty: '', receivedQty: '', acceptedQty: '', rejectedQty: '', shortExcessQty: '', remarks: '' }]);
   };
@@ -2047,7 +2160,7 @@ const InventoryPage: React.FC = () => {
 
       if (selectedItem) {
         updatedItems[index].itemCode = selectedItem.item_code;
-        updatedItems[index].itemName = selectedItem.name || selectedItem.item_name;
+        updatedItems[index].itemName = selectedItem.item_name || selectedItem.name;
         updatedItems[index].uom = selectedItem.uom || selectedItem.unit;
         updatedItems[index].itemId = selectedItem.id;
 
@@ -2166,7 +2279,8 @@ const InventoryPage: React.FC = () => {
       await httpClient.post('/api/inventory/operations/new-grn/', payload);
       showSuccess('GRN saved successfully!');
       setShowGRNForm(false);
-      // Reset logic if needed
+      setGrnDocument(null);
+      setGrnDocumentPreview(null);
     } catch (error) {
       console.error('Error saving GRN:');
       showError('Failed to save GRN. Please check your inputs.');
@@ -2961,9 +3075,12 @@ const InventoryPage: React.FC = () => {
                               className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             >
                               <option value="">Select Vendor</option>
-                              {vendors.map(vendor => (
-                                <option key={vendor.id} value={vendor.vendor_name}>{vendor.vendor_name}</option>
-                              ))}
+                              {vendors
+                                .filter(v => (v.vendor_category || '').toLowerCase().includes('jobwork'))
+                                .map(vendor => (
+                                  <option key={vendor.id} value={vendor.vendor_name}>{vendor.vendor_name}</option>
+                                ))
+                              }
                             </select>
                           </div>
                           <div>
@@ -3492,9 +3609,11 @@ const InventoryPage: React.FC = () => {
                               className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             >
                               <option value="">Select Vendor</option>
-                              {vendors.map(vendor => (
-                                <option key={vendor.id} value={vendor.vendor_name}>{vendor.vendor_name}</option>
-                              ))}
+                              {vendors
+                                .filter(v => (v.vendor_category || '').toLowerCase().includes('jobwork'))
+                                .map(vendor => (
+                                  <option key={vendor.id} value={vendor.vendor_name}>{vendor.vendor_name}</option>
+                                ))}
                             </select>
                           </div>
                           <div>
@@ -3555,6 +3674,77 @@ const InventoryPage: React.FC = () => {
                             placeholder=""
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
+                        </div>
+                      </div>
+
+                      {/* Upload Document Section */}
+                      <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-indigo-400 transition-colors">
+                        <input
+                          type="file"
+                          id="receipt-doc-upload"
+                          className="hidden"
+                          accept=".pdf,.png,.jpg,.jpeg"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setReceiptDocument(file);
+                              const url = URL.createObjectURL(file);
+                              setReceiptPreviewUrl(url);
+                            }
+                          }}
+                        />
+                        <div className="flex flex-col items-center gap-2">
+                          {!receiptDocument ? (
+                            <>
+                              <div className="bg-indigo-100 p-3 rounded-full">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                </svg>
+                              </div>
+                              <p className="text-sm font-semibold text-gray-700 mt-1">Upload Receipt Document</p>
+                              <p className="text-xs text-gray-500">Supported formats: PDF, PNG, JPG (Max 5MB)</p>
+                              <button
+                                type="button"
+                                onClick={() => document.getElementById('receipt-doc-upload')?.click()}
+                                className="mt-2 px-6 py-2 bg-indigo-600 text-white text-sm font-medium rounded hover:bg-indigo-700 transition-colors"
+                              >
+                                Select File
+                              </button>
+                            </>
+                          ) : (
+                            <div className="flex flex-col items-center gap-4 w-full">
+                              <div className="flex items-center gap-3 bg-white p-3 rounded-lg border border-gray-200 w-full max-w-md shadow-sm">
+                                <div className="bg-green-100 p-2 rounded">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                </div>
+                                <div className="flex-1 text-left truncate">
+                                  <p className="text-sm font-semibold text-gray-900 truncate">{receiptDocument.name}</p>
+                                  <p className="text-xs text-gray-500">{(receiptDocument.size / 1024 / 1024).toFixed(2)} MB</p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowReceiptPreview(true)}
+                                  className="text-indigo-600 hover:text-indigo-800 text-sm font-bold uppercase tracking-wider px-3"
+                                >
+                                  Preview
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setReceiptDocument(null);
+                                    setReceiptPreviewUrl(null);
+                                  }}
+                                  className="text-red-500 hover:text-red-700"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -4610,11 +4800,32 @@ const InventoryPage: React.FC = () => {
                         <label className="block text-sm font-semibold text-gray-700 mb-1">Material Issue Slip No.</label>
                         <select
                           multiple
-                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 h-24"
+                          value={selectedMaterialIssueSlips}
+                          onChange={(e) => {
+                            const newSelectedSlips = Array.from(e.target.selectedOptions, option => option.value);
+                            setSelectedMaterialIssueSlips(newSelectedSlips);
+
+                            // Auto-fetch source location from first selected slip
+                            if (newSelectedSlips.length > 0) {
+                              const found = materialIssueSlipOptions.find(o => o.issue_slip_no === newSelectedSlips[0]);
+                              if (found) {
+                                // For inter-process, the "From" (goodsToLocation) is actually the "To" of previous slip
+                                setGoodsToLocation(String(found.goods_to_location || found.location_id || ''));
+
+                                // Reset the interProcessToLocation to avoid confusion (or keep as needed)
+                                // setInterProcessToLocation(''); 
+                              }
+                            }
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 h-24 font-bold"
                         >
-                          <option value="MIS-001">MIS-001</option>
-                          <option value="MIS-002">MIS-002</option>
-                          {/* Fetch actual slips here */}
+                          {materialIssueSlipOptions.length === 0 ? (
+                            <option disabled>No slips found</option>
+                          ) : (
+                            materialIssueSlipOptions.map((slip, idx) => (
+                              <option key={idx} value={slip.issue_slip_no}>{slip.issue_slip_no}</option>
+                            ))
+                          )}
                         </select>
                         <p className="text-xs text-gray-500 mt-1">Hold Ctrl (Cmd) to select multiple</p>
                       </div>
@@ -4626,15 +4837,15 @@ const InventoryPage: React.FC = () => {
                           <input
                             type="text"
                             readOnly
-                            placeholder="Fetch from Material Issue Slip"
+                            value={locations.find(l => String(l.id) === String(goodsToLocation))?.name || ''}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-100 cursor-not-allowed"
                           />
                         </div>
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-1">Issued To</label>
                           <select
-                            value={goodsToLocation}
-                            onChange={(e) => setGoodsToLocation(e.target.value)}
+                            value={interProcessToLocation}
+                            onChange={(e) => setInterProcessToLocation(e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="">Select location</option>
@@ -4694,9 +4905,9 @@ const InventoryPage: React.FC = () => {
                                           const qty = Number(val || 0);
                                           const rate = Number(newItems[index].rate || 0);
                                           const amount = parseFloat((qty * rate).toFixed(2));
-                                          
-                                          newItems[index] = { 
-                                            ...newItems[index], 
+
+                                          newItems[index] = {
+                                            ...newItems[index],
                                             issueQty: val,
                                             amount: amount.toString()
                                           };
@@ -4825,7 +5036,7 @@ const InventoryPage: React.FC = () => {
                                           const qty = Number(val || 0);
                                           const rate = Number(newItems[index].rate || 0);
                                           const amount = parseFloat((qty * rate).toFixed(2));
-                                          
+
                                           newItems[index] = {
                                             ...newItems[index],
                                             quantity: val,
@@ -4846,7 +5057,7 @@ const InventoryPage: React.FC = () => {
                                           const rate = Number(val || 0);
                                           const qty = Number(newItems[index].quantity || 0);
                                           const amount = parseFloat((qty * rate).toFixed(2));
-                                          
+
                                           newItems[index] = {
                                             ...newItems[index],
                                             rate: val,
@@ -4960,11 +5171,26 @@ const InventoryPage: React.FC = () => {
                         <label className="block text-sm font-semibold text-gray-700 mb-1">Process Transfer Slip No.</label>
                         <select
                           multiple
-                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 h-24"
+                          value={selectedProcessTransferSlips}
+                          onChange={(e) => {
+                            const newSelectedSlips = Array.from(e.target.selectedOptions, option => option.value);
+                            setSelectedProcessTransferSlips(newSelectedSlips);
+                            if (newSelectedSlips.length > 0) {
+                              const found = processTransferSlipOptions.find(o => o.issue_slip_no === newSelectedSlips[0]);
+                              if (found) {
+                                setGoodsFromLocation(String(found.goods_to_location || ''));
+                              }
+                            }
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 h-24 font-bold"
                         >
-                          <option value="PTS-001">PTS-001</option>
-                          <option value="PTS-002">PTS-002</option>
-                          {/* Fetch actual slips here */}
+                          {processTransferSlipOptions.length === 0 ? (
+                            <option disabled>No slips found</option>
+                          ) : (
+                            processTransferSlipOptions.map((slip, idx) => (
+                              <option key={idx} value={slip.issue_slip_no}>{slip.issue_slip_no}</option>
+                            ))
+                          )}
                         </select>
                         <p className="text-xs text-gray-500 mt-1">Hold Ctrl (Cmd) to select multiple</p>
                       </div>
@@ -4976,7 +5202,7 @@ const InventoryPage: React.FC = () => {
                           <input
                             type="text"
                             readOnly
-                            placeholder="Fetch from Process Transfer Slip"
+                            value={locations.find(l => String(l.id) === goodsFromLocation)?.name || ''}
                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-100 cursor-not-allowed"
                           />
                         </div>
@@ -5036,17 +5262,17 @@ const InventoryPage: React.FC = () => {
                                     <td className="px-3 py-2 border-r"><input type="text" value={item.uom} readOnly className="w-full bg-gray-50 border-none rounded text-sm text-center" /></td>
                                     <td className="px-3 py-2 border-r"><input type="number" value={item.quantityAvailable} readOnly className="w-full bg-gray-50 border-none rounded text-sm text-center" /></td>
                                     <td className="px-3 py-2 border-r">
-                                      <input 
-                                        type="number" 
-                                        value={item.quantityIssued} 
-                                        placeholder="Issue Qty" 
+                                      <input
+                                        type="number"
+                                        value={item.quantityIssued}
+                                        placeholder="Issue Qty"
                                         onChange={(e) => {
                                           const val = e.target.value;
                                           const newItems = [...fgMaterialsIssuedItems];
                                           const qty = Number(val || 0);
                                           const rate = Number(newItems[index].rate || 0);
                                           const amount = parseFloat((qty * rate).toFixed(2));
-                                          
+
                                           newItems[index] = {
                                             ...newItems[index],
                                             quantityIssued: val,
@@ -5054,18 +5280,18 @@ const InventoryPage: React.FC = () => {
                                           };
                                           setFgMaterialsIssuedItems(newItems);
                                         }}
-                                        className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-center" 
+                                        className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-center"
                                       />
                                     </td>
                                     <td className="px-3 py-2 border-r"><input type="number" value={item.rate} readOnly className="w-full bg-gray-50 border-none rounded text-sm text-center" /></td>
                                     <td className="px-3 py-2">
-                                      <input 
-                                        type="number" 
-                                        value={item.amount} 
-                                        readOnly 
+                                      <input
+                                        type="number"
+                                        value={item.amount}
+                                        readOnly
                                         disabled
                                         placeholder="0.00"
-                                        className="w-full bg-gray-100 border border-gray-300 rounded px-2 py-1 text-sm text-center cursor-not-allowed" 
+                                        className="w-full bg-gray-100 border border-gray-300 rounded px-2 py-1 text-sm text-center cursor-not-allowed"
                                       />
                                     </td>
                                   </tr>
@@ -5169,7 +5395,7 @@ const InventoryPage: React.FC = () => {
                                           const qty = Number(val || 0);
                                           const rate = Number(newItems[index].rate || 0);
                                           const amount = parseFloat((qty * rate).toFixed(2));
-                                          
+
                                           newItems[index] = {
                                             ...newItems[index],
                                             quantityProduced: val,
@@ -5202,7 +5428,7 @@ const InventoryPage: React.FC = () => {
                                           const rate = Number(val || 0);
                                           const qty = Number(newItems[index].quantityProduced || 0);
                                           const amount = parseFloat((qty * rate).toFixed(2));
-                                          
+
                                           newItems[index] = {
                                             ...newItems[index],
                                             rate: val,
@@ -5577,7 +5803,6 @@ const InventoryPage: React.FC = () => {
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">
                             GRN No.
-                            {grnSelectedSeriesId && <span className="ml-2 text-xs text-indigo-500 font-normal">(Auto-generated)</span>}
                           </label>
                           <input
                             type="text"
@@ -5648,6 +5873,56 @@ const InventoryPage: React.FC = () => {
                           </select>
                         </div>
                       </div>
+
+                      <div className="grid grid-cols-2 gap-5 mt-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">Upload Document</label>
+                          <div className="flex items-center space-x-4">
+                            <label className="cursor-pointer bg-white border border-gray-300 rounded px-3 py-1.5 text-xs text-indigo-600 font-semibold hover:bg-indigo-50 flex items-center space-x-2 transition-colors border-dashed border-2 border-indigo-200">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                              </svg>
+                              <span>{grnDocument ? 'Change Document' : 'Upload Document'}</span>
+                              <input type="file" className="hidden" onChange={handleGrnDocumentChange} accept="image/*,application/pdf" />
+                            </label>
+                            {grnDocumentPreview && (
+                              <div className="relative group flex items-center bg-indigo-50 px-2.5 py-1.5 rounded-lg border border-indigo-100 shadow-sm hover:shadow-md transition-all cursor-pointer" onClick={() => setIsGrnDocumentModalOpen(true)}>
+                                {grnDocument?.type.startsWith('image/') ? (
+                                  <div className="relative">
+                                    <img src={grnDocumentPreview} alt="Preview" className="h-9 w-9 object-cover rounded-md border border-indigo-200" />
+                                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 flex items-center justify-center rounded-md transition-all">
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white opacity-0 group-hover:opacity-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                      </svg>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="h-9 w-9 flex items-center justify-center bg-white rounded-md border border-indigo-200 group-hover:bg-indigo-600 transition-colors">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-indigo-500 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                    </svg>
+                                  </div>
+                                )}
+                                <div className="ml-3 flex flex-col">
+                                  <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider">Preview Document</span>
+                                  <span className="text-xs text-gray-700 font-semibold max-w-[120px] truncate leading-tight">{grnDocument?.name}</span>
+                                </div>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setGrnDocument(null); setGrnDocumentPreview(null); }}
+                                  className="ml-3 p-1.5 bg-white text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full shadow-sm transition-all border border-gray-100"
+                                  title="Remove Document"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                  </svg>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div>{/* Empty col to balance grid */}</div>
+                      </div>
                     </>
                   ) : (
                     // SALES RETURN FORM
@@ -5670,7 +5945,6 @@ const InventoryPage: React.FC = () => {
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">
                             GRN No.
-                            {grnSelectedSeriesId && <span className="ml-2 text-xs text-indigo-500 font-normal">(Auto-generated)</span>}
                           </label>
                           <input
                             type="text"
@@ -5790,7 +6064,7 @@ const InventoryPage: React.FC = () => {
                                 >
                                   <option value="">Select Item</option>
                                   {items.map(i => (
-                                    <option key={i.id} value={i.name}>{i.name}</option>
+                                    <option key={i.id} value={i.item_name || i.name}>{i.item_name || i.name}</option>
                                   ))}
                                 </select>
                               </td>
@@ -5917,7 +6191,7 @@ const InventoryPage: React.FC = () => {
 
                   <div className="flex gap-3 justify-end border-t border-gray-200 pt-5 mt-4">
                     <button onClick={handleGRNSubmit} className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 font-semibold text-sm">Post & Close</button>
-                    <button onClick={() => { setShowGRNForm(false); setGrnSelectedSeriesId(null); setGrnNumber(''); }} className="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 font-semibold text-sm">Cancel</button>
+                    <button onClick={() => { setShowGRNForm(false); setGrnSelectedSeriesId(null); setGrnNumber(''); setGrnDocument(null); setGrnDocumentPreview(null); }} className="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 font-semibold text-sm">Cancel</button>
                   </div>
                 </div>
               </div>
@@ -6511,6 +6785,82 @@ const InventoryPage: React.FC = () => {
             </div>
           )
         }
+
+        {/* Document Preview Modal */}
+        {showReceiptPreview && receiptPreviewUrl && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+            <div className="bg-white rounded-lg shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden animate-in zoom-in duration-300">
+              {/* Header */}
+              <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-white sticky top-0 z-10">
+                <div className="flex items-center gap-4">
+                  <div className="bg-indigo-50 p-2 rounded-lg">
+                    <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900 leading-tight">Document Preview</h3>
+                    <p className="text-sm text-gray-500 font-medium">{receiptDocument?.name || 'document.pdf'}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => {
+                      if (receiptPreviewUrl) {
+                        const link = document.createElement('a');
+                        link.href = receiptPreviewUrl;
+                        link.download = receiptDocument?.name || 'download';
+                        link.click();
+                      }
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors font-semibold border border-gray-200"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Download
+                  </button>
+                  <button
+                    onClick={() => setShowReceiptPreview(false)}
+                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all"
+                  >
+                    <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* Preview Body */}
+              <div className="flex-1 bg-gray-800 p-4 flex items-center justify-center overflow-auto">
+                {receiptDocument?.type === 'application/pdf' ? (
+                  <iframe
+                    src={receiptPreviewUrl}
+                    className="w-full h-full rounded shadow-lg bg-white"
+                    title="Document Preview"
+                  />
+                ) : (
+                  <img
+                    src={receiptPreviewUrl}
+                    alt="Document Preview"
+                    className="max-w-full max-h-full object-contain rounded shadow-2xl"
+                  />
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-center">
+                <button
+                  onClick={() => setShowReceiptPreview(false)}
+                  className="px-12 py-3 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 font-bold text-base shadow-md uppercase tracking-wide transition-transform active:scale-95"
+                >
+                  Close Preview
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div >
     );
   };
@@ -7072,7 +7422,7 @@ const InventoryPage: React.FC = () => {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50 sticky top-0">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">GRN Type</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Preview</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">GRN Series Name</th>
                     <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Action</th>
@@ -7318,7 +7668,7 @@ const InventoryPage: React.FC = () => {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50 sticky top-0">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Issue Slip Type</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Preview</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Issue Slip Series Name</th>
                     <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Action</th>
@@ -7464,6 +7814,78 @@ const InventoryPage: React.FC = () => {
         {activeTab === 'Master' && renderMaster()}
         {activeTab === 'Operations' && renderOperations()}
       </div>
+
+      {/* Document Preview Modal (Centered like Screenshot) */}
+      {isGrnDocumentModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-8 bg-black/70 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col overflow-hidden border border-gray-100 transform animate-in zoom-in-95 duration-300">
+            {/* Header Area */}
+            <div className="px-8 py-5 border-b border-gray-100 flex justify-between items-center bg-white">
+              <div className="flex items-center space-x-5">
+                <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-100">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-2xl font-extrabold text-gray-900 tracking-tight">Document Preview</h3>
+                  <p className="text-sm text-gray-500 font-medium truncate max-w-md mt-0.5">{grnDocument?.name || 'Uploaded File'}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={() => {
+                    if (grnDocumentPreview) {
+                      const link = document.createElement('a');
+                      link.href = grnDocumentPreview;
+                      link.download = grnDocument?.name || 'document';
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    }
+                  }}
+                  className="flex items-center space-x-2 px-5 py-2.5 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-xl text-sm font-bold transition-all border border-gray-200"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  <span>Download</span>
+                </button>
+                <button onClick={() => setIsGrnDocumentModalOpen(false)} className="bg-gray-50 hover:bg-red-50 text-gray-400 hover:text-red-500 p-2.5 rounded-xl transition-all border border-gray-200">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Viewer Body */}
+            <div className="flex-1 bg-[#2b2b2b] p-6 flex items-center justify-center overflow-auto shadow-inner">
+              {grnDocumentPreview && (
+                grnDocument?.type.startsWith('image/') ? (
+                  <img src={grnDocumentPreview} alt="Preview" className="max-w-full max-h-full object-contain shadow-2xl rounded-sm border border-black/10 transition-all" />
+                ) : (
+                  <iframe src={grnDocumentPreview} className="w-full h-full min-h-[65vh] rounded shadow-2xl border-none" title="PDF Preview" />
+                )
+              )}
+              {!grnDocumentPreview && (
+                <div className="text-gray-400 font-medium">No document selected to preview</div>
+              )}
+            </div>
+
+            {/* Sticky Action Footer */}
+            <div className="px-8 py-6 border-t border-gray-100 bg-white flex justify-center shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.05)]">
+              <button
+                onClick={() => setIsGrnDocumentModalOpen(false)}
+                className="px-14 py-4 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-xl font-black shadow-xl shadow-indigo-200 transform hover:-translate-y-0.5 active:translate-y-0 transition-all uppercase underline-offset-4 decoration-2 decoration-indigo-300"
+              >
+                Close Preview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

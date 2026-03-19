@@ -584,6 +584,7 @@ CREATE TABLE `company_informations` (
     
     `hsn_code` VARCHAR(20) DEFAULT NULL,
     `gst_rate` DECIMAL(5,2) DEFAULT NULL,
+    `cess_rate` DECIMAL(5,2) DEFAULT NULL,
     
     `reorder_level` VARCHAR(255) DEFAULT NULL COMMENT 'Reorder Level Information',
     `is_saleable` TINYINT(1) NOT NULL DEFAULT 0,

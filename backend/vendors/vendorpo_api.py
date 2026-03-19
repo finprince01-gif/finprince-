@@ -7,9 +7,9 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.core.exceptions import PermissionDenied
 
-from vendors.models import VendorTransactionPO, VendorTransactionPOItem
-from vendors.vendorpo_serializers import VendorPOSerializer, VendorPOCreateSerializer, VendorPOItemSerializer
-from vendors import vendorpo_database as db
+from .models import VendorTransactionPO, VendorTransactionPOItem
+from .vendorpo_serializers import VendorPOSerializer, VendorPOCreateSerializer, VendorPOItemSerializer
+from . import vendorpo_database as db
 
 
 class VendorPOViewSet(viewsets.ModelViewSet):
@@ -131,6 +131,7 @@ class VendorPOViewSet(viewsets.ModelViewSet):
         except Exception as e:
             import traceback
             traceback.print_exc()
+            with open('err.txt', 'w') as f2: f2.write(str(e) + '\n' + traceback.format_exc())
             return Response({
                 'success': False,
                 'error': str(e)
@@ -216,11 +217,12 @@ def get_pending_pos(request):
             
         tenant_id = str(user.tenant_id)
         vendor_id = request.query_params.get('vendor_id')
+        vendor_name = request.query_params.get('vendor_name')
         
-        if not vendor_id:
+        if not vendor_id and not vendor_name:
             return Response([], status=status.HTTP_200_OK)
             
-        po_list = db.get_pending_pos_for_vendor(tenant_id, vendor_id)
+        po_list = db.get_pending_pos_for_vendor(tenant_id, vendor_id, vendor_name)
         
         # Return in the format requested by user: [{"id": 1, "po_number": "PO000001"}]
         # No extra fields as requested.

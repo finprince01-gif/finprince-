@@ -2,14 +2,15 @@
 Database operations for Vendor Master Banking Information.
 """
 
-from django.db import connection
+import django.db
+connection = django.db.connection
 from typing import Dict, List, Optional
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-def create_vendor_banking(data: Dict) -> Dict:
+def create_vendor_banking(data: Dict) -> Optional[Dict]:
     """
     Create a new vendor banking record in the database.
     """
@@ -68,7 +69,7 @@ def create_vendor_banking(data: Dict) -> Dict:
         raise
 
 
-def update_vendor_banking(banking_id: int, data: Dict) -> Dict:
+def update_vendor_banking(banking_id: int, data: Dict) -> Optional[Dict]:
     """
     Update an existing vendor banking record.
     Supports partial updates by using COALESCE.
