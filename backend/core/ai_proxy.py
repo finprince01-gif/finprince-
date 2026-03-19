@@ -354,9 +354,9 @@ def process_ai_request(request_data: dict) -> dict:
 
 
 def execute_with_retry(prompt: str, request_data: dict, api_key: str) -> str:
-    """Execute AI request with exponential backoff, retry-after respect, and model fallback"""
-    max_attempts = 5
-    base_delay = 5
+    """Execute AI request with exponential backoff, retry-after respect, and model fallback."""
+    max_attempts = 3 # 1 initial + 2 retries
+    base_delay = 2
     api_key_used = api_key
     
     candidate_models = [
@@ -385,7 +385,7 @@ def execute_with_retry(prompt: str, request_data: dict, api_key: str) -> str:
                 try:
                     logger.info(f"Attempting with model: {model_name} (Key: {api_key_used[:4]}...)")
                     model = genai.GenerativeModel(model_name)
-                    response = model.generate_content(prompt)
+                    response = model.generate_content(prompt, request_options={"timeout": 15.0})
                     return response.text.strip()
                 except exceptions.NotFound:
                     logger.warning(f"Model {model_name} not found, trying next...")

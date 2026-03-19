@@ -38,6 +38,8 @@ interface InvoiceResult {
     report?: IngestionReport;
     /** id column from invoice_ocr_temp — present when result was served from cache or freshly saved */
     cacheRecordId?: number | null;
+    /** hash to track and deduplicate bulk results */
+    file_hash?: string;
 }
 
 interface InvoiceScannerModalProps {
@@ -349,6 +351,11 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
     const [isCreateVendorModalOpen, setIsCreateVendorModalOpen] = useState(false);
     const [extractedVendorData, setExtractedVendorData] = useState<any>(null);
 
+    // -- Bulk Job State --
+    const [bulkJobId, setBulkJobId] = useState<number | null>(null);
+    const [bulkStatus, setBulkStatus] = useState<{ total: number; processed: number; failed: number; pending: number; status: string } | null>(null);
+    const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
     const firstInvoiceVendorStr = invoiceResults.length > 0 && !isExtracting && voucherType === 'Purchase'
         ? String(invoiceResults[0].invoice['Vendor Name'] || '') + '|' + String(invoiceResults[0].invoice['GSTIN'] || '') + '|' + String(invoiceResults[0].invoice['Branch'] || '')
         : '';
@@ -450,7 +457,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         let duplicateFound = false;
 
         // Enforce single file for Finpixe Single Scan
-        if (scanType === 'single' && files.length > 1) {
+        if (scanType === 'single' && files.length > 1 && extractionMode === 'finpixe') {
             showError('FINPIXE SINGLE SCAN allows only one invoice. Use FINPIXE BULK SCAN for multiple invoices.');
             return;
         }
@@ -493,6 +500,25 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         }
 
         try {
+            if (scanType === 'bulk') {
+                const formData = new FormData();
+                newFiles.forEach(f => formData.append('files', f));
+                
+                const response = await httpClient.postFormData<any>('/api/bulk-upload/', formData);
+                if (response.job_id) {
+                    setBulkJobId(response.job_id);
+                    setBulkStatus({
+                        total: response.total_files,
+                        processed: 0,
+                        failed: 0,
+                        pending: response.total_files,
+                        status: 'processing'
+                    });
+                    startPolling(response.job_id);
+                }
+                return;
+            }
+
             const allResults: InvoiceResult[] = [];
             let batchProcessedCount = 0;
             const CONCURRENCY_LIMIT = 4;
@@ -753,10 +779,89 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         } catch (error) {
             showError(`❌ Extraction Failed: ${(error as Error).message}. Please try again.`);
         } finally {
-            setIsExtracting(false);
+            if (scanType !== 'bulk') {
+                setIsExtracting(false);
+            }
             if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
+
+    const fetchStagingData = async () => {
+        try {
+            // Fetch the actual extracted data from the staging API
+            const stagedResults = await httpClient.get<any[]>('/api/ocr-staging/');
+            
+            // Map the OCR staging results to the format expected by our UI (InvoiceResult)
+            const mappedResults: InvoiceResult[] = stagedResults.map(item => {
+                const extracted = item.extracted_data || {};
+                
+                return {
+                    invoice: extracted.invoice || extracted.header || extracted,
+                    items: extracted.items || extracted.line_items || [],
+                    headerMapping: {}, 
+                    itemMapping: {},
+                    file_hash: item.file_hash,
+                    cacheRecordId: item.id
+                };
+            }).filter(res => res.items.length > 0 || Object.keys(res.invoice).length > 0);
+
+            if (mappedResults.length === 0) return;
+
+            // Update results: Replace existing entries with same hash, add new ones
+            setInvoiceResults(prev => {
+                const map = new Map<string, InvoiceResult>();
+                // Preserve original order as much as possible
+                prev.forEach(r => {
+                    if (r.file_hash) map.set(r.file_hash, r);
+                });
+                
+                // Overwrite with fresh data from staging
+                mappedResults.forEach(r => {
+                    if (r.file_hash) map.set(r.file_hash, r);
+                });
+
+                return Array.from(map.values());
+            });
+        } catch (err) {
+            console.error("Failed to fetch staging data:", err);
+        }
+    };
+
+    const startPolling = (jobId: number) => {
+        if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+
+        pollingIntervalRef.current = setInterval(async () => {
+            try {
+                const status = await httpClient.get<any>(`/api/bulk-status/${jobId}/`);
+                setBulkStatus(status);
+
+                // Fetch data if something was processed
+                if (status.processed > 0) {
+                    await fetchStagingData();
+                }
+
+                if (status.status === 'completed' || status.status === 'failed') {
+                    if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+                    setIsExtracting(false);
+                    
+                    // Final fetch to ensure all data is caught
+                    await fetchStagingData();
+
+                    if (status.status === 'completed') {
+                        showSuccess(`✅ Bulk processing completed! ${status.processed} processed, ${status.failed} failed.`);
+                    }
+                }
+            } catch (err) {
+                console.error("Polling error:", err);
+            }
+        }, 3000);
+    };
+
+    useEffect(() => {
+        return () => {
+            if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+        };
+    }, []);
 
     // ── Upload directly (no risk dashboard) ──────────────────────────────────────
     const handleUploadToFinpixe = () => {
@@ -949,11 +1054,12 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         });
 
         // For Tally: always export ALL columns. For other modes: active columns only.
-        const exportCols = extractionMode === 'tally'
+        const exportCols = (extractionMode === 'tally'
             ? ALL_COLUMNS
             : ALL_COLUMNS.filter(col =>
                 allRows.some(row => row[col] !== '' && row[col] !== undefined)
-            );
+            )
+        ).filter(c => !['S.No', 'Staging Status', 'Action', 'Validation Status', 'id', 'serial', 'cacheRecordId', 'file_hash'].includes(c));
 
         let csvContent = exportCols.map(h => `"${h.replace(/"/g, '""')}"`).join(',') + '\n';
 
@@ -1028,12 +1134,20 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
             next[invoiceIdx] = res;
 
-            // ── Persist edit to OCR cache (fire-and-forget, non-blocking) ─────
-            if (res.cacheRecordId) {
-                apiService.updateOcrCache(res.cacheRecordId, {
-                    invoice: res.invoice,
-                    items: res.items,
-                }).catch((err: any) => {
+            // ── Persist edit to OCR cache / Staging table ─────
+            const extractedData = {
+                invoice: res.invoice,
+                items: res.items,
+            };
+
+            if (res.file_hash) {
+                // Bulk flow: Use staging API (triggers re-validation)
+                apiService.saveStagingEdit(res.file_hash, extractedData)
+                    .then(() => fetchStagingData()) // Refresh validation status (READY, etc.)
+                    .catch(err => console.warn('[Staging] Edit failed', err));
+            } else if (res.cacheRecordId) {
+                // Single scan fallback
+                apiService.updateOcrCache(res.cacheRecordId, extractedData).catch((err: any) => {
                     console.warn('[OCR Cache] Failed to persist edit for record', res.cacheRecordId, err);
                 });
             }
@@ -1077,9 +1191,11 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
     // ────────────────────────────────────────────────────────────────────────────
     const isSingleScan = scanType === 'single';
-    const modalTitle = isSingleScan
-        ? 'Finpixe Single Scan – Invoice Scanner'
-        : 'Finpixe Bulk Scan – Invoice Scanner';
+    const modePrefix = extractionMode === 'tally' ? 'Tally' : 
+                      (extractionMode === 'finpixe' ? 'Finpixe' : 
+                      (extractionMode.charAt(0).toUpperCase() + extractionMode.slice(1)));
+    
+    const modalTitle = `${modePrefix} ${isSingleScan ? 'Single' : 'Bulk'} Scan – Invoice Scanner`;
     const modalHint = isSingleScan
         ? 'Upload a single invoice for fast AI extraction.'
         : 'Upload multiple invoices for batch AI processing.';
@@ -1142,26 +1258,51 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                             )}
 
                             {isExtracting && (
-                                <div className="flex flex-col justify-center px-6 py-2">
-                                    <div className="flex items-center gap-2 text-sm font-medium text-indigo-600">
-                                        <Icon name="spinner" className="w-5 h-5 animate-spin" />
-                                        <span>Processing invoices...</span>
-                                    </div>
-                                    {countdownSeconds !== null && (
-                                        <div className="flex items-center gap-1.5 ml-7 mt-1">
-                                            <span style={{ fontSize: '15px', lineHeight: 1 }}>⏱</span>
-                                            <span className="text-xs font-semibold text-indigo-600 tabular-nums">
-                                                {countdownSeconds > 0
-                                                    ? (() => {
-                                                        const m = Math.floor(countdownSeconds / 60);
-                                                        const s = countdownSeconds % 60;
-                                                        return m > 0
-                                                            ? `${m}:${String(s).padStart(2, '0')} remaining`
-                                                            : `${s}s remaining`;
-                                                    })()
-                                                    : 'Almost done...'}
-                                            </span>
+                                <div className="flex flex-col justify-center px-6 py-2 w-full max-w-md">
+                                    <div className="flex items-center justify-between mb-1">
+                                        <div className="flex items-center gap-2 text-sm font-medium text-indigo-600">
+                                            <Icon name="spinner" className="w-5 h-5 animate-spin" />
+                                            <span>{scanType === 'bulk' ? 'Processing Bulk Job...' : 'Processing invoices...'}</span>
                                         </div>
+                                        {bulkStatus && (
+                                            <span className="text-xs font-bold text-indigo-600">
+                                                {Math.round(((bulkStatus.processed + bulkStatus.failed) / bulkStatus.total) * 100)}%
+                                            </span>
+                                        )}
+                                    </div>
+                                    
+                                    {bulkStatus ? (
+                                        <div className="space-y-1.5">
+                                            <div className="w-full bg-gray-200 rounded-full h-2">
+                                                <div 
+                                                    className="bg-indigo-600 h-2 rounded-full transition-all duration-500" 
+                                                    style={{ width: `${((bulkStatus.processed + bulkStatus.failed) / bulkStatus.total) * 100}%` }}
+                                                ></div>
+                                            </div>
+                                            <div className="flex justify-between text-[10px] text-gray-500 font-medium">
+                                                <span>Total: {bulkStatus.total}</span>
+                                                <span className="text-emerald-600">Processed: {bulkStatus.processed}</span>
+                                                <span className="text-red-500">Failed: {bulkStatus.failed}</span>
+                                                <span>Pending: {bulkStatus.pending}</span>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        countdownSeconds !== null && (
+                                            <div className="flex items-center gap-1.5 ml-7 mt-1">
+                                                <span style={{ fontSize: '15px', lineHeight: 1 }}>⏱</span>
+                                                <span className="text-xs font-semibold text-indigo-600 tabular-nums">
+                                                    {countdownSeconds > 0
+                                                        ? (() => {
+                                                            const m = Math.floor(countdownSeconds / 60);
+                                                            const s = countdownSeconds % 60;
+                                                            return m > 0
+                                                                ? `${m}:${String(s).padStart(2, '0')} remaining`
+                                                                : `${s}s remaining`;
+                                                        })()
+                                                        : 'Almost done...'}
+                                                </span>
+                                            </div>
+                                        )
                                     )}
                                 </div>
                             )}

@@ -415,6 +415,10 @@ CREATE TABLE `company_informations` (
     `branch_contact_person` varchar(100) DEFAULT NULL COMMENT 'Branch contact person',
     `branch_email` varchar(255) DEFAULT NULL COMMENT 'Branch email',
     `branch_contact_no` varchar(20) DEFAULT NULL COMMENT 'Branch contact number',
+    `branch_pincode` varchar(10) DEFAULT NULL COMMENT 'Branch pincode',
+    `branch_city` varchar(100) DEFAULT NULL COMMENT 'Branch city',
+    `branch_state` varchar(100) DEFAULT NULL COMMENT 'Branch state',
+    `branch_country` varchar(100) DEFAULT NULL COMMENT 'Branch country',
     PRIMARY KEY (`id`),
     UNIQUE KEY `vendor_gstdetails_tenant_gstin_ref_unique` (`tenant_id`,`gstin`,`reference_name`),
     KEY `vendor_gstdetails_tenant_id_idx` (`tenant_id`),
@@ -584,6 +588,7 @@ CREATE TABLE `company_informations` (
     
     `hsn_code` VARCHAR(20) DEFAULT NULL,
     `gst_rate` DECIMAL(5,2) DEFAULT NULL,
+    `cess_rate` DECIMAL(5,2) DEFAULT NULL,
     
     `reorder_level` VARCHAR(255) DEFAULT NULL COMMENT 'Reorder Level Information',
     `is_saleable` TINYINT(1) NOT NULL DEFAULT 0,
