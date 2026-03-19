@@ -170,7 +170,9 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
 
             setDate(prefilledData.invoiceDate || new Date().toISOString().split('T')[0]);
             setSalesInvoiceNo(prefilledData.invoiceNumber || '');
-            setCustomerName(prefilledData.sellerName || ''); // Maps Seller/Party -> Customer Name
+            const sellerName = prefilledData.sellerName || '';
+            setCustomerName(sellerName);
+            if (sellerName) handleCustomerChange(sellerName);
             if (prefilledData.gstin) setGstin(prefilledData.gstin);
             if (prefilledData.placeOfSupply) setPlaceOfSupply(prefilledData.placeOfSupply);
             if (prefilledData.invoiceType) setInvoiceType(prefilledData.invoiceType);
@@ -419,6 +421,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
     }, [fetchOutwardSlips]);
 
     const [customerName, setCustomerName] = useState('');
+    const [customerId, setCustomerId] = useState<number | string | null>(null);
     const [customerBranch, setCustomerBranch] = useState('');
     const [masterCustomers, setMasterCustomers] = useState<any[]>([]);
     const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
@@ -508,12 +511,14 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
     // Handle Customer Selection
     const handleCustomerChange = (val: string) => {
         setCustomerName(val);
+        setCustomerId(null); // Reset
         setCustomerBranch(''); // reset branch on customer change
         setCustomerBillingCurrency('');
 
         const allCustomers = [...(customers || []), ...(masterCustomers || [])];
         const customer = allCustomers.find(c => c.customer_name === val);
         if (customer) {
+            setCustomerId(customer.id);
             const branches: any[] = customer.gst_details?.branches || [];
             const refs = branches.map((b: any) => b.defaultRef || b.referenceName || '').filter(Boolean);
 
@@ -1018,6 +1023,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 }
                 if (!customerName && customerToSet) {
                     handleCustomerChange(customerToSet);
+                    if (fullDoc.customer_id) setCustomerId(fullDoc.customer_id);
                 }
             }
         } catch (error) {
@@ -1623,6 +1629,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 voucher_name: voucherName,
                 outward_slip_no: outwardSlipNo,
                 customer_name: customerName,
+                customer_id: customerId,
                 bill_to: JSON.stringify(billTo),
                 ship_to: JSON.stringify(shipTo),
                 gstin,
@@ -1805,7 +1812,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
 
             const payload = {
                 date: formatDate(date), sales_invoice_no: salesInvoiceNo, voucher_name: voucherName, outward_slip_no: outwardSlipNo,
-                customer_name: customerName, bill_to: JSON.stringify(billTo), ship_to: JSON.stringify(shipTo), gstin, contact, tax_type: taxType,
+                customer_name: customerName, customer_id: customerId, bill_to: JSON.stringify(billTo), ship_to: JSON.stringify(shipTo), gstin, contact, tax_type: taxType,
                 state_type: stateType, export_type: exportType, exchange_rate: exchangeRate, supporting_document: supportingDocument,
                 sales_order_no: salesOrderNos.join(', '), place_of_supply: placeOfSupply || null, reverse_charge: reverseCharge, invoice_type: invoiceType,
                 gst_export_type: stateType === 'export' ? gstExportType : null, port_code: stateType === 'export' ? portCode : null,

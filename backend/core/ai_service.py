@@ -4,8 +4,12 @@ import json
 import logging
 import hashlib
 import base64
+import traceback
+from typing import Optional
 from core.ocr_cache import compute_file_hash, get_cached_ocr, save_ocr_cache, update_ocr_cache_session
 from django.core.files.uploadedfile import UploadedFile
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +35,10 @@ def create_dynamic_voucher_extraction_request(
     mime_type: str = 'image/jpeg',
     user_id: str = '',
     tenant_id: str = '',
-    upload_session_id: str = None,
+    upload_session_id: Optional[str] = None,
+    extraction_mode: str = 'finpixe'
 ) -> dict:
+
     """
     Enterprise-Grade ERP Invoice Extraction Engine — 5-Phase Processing Pipeline.
 
@@ -55,22 +61,27 @@ def create_dynamic_voucher_extraction_request(
         file_hash = compute_file_hash(image_content)
 
         # ── DUPLICATE CHECK ──────────────────────────────────────────────────
-        existing = get_cached_ocr(file_hash, tenant_id)
-        if existing:
-            logger.info(f"Duplicate detect: Reusing cached OCR for hash={file_hash[:12]} tenant={tenant_id}")
-            return {
-                "reply": json.dumps(existing.get('extracted_data', {}), default=str),
-                "duplicate": True,
-                "from_cache": True,
-                "message": "Invoice already scanned. Using cached extraction.",
-                "cache_record_id": existing.get('id')
-            }
+        # Skip cache if not in standard finpixe mode (e.g. tally, zoho, sap)
+        existing = None
+        if extraction_mode == 'finpixe':
+            existing = get_cached_ocr(file_hash, tenant_id)
+            if existing:
+                logger.info(f"Duplicate detect: Reusing cached OCR for hash={file_hash[:12]} tenant={tenant_id}")
+                return {
+                    "reply": json.dumps(existing.get('extracted_data', {}), default=str),
+                    "duplicate": True,
+                    "from_cache": True,
+                    "message": "Invoice already scanned. Using cached extraction.",
+                    "cache_record_id": existing.get('id')
+                }
+
 
         # Transfer session if needed (for bulk scan)
         if existing and upload_session_id and not existing.get('processed'):
              try:
-                 from .ocr_cache import update_ocr_cache_session
+                 from core.ocr_cache import update_ocr_cache_session
                  update_ocr_cache_session(existing['id'], upload_session_id)
+
              except Exception as e:
                  logger.warning(f"Failed to update session for cached record: {e}")
 
@@ -369,14 +380,15 @@ STRICT RULES
             'mime_type': mime_type,
         }
 
-        from .ai_proxy import ai_service
+        from core.ai_proxy import ai_service
         result = ai_service.make_request('invoice', request_data, user_id, tenant_id)
+
 
         # ── SAVE TO CACHE (Only for new files) ──────────────────────────────
         if result and 'reply' in result and not result.get('error'):
             try:
                 # We need to parse it to store structured data
-                from .processing_engine import parse_and_process_ocr
+                from core.processing_engine import parse_and_process_ocr
                 processed = parse_and_process_ocr(result['reply'])
                 
                 save_ocr_cache(
@@ -510,8 +522,9 @@ Return ONLY raw JSON. No markdown, no code fences, no explanations.
             'mime_type': mime_type,
         }
 
-        from .ai_proxy import ai_service
+        from core.ai_proxy import ai_service
         return ai_service.make_request('invoice', request_data, user_id, tenant_id)
+
 
     except Exception as e:
         logger.exception("Error creating tax debug request")
@@ -585,8 +598,9 @@ Return ONLY the raw JSON object above — no markdown, no code fences, no explan
             'mime_type': mime_type,
         }
 
-        from .ai_proxy import ai_service
+        from core.ai_proxy import ai_service
         return ai_service.make_request('invoice', request_data, user_id, tenant_id)
+
 
     except Exception as e:
         logger.exception("Error creating master processing request")

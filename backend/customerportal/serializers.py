@@ -206,6 +206,7 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
             'customer_name': instance.customer_name,
             'customer_code': instance.customer_code,
             'customer_category': instance.customer_category_id,
+            'customer_category_name': str(instance.customer_category) if instance.customer_category else None,
             'pan_number': instance.pan_number,
             'contact_person': instance.contact_person,
             'email_address': instance.email_address,
@@ -345,8 +346,19 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
             with transaction.atomic():
                 # 1. Create Basic Details (parent table)
                 logger.info("Creating Basic Details...")
+                
+                # Auto-create Ledger
+                from accounting.utils_ledger import get_or_create_entity_ledger
+                ledger = get_or_create_entity_ledger(
+                    tenant_id=validated_data.get('tenant_id'),
+                    entity_name=validated_data.get('customer_name'),
+                    entity_type='customer',
+                    created_by=validated_data.get('created_by')
+                )
+                validated_data['ledger'] = ledger
+                
                 basic_details = super().create(validated_data)
-                logger.info(f"✅ Basic Details created: ID={basic_details.id}, Code={basic_details.customer_code}")
+                logger.info(f"[OK] Basic Details created: ID={basic_details.id}, Code={basic_details.customer_code}, Ledger_ID={ledger.id}")
                 
                 # 2. Create GST Details
                 logger.info("Creating GST Details...")
@@ -584,6 +596,17 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
         
         with transaction.atomic():
             # Update basic details
+            
+            # Ensure Ledger exists
+            from accounting.utils_ledger import get_or_create_entity_ledger
+            ledger = get_or_create_entity_ledger(
+                tenant_id=instance.tenant_id,
+                entity_name=validated_data.get('customer_name', instance.customer_name),
+                entity_type='customer',
+                created_by=validated_data.get('updated_by', instance.updated_by)
+            )
+            validated_data['ledger'] = ledger
+            
             instance = super().update(instance, validated_data)
             
             # Update GST Details

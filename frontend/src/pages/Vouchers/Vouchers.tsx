@@ -197,7 +197,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [scannerFiles, setScannerFiles] = useState<FileList | null>(null);
   const [scanType, setScanType] = useState<'single' | 'bulk'>('single');
   const scannerInputRef = useRef<HTMLInputElement>(null);
-  const [extractionMode, setExtractionMode] = useState<'finpixe' | 'tally'>('finpixe');
+  const [extractionMode, setExtractionMode] = useState<'finpixe' | 'tally' | 'zoho' | 'sap'>('finpixe');
+
+  // Zoho / SAP Scanner refs
+  const zohoScannerInputRef = useRef<HTMLInputElement>(null);
+  const sapScannerInputRef = useRef<HTMLInputElement>(null);
 
   // Tally Master Scanner Modal state
   const [isTallyMasterScannerOpen, setIsTallyMasterScannerOpen] = useState(false);
@@ -258,6 +262,30 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       setMasterScannerFiles(files);
       setIsTallyMasterScannerOpen(true);
     }
+  };
+
+  // Zoho multi-file handler
+  const handleZohoScannerFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      setExtractionMode('zoho');
+      setScanType('bulk');
+      setScannerFiles(files);
+      setIsInvoiceScannerOpen(true);
+    }
+    if (zohoScannerInputRef.current) zohoScannerInputRef.current.value = '';
+  };
+
+  // SAP multi-file handler
+  const handleSapScannerFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      setExtractionMode('sap');
+      setScanType('bulk');
+      setScannerFiles(files);
+      setIsInvoiceScannerOpen(true);
+    }
+    if (sapScannerInputRef.current) sapScannerInputRef.current.value = '';
   };
 
   const handleInvoiceUploadResults = (results: any[]) => {
@@ -6887,7 +6915,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             {isTallySubmenuOpen && (
                               <div className="bg-gray-100/50 py-0.5 shadow-inner">
                                 <button
-                                  onClick={() => { openScanner('tally'); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); setIsTallySubmenuOpen(false); }}
+                                  onClick={() => { openScanner('tally', 'bulk'); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); setIsTallySubmenuOpen(false); }}
                                   className="flex items-center w-full text-left px-12 py-1.5 text-xs text-gray-500 hover:bg-gray-200"
                                   role="menuitem"
                                 >
@@ -6905,7 +6933,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               </div>
                             )}
                             <button
-                              onClick={() => { showInfo("Zoho import triggered"); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); }}
+                              onClick={() => { zohoScannerInputRef.current?.click(); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); }}
                               className="flex items-center w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
                               role="menuitem"
                             >
@@ -6913,7 +6941,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               Zoho
                             </button>
                             <button
-                              onClick={() => { showInfo("SAP import triggered"); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); }}
+                              onClick={() => { sapScannerInputRef.current?.click(); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); }}
                               className="flex items-center w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
                               role="menuitem"
                             >
@@ -6967,6 +6995,26 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   onClick={(e) => { if (e.target) (e.target as any).value = null; }}
                   onChange={handleMasterScannerFileChange}
                   accept="image/*,.pdf"
+                  multiple
+                  className="hidden"
+                />
+
+                {/* Zoho multi-file scanner input */}
+                <input
+                  type="file"
+                  ref={zohoScannerInputRef}
+                  onChange={handleZohoScannerFileChange}
+                  accept="image/*,.pdf,.xlsx,.xls,.csv"
+                  multiple
+                  className="hidden"
+                />
+
+                {/* SAP multi-file scanner input */}
+                <input
+                  type="file"
+                  ref={sapScannerInputRef}
+                  onChange={handleSapScannerFileChange}
+                  accept="image/*,.pdf,.xlsx,.xls,.csv"
                   multiple
                   className="hidden"
                 />
@@ -7154,7 +7202,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   refetch(); // Refresh usage after scan
                 }}
                 onExtractionSuccess={(extractedData) => {
-                  if (voucherType !== 'Purchase') return;
+                  if (voucherType !== 'Purchase' || extractionMode !== 'finpixe') return;
 
                   validateVendorFromInvoice(
                     extractedData.vendor_name,
@@ -7164,6 +7212,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     extractedData.branch
                   );
                 }}
+
                 onUpload={(data) => {
                   console.log('[VouchersPage] Data received from InvoiceScannerModal:', data);
                   const firstRow = data[0];
