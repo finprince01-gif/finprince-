@@ -782,23 +782,35 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
             const exRateNum = parseFloat(exchangeRate) || 1;
             const inrRate = fRate * exRateNum;
+            const taxableValue = qty * inrRate;
+
+            // Fetch info from master data (Inventory > Inventory Items)
+            const stockItem = allItems.find((si: any) =>
+              ((si.item_code || si.code) || '').toLowerCase() === (item.item_code || '').toLowerCase() ||
+              ((si.name || si.item_name) || '').toLowerCase() === (item.item_name || '').toLowerCase()
+            );
+
+            const gstRate = stockItem?.gstRate || (stockItem as any)?.gst_rate || 0;
+            const cessRate = stockItem?.cessRate || (stockItem as any)?.cess_rate || 0;
+            const totalTax = taxableValue * (gstRate / 100);
+            const cessAmount = totalTax * (cessRate / 100);
 
             return {
               id: (Date.now() + idx + Math.random()).toString(),
-              itemCode: item.item_code || '',
-              itemName: item.item_name || '',
-              hsnSac: '',
+              itemCode: item.item_code || stockItem?.item_code || stockItem?.code || '',
+              itemName: item.item_name || stockItem?.name || stockItem?.item_name || '',
+              hsnSac: stockItem?.hsn_sac || stockItem?.hsn || stockItem?.hsn_code || stockItem?.hsn_sac_code || '',
               qty: qty,
-              uom: item.uom || '',
+              uom: item.uom || stockItem?.uom || stockItem?.unit || '',
               rate: inrRate,
-              taxableValue: qty * inrRate,
+              taxableValue: taxableValue,
               foreignRate: fRate,
               foreignAmount: qty * fRate,
-              igst: isInter ? gstAmount : 0,
-              cgst: isInter ? 0 : (gstAmount / 2),
-              sgst: isInter ? 0 : (gstAmount / 2),
-              cess: 0,
-              invoiceValue: parseFloat(item.invoice_value) || 0,
+              igst: isInter ? totalTax : 0,
+              cgst: isInter ? 0 : (totalTax / 2),
+              sgst: isInter ? 0 : (totalTax / 2),
+              cess: cessAmount,
+              invoiceValue: taxableValue + totalTax + cessAmount,
               description: item.description || '',
               poRate: inrRate,          // store PO rate (INR) for cross-check
               invoiceRate: null as number | null,
@@ -823,7 +835,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       }
     };
     fetchMultiplePODetails();
-  }, [selectedPurchasePOs, availablePOs, isInterState, party, setParty, exchangeRate]);
+  }, [selectedPurchasePOs, availablePOs, isInterState, party, setParty, exchangeRate, allItems]);
 
   // Fetch Pending GRNs based on selected vendor for Purchase Vouchers
   useEffect(() => {
@@ -861,7 +873,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       const selectedGRN = pendingGRNs.find(g => g.grn_no === grnRefNo);
       if (selectedGRN && selectedGRN.items && selectedGRN.items.length > 0) {
         const mappedItems = selectedGRN.items.map((item: any, idx: number) => {
-          const qty = parseFloat(item.quantity) || 0;
+          const qty = parseFloat(item.secondary_qty) || parseFloat(item.quantity) || 0;
           const rate = parseFloat(item.rate) || parseFloat(item.final_rate) || 0;
           const gstRate = parseFloat(item.gst_rate) || 0;
           const cessRate = parseFloat(item.cess_rate) || 0;
@@ -883,7 +895,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             sgst: isInterState ? 0 : totalTax / 2,
             cess: 0,
             invoiceValue: taxable + totalTax,
-            description: item.description || ''
+            description: item.description || '',
+            grnQty: parseFloat(item.secondary_qty) || null,
+            invoiceQty: parseFloat(item.secondary_qty) || null
           };
         });
         setPurchaseItems(mappedItems);
@@ -1833,7 +1847,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   // ── TDS/TCS Auto-Calculation ─────────────────────────────────────────────────────
   // Runs whenever vendor, items, or rich vendor list changes.
   // Reads tds_rate or tcs_rate from the vendor's master record (flattened by the backend serializer)
-  // and computes: TDS/TCS Amount = Total Taxable Value × Rate
+  // and computes: TCS Amount = Invoice Value × Rate, TDS Amount = Total Taxable × Rate
   useEffect(() => {
     if (voucherType !== 'Purchase') return;
 
@@ -1881,8 +1895,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     }
 
     const rateDecimal = numeric / 100;
-    const totalTaxable = purchaseItems.reduce((sum, item) => sum + (Number(item.taxableValue) || 0), 0);
-    const taxAmount = (totalTaxable * rateDecimal).toFixed(2);
+    // TDS/TCS is on Invoice Value (including GST)
+    const totalInvoice = purchaseItems.reduce((sum, item) => sum + (Number(item.invoiceValue) || 0), 0);
+
+    const taxAmount = (totalInvoice * rateDecimal).toFixed(2);
 
     setPurchaseTdsIt(taxAmount);
     setPurchaseTaxIsTcs(isTcs);
@@ -1892,25 +1908,21 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
   // Recalculate all item taxes when transaction type (isInterState) changes
   useEffect(() => {
-    // Safety check: only run if stockItems is defined
     if (!stockItems || !Array.isArray(stockItems)) {
       return;
     }
 
+    // Recalculate simple items (Sales, etc.)
     setItems(currentItems => currentItems.map(item => {
       if (!item.name) return item;
-      const stockItem = stockItems.find(si => si.name && si.name.toLowerCase() === item.name.toLowerCase());
-
-      if (!stockItem) {
-        return item;
-      }
+      const stockItem = allItems.find(si => (si.name || '').toLowerCase() === (item.name || '').toLowerCase());
+      if (!stockItem) return item;
 
       const gstRate = stockItem.gstRate || (stockItem as any).gst_rate || 0;
-      const taxableAmount = item.qty * item.rate;
+      const taxableAmount = (item.qty || 0) * (item.rate || 0);
       const totalTax = taxableAmount * (gstRate / 100);
 
       const newItem = { ...item, taxableAmount };
-
       if (isInterState) {
         newItem.cgstAmount = 0;
         newItem.sgstAmount = 0;
@@ -1923,7 +1935,38 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       newItem.totalAmount = taxableAmount + totalTax;
       return newItem;
     }));
-  }, [isInterState, stockItems]);
+
+    // Recalculate sophisticated Purchase items
+    setPurchaseItems(prevItems => prevItems.map(item => {
+      if (!item.itemName && !item.itemCode && !item.hsnSac) return item;
+
+      const selectedStockItem = allItems.find((si: any) =>
+        ((si.item_code || si.code) || '').toLowerCase() === (item.itemCode || '').toLowerCase() ||
+        ((si.name || si.item_name) || '').toLowerCase() === (item.itemName || '').toLowerCase() ||
+        ((si.hsn_sac || si.hsn) || '').toString().trim() === (item.hsnSac || '').toString().trim()
+      );
+
+      const gstRate = selectedStockItem?.gstRate || selectedStockItem?.gst_rate || 0;
+      const cessRate = selectedStockItem?.cessRate || selectedStockItem?.cess_rate || 0;
+      const taxable = (item.qty || 0) * (item.rate || 0);
+      const totalTax = taxable * (gstRate / 100);
+      const cess = totalTax * (cessRate / 100);
+
+      const newItem = { ...item, taxableValue: taxable, cess };
+
+      if (isInterState) {
+        newItem.igst = totalTax;
+        newItem.cgst = 0;
+        newItem.sgst = 0;
+      } else {
+        newItem.igst = 0;
+        newItem.cgst = totalTax / 2;
+        newItem.sgst = totalTax / 2;
+      }
+      newItem.invoiceValue = taxable + newItem.igst + newItem.cgst + newItem.sgst + cess;
+      return newItem;
+    }));
+  }, [isInterState, stockItems, allItems]);
 
   const formatDateForInput = (dateString: string): string => {
     if (!dateString) return '';
@@ -2447,7 +2490,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         gstin: gstin,
         grn_reference: grnRefNo,
         bill_from: [billFromAddress1, billFromAddress2, billFromAddress3, billFromCity, billFromPincode, billFromState, billFromCountry].filter(Boolean).join(', '),
-        ship_from: sameAsBillFrom 
+        ship_from: sameAsBillFrom
           ? [billFromAddress1, billFromAddress2, billFromAddress3, billFromCity, billFromPincode, billFromState, billFromCountry].filter(Boolean).join(', ')
           : [shipFromAddress1, shipFromAddress2, shipFromAddress3, shipFromCity, shipFromPincode, shipFromState, shipFromCountry].filter(Boolean).join(', '),
         input_type: purchaseInputTypes.join(', '),
@@ -2672,7 +2715,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         item.itemCode = selectedItem.item_code || selectedItem.code || item.itemCode;
         item.itemName = selectedItem.name || selectedItem.item_name || item.itemName;
         item.uom = selectedItem.unit || selectedItem.uom || item.uom;
-        item.hsnSac = selectedItem.hsn_code || selectedItem.hsn || selectedItem.hsn_sac || selectedItem.sac_code || item.hsnSac;
+        item.hsnSac = selectedItem.hsn_sac || selectedItem.hsn || selectedItem.hsn_code || selectedItem.hsn_sac_code || item.hsnSac;
 
         // ── RATE FETCHING LOGIC ──────────────────────────────────────────────
         let fetchedRate: number | null = null;
@@ -2689,6 +2732,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           if (poMatch) {
             fetchedRate = parseFloat(poMatch.final_rate) || parseFloat(poMatch.negotiated_rate) || 0;
             isFromPO = true;
+            item.sourcePoNo = poMatch._poNumber || null;
           }
         }
 
@@ -2739,20 +2783,21 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     }
 
     // Auto-calculate Taxable Value (Qty * Rate) and Taxes (INR)
-    if (field === 'qty' || field === 'rate' || field === 'itemCode' || field === 'itemName') {
+    if (field === 'qty' || field === 'rate' || field === 'itemCode' || field === 'itemName' || field === 'hsnSac') {
       const qty = parseFloat(item.qty.toString()) || 0;
       const rate = parseFloat(item.rate.toString()) || 0;
       item.taxableValue = qty * rate;
 
-      // Fetch GST Rate from combined items
+      // Fetch GST Rate from combined items (Master > Inventory Item)
       const selectedStockItem = allItems.find((si: any) =>
-        (si.item_code || si.code) === item.itemCode ||
-        (si.name || si.item_name) === item.itemName
+        ((si.item_code || si.code) || '').toLowerCase() === (item.itemCode || '').toLowerCase() ||
+        ((si.name || si.item_name) || '').toLowerCase() === (item.itemName || '').toLowerCase() ||
+        ((si.hsn_sac || si.hsn) || '').toString().trim() === (item.hsnSac || '').toString().trim()
       );
       const gstRate = selectedStockItem?.gstRate || selectedStockItem?.gst_rate || 0;
       const cessRate = selectedStockItem?.cessRate || selectedStockItem?.cess_rate || 0;
       const totalTax = item.taxableValue * (gstRate / 100);
-      item.cess = item.taxableValue * (cessRate / 100);
+      item.cess = totalTax * (cessRate / 100);
 
       if (isInterState) {
         item.igst = totalTax;
@@ -2771,32 +2816,33 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       const fRate = parseFloat(item.foreignRate?.toString() || '0') || 0;
       item.foreignAmount = qty * fRate;
 
-      const exRate = parseFloat(exchangeRate) || 0;
-      if (exRate > 0) {
-        item.rate = fRate * exRate;
-        item.taxableValue = qty * item.rate;
+      const exRate = parseFloat(exchangeRate) || 1; // Fallback to 1 ensures INR tab matches Foreign values if rate is empty
+      item.rate = fRate * exRate;
+      item.taxableValue = qty * item.rate;
 
-        // Recalculate taxes based on new taxable value
-        const selectedStockItem = allItems.find((si: any) =>
-          (si.item_code || si.code) === item.itemCode ||
-          (si.name || si.item_name) === item.itemName
-        );
-        const gstRate = selectedStockItem?.gstRate || selectedStockItem?.gst_rate || 0;
-        const cessRate = selectedStockItem?.cessRate || selectedStockItem?.cess_rate || 0;
-        const totalTax = item.taxableValue * (gstRate / 100);
-        item.cess = item.taxableValue * (cessRate / 100);
 
-        if (isInterState) {
-          item.igst = totalTax;
-          item.cgst = 0;
-          item.sgst = 0;
-        } else {
-          item.igst = 0;
-          item.cgst = totalTax / 2;
-          item.sgst = totalTax / 2;
-        }
+      // Recalculate taxes based on new taxable value - Source: Inventory Item Master
+      const selectedStockItem = allItems.find((si: any) =>
+        ((si.item_code || si.code) || '').toLowerCase() === (item.itemCode || '').toLowerCase() ||
+        ((si.name || si.item_name) || '').toLowerCase() === (item.itemName || '').toLowerCase() ||
+        ((si.hsn_sac || si.hsn) || '').toString().trim() === (item.hsnSac || '').toString().trim()
+      );
+      const gstRate = selectedStockItem?.gstRate || selectedStockItem?.gst_rate || 0;
+      const cessRate = selectedStockItem?.cessRate || selectedStockItem?.cess_rate || 0;
+      const totalTax = item.taxableValue * (gstRate / 100);
+      item.cess = totalTax * (cessRate / 100);
+
+      if (isInterState) {
+        item.igst = totalTax;
+        item.cgst = 0;
+        item.sgst = 0;
+      } else {
+        item.igst = 0;
+        item.cgst = totalTax / 2;
+        item.sgst = totalTax / 2;
       }
     }
+
 
     // Auto-calculate Invoice Value (Taxable + Taxes)
     const taxable = parseFloat(item.taxableValue.toString()) || 0;
@@ -3668,8 +3714,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       setExchangeRate(exRateVal);
 
                       // Auto-update all INR rates based on the new exchange rate
-                      const exRateNum = parseFloat(exRateVal) || 0;
-                      if (exRateNum > 0) {
+                        const exRateNum = parseFloat(exRateVal) || 1; // Fallback to 1 for instant 1:1 sync when cleared
                         const updatedItems = purchaseItems.map(item => {
                           const fRate = parseFloat(item.foreignRate?.toString() || '0') || 0;
                           const qty = parseFloat(item.qty.toString()) || 0;
@@ -3677,36 +3722,38 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           const newRate = fRate * exRateNum;
                           const newTaxable = qty * newRate;
 
-                          const selectedStockItem = allItems.find((si: any) =>
-                            (si.item_code || si.code) === item.itemCode ||
-                            (si.name || si.item_name) === item.itemName
-                          );
-                          const gstRate = selectedStockItem?.gstRate || selectedStockItem?.gst_rate || 0;
-                          const cessRate = selectedStockItem?.cessRate || selectedStockItem?.cess_rate || 0;
-                          const totalTax = newTaxable * (gstRate / 100);
-                          const newCess = newTaxable * (cessRate / 100);
 
-                          let igst = 0, cgst = 0, sgst = 0;
-                          if (isInterState) {
-                            igst = totalTax;
-                          } else {
-                            cgst = totalTax / 2;
-                            sgst = totalTax / 2;
-                          }
+                        const selectedStockItem = allItems.find((si: any) =>
+                          (si.item_code || si.code) === item.itemCode ||
+                          (si.name || si.item_name) === item.itemName
+                        );
+                        const gstRate = selectedStockItem?.gstRate || selectedStockItem?.gst_rate || 0;
+                        const cessRate = selectedStockItem?.cessRate || selectedStockItem?.cess_rate || 0;
+                        const totalTax = newTaxable * (gstRate / 100);
+                        const newCess = totalTax * (cessRate / 100);
 
-                          return {
-                            ...item,
-                            rate: newRate,
-                            taxableValue: newTaxable,
-                            igst,
-                            cgst,
-                            sgst,
-                            cess: newCess,
-                            invoiceValue: newTaxable + igst + cgst + sgst + newCess
-                          };
-                        });
-                        setPurchaseItems(updatedItems);
-                      }
+
+                        let igst = 0, cgst = 0, sgst = 0;
+                        if (isInterState) {
+                          igst = totalTax;
+                        } else {
+                          cgst = totalTax / 2;
+                          sgst = totalTax / 2;
+                        }
+
+                        return {
+                          ...item,
+                          rate: newRate,
+                          taxableValue: newTaxable,
+                          igst,
+                          cgst,
+                          sgst,
+                          cess: newCess,
+                          invoiceValue: newTaxable + igst + cgst + sgst + newCess
+                        };
+                      });
+                      setPurchaseItems(updatedItems);
+
                     }}
                     className="w-24 border-b-2 border-gray-300 focus:border-indigo-500 focus:outline-none px-2 py-1 text-center font-medium text-indigo-600"
                     placeholder="Rate"
@@ -3733,14 +3780,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       const getPoColor = (poNo: string | null) => {
                         if (!poNo) return '';
                         const colors = [
-                          'bg-emerald-50/60 hover:bg-emerald-100/60 transition-colors',
-                          'bg-amber-50/60 hover:bg-amber-100/60 transition-colors',
-                          'bg-rose-50/60 hover:bg-rose-100/60 transition-colors',
-                          'bg-sky-50/60 hover:bg-sky-100/60 transition-colors',
-                          'bg-violet-50/60 hover:bg-violet-100/60 transition-colors',
-                          'bg-indigo-50/60 hover:bg-indigo-100/60 transition-colors',
-                          'bg-orange-50/60 hover:bg-orange-100/60 transition-colors',
-                          'bg-teal-50/60 hover:bg-teal-100/60 transition-colors',
+                          'bg-emerald-50/60 hover:bg-emerald-100/60 border-l-4 border-l-emerald-400',
+                          'bg-amber-50/60 hover:bg-amber-100/60 border-l-4 border-l-amber-400',
+                          'bg-rose-50/60 hover:bg-rose-100/60 border-l-4 border-l-rose-400',
+                          'bg-sky-50/60 hover:bg-sky-100/60 border-l-4 border-l-sky-400',
+                          'bg-violet-50/60 hover:bg-violet-100/60 border-l-4 border-l-violet-400',
+                          'bg-indigo-50/60 hover:bg-indigo-100/60 border-l-4 border-l-indigo-400',
+                          'bg-orange-50/60 hover:bg-orange-100/60 border-l-4 border-l-orange-400',
+                          'bg-teal-50/60 hover:bg-teal-100/60 border-l-4 border-l-teal-400',
                         ];
                         const idx = selectedPurchasePOs.indexOf(poNo);
                         return idx !== -1 ? colors[idx % colors.length] : '';
@@ -3748,7 +3795,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       const rowColor = getPoColor(row.sourcePoNo);
 
                       return (
-                        <tr key={row.id} className={`${rowColor || 'hover:bg-gray-50'} transition-colors`}>
+                        <tr key={row.id} className={`${rowColor || 'border-b border-gray-200 hover:bg-gray-50'} transition-colors`}>
                           <td className="px-3 py-2 text-center border-r border-gray-200">
                             <input
                               type="checkbox"
@@ -3985,7 +4032,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         {purchaseInputTypes.includes('Intrastate') ? (
                           <>
                             <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">CGST</th>
-                            <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">SGST</th>
+                            <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">SGST/UTGST</th>
                           </>
                         ) : (
                           <th className="px-3 py-3 text-xs font-semibold text-center border-r border-indigo-500">IGST</th>
@@ -4131,7 +4178,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                 <td className="px-2 py-2 border-r border-gray-200">
                                   <div
                                     className="w-24 px-2 py-1 bg-green-50 rounded text-right text-sm font-semibold text-green-700 select-none"
-                                    title="SGST = Taxable Value × GST Rate × ½ (auto-calculated)"
+                                    title="SGST/UTGST = Taxable Value × GST Rate × ½ (auto-calculated)"
                                   >
                                     {row.sgst?.toFixed(2) ?? '0.00'}
                                   </div>
@@ -4251,8 +4298,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         <th className="px-4 py-2 text-sm font-semibold text-gray-700 border-r border-gray-300">IGST</th>
                         <th className="px-4 py-2 text-sm font-semibold text-gray-700 border-r border-gray-300">CGST</th>
                         <th className="px-4 py-2 text-sm font-semibold text-gray-700 border-r border-gray-300">SGST/UTGST</th>
-                        <th className="px-4 py-2 text-sm font-semibold text-gray-700 border-r border-gray-300">Cess</th>
-                        <th className="px-4 py-2 text-sm font-semibold text-gray-700">State Cess</th>
+                        <th className="px-4 py-2 text-sm font-semibold text-gray-700">Cess</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -4269,11 +4315,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         <td className="px-4 py-3 border-r border-gray-200 text-center text-sm font-medium">
                           {(purchaseItems.reduce((sum, item) => sum + (Number(item.sgst) || 0), 0)).toFixed(2)}
                         </td>
-                        <td className="px-4 py-3 border-r border-gray-200 text-center text-sm font-medium">
-                          {(purchaseItems.reduce((sum, item) => sum + (Number(item.cess) || 0), 0)).toFixed(2)}
-                        </td>
                         <td className="px-4 py-3 text-center text-sm font-medium">
-                          0.00
+                          {(purchaseItems.reduce((sum, item) => sum + (Number(item.cess) || 0), 0)).toFixed(2)}
                         </td>
                       </tr>
                     </tbody>

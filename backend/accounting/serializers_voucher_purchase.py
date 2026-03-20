@@ -163,6 +163,19 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):
         )
         purchase_total = due_data.get('to_pay') if isinstance(due_data, dict) else None
 
+        # Calculate tax totals from supply_inr_data if available
+        total_taxable = 0
+        total_cgst = 0
+        total_sgst = 0
+        total_igst = 0
+        
+        if isinstance(supply_inr_data, dict) and 'items' in supply_inr_data:
+            for item in supply_inr_data['items']:
+                total_taxable += float(item.get('taxableValue', 0))
+                total_cgst += float(item.get('cgst', 0))
+                total_sgst += float(item.get('sgst', 0))
+                total_igst += float(item.get('igst', 0))
+
         voucher = Voucher.objects.create(
             tenant_id=tenant_id,
             type='purchase',
@@ -173,6 +186,12 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):
             total=purchase_total,
             source='purchase_voucher',
             reference_id=supplier_instance.id,
+            is_inter_state=supplier_instance.input_type == 'Interstate',
+            total_taxable_amount=total_taxable,
+            total_cgst=total_cgst,
+            total_sgst=total_sgst,
+            total_igst=total_igst,
+            items_data=supply_inr_data.get('items') if isinstance(supply_inr_data, dict) else None
         )
 
         setattr(supplier_instance, '_accounting_voucher_id', voucher.id)
@@ -251,6 +270,51 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
         instance.save()
         tenant_id = instance.tenant_id
+
+        # Update the unified Voucher object
+        from .models import Voucher
+        voucher_id = getattr(instance, 'voucher_id', None)
+        if voucher_id:
+            try:
+                voucher = Voucher.objects.get(id=voucher_id)
+                
+                # Fetch components for re-calculation
+                due_data = parse_json(due_data) if due_data is not None else parse_json(self.initial_data.get('due_details'))
+                supply_inr_data = parse_json(supply_inr_data) if supply_inr_data is not None else parse_json(self.initial_data.get('supply_inr_details'))
+                
+                purchase_total = due_data.get('to_pay') if isinstance(due_data, dict) else voucher.total
+                
+                total_taxable = 0
+                total_cgst = 0
+                total_sgst = 0
+                total_igst = 0
+                items_list = None
+                
+                if isinstance(supply_inr_data, dict) and 'items' in supply_inr_data:
+                    items_list = supply_inr_data['items']
+                    for item in items_list:
+                        total_taxable += float(item.get('taxableValue', 0))
+                        total_cgst += float(item.get('cgst', 0))
+                        total_sgst += float(item.get('sgst', 0))
+                        total_igst += float(item.get('igst', 0))
+
+                voucher.date = instance.date
+                voucher.voucher_number = instance.purchase_voucher_no or instance.supplier_invoice_no or voucher.voucher_number
+                voucher.invoice_no = instance.supplier_invoice_no
+                voucher.party = instance.vendor_name
+                voucher.total = purchase_total
+                voucher.is_inter_state = instance.input_type == 'Interstate'
+                voucher.total_taxable_amount = total_taxable
+                voucher.total_cgst = total_cgst
+                voucher.total_sgst = total_sgst
+                voucher.total_igst = total_igst
+                if items_list is not None:
+                    voucher.items_data = items_list
+                
+                voucher.save()
+            except Voucher.DoesNotExist:
+                pass
+
 
         # Update or Create Nested Relations
         if supply_foreign_data is not None:
