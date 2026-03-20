@@ -447,8 +447,12 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
     }, [initialFiles]);
 
     const processFiles = async (files: FileList | File[]) => {
+        if (isExtracting) return; // Point 1B fix
+        setIsExtracting(true);
+
         if (isLimitReached && extractionMode === 'finpixe') {
             showError('❌ AI Extraction limit reached for your plan. Please upgrade to continue.');
+            setIsExtracting(false);
             return;
         }
 
@@ -830,31 +834,44 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
     const startPolling = (jobId: number) => {
         if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
 
-        pollingIntervalRef.current = setInterval(async () => {
+        let currentInterval = 2000;
+        
+        const poll = async () => {
             try {
                 const status = await httpClient.get<any>(`/api/bulk-status/${jobId}/`);
                 setBulkStatus(status);
 
-                // Fetch data if something was processed
                 if (status.processed > 0) {
                     await fetchStagingData();
                 }
 
-                if (status.status === 'completed' || status.status === 'failed') {
+                // Check for completion
+                if (status.status === 'completed' || status.status === 'failed' || status.status === 'success') {
                     if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
                     setIsExtracting(false);
-                    
-                    // Final fetch to ensure all data is caught
                     await fetchStagingData();
-
-                    if (status.status === 'completed') {
+                    if (status.status !== 'failed') {
                         showSuccess(`✅ Bulk processing completed! ${status.processed} processed, ${status.failed} failed.`);
                     }
+                    return;
                 }
+
+                // Adaptive Polling: Slow down after 50% to reduce server load
+                const progress = (status.processed + status.failed) / status.total;
+                const nextInterval = progress >= 0.5 ? 5000 : 2000;
+
+                if (nextInterval !== currentInterval) {
+                   currentInterval = nextInterval;
+                   if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+                   pollingIntervalRef.current = setInterval(poll, currentInterval);
+                }
+
             } catch (err) {
                 console.error("Polling error:", err);
             }
-        }, 3000);
+        };
+
+        pollingIntervalRef.current = setInterval(poll, currentInterval);
     };
 
     useEffect(() => {
