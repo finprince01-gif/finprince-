@@ -243,13 +243,60 @@ SPECTACULAR_SETTINGS = {
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# In-Memory Cache Configuration (No Redis)
+# ============================================================================
+# REDIS + CELERY CONFIGURATION
+# ============================================================================
+REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+
+# Redis-backed cache (replaces LocMemCache for distributed environments)
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'unique-snowflake',
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': REDIS_URL,
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'SOCKET_CONNECT_TIMEOUT': 5,
+            'SOCKET_TIMEOUT': 5,
+            'RETRY_ON_TIMEOUT': True,
+            'MAX_CONNECTIONS': 100,
+        },
+        'KEY_PREFIX': 'finpixe',
+        'TIMEOUT': 3600,  # 1 hour default TTL
     }
 }
+
+# Celery Configuration
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', REDIS_URL)
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', REDIS_URL)
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'Asia/Kolkata'
+CELERY_ENABLE_UTC = True
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 300        # 5 min hard kill
+CELERY_TASK_SOFT_TIME_LIMIT = 240   # 4 min soft
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1  # One task at a time per worker (fair)
+CELERY_TASK_ACKS_LATE = True           # Ack only after completion (no lost tasks)
+CELERY_WORKER_CANCEL_LONG_RUNNING_TASKS_ON_CONNECTION_LOSS = True
+
+# Priority-aware Queues
+CELERY_TASK_ROUTES = {
+    'vouchers.tasks.process_invoice_page': {'queue': 'invoice_pages'},
+    'vouchers.tasks.process_invoice_file': {'queue': 'invoice_files'},
+    'vouchers.tasks.finalize_invoice_job': {'queue': 'invoice_merge'},
+}
+CELERY_TASK_QUEUE_MAX_PRIORITY = 10   # 1=high, 10=low
+CELERY_TASK_DEFAULT_PRIORITY = 5
+
+# ============================================================================
+# BULK PROCESSING PIPELINE SETTINGS
+# ============================================================================
+BULK_MAX_ACTIVE_JOBS_PER_TENANT = int(os.getenv('BULK_MAX_ACTIVE_JOBS', '5'))
+BULK_AI_RATE_LIMITER_SLOTS = int(os.getenv('BULK_AI_SLOTS', '10'))
+BULK_AI_CALL_GAP_SECONDS = float(os.getenv('BULK_AI_CALL_GAP', '0.5'))
+BULK_MAX_RETRIES = int(os.getenv('BULK_MAX_RETRIES', '3'))
+BULK_STUCK_THRESHOLD_MINUTES = int(os.getenv('BULK_STUCK_THRESHOLD', '5'))
 
 # ============================================================================
 # LOGIN SECURITY SETTINGS

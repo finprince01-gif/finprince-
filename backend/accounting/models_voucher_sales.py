@@ -96,6 +96,14 @@ class VoucherSalesInvoiceDetails(BaseModel):
     irn = models.CharField(max_length=255, null=True, blank=True)
     ack_no = models.CharField(max_length=100, null=True, blank=True)
 
+    # Posting Status Tracking
+    posting_status = models.CharField(
+        max_length=20, 
+        choices=[('POSTED', 'Posted'), ('SKIPPED', 'Skipped'), ('FAILED', 'Failed')],
+        default='SKIPPED'
+    )
+    posting_error = models.TextField(null=True, blank=True)
+
     class Meta:
         managed = False
         db_table = 'voucher_sales_invoicedetails'

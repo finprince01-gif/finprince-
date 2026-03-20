@@ -1,6 +1,37 @@
 from django.db import transaction
 from decimal import Decimal
-from accounting.models import JournalEntry
+from accounting.models import JournalEntry, MasterLedger
+
+def _resolve_ledger(value, tenant_id=None):
+    """
+    Resolve either a numeric ID or a ledger name (string) to a MasterLedger instance.
+    Returns the MasterLedger instance, or None if not found/invalid.
+    """
+    if value is None or value == '':
+        return None
+
+    # Already an integer ID
+    try:
+        pk = int(value)
+        qs = MasterLedger.objects.filter(id=pk)
+        if tenant_id:
+            qs = qs.filter(tenant_id=tenant_id)
+        return qs.first()
+    except (ValueError, TypeError):
+        pass
+
+    # String name
+    if isinstance(value, str):
+        qs = MasterLedger.objects.filter(name__iexact=value.strip())
+        if tenant_id:
+            qs = qs.filter(tenant_id=tenant_id)
+        return qs.first()
+
+    # If already a model instance
+    if hasattr(value, 'id'):
+        return value
+
+    return None
 
 def post_transaction(voucher_type, voucher_id, tenant_id, entries):
     """

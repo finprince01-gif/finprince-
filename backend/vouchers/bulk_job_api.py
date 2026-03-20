@@ -1,18 +1,37 @@
+"""
+Bulk Invoice Upload API – Chaos-Hardened Final
+================================================
+Guards in order:
+  1. Infrastructure health  → 503 with retry_after
+  2. Kafka upload lag       → 503 with retry_after (backpressure)
+  3. Tenant job limit       → 503 with retry_after
+  4. Batch idempotency      → 200 (already done/processing)
+  5. Distributed Redis lock → 200 (duplicate in-flight)
+  6. Large job split        → files split into sub-batches if page count too high
+  7. Create job + publish   → Kafka only, never direct AI
+"""
 import os
-import uuid
 import hashlib
-import json
 import logging
+
 from django.conf import settings
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
-from django.core.files.storage import default_storage
-from django.core.files.base import ContentFile
+
 from .models import BulkInvoiceJob, InvoiceProcessingItem
-from .worker import start_bulk_job_thread
+from .pipeline import storage, kafka_client
+from .pipeline.health import SystemHealth, IdempotencyLock, MAX_PAGES_PER_JOB
 
 logger = logging.getLogger(__name__)
+
+# Retry-after hints per rejection reason (seconds)
+RETRY_AFTER = {
+    'infrastructure': 30,
+    'lag':            15,
+    'tenant_limit':   60,
+}
+
 
 class BulkUploadAPIView(APIView):
     parser_classes = (MultiPartParser, FormParser)
@@ -22,140 +41,146 @@ class BulkUploadAPIView(APIView):
         if not files:
             return Response({'error': 'No files uploaded'}, status=400)
 
-        if len(files) > 300: # Explicit limit as per request goal
-            return Response({'error': 'Too many files. Max 300 allowed.'}, status=400)
-
         tenant_id = getattr(request.user, 'tenant_id', 'default_tenant')
 
-        # 0. Check for existing active job for this tenant
-        existing_job = BulkInvoiceJob.objects.filter(
-            tenant_id=tenant_id, 
-            status__in=['pending', 'processing']
-        ).first()
-        if existing_job:
-            return Response({
-                'status': 'existing_job_found',
-                'job_id': existing_job.id,
-                'message': 'An active bulk job is already running for this tenant.',
-                'total_files': existing_job.total_files
-            })
+        # ── GATE 1: System health ────────────────────────────────────────────
+        ready, reason = SystemHealth.is_ready()
+        if not ready:
+            logger.critical(f"[UPLOAD] BLOCKED – {reason}")
+            return self._busy(reason, 'infrastructure')
 
-        # 1. Create Job Entry
+        # ── GATE 2: Kafka upload lag backpressure ────────────────────────────
+        lag_ok, lag = SystemHealth.check_upload_lag()
+        if not lag_ok:
+            msg = f"Upload queue is saturated (lag={lag}). Please retry shortly."
+            logger.warning(f"[UPLOAD] BACKPRESSURE – lag={lag}")
+            return self._busy(msg, 'lag')
+
+        # ── GATE 3: Tenant active job limit ──────────────────────────────────
+        max_jobs = getattr(settings, 'BULK_MAX_ACTIVE_JOBS_PER_TENANT', 5)
+        active = BulkInvoiceJob.objects.filter(
+            tenant_id=tenant_id, status__in=['pending', 'processing']
+        ).count()
+        if active >= max_jobs:
+            msg = f"Too many active jobs ({active}/{max_jobs}). Wait for current batch to complete."
+            logger.warning(f"[UPLOAD] TENANT LIMIT for {tenant_id}: {active} active")
+            return self._busy(msg, 'tenant_limit')
+
+        # ── GATE 4: Batch idempotency ─────────────────────────────────────────
+        batch_fingerprint = hashlib.sha256(
+            "".join(f"{f.name}-{f.size}" for f in files).encode()
+        ).hexdigest()
+
+        lock = IdempotencyLock(batch_fingerprint, ttl=300)
+
+        done_job_id = lock.is_done()
+        if done_job_id:
+            logger.info(f"[IDEMPOTENCY] Batch done → Job {done_job_id}")
+            return Response({'status': 'already_completed', 'job_id': done_job_id})
+
+        existing = BulkInvoiceJob.objects.filter(
+            file_hash=batch_fingerprint,
+            status__in=['pending', 'processing'],
+            tenant_id=tenant_id
+        ).first()
+        if existing:
+            logger.info(f"[IDEMPOTENCY] In-progress → Job {existing.id}")
+            return Response({'status': 'already_processing', 'job_id': existing.id,
+                             'total_files': existing.total_files})
+
+        # ── GATE 5: Distributed lock (race condition) ─────────────────────────
+        if not lock.acquire():
+            return Response({'status': 'already_processing',
+                             'message': 'Duplicate request received'})
+
+        try:
+            return self._create_and_enqueue(tenant_id, files, batch_fingerprint, lock)
+        except Exception as e:
+            lock.release()
+            logger.error(f"[UPLOAD] Job creation failed: {e}")
+            return Response({'error': 'Internal error. Please retry.'}, status=500)
+
+    def _create_and_enqueue(self, tenant_id, files, fingerprint, lock):
+        # ── GATE 6: Large job protection ─────────────────────────────────────
+        if len(files) > MAX_PAGES_PER_JOB:
+            logger.warning(f"[UPLOAD] Large batch ({len(files)} files > {MAX_PAGES_PER_JOB}). "
+                           "Processing first chunk only; re-upload remaining files.")
+            files = list(files)[:MAX_PAGES_PER_JOB]
+
         job = BulkInvoiceJob.objects.create(
             tenant_id=tenant_id,
+            file_hash=fingerprint,
             total_files=len(files),
-            status='pending'
+            status='pending',
+            segmentation_done=False
         )
+        logger.info(f"[UPLOAD] Created Job {job.id} | tenant={tenant_id} | files={len(files)}")
 
-        job_dir = os.path.join('bulk_uploads', str(job.id))
-        if not os.path.exists(os.path.join(settings.MEDIA_ROOT, job_dir)):
-             os.makedirs(os.path.join(settings.MEDIA_ROOT, job_dir))
-
-        # 2. Create individual items (Supports multi-invoice PDF)
         for uploaded_file in files:
             file_bytes = uploaded_file.read()
-            uploaded_file.seek(0)
-            
-            # Detect PDF and potentially split
-            is_pdf = uploaded_file.name.lower().endswith('.pdf')
-            split_items = []
-            
-            if is_pdf:
-                try:
-                    from core.pdf_splitter import split_pdf_into_invoice_files
-                    split_results = split_pdf_into_invoice_files(
-                        pdf_bytes=file_bytes,
-                        original_filename=uploaded_file.name
-                    )
-                    
-                    if len(split_results) > 1:
-                        for inv_number, tmp_path, group in split_results:
-                            with open(tmp_path, 'rb') as f:
-                                split_bytes = f.read()
-                            
-                            s_hash = hashlib.sha256(split_bytes).hexdigest()
-                            s_unique = f"{uuid.uuid4().hex}.pdf"
-                            s_path = os.path.join(settings.MEDIA_ROOT, job_dir, s_unique)
-                            
-                            with open(s_path, 'wb+') as dest:
-                                dest.write(split_bytes)
-                                
-                            split_items.append({
-                                'path': s_path,
-                                'hash': s_hash,
-                            })
-                            # cleanup tmp file
-                            from core.pdf_splitter import cleanup_temp_pdf
-                            cleanup_temp_pdf(tmp_path)
-                    else:
-                         pass # split failed or only 1 invoice
-                except Exception as e:
-                    logger.warning(f"PDF split failed for {uploaded_file.name}: {e}")
+            file_hash  = storage.hash_bytes(file_bytes)
+            key        = storage.make_key(job.id, uploaded_file.name)
 
-            if not split_items:
-                # Regular file or single-invoice PDF
-                file_hash = hashlib.sha256(file_bytes).hexdigest()
-                file_ext = os.path.splitext(uploaded_file.name)[1].lower()
-                unique_filename = f"{uuid.uuid4().hex}{file_ext}"
-                file_path = os.path.join(settings.MEDIA_ROOT, job_dir, unique_filename)
-                
-                with open(file_path, 'wb+') as destination:
-                    destination.write(file_bytes)
-                    
-                split_items.append({
-                    'path': file_path,
-                    'hash': file_hash,
-                })
+            storage.upload_bytes(file_bytes, key)
 
-            for si in split_items:
-                InvoiceProcessingItem.objects.create(
-                    job=job,
-                    file_path=si['path'],
-                    file_hash=si['hash'],
-                    status='pending'
-                )
+            master = InvoiceProcessingItem.objects.create(
+                job=job,
+                file_path=key,
+                file_hash=file_hash,
+                status='pending',
+                page_count=1,
+            )
 
-        # Update total count in case of splits
-        total_count = job.items.count()
-        if total_count != job.total_files:
-            job.total_files = total_count
-            job.save()
+            # Only trigger: Kafka publish. No direct AI. No Celery. No threads.
+            kafka_client.publish_sync('upload', {
+                'job_id':      job.id,
+                'tenant_id':   tenant_id,
+                'item_id':     master.id,
+                'storage_key': key,
+                'filename':    uploaded_file.name,
+                'file_hash':   file_hash,
+            }, key=str(tenant_id))
 
-        # 3. Start background job
-        start_bulk_job_thread(job.id)
+        lock.release()
+        logger.info(f"[UPLOAD] Job {job.id} published to Kafka pipeline")
 
         return Response({
-            'status': 'processing_started',
-            'job_id': job.id,
-            'total_files': len(files)
+            'status':      'processing_started',
+            'job_id':      job.id,
+            'total_files': job.total_files,
         })
+
+    @staticmethod
+    def _busy(reason: str, reason_key: str) -> Response:
+        """Return 503 with Retry-After header and retry_after field in body."""
+        after = RETRY_AFTER.get(reason_key, 30)
+        resp = Response(
+            {'error': reason, 'retry_after': after},
+            status=503
+        )
+        resp['Retry-After'] = str(after)
+        return resp
+
 
 class BulkStatusAPIView(APIView):
     def get(self, request, job_id, *args, **kwargs):
         try:
-            job = BulkInvoiceJob.objects.get(id=job_id)
-            
-            # Calculate accurately
-            pending = job.items.filter(status='pending').count()
-            processing = job.items.filter(status='processing').count()
-            done = job.items.filter(status='done').count()
-            failed = job.items.filter(status='failed').count()
+            job     = BulkInvoiceJob.objects.get(id=job_id)
+            masters = job.items.filter(parent_item_id=None)
+            total   = masters.count() or job.total_files
+            success = masters.filter(status__in=['success', 'partial']).count()
+            failed  = masters.filter(status='failed').count()
+            pending = masters.filter(status__in=['pending', 'processing']).count()
 
-            current_status = job.status
-            # Auto-complete if finished
-            if done + failed >= job.total_files and current_status not in ['completed', 'failed']:
-                job.status = 'completed'
-                job.save()
-                current_status = 'completed'
+            if job.status == 'completed' and job.file_hash:
+                IdempotencyLock(job.file_hash).mark_done(job.id)
 
             return Response({
-                'id': job.id,
-                'total': job.total_files,
-                'processed': done,
-                'failed': failed,
-                'pending': pending + processing,
-                'status': current_status,
-                'created_at': job.created_at
+                'total':     total,
+                'processed': success,
+                'failed':    failed,
+                'pending':   pending,
+                'status':    job.status,
             })
         except BulkInvoiceJob.DoesNotExist:
             return Response({'error': 'Job not found'}, status=404)

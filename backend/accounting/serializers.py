@@ -6,6 +6,8 @@ from .models import (
     Voucher, JournalEntry, AmountTransaction
 )
 from .models_question import Answer, Question
+from .services.ledger_service import post_transaction, _resolve_ledger
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -391,103 +393,71 @@ class VoucherSerializer(TenantModelSerializerMixin, serializers.ModelSerializer)
         
         return voucher
     
-    def _create_journal_entries(self, voucher, validated_data, entries_data, tenant_id):
-        """Create journal entries based on voucher type"""
-        voucher_type = voucher.type
-        
-        if voucher_type == 'sales':
-            # Debit: Party, Credit: Sales
-            JournalEntry.objects.create(
-                voucher=voucher,
-                ledger=validated_data.get('party', 'Unknown'),
-                debit=voucher.total or 0,
-                credit=0,
-                tenant_id=tenant_id
-            )
-            JournalEntry.objects.create(
-                voucher=voucher,
-                ledger='Sales',
-                debit=0,
-                credit=voucher.total or 0,
-                tenant_id=tenant_id
-            )
-        
-        elif voucher_type == 'purchase':
-            # Debit: Purchase, Credit: Party
-            JournalEntry.objects.create(
-                voucher=voucher,
-                ledger='Purchase',
-                debit=voucher.total or 0,
-                credit=0,
-                tenant_id=tenant_id
-            )
-            JournalEntry.objects.create(
-                voucher=voucher,
-                ledger=validated_data.get('party', 'Unknown'),
-                debit=0,
-                credit=voucher.total or 0,
-                tenant_id=tenant_id
-            )
-        
-        elif voucher_type == 'payment':
-            # Debit: Party, Credit: Account
-            JournalEntry.objects.create(
-                voucher=voucher,
-                ledger=validated_data.get('party', 'Unknown'),
-                debit=voucher.amount or 0,
-                credit=0,
-                tenant_id=tenant_id
-            )
-            JournalEntry.objects.create(
-                voucher=voucher,
-                ledger=validated_data.get('account', 'Cash'),
-                debit=0,
-                credit=voucher.amount or 0,
-                tenant_id=tenant_id
-            )
-        
-        elif voucher_type == 'receipt':
-            # Debit: Account, Credit: Party
-            JournalEntry.objects.create(
-                voucher=voucher,
-                ledger=validated_data.get('account', 'Cash'),
-                debit=voucher.amount or 0,
-                credit=0,
-                tenant_id=tenant_id
-            )
-            JournalEntry.objects.create(
-                voucher=voucher,
-                ledger=validated_data.get('party', 'Unknown'),
-                debit=0,
-                credit=voucher.amount or 0,
-                tenant_id=tenant_id
-            )
-        
-        elif voucher_type == 'contra':
-            # Debit: To Account, Credit: From Account
-            JournalEntry.objects.create(
-                voucher=voucher,
-                ledger=validated_data.get('to_account', 'Bank'),
-                debit=voucher.amount or 0,
-                credit=0,
-                tenant_id=tenant_id
-            )
-            JournalEntry.objects.create(
-                voucher=voucher,
-                ledger=validated_data.get('from_account', 'Cash'),
-                debit=0,
-                credit=voucher.amount or 0,
-                tenant_id=tenant_id
-            )
-        
-        elif voucher_type == 'journal':
-            # Create custom journal entries
-            for entry in entries_data:
-                JournalEntry.objects.create(
-                    voucher=voucher,
-                    ledger=entry.get('ledger'),
-                    debit=entry.get('debit', 0),
-                    credit=entry.get('credit', 0),
-                    tenant_id=tenant_id
+    def _create_journal_entries(self, voucher, validated_data, entries_data=None, tenant_id=None):
+        """
+        Unified bridge to post_transaction service for doubled-entry.
+        """
+        if not tenant_id:
+            tenant_id = voucher.tenant_id
+
+        v_type = (voucher.type or '').lower()
+        entries = []
+
+        try:
+            if v_type == 'sales':
+                party = _resolve_ledger(validated_data.get('party'), tenant_id)
+                sales = _resolve_ledger('Sales', tenant_id)
+                total = float(voucher.total or 0)
+                if party and sales and total > 0:
+                    entries.append({"ledger_id": party.id, "debit": total, "credit": 0})
+                    entries.append({"ledger_id": sales.id, "debit": 0, "credit": total})
+
+            elif v_type == 'purchase':
+                purchase = _resolve_ledger('Purchase', tenant_id)
+                party = _resolve_ledger(validated_data.get('party'), tenant_id)
+                total = float(voucher.total or 0)
+                if purchase and party and total > 0:
+                    entries.append({"ledger_id": purchase.id, "debit": total, "credit": 0})
+                    entries.append({"ledger_id": party.id, "debit": 0, "credit": total})
+
+            elif v_type in ('payment', 'receipt'):
+                party = _resolve_ledger(validated_data.get('party'), tenant_id)
+                account = _resolve_ledger(validated_data.get('account', 'Cash'), tenant_id)
+                amt = float(voucher.total or voucher.amount or 0)
+                if party and account and amt > 0:
+                    if v_type == 'payment':
+                        # Debit Party, Credit Account
+                        entries.append({"ledger_id": party.id, "debit": amt, "credit": 0})
+                        entries.append({"ledger_id": account.id, "debit": 0, "credit": amt})
+                    else:
+                        # Debit Account, Credit Party
+                        entries.append({"ledger_id": account.id, "debit": amt, "credit": 0})
+                        entries.append({"ledger_id": party.id, "debit": 0, "credit": amt})
+
+            elif v_type == 'contra':
+                to_acc = _resolve_ledger(validated_data.get('to_account', 'Bank'), tenant_id)
+                from_acc = _resolve_ledger(validated_data.get('from_account', 'Cash'), tenant_id)
+                amt = float(voucher.amount or 0)
+                if to_acc and from_acc and amt > 0:
+                    entries.append({"ledger_id": to_acc.id, "debit": amt, "credit": 0})
+                    entries.append({"ledger_id": from_acc.id, "debit": 0, "credit": amt})
+
+            elif v_type == 'journal':
+                if entries_data:
+                    for row in entries_data:
+                        ledger = _resolve_ledger(row.get('ledger'), tenant_id)
+                        dr = float(row.get('debit', 0))
+                        cr = float(row.get('credit', 0))
+                        if ledger and (dr > 0 or cr > 0):
+                            entries.append({"ledger_id": ledger.id, "debit": dr, "credit": cr})
+
+            if len(entries) >= 2:
+                post_transaction(
+                    voucher_type=v_type.upper(),
+                    voucher_id=voucher.id,
+                    tenant_id=tenant_id,
+                    entries=entries
                 )
+        except Exception as e:
+            logger.error(f"Failed to post Journal Entries for voucher {voucher.id}: {str(e)}")
 
