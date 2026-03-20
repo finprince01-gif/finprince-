@@ -434,11 +434,24 @@ EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL") or EMAIL_HOST_USER or 'webmaster@localhost'
 
-# ============================================================================
-# DATABASE SCHEMA MANAGEMENT (MANUAL)
-# ============================================================================
-# Django migrations are completely disabled.
-# ============================================================================
+# Django migrations are completely disabled for project apps.
+MIGRATION_MODULES = {
+    'accounting': None,
+    'core': None,
+    'customerportal': None,
+    'inventory': None,
+    'masters': None,
+    'payroll': None,
+    'rbac': None,
+    'reports': None,
+    'services': None,
+    'vendors': None,
+    'vouchers': None,
+    'registration': None,
+    'login': None,
+    'dashboard': None,
+    'settings': None,
+}
 # BANK RECONCILIATION SETTINGS
 # ============================================================================
 BANK_MATCH_TOLERANCE = 1

@@ -380,7 +380,7 @@ CREATE TABLE `company_informations` (
     `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
     `created_by` varchar(100) DEFAULT NULL COMMENT 'Created by user',
     `updated_by` varchar(100) DEFAULT NULL COMMENT 'Updated by user',
-    `ledger_id` bigint NOT NULL COMMENT 'FK to master_ledgers',
+    `ledger_id` bigint DEFAULT NULL COMMENT 'FK to master_ledgers',
     PRIMARY KEY (`id`),
     CONSTRAINT `fk_vendor_ledger` FOREIGN KEY (`ledger_id`) REFERENCES `master_ledgers` (`id`) ON DELETE RESTRICT,
     UNIQUE KEY `vendor_basicdetail_tenant_code_unique` (`tenant_id`,`vendor_code`),
@@ -588,7 +588,6 @@ CREATE TABLE `company_informations` (
     
     `hsn_code` VARCHAR(20) DEFAULT NULL,
     `gst_rate` DECIMAL(5,2) DEFAULT NULL,
-    `cess_rate` DECIMAL(5,2) DEFAULT NULL,
     
     `reorder_level` VARCHAR(255) DEFAULT NULL COMMENT 'Reorder Level Information',
     `is_saleable` TINYINT(1) NOT NULL DEFAULT 0,
@@ -1118,7 +1117,7 @@ CREATE TABLE `customer_master_customer_basicdetails` (
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   `created_by` varchar(100) DEFAULT NULL,
   `updated_by` varchar(100) DEFAULT NULL,
-  `ledger_id` bigint NOT NULL COMMENT 'FK to master_ledgers',
+  `ledger_id` bigint DEFAULT NULL COMMENT 'FK to master_ledgers',
   PRIMARY KEY (`id`),
   CONSTRAINT `fk_customer_ledger` FOREIGN KEY (`ledger_id`) REFERENCES `master_ledgers` (`id`) ON DELETE RESTRICT,
   UNIQUE KEY `customer_basic_tenant_code_uniq` (`tenant_id`,`customer_code`),
@@ -1646,6 +1645,7 @@ CREATE TABLE `voucher_sales_invoicedetails` (
   `customer_id` BIGINT DEFAULT NULL COMMENT 'Link to customer_master_customer_basicdetails.id',
   `customer_branch` VARCHAR(100) DEFAULT NULL,
   `voucher_id` BIGINT DEFAULT NULL COMMENT 'Link to unified vouchers table',
+  `outward_slip_id` BIGINT NULL COMMENT 'Link to inventory_operation_outward.id',
 
   `bill_to` LONGTEXT,
   `ship_to` LONGTEXT,
@@ -1670,6 +1670,8 @@ CREATE TABLE `voucher_sales_invoicedetails` (
   `ecommerce_gstin` VARCHAR(15) DEFAULT NULL COMMENT 'E-commerce GSTIN',
   `irn` VARCHAR(255) DEFAULT NULL,
   `ack_no` VARCHAR(100) DEFAULT NULL,
+  `posting_status` VARCHAR(20) DEFAULT 'SKIPPED',
+  `posting_error` TEXT DEFAULT NULL,
   
   PRIMARY KEY (`id`),
   KEY `idx_tenant_id` (`tenant_id`),
@@ -1679,7 +1681,11 @@ CREATE TABLE `voucher_sales_invoicedetails` (
     FOREIGN KEY (`customer_id`) 
     REFERENCES `customer_master_customer_basicdetails` (`id`)
     ON DELETE RESTRICT
-    ON UPDATE CASCADE
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_sales_outward`
+    FOREIGN KEY (`outward_slip_id`)
+    REFERENCES `inventory_operation_outward` (`id`)
+    ON DELETE SET NULL
 ) ENGINE=InnoDB
 DEFAULT CHARSET=utf8mb4
 COLLATE=utf8mb4_unicode_ci;
@@ -2323,6 +2329,7 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_new_grn` (
   
   `grn_type` VARCHAR(50) DEFAULT 'purchases' COMMENT 'purchases, sales_return',
   `grn_no` VARCHAR(100) DEFAULT NULL,
+  `grn_series_name` VARCHAR(255) DEFAULT NULL,
   `date` DATE DEFAULT NULL,
   `time` TIME DEFAULT NULL,
   
@@ -2337,7 +2344,6 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_new_grn` (
   
   -- References
   `reference_no` VARCHAR(100) DEFAULT NULL COMMENT 'PO No or Sales Voucher No',
-  `secondary_ref_no` VARCHAR(100) DEFAULT NULL COMMENT 'Supplier Inv No or Debit Note No',
   
   -- Sales Return Specific
   `return_reason` TEXT DEFAULT NULL,
@@ -2369,6 +2375,7 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_outward` (
   `location_id` BIGINT NULL,
   `sales_order_no` VARCHAR(100) NULL,
   `customer_name` VARCHAR(255) NULL,
+  `customer_id` BIGINT NULL COMMENT 'Link to customer_master_customer_basicdetails.id',
   `supplier_invoice_no` VARCHAR(100) NULL,
   `vendor_name` VARCHAR(255) NULL,
   `branch` VARCHAR(100) NULL,
@@ -2376,6 +2383,8 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_outward` (
   `gstin` VARCHAR(20) NULL,
   `total_boxes` VARCHAR(50) NULL,
   `posting_note` TEXT NULL,
+  `status` VARCHAR(20) DEFAULT 'PENDING',
+  `linked_sales_voucher_id` BIGINT NULL COMMENT 'Link to voucher_sales_invoicedetails.id',
   
   `items` JSON DEFAULT NULL COMMENT 'List of items: item_code, quantity, hsn, etc.',
 
@@ -2396,7 +2405,16 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_outward` (
   PRIMARY KEY (`id`),
   KEY `idx_ioo_tenant` (`tenant_id`),
   KEY `idx_ioo_outward_slip` (`outward_slip_no`),
-  KEY `idx_ioo_location` (`location_id`)
+  KEY `idx_ioo_location` (`location_id`),
+  UNIQUE KEY `idx_ioo_linked_voucher` (`linked_sales_voucher_id`),
+  CONSTRAINT `fk_outward_customer`
+    FOREIGN KEY (`customer_id`)
+    REFERENCES `customer_master_customer_basicdetails` (`id`)
+    ON DELETE RESTRICT,
+  CONSTRAINT `fk_outward_sales_voucher`
+    FOREIGN KEY (`linked_sales_voucher_id`)
+    REFERENCES `voucher_sales_invoicedetails` (`id`)
+    ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
@@ -2585,8 +2603,7 @@ ADD COLUMN country VARCHAR(100) NULL,
 ADD COLUMN pincode VARCHAR(20) NULL;
 
 -- Updates for Inventory Operation Schema (2026-02-21)
-ALTER TABLE `inventory_operation_new_grn`
-ADD COLUMN `grn_series_name` VARCHAR(255) DEFAULT NULL AFTER `grn_no`;
+-- Consolidated into main table definition above
 
 -- Updates to prevent duplication in category tables (2026-02-21)
 UPDATE `inventory_master_category` SET `group` = '' WHERE `group` IS NULL;
@@ -2816,8 +2833,8 @@ CREATE TABLE IF NOT EXISTS `bank_reconciliation_links` (
     `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_bank_transaction` (`bank_transaction_id`),
+    UNIQUE KEY `uk_voucher` (`voucher_id`),
     KEY `idx_bank_rec_tenant` (`tenant_id`),
-    KEY `idx_bank_rec_voucher` (`voucher_id`),
     CONSTRAINT `fk_bank_rec_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
     CONSTRAINT `fk_bank_rec_transaction` FOREIGN KEY (`bank_transaction_id`) REFERENCES `bank_statement_transactions` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -2912,14 +2929,25 @@ CREATE TABLE `vouchers` (
   `narration` TEXT DEFAULT NULL,
   `source` VARCHAR(100) DEFAULT 'manual',
   `invoice_no` VARCHAR(50) DEFAULT NULL,
+  `is_inter_state` TINYINT(1) DEFAULT 0,
+  `total_taxable_amount` DECIMAL(15,2) DEFAULT 0.00,
+  `total_cgst` DECIMAL(15,2) DEFAULT 0.00,
+  `total_sgst` DECIMAL(15,2) DEFAULT 0.00,
+  `total_igst` DECIMAL(15,2) DEFAULT 0.00,
+  `total_debit` DECIMAL(15,2) DEFAULT 0.00,
+  `total_credit` DECIMAL(15,2) DEFAULT 0.00,
+  `from_account` VARCHAR(255) DEFAULT NULL,
+  `to_account` VARCHAR(255) DEFAULT NULL,
+  `items_data` JSON DEFAULT NULL,
   `reference_id` BIGINT DEFAULT NULL COMMENT 'ID of source document',
+  `dummy_force` INT DEFAULT NULL,
   PRIMARY KEY (`id`),
   INDEX `idx_vouchers_tenant` (`tenant_id`),
   INDEX `idx_vouchers_type_number` (`tenant_id`, `type`, `voucher_number`),
   INDEX `idx_vouchers_date` (`date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE journal_entries (
+CREATE TABLE entries (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     tenant_id VARCHAR(36) NOT NULL,
     created_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
@@ -2931,11 +2959,14 @@ CREATE TABLE journal_entries (
     transaction_date DATE DEFAULT NULL,
     narration TEXT DEFAULT NULL,
     
-    ledger_id BIGINT NOT NULL COMMENT 'FK to master_ledgers',
+    ledger_id BIGINT NULL COMMENT 'FK to master_ledgers',
     ledger_name VARCHAR(255) DEFAULT NULL,
     
     debit DECIMAL(15,2) NOT NULL DEFAULT 0.00,
     credit DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+
+    customer_id BIGINT NULL,
+    vendor_id BIGINT NULL,
 
     -- Mutual Exclusion Constraint
     CONSTRAINT chk_debit_credit_mutual_exclusive 
@@ -2944,6 +2975,8 @@ CREATE TABLE journal_entries (
     -- Foreign Key
     CONSTRAINT fk_je_ledger FOREIGN KEY (ledger_id) REFERENCES master_ledgers(id) ON DELETE RESTRICT,
     CONSTRAINT fk_je_voucher FOREIGN KEY (voucher_id) REFERENCES vouchers(id) ON DELETE CASCADE,
+    CONSTRAINT fk_entries_customer FOREIGN KEY (customer_id) REFERENCES customer_master_customer_basicdetails(id) ON DELETE SET NULL,
+    CONSTRAINT fk_entries_vendor FOREIGN KEY (vendor_id) REFERENCES vendor_master_vendorcreation_basicdetail(id) ON DELETE SET NULL,
 
     -- Indexes
     INDEX idx_voucher_composite (tenant_id, voucher_type, voucher_id),
@@ -2962,3 +2995,91 @@ ADD COLUMN packing_notes VARCHAR(255) DEFAULT NULL COMMENT 'Packing Notes';
 --Alter the customer_transaction_salesorder_items table by adding a new column packing_notes
 ALTER TABLE customer_transaction_salesorder_items
 ADD COLUMN packing_notes TEXT DEFAULT NULL COMMENT 'Packing Notes';
+
+CREATE TABLE hsn_gst_master (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    hsn_code VARCHAR(20) NOT NULL,
+    description TEXT,
+    sgst_utgst DECIMAL(5,2),
+    igst DECIMAL(5,2),
+    cgst DECIMAL(5,2),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_hsn_code (hsn_code)
+);
+
+  -- Table: bulk_invoice_jobs
+  -- Tracks bulk upload units for processing 300+ invoices in the background.
+
+  CREATE TABLE IF NOT EXISTS `bulk_invoice_jobs` (
+    `id` bigint NOT NULL AUTO_INCREMENT,
+    `tenant_id` char(36) NOT NULL,
+    `file_hash` varchar(64) DEFAULT NULL COMMENT 'SHA-256 batch fingerprint',
+    `total_files` int NOT NULL DEFAULT '0',
+    `processed_count` int NOT NULL DEFAULT '0',
+    `failed_count` int NOT NULL DEFAULT '0',
+    `status` varchar(20) NOT NULL DEFAULT 'pending' COMMENT 'pending, processing, success, failed, partial',
+    `segmentation_done` tinyint(1) NOT NULL DEFAULT '0',
+    `timeout_rate` float DEFAULT '0.0',
+    `success_rate` float DEFAULT '0.0',
+    `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (`id`),
+    KEY `bulk_invoice_jobs_tenant_id_idx` (`tenant_id`),
+    KEY `bulk_invoice_jobs_status_idx` (`status`)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Bulk invoice processing jobs tracker';
+
+  -- Table: invoice_processing_items
+  -- Individual files within a bulk processing job.
+
+  CREATE TABLE IF NOT EXISTS `invoice_processing_items` (
+    `id` bigint NOT NULL AUTO_INCREMENT,
+    `job_id` bigint NOT NULL,
+    `file_path` varchar(500) NOT NULL,
+    `file_hash` varchar(64) DEFAULT NULL COMMENT 'SHA-256 hash to prevent duplicate AI calls',
+    `status` varchar(20) NOT NULL DEFAULT 'pending' COMMENT 'pending, processing, success, failed, partial, skipped',
+    `retry_count` int NOT NULL DEFAULT '0',
+    `parent_item_id` bigint DEFAULT NULL COMMENT 'ID of parent item if this is a split page',
+    `page_number` int NOT NULL DEFAULT '1',
+    `page_count` int NOT NULL DEFAULT '1',
+    `result_json` JSON DEFAULT NULL COMMENT 'Extracted OCR data from AI',
+    `error_message` longtext DEFAULT NULL,
+    `processed_pages` int NOT NULL DEFAULT '0' COMMENT 'Atomic counter for merge tracking',
+    `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_page_per_item` (`job_id`, `page_number`, `parent_item_id`),
+    KEY `invoice_processing_items_job_id_idx` (`job_id`),
+    KEY `invoice_processing_items_hash_idx` (`file_hash`),
+    KEY `invoice_processing_items_status_idx` (`status`),
+    CONSTRAINT `invoice_processing_items_job_fk` FOREIGN KEY (`job_id`) REFERENCES `bulk_invoice_jobs` (`id`) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Individual invoices within a bulk processing job';
+
+
+
+-- ADDED A NEW TABLE customer_masters_salesorder
+
+CREATE TABLE `customer_masters_salesorder` (
+              `id` int(11) NOT NULL AUTO_INCREMENT,
+              `tenant_id` varchar(36) NOT NULL,
+              `series_name` varchar(100) NOT NULL,
+              `customer_category` varchar(100) DEFAULT NULL,
+              `prefix` varchar(20) DEFAULT 'SO/',
+              `suffix` varchar(20) DEFAULT '/24-25',
+              `required_digits` int(11) DEFAULT '4',
+              `current_number` int(11) DEFAULT '0',
+              `auto_year` tinyint(1) DEFAULT '0',
+              `is_active` tinyint(1) NOT NULL DEFAULT '1',
+              `is_deleted` tinyint(1) NOT NULL DEFAULT '0',
+              `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+              `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+              `created_by` varchar(100) DEFAULT NULL,
+              PRIMARY KEY (`id`),
+              UNIQUE KEY `customer_so_tenant_series_unique` (`tenant_id`,`series_name`),
+              KEY `customer_so_tenant_id_idx` (`tenant_id`),
+              KEY `customer_so_category_idx` (`customer_category`),
+              KEY `customer_so_is_active_idx` (`is_active`),
+              KEY `customer_so_is_deleted_idx` (`is_deleted`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -1,8 +1,0 @@
-node_modules/lucide-react/dist/lucide-react.d.ts(2,10): error TS2305: Module '"react"' has no exported member 'ReactSVG'.
-src/components/CategoryHierarchicalDropdown.tsx(1,8): error TS1259: Module '"C:/108/muthu/AI-accounting-0.03/frontend/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
-src/components/Icon.tsx(1,8): error TS1259: Module '"C:/108/muthu/AI-accounting-0.03/frontend/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
-src/components/InventoryCategoryWizard.tsx(1,8): error TS1259: Module '"C:/108/muthu/AI-accounting-0.03/frontend/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
-src/components/MultiSelectDropdown.tsx(1,8): error TS1259: Module '"C:/108/muthu/AI-accounting-0.03/frontend/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
-src/components/SearchableDropdown.tsx(1,8): error TS1259: Module '"C:/108/muthu/AI-accounting-0.03/frontend/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
-src/pages/Inventory/Inventory.tsx(1,8): error TS1259: Module '"C:/108/muthu/AI-accounting-0.03/frontend/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
-src/services/httpClient.ts(31,30): error TS1343: The 'import.meta' meta-property is only allowed when the '--module' option is 'es2020', 'es2022', 'esnext', 'system', 'node16', 'node18', or 'nodenext'.
