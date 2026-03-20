@@ -24,6 +24,7 @@ interface ItemRow {
     cgst: string;
     sgst: string;
     cess: string;
+    cessRate: string;
     invoiceValue: string;
     salesLedger: string;
     description: string;
@@ -240,6 +241,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                         cgst: cgst.toFixed(2),
                         sgst: sgst.toFixed(2),
                         cess: cess.toFixed(2),
+                        cessRate: (cess > 0 && (igst + cgst + sgst) > 0) ? ((cess / (igst + cgst + sgst)) * 100).toFixed(2) : '0',
                         invoiceValue: invVal.toFixed(2),
                         alternateUnit: '',
                         gstRate: (hasExtractedTax && taxable !== 0) ? (item.igst ? ((item.igst / taxable) * 100).toFixed(0) : ((item.cgst * 2 / taxable) * 100).toFixed(0)) : '18'
@@ -807,8 +809,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
     }, [invoiceType]);
 
     const isCessHidden = useMemo(() => {
-        return invoiceType === 'Regular' || invoiceType === 'SEZ with payment' || invoiceType === 'Export with payment' || invoiceType === 'Deemed Export' || isTaxHidden;
-    }, [invoiceType, isTaxHidden]);
+        return isTaxHidden;
+    }, [isTaxHidden]);
 
     const stateType = useMemo(() => {
         const lowerType = invoiceType.toLowerCase();
@@ -896,7 +898,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                     return [{
                         id: Date.now(),
                         itemCode: '', itemName: '', hsnSac: '', qty: '', uom: '', alternateUnit: '',
-                        itemRate: '', taxableValue: '', igst: '', cgst: '', sgst: '', cess: '',
+                        itemRate: '', taxableValue: '', igst: '', cgst: '', sgst: '', cess: '', cessRate: '0',
                         invoiceValue: '', salesLedger: '', description: '', gstRate: ''
                     }];
                 }
@@ -940,7 +942,20 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                     const igst = parseFloat(item.igst || item.igst_amount) || 0;
                     const cgst = parseFloat(item.cgst || item.cgst_amount) || 0;
                     const sgst = parseFloat(item.sgst || item.sgst_amount) || 0;
-                    const cess = parseFloat(item.cess || item.cess_amount) || 0;
+                    const totalTax = igst + cgst + sgst;
+
+                    // Fetch cessRate from master
+                    const code = item.item_code || '';
+                    const name = item.item_name || '';
+                    const masterItem = inventoryItems.find(i =>
+                        (code && i.item_code === code) ||
+                        (name && (i.name === name || i.item_name === name))
+                    ) || serviceItems.find(i =>
+                        (code && (i.serviceCode === code || i.service_code === code)) ||
+                        (name && (i.serviceName === name || i.service_name === name))
+                    );
+                    const cessRate = masterItem ? parseFloat(masterItem.cess_rate || masterItem.cessRate || '0') : 0;
+                    const cess = (totalTax * cessRate / 100);
                     const invValInr = taxableInr + igst + cgst + sgst + cess;
 
                     // Lookup HSN/SAC from master if missing
@@ -1115,6 +1130,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
             salesLedger: '',
             description: '',
             gstRate: '0',
+            cessRate: '0',
             selected: true
         }
     ]);
@@ -1133,6 +1149,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
             cgst: '0',
             sgst: '0',
             cess: '0',
+            cessRate: '0',
             invoiceValue: '',
             salesLedger: '',
             description: '',
@@ -1453,6 +1470,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                     salesLedger: '',
                     description: item.description || '',
                     alternateUnit: item.alternate_uom || item.alternateUnit || '',
+                    cessRate: (cessNum > 0 && (igstNum + cgstNum + sgstNum) > 0) ? ((cessNum / (igstNum + cgstNum + sgstNum)) * 100).toFixed(2) : '0',
                     sourceDoc: 'Outward Slip: ' + val,
                     selected: true
                 };
@@ -1925,6 +1943,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                             updatedRow.itemRate = inrRate.toString();
                         }
                         updatedRow.gstRate = (matchedItem.gst_rate || matchedItem.gstRate || '0').toString();
+                        updatedRow.cessRate = (matchedItem.cess_rate || matchedItem.cessRate || '0').toString();
 
                         // Recalculate values
                         const qty = parseFloat(updatedRow.qty) || 0;
@@ -2002,7 +2021,10 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                     const igst = parseFloat(updatedRow.igst) || 0;
                     const cgst = parseFloat(updatedRow.cgst) || 0;
                     const sgst = parseFloat(updatedRow.sgst) || 0;
-                    updatedRow.invoiceValue = (taxableVal + igst + cgst + sgst + cess).toFixed(2);
+                    const cessRate = parseFloat(updatedRow.cessRate) || 0;
+                    const totalTax = igst + cgst + sgst;
+                    updatedRow.cess = (totalTax * cessRate / 100).toFixed(2);
+                    updatedRow.invoiceValue = (taxableVal + igst + cgst + sgst + parseFloat(updatedRow.cess)).toFixed(2);
                 }
 
                 return updatedRow;
@@ -2058,6 +2080,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
             description: '',
             alternateUnit: '',
             gstRate: '0',
+            cessRate: '0',
             selected: true
         };
         setItemRows(prev => [...prev, newRow]);
@@ -2080,7 +2103,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
             const blankRow: ItemRow = {
                 id: newId,
                 itemCode: '', itemName: '', hsnSac: '', qty: '0', uom: '', alternateUnit: '',
-                itemRate: '0', taxableValue: '0', igst: '0', cgst: '0', sgst: '0', cess: '0',
+                itemRate: '0', taxableValue: '0', igst: '0', cgst: '0', sgst: '0', cess: '0', cessRate: '0',
                 invoiceValue: '0', salesLedger: '', description: '', gstRate: '0', selected: true
             };
             setItemRows([blankRow]);
@@ -2304,7 +2327,12 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
             const igstNum = parseFloat(updatedRow.igst) || 0;
             const cgstNum = parseFloat(updatedRow.cgst) || 0;
             const sgstNum = parseFloat(updatedRow.sgst) || 0;
-            updatedRow.invoiceValue = (taxableVal + igstNum + cgstNum + sgstNum + cess).toFixed(2);
+            const cessRateVal = parseFloat(updatedRow.cessRate) || 0;
+            const totalTaxVal = igstNum + cgstNum + sgstNum;
+            const calculatedCess = (totalTaxVal * cessRateVal / 100);
+            updatedRow.cess = calculatedCess.toFixed(2);
+
+            updatedRow.invoiceValue = (taxableVal + totalTaxVal + calculatedCess).toFixed(2);
             return updatedRow;
         }));
     }, [isInterState]);
