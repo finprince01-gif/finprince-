@@ -17,18 +17,30 @@ class VoucherSalesViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
         queryset = super().get_queryset()
         # Filter for the current tenant
         user = self.request.user
-        if hasattr(user, 'tenant_id') and user.tenant_id:
-            queryset = queryset.filter(tenant_id=user.tenant_id)
+        tenant_id = getattr(user, 'tenant_id', None)
+        
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+
+        # MANDATORY: Only show vouchers with positive outstanding payable
+        # This filters out zero, negative, or NULL payable invoices at the DB level
+        queryset = queryset.filter(
+            payment_details__payment_payable__isnull=False,
+            payment_details__payment_payable__gt=0
+        ).select_related('payment_details')
 
         # Exclude invoices that already have a receipt voucher linked to them
         # (vouchers with reference_id = invoice_id and type = 'receipt')
         # This keeps the "Due Invoices" list clean
-        receipt_invoice_ids = Voucher.objects.filter(
-            type='receipt', 
-            tenant_id=user.tenant_id
-        ).values_list('reference_id', flat=True)
+        if tenant_id:
+            receipt_invoice_ids = Voucher.objects.filter(
+                type='receipt', 
+                tenant_id=tenant_id
+            ).values_list('reference_id', flat=True)
+            
+            queryset = queryset.exclude(id__in=receipt_invoice_ids)
         
-        return queryset.exclude(id__in=receipt_invoice_ids)
+        return queryset
 
     def perform_create(self, serializer):
         super().perform_create(serializer)
