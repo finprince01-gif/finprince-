@@ -21,7 +21,7 @@ class BulkInvoiceJob(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        managed = False
+
         db_table = 'bulk_invoice_jobs'
 
 class InvoiceProcessingItem(models.Model):
@@ -48,5 +48,5 @@ class InvoiceProcessingItem(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        managed = False
+
         db_table = 'invoice_processing_items'

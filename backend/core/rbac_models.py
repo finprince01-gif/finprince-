@@ -48,7 +48,7 @@ class Role(BaseModel):
     is_active = models.BooleanField(default=True, help_text="Whether this role is active")
     
     class Meta:
-        managed = False
+
         db_table = 'rbac_roles'
         unique_together = [['tenant_id', 'name']]  # Unique role names per tenant
         ordering = ['name']
@@ -111,7 +111,7 @@ class UserRole(BaseModel):
     )
     
     class Meta:
-        managed = False
+
         db_table = 'rbac_user_roles'
         unique_together = [['user', 'role', 'tenant_id']]  # Prevent duplicate assignments
         ordering = ['-assigned_at']
@@ -153,7 +153,7 @@ class UserRole(BaseModel):
 #     change_summary = models.TextField(blank=True, null=True, help_text="Human-readable summary")
 #     
 #     class Meta:
-        managed = False
+
 #         db_table = 'rbac_permission_logs'
 #         ordering = ['-created_at']
 #     

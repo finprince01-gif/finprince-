@@ -24,7 +24,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 django.setup()
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s [%(levelname)s] %(name)s - %(message)s',
 )
 logger = logging.getLogger('pipeline')

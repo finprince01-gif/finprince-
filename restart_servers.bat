@@ -1,41 +1,55 @@
 @echo off
-echo ========================================
-echo CORS FIX - FORCE BROWSER RELOAD
-echo ========================================
-echo.
-echo The code has been fixed but your browser
-echo is using cached JavaScript.
-echo.
-echo SOLUTION: Kill and restart both servers
-echo ========================================
-echo.
+setlocal enabledelayedexpansion
 
-echo Step 1: Killing all Node and Python processes...
-taskkill /F /IM node.exe 2>nul
-taskkill /F /IM python.exe 2>nul
+:: ===========================================
+:: RESTART SERVERS (Django + Vite)
+:: ===========================================
+
+cd /d "%~dp0"
+
+echo ===========================================
+echo KILLING EXISTING PROCESSES...
+echo ===========================================
+taskkill /F /IM node.exe /T 2>nul
+taskkill /F /IM python.exe /T 2>nul
 timeout /t 2 /nobreak >nul
 
+echo ===========================================
+echo STARTING FINPIXE AI ACCOUNTING SERVERS...
+echo ===========================================
+
+:: 1. Start Backend (Django)
 echo.
-echo Step 2: Starting backend server...
-cd "c:\108\django v3\backend"
-start cmd /k "python manage.py runserver"
-timeout /t 3 /nobreak >nul
+echo [1/2] Starting Backend (Django)...
+cd /d backend
+if not exist "venv" (
+    echo [ERROR] VirtualEnv not found! Please run setup.bat first.
+    pause
+    exit /b
+)
+call venv\Scripts\activate
+start "Django Backend" python manage.py runserver 8000
+cd /d ..
+
+:: 2. Start Frontend (Vite)
+echo.
+echo [2/2] Starting Frontend (Vite)...
+cd /d frontend
+if not exist "node_modules" (
+    echo [ERROR] node_modules not found! Please run setup.bat first.
+    pause
+    exit /b
+)
+start "Vite Frontend" npm run dev -- --port 5173
+cd /d ..
 
 echo.
-echo Step 3: Starting frontend server...
-cd "c:\108\django v3\frontend"
-start cmd /k "npm run dev"
-
+echo ===========================================
+echo ALL SERVERS STARTING...
+echo ===========================================
 echo.
-echo ========================================
-echo DONE! Servers restarted.
-echo ========================================
+echo Frontend: http://localhost:5173
+echo Backend:  http://localhost:8000
 echo.
-echo Now:
-echo 1. Wait 10 seconds for servers to start
-echo 2. Open NEW incognito window (Ctrl+Shift+N)
-echo 3. Go to http://localhost:5173
-echo 4. Try registration
-echo.
-echo Press any key to close this window...
-pause >nul
+echo ===========================================
+pause

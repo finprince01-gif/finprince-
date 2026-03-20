@@ -115,6 +115,9 @@ class SalesVoucherViewSet(viewsets.ModelViewSet):
             # If invalid ID format, return empty to avoid slow queries or errors
             return SalesVoucher.objects.none()
 
+        if self.request.query_params.get('customer_name'):
+            filters['customer_name'] = self.request.query_params['customer_name']
+
         if self.request.query_params.get('status'):
             filters['status'] = self.request.query_params['status']
         

@@ -28,7 +28,7 @@ class VoucherContra(BaseModel):
     bank_reference_number = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
-        managed = False
+
         db_table = 'voucher_contra'
         ordering = ['-date', '-created_at']
 

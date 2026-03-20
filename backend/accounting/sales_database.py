@@ -115,10 +115,23 @@ def get_sales_vouchers(tenant_id: str, filters: Optional[Dict] = None, prefetch:
             # Schema uses customer_name, API passes customer_id
             # We must look up the name first
             try:
-                c = MasterLedger.objects.get(id=filters['customer_id'], tenant_id=tenant_id)
-                queryset = queryset.filter(customer_name=c.name)
-            except MasterLedger.DoesNotExist:
+                # Try MasterLedger first (Sundry Debtors)
+                c = MasterLedger.objects.filter(id=filters['customer_id'], tenant_id=tenant_id).first()
+                if c:
+                    queryset = queryset.filter(customer_name=c.name)
+                else:
+                    # Try Customer Portal master
+                    from customerportal.models import CustomerMasterCustomerBasicDetails
+                    c_portal = CustomerMasterCustomerBasicDetails.objects.filter(id=filters['customer_id'], tenant_id=tenant_id).first()
+                    if c_portal:
+                        queryset = queryset.filter(customer_name=c_portal.customer_name)
+                    else:
+                        return SalesVoucher.objects.none()
+            except Exception:
                 return SalesVoucher.objects.none()
+
+        if filters.get('customer_name'):
+            queryset = queryset.filter(customer_name=filters['customer_name'])
 
         # Schema does not have status column in header?
         # if filters.get('status'):

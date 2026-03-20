@@ -35,7 +35,7 @@ class VoucherPaymentSingle(BaseModel):
     bank_reference_number = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
-        managed = False
+
         db_table = 'voucher_payment_single'
         ordering = ['-date', '-created_at']
 
@@ -77,7 +77,7 @@ class VoucherPaymentBulk(BaseModel):
     bank_reference_number = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
-        managed = False
+
         db_table = 'voucher_payment_bulk'
         ordering = ['-date', '-created_at']
 

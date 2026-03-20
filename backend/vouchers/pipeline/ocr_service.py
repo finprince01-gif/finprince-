@@ -31,6 +31,7 @@ async def handle_upload_event(payload: dict):
     tenant_id   = payload.get('tenant_id', 'unknown')
     item_id     = payload.get('item_id')
 
+    print(f"🔍 [OCR] Received message for Job {job_id}: {filename}")
     logger.info(f"[OCR] Job {job_id}: {filename}")
 
     try:

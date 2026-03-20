@@ -7,6 +7,7 @@ import base64
 import traceback
 from typing import Optional
 from core.ocr_cache import compute_file_hash, get_cached_ocr, save_ocr_cache, update_ocr_cache_session
+from core.rule_parser import rule_parse_invoice
 from django.core.files.uploadedfile import UploadedFile
 
 
@@ -381,7 +382,21 @@ STRICT RULES
         }
 
         from core.ai_proxy import ai_service
-        result = ai_service.make_request('invoice', request_data, user_id, tenant_id)
+        try:
+            result = ai_service.make_request('invoice', request_data, user_id, tenant_id)
+        except Exception as e:
+            # ── CRITICAL FALLBACK (No-Stall Logic) ──────────────────────────
+            # If AI Service (Proxy/Flash/Pro) fails or times out (504), 
+            # we MUST return a rule-based extraction to unblock the pipeline.
+            logger.warning(f"⚠️ [AI] Extraction failed: {e}. Falling back to Rule-Based Parser.")
+            
+            # Use shared rule-parser for unblocking
+            fb_res = rule_parse_invoice(image_content, mime_type)
+            result = {
+                "reply": json.dumps(fb_res),
+                "_fallback": True,
+                "message": f"AI service unavailable ({str(e)}). Using local rule-based extractor."
+            }
 
 
         # ── SAVE TO CACHE (Only for new files) ──────────────────────────────

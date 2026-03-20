@@ -246,24 +246,35 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 # ============================================================================
 # REDIS + CELERY CONFIGURATION
 # ============================================================================
-REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+# Cache Configuration - Use Redis if available, with foolproof fallback
+REDIS_URL = os.getenv('REDIS_URL')
+USE_REDIS = REDIS_URL and os.getenv('USE_REDIS', 'True') == 'True'
 
-# Redis-backed cache (replaces LocMemCache for distributed environments)
-CACHES = {
-    'default': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': REDIS_URL,
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-            'SOCKET_CONNECT_TIMEOUT': 5,
-            'SOCKET_TIMEOUT': 5,
-            'RETRY_ON_TIMEOUT': True,
-            'MAX_CONNECTIONS': 100,
-        },
-        'KEY_PREFIX': 'finpixe',
-        'TIMEOUT': 3600,  # 1 hour default TTL
+if USE_REDIS:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': REDIS_URL,
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                'IGNORE_EXCEPTIONS': True,  # Prevent 500 error if Redis is down
+                'SOCKET_CONNECT_TIMEOUT': 5,
+                'SOCKET_TIMEOUT': 5,
+                'RETRY_ON_TIMEOUT': True,
+                'MAX_CONNECTIONS': 100,
+            },
+            'KEY_PREFIX': 'finpixe',
+            'TIMEOUT': 3600,
+        }
     }
-}
+else:
+    # Fallback to local memory cache for development or if Redis is down
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'unique-snowflake',
+        }
+    }
 
 # Celery Configuration
 CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', REDIS_URL)
@@ -427,36 +438,8 @@ DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL") or EMAIL_HOST_USER or 'webm
 # DATABASE SCHEMA MANAGEMENT (MANUAL)
 # ============================================================================
 # Django migrations are completely disabled.
-# schema.sql is the single source of truth for the database structure.
-# All models MUST have Meta: managed = False and explicit db_table.
-
-MIGRATION_MODULES = {
-    'core': None,
-    'accounting': None,
-    'inventory': None,
-    'customerportal': None,
-    'payroll': None,
-    'services': None,
-    'rbac': None,
-    'reports': None,
-    'registration': None,
-    'login': None,
-    'masters': None,
-    'settings': None,
-    'vouchers': None,
-    'dashboard': None,
-    'vendors': None,
-    'admin': None,
-    'auth': None,
-    'contenttypes': None,
-    'sessions': None,
-    'messages': None,
-    'staticfiles': None,
-    'rest_framework': None,
-    'corsheaders': None,
-}
-
 # ============================================================================
 # BANK RECONCILIATION SETTINGS
 # ============================================================================
 BANK_MATCH_TOLERANCE = 1
+

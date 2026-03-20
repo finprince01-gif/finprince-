@@ -60,7 +60,7 @@ class BankStatementTransaction(BaseModel):
     reconciled_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        managed = False
+
         db_table = 'bank_statement_transactions'
         indexes = [
             models.Index(fields=['tenant_id', 'bank_ledger', 'status']),
@@ -95,11 +95,10 @@ class BankReconciliationLink(BaseModel):
       - match_method: how the match was achieved (voucher_match, reference_match, etc.)
       - reconciled_at: timestamp when auto-reconciled
     """
-    bank_transaction = models.ForeignKey(
+    bank_transaction = models.OneToOneField(
         BankStatementTransaction,
         on_delete=models.CASCADE,
-        related_name='reconciliation_links',
-        unique=True
+        related_name='reconciliation_links'
     )
     voucher_id = models.BigIntegerField(unique=True)
     voucher_type = models.CharField(
@@ -131,7 +130,7 @@ class BankReconciliationLink(BaseModel):
     reconciled_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        managed = False
+
         db_table = 'bank_reconciliation_links'
         # unique_together redundant now due to individual unique fields, but keeping for clarity if needed
         # or replacing with a single record guard.

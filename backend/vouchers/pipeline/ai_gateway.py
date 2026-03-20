@@ -278,29 +278,6 @@ class AIGateway:
 
     @staticmethod
     def _rule_parse(file_bytes: bytes, mime_type: str) -> dict:
-        """Zero-cost OCR rule parser. ~100ms, no API calls."""
-        import re, fitz
-        result = {"invoice": {}, "items": [], "_fallback": True}
-        try:
-            ftype = "pdf" if "pdf" in mime_type else "png"
-            doc   = fitz.open(stream=file_bytes, filetype=ftype)
-            text  = "\n".join(p.get_text("text") for p in doc)
-            doc.close()
-
-            patterns = {
-                "Voucher Date":        r'\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b',
-                "Supplier Invoice No": r'(?:Invoice|Bill|Inv)\s*(?:No|#)[:\s]*([A-Z0-9/-]+)',
-                "Total Invoice Value": r'(?:Grand Total|Total Amount|Total)[:\s₹]*(\d[\d,]+(?:\.\d+)?)',
-                "GSTIN":               r'\b(\d{2}[A-Z]{5}\d{4}[A-Z]\d[Z][A-Z\d])\b',
-                "Vendor Name":         r'(?:From|Seller|Vendor|Supplier)[:\s]+([A-Za-z][A-Za-z\s&.,]{3,50})',
-            }
-            for field, pattern in patterns.items():
-                m = re.search(pattern, text, re.I)
-                if m:
-                    val = m.group(1).strip().replace(',', '')
-                    result["invoice"][field] = val
-
-            _metrics.increment('rule_parse_used')
-        except Exception as e:
-            logger.warning(f"[RULE PARSER] Failed: {e}")
-        return result
+        """Shared rule-based parser fallback."""
+        from core.rule_parser import rule_parse_invoice
+        return rule_parse_invoice(file_bytes, mime_type)

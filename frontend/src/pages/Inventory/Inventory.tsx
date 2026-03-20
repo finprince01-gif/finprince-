@@ -2115,7 +2115,10 @@ const InventoryPage: React.FC = () => {
 
       try {
         // Fetch Sales Vouchers for the customer
-        const salesVouchers = await apiService.getSalesVouchers({ customer_id: customer.id });
+        const salesVouchers = await apiService.getSalesVouchers({ 
+          customer_id: customer.id,
+          customer_name: customer.customer_name 
+        });
         if (Array.isArray(salesVouchers)) {
           setGrnReferenceNoOptions(salesVouchers);
         }

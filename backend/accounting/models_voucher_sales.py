@@ -11,6 +11,7 @@ class VoucherSalesInvoiceDetails(BaseModel):
     date = models.DateField(help_text="Voucher Date")
     
     # Invoice No
+    # Invoice No
     sales_invoice_no = models.CharField(max_length=50, help_text="Sales Invoice Number")
     
     # New Fields matching Frontend
@@ -22,6 +23,7 @@ class VoucherSalesInvoiceDetails(BaseModel):
     customer_id = models.BigIntegerField(null=True, blank=True, help_text="Link to customer master")
     customer_branch = models.CharField(max_length=100, null=True, blank=True)
     voucher_id = models.BigIntegerField(null=True, blank=True, help_text="Link to voucher master table")
+    outward_slip_id = models.BigIntegerField(null=True, blank=True, help_text="Link to outward slip")
     
     # Addresses
     bill_to = models.TextField(null=True, blank=True, help_text="Billing Address")
@@ -96,6 +98,14 @@ class VoucherSalesInvoiceDetails(BaseModel):
     irn = models.CharField(max_length=255, null=True, blank=True)
     ack_no = models.CharField(max_length=100, null=True, blank=True)
 
+    # Status Tracking
+    status = models.CharField(
+        max_length=20, 
+        choices=[('draft', 'Draft'), ('pending', 'Pending Approval'), ('completed', 'Completed'), ('cancelled', 'Cancelled')],
+        default='draft'
+    )
+    current_step = models.IntegerField(default=1, help_text="Current creation step (1-5)")
+
     # Posting Status Tracking
     posting_status = models.CharField(
         max_length=20, 
@@ -105,7 +115,7 @@ class VoucherSalesInvoiceDetails(BaseModel):
     posting_error = models.TextField(null=True, blank=True)
 
     class Meta:
-        managed = False
+
         db_table = 'voucher_sales_invoicedetails'
         verbose_name = "Voucher Sales Invoice Detail"
 
@@ -137,7 +147,7 @@ class VoucherSalesItems(BaseModel):
     alternate_unit = models.CharField(max_length=50, null=True, blank=True)
 
     class Meta:
-        managed = False
+
         db_table = 'voucher_sales_items'
         verbose_name = "Voucher Sales Item"
 
@@ -158,7 +168,7 @@ class VoucherSalesItemsForeign(BaseModel):
     sales_ledger = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:
-        managed = False
+
         db_table = 'voucher_sales_items_foreign'
         verbose_name = "Voucher Sales Item Foreign"
 
@@ -192,7 +202,7 @@ class VoucherSalesPaymentDetails(BaseModel):
     advance_references = models.TextField(default="[]", null=True, blank=True)
 
     class Meta:
-        managed = False
+
         db_table = 'voucher_sales_paymentdetails'
         verbose_name = "Voucher Sales Payment Detail"
 
@@ -253,7 +263,7 @@ class VoucherSalesDispatchDetails(BaseModel):
     rail_beyond_port_dest_country = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
-        managed = False
+
         db_table = 'voucher_sales_dispatchdetails'
         verbose_name = "Voucher Sales Dispatch Detail"
 
@@ -284,6 +294,6 @@ class VoucherSalesEwayBill(BaseModel):
     ack_no = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
-        managed = False
+
         db_table = 'voucher_sales_ewaybill'
         verbose_name = "Voucher Sales Eway Bill"

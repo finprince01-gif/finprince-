@@ -45,7 +45,7 @@ class VoucherExpense(BaseModel):
     )
 
     class Meta:
-        managed = False
+
         db_table = 'voucher_expenses'
         ordering = ['-date', '-created_at']
 

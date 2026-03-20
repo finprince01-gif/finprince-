@@ -59,9 +59,13 @@ async def handle_ocr_event(payload: dict):
     page_number = payload['page_number']
     page_count  = payload['page_count']
     text        = payload.get('text', '')
+    filename    = payload.get('filename', 'doc.pdf') # Added filename extraction
     text_length = payload.get('text_length', len(text))
     tenant_id   = payload['tenant_id']
     item_id     = payload.get('item_id')
+
+    print(f"🔥 [AI] Processing Job {job_id} | File: {filename}") # Added print statement
+    logger.info(f"[AI] Processing Job {job_id} | File: {filename}") # Added logger statement
 
     # ── Guard 1: Large job protection ───────────────────────────────────────
     if page_number > MAX_PAGES_PER_JOB:
@@ -107,18 +111,33 @@ async def handle_ocr_event(payload: dict):
             logger.info(f"[AI WORKER] AI_CALL  – Job {job_id} page {page_number}")
             file_bytes = storage.download_bytes(page_key)
             mime = _guess_mime(page_key)
-            result = await gateway.extract(file_bytes, mime, page_hash, tenant_id)
+            try:
+                # ── PRIMARY: AI EXTRACTION ──────────────────────────────────
+                result = await gateway.extract(file_bytes, mime, page_hash, tenant_id)
+            except Exception as ai_err:
+                # ── FALLBACK: RULE-BASED PARSER (on 504/timeout) ────────────
+                logger.warning(f"⚠️ [AI WORKER] AI Timeout/Error for Job {job_id} page {page_number}: {ai_err}. "
+                               f"Falling back to Rule-Based Parser to unblock.")
+                result = AIGateway._rule_parse(file_bytes, mime)
+                decision = 'RULE_FALLBACK'
 
         await _emit_result(job_id, tenant_id, item_id, page_key, page_hash,
                            page_number, page_count, result, skipped=skipped, decision=decision)
 
     except Exception as e:
-        logger.error(f"[AI WORKER] Job {job_id} page {page_number} failed: {e}")
-        await kafka_client.publish('retry', {
-            'stage': 'ai', 'error': str(e),
-            'retry_count': payload.get('retry_count', 0) + 1,
-            **payload,
-        })
+        logger.error(f"[AI WORKER] CRITICAL ERROR for Job {job_id} page {page_number}: {e}")
+        # Only retry if it's NOT a timeout (which we handled above)
+        if "504" not in str(e) and "timeout" not in str(e).lower():
+            await kafka_client.publish('retry', {
+                'stage': 'ai', 'error': str(e),
+                'retry_count': payload.get('retry_count', 0) + 1,
+                **payload,
+            })
+        else:
+            # If for some reason the outer try caught a timeout, just emit fallback
+            logger.warning(f"Outer fallback for Job {job_id} page {page_number}")
+            await _emit_result(job_id, tenant_id, item_id, page_key, page_hash,
+                               page_number, page_count, {}, skipped=True, decision='TOTAL_FAILURE')
 
 
 async def _emit_result(job_id, tenant_id, item_id, page_key, page_hash,

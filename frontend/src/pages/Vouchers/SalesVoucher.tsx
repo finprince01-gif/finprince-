@@ -398,6 +398,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
 
 
     const [outwardSlipNo, setOutwardSlipNo] = useState('');
+    const [outwardSlipId, setOutwardSlipId] = useState<number | null>(null);
     const [outwardSlipOptions, setOutwardSlipOptions] = useState<string[]>([]);
     const [outwardSlipsData, setOutwardSlipsData] = useState<any[]>([]);
 
@@ -407,12 +408,18 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
             // Add timestamp to prevent browser caching of the GET response
             const data = await httpClient.get<any[]>(`/api/inventory/operations/outward/?_t=${Date.now()}`).catch(() => []);
             if (Array.isArray(data)) {
-                setOutwardSlipsData(data);
-                // Extract unique slip numbers, trim them, and sort descending (newest format first)
-                const options = data.map(item => (item.outward_slip_no || item.slip_no || '').toString().trim()).filter(Boolean);
+                // FILTER: Only show PENDING slips, or the currently selected one (for edit mode)
+                const filteredData = data.filter(item => 
+                    item.status === 'PENDING' || 
+                    !item.status || 
+                    item.outward_slip_no === outwardSlipNo
+                );
+                setOutwardSlipsData(filteredData);
+                // Extract unique slip numbers, trim them, and sort descending
+                const options = filteredData.map(item => (item.outward_slip_no || item.slip_no || '').toString().trim()).filter(Boolean);
                 const uniqueOptions = [...new Set(options)].sort((a, b) => b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' }));
                 setOutwardSlipOptions(uniqueOptions);
-                return data;
+                return filteredData;
             }
         } catch (e) {
             console.error('Failed to fetch outward slips', e);
@@ -1424,6 +1431,12 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
             (s.slip_no === val) ||
             (s.id?.toString() === val)
         );
+        if (selectedSlip) {
+            setOutwardSlipId(selectedSlip.id || null);
+        } else {
+            setOutwardSlipId(null);
+        }
+        
         if (selectedSlip && selectedSlip.items) {
             const slipItems = Array.isArray(selectedSlip.items) ? selectedSlip.items : [];
             const newRows: ItemRow[] = slipItems.map((item: any, idx: number) => {
@@ -1657,6 +1670,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 sales_invoice_no: salesInvoiceNo,
                 voucher_name: voucherName,
                 outward_slip_no: outwardSlipNo,
+                outward_slip_id: outwardSlipId,
                 customer_name: customerName,
                 customer_id: customerId,
                 bill_to: JSON.stringify(billTo),
@@ -1840,7 +1854,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
             const shipTo = { address_line_1: shipToAddress1, address_line_2: shipToAddress2, address_line_3: shipToAddress3, city: shipToCity, pincode: shipToPincode, state: shipToState, country: shipToCountry };
 
             const payload = {
-                date: formatDate(date), sales_invoice_no: salesInvoiceNo, voucher_name: voucherName, outward_slip_no: outwardSlipNo,
+                date: formatDate(date), sales_invoice_no: salesInvoiceNo, voucher_name: voucherName, outward_slip_no: outwardSlipNo, outward_slip_id: outwardSlipId,
                 customer_name: customerName, customer_id: customerId, bill_to: JSON.stringify(billTo), ship_to: JSON.stringify(shipTo), gstin, contact, tax_type: taxType,
                 state_type: stateType, export_type: exportType, exchange_rate: exchangeRate, supporting_document: supportingDocument,
                 sales_order_no: salesOrderNos.join(', '), place_of_supply: placeOfSupply || null, reverse_charge: reverseCharge, invoice_type: invoiceType,
@@ -5217,6 +5231,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                 const newSlipNo = (response.outward_slip_no || '').toString().trim();
                                 if (newSlipNo) {
                                     setOutwardSlipNo(newSlipNo);
+                                    setOutwardSlipId(response.id || null);
                                     applySlipData(newSlipNo, freshData);
                                 }
 

@@ -936,6 +936,7 @@ class ApiService {
         if (filters?.date_from) params.append('date_from', filters.date_from);
         if (filters?.date_to) params.append('date_to', filters.date_to);
         if (filters?.customer_id) params.append('customer_id', String(filters.customer_id));
+        if (filters?.customer_name) params.append('customer_name', filters.customer_name);
         if (filters?.status) params.append('status', filters.status);
 
         const queryString = params.toString();
