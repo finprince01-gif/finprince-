@@ -206,6 +206,7 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
             'customer_name': instance.customer_name,
             'customer_code': instance.customer_code,
             'customer_category': instance.customer_category_id,
+            'customer_category_name': str(instance.customer_category) if instance.customer_category else None,
             'pan_number': instance.pan_number,
             'contact_person': instance.contact_person,
             'email_address': instance.email_address,
@@ -346,7 +347,8 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
                 # 1. Create Basic Details (parent table)
                 logger.info("Creating Basic Details...")
                 basic_details = super().create(validated_data)
-                logger.info(f"✅ Basic Details created: ID={basic_details.id}, Code={basic_details.customer_code}")
+                logger.info(f"[OK] Basic Details created: ID={basic_details.id}, Code={basic_details.customer_code}")
+                print("CUSTOMER CREATED - NO LEDGER SHOULD BE CREATED")
                 
                 # 2. Create GST Details
                 logger.info("Creating GST Details...")
@@ -447,7 +449,7 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
                         packing_notes=item.get('packingNotes'),
                         created_by=basic_details.created_by
                     )
-                    logger.info(f"  ✅ Product/Service created: ID={prod_record.id}, Code={item_code}")
+                    logger.info(f"  [OK] Product/Service created: ID={prod_record.id}, Code={item_code}")
                     created_count += 1
                 
                 # If no products created, create one empty record
@@ -460,7 +462,7 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
                         item_name=None,
                         created_by=basic_details.created_by
                     )
-                    logger.info(f"  ✅ Empty Product/Service created: ID={prod_record.id}")
+                    logger.info(f"  [OK] Empty Product/Service created: ID={prod_record.id}")
                 
                 # 4. Create TDS Details (ALWAYS create, even if all fields are empty)
                 logger.info("Creating TDS Details...")
@@ -472,7 +474,7 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
                         **tds_data
                     }
                 )
-                logger.info(f"  ✅ TDS Details {'created' if created else 'updated'}: ID={tds_record.id}")
+                logger.info(f"  [OK] TDS Details {'created' if created else 'updated'}: ID={tds_record.id}")
                 
                 # 5. Create Banking Information (ALWAYS create at least one record, even if empty)
                 logger.info("Creating Banking Information...")
@@ -497,7 +499,7 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
                             associated_branches=account.get('associatedBranches'),
                             created_by=basic_details.created_by
                         )
-                        logger.info(f"  ✅ Banking Info created: ID={bank_record.id}, Account={account.get('accountNumber')}")
+                        logger.info(f"  [OK] Banking Info created: ID={bank_record.id}, Account={account.get('accountNumber')}")
                         created_count += 1
                 
                 # If no bank accounts created, create one empty record
@@ -511,7 +513,7 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
                         ifsc_code=None,
                         created_by=basic_details.created_by
                     )
-                    logger.info(f"  ✅ Empty Banking Info created: ID={bank_record.id}")
+                    logger.info(f"  [OK] Empty Banking Info created: ID={bank_record.id}")
                 
                 # 6. Create Terms & Conditions (ALWAYS create, even if all fields are empty)
                 logger.info("Creating Terms & Conditions...")
@@ -524,15 +526,15 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
                         **terms_data
                     }
                 )
-                logger.info(f"  ✅ Terms & Conditions {'created' if created else 'updated'}: ID={terms_record.id}")
+                logger.info(f"  [OK] Terms & Conditions {'created' if created else 'updated'}: ID={terms_record.id}")
             
             logger.info("=" * 80)
-            logger.info("✅ CUSTOMER CREATION COMPLETED SUCCESSFULLY")
+            logger.info("[OK] CUSTOMER CREATION COMPLETED SUCCESSFULLY")
             logger.info("=" * 80)
             
         except Exception as e:
             logger.error("=" * 80)
-            logger.error("❌ ERROR DURING CUSTOMER CREATION")
+            logger.error("[ERROR] ERROR DURING CUSTOMER CREATION")
             logger.error("=" * 80)
             logger.error(f"Error: {str(e)}")
             import traceback
@@ -936,7 +938,7 @@ class CustomerTransactionSalesOrderSerializer(serializers.ModelSerializer):
             with transaction.atomic():
                 # 1. Create Basic Details
                 sales_order = CustomerTransactionSalesOrderBasicDetails.objects.create(**validated_data)
-                logger.info(f"✅ Basic Details created: ID={sales_order.id}, SO Number={sales_order.so_number}")
+                logger.info(f"[OK] Basic Details created: ID={sales_order.id}, SO Number={sales_order.so_number}")
                 
                 # 2. Create Items
                 for item_data in items_data:
@@ -945,7 +947,7 @@ class CustomerTransactionSalesOrderSerializer(serializers.ModelSerializer):
                         so_basic_detail=sales_order, 
                         **item_data
                     )
-                logger.info(f"✅ Created {len(items_data)} items")
+                logger.info(f"[OK] Created {len(items_data)} items")
                 
                 # 3. Create Delivery Terms (if provided)
                 if delivery_terms_data:
@@ -954,7 +956,7 @@ class CustomerTransactionSalesOrderSerializer(serializers.ModelSerializer):
                         so_basic_detail=sales_order, 
                         **delivery_terms_data
                     )
-                    logger.info("✅ Delivery Terms created")
+                    logger.info("[OK] Delivery Terms created")
                 
                 # 4. Create Payment and Salesperson (if provided)
                 if payment_and_salesperson_data:
@@ -963,7 +965,7 @@ class CustomerTransactionSalesOrderSerializer(serializers.ModelSerializer):
                         so_basic_detail=sales_order, 
                         **payment_and_salesperson_data
                     )
-                    logger.info("✅ Payment and Salesperson created")
+                    logger.info("[OK] Payment and Salesperson created")
                 
                 # 5. Create Quotation Details (if provided)
                 if quotation_details_data:
@@ -972,14 +974,14 @@ class CustomerTransactionSalesOrderSerializer(serializers.ModelSerializer):
                         so_basic_detail=sales_order, 
                         **quotation_details_data
                     )
-                    logger.info("✅ Quotation Details created")
+                    logger.info("[OK] Quotation Details created")
                 
                 logger.info("=== Sales Order Creation Completed ===")
                 return sales_order
                 
                 
         except Exception as e:
-            logger.error(f"❌ Error creating sales order: {str(e)}")
+            logger.error(f"[ERROR] Error creating sales order: {str(e)}")
             import traceback
             logger.error(traceback.format_exc())
             raise
@@ -1006,7 +1008,7 @@ class CustomerTransactionSalesOrderSerializer(serializers.ModelSerializer):
                 for attr, value in validated_data.items():
                     setattr(instance, attr, value)
                 instance.save()
-                logger.info(f"✅ Basic Details updated: ID={instance.id}")
+                logger.info(f"[OK] Basic Details updated: ID={instance.id}")
                 
                 # 2. Update Items
                 if items_data is not None:
@@ -1018,7 +1020,7 @@ class CustomerTransactionSalesOrderSerializer(serializers.ModelSerializer):
                             so_basic_detail=instance, 
                             **item_data
                         )
-                    logger.info(f"✅ Updated {len(items_data)} items")
+                    logger.info(f"[OK] Updated {len(items_data)} items")
                 
                 # 3. Update Delivery Terms
                 if delivery_terms_data is not None:
@@ -1028,7 +1030,7 @@ class CustomerTransactionSalesOrderSerializer(serializers.ModelSerializer):
                         so_basic_detail=instance, 
                         **delivery_terms_data
                     )
-                    logger.info("✅ Delivery Terms updated")
+                    logger.info("[OK] Delivery Terms updated")
                 
                 # 4. Update Payment and Salesperson
                 if payment_and_salesperson_data is not None:
@@ -1038,7 +1040,7 @@ class CustomerTransactionSalesOrderSerializer(serializers.ModelSerializer):
                         so_basic_detail=instance, 
                         **payment_and_salesperson_data
                     )
-                    logger.info("✅ Payment and Salesperson updated")
+                    logger.info("[OK] Payment and Salesperson updated")
                 
                 # 5. Update Quotation Details
                 if quotation_details_data is not None:
@@ -1048,13 +1050,13 @@ class CustomerTransactionSalesOrderSerializer(serializers.ModelSerializer):
                         so_basic_detail=instance, 
                         **quotation_details_data
                     )
-                    logger.info("✅ Quotation Details updated")
+                    logger.info("[OK] Quotation Details updated")
                 
                 logger.info("=== Sales Order Update Completed ===")
                 return instance
                 
         except Exception as e:
-            logger.error(f"❌ Error updating sales order: {str(e)}")
+            logger.error(f"[ERROR] Error updating sales order: {str(e)}")
             import traceback
             logger.error(traceback.format_exc())
             raise

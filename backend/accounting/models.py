@@ -271,6 +271,7 @@ class Voucher(BaseModel):
     to_account = models.CharField(max_length=255, null=True, blank=True)
     
     items_data = models.JSONField(null=True, blank=True, help_text="Line items with qty, rate, etc")
+    reference_id = models.BigIntegerField(null=True, blank=True, help_text="ID of the source document (Invoice/Order)")
     dummy_force = models.IntegerField(null=True, blank=True)
 
     class Meta:
@@ -284,17 +285,74 @@ class Voucher(BaseModel):
         ]
 
 class JournalEntry(BaseModel):
-    voucher = models.ForeignKey(Voucher, on_delete=models.CASCADE, related_name='journal_entries')
-    ledger = models.CharField(max_length=255)
+    voucher_type = models.CharField(max_length=50)
+    voucher_id = models.BigIntegerField()
+    voucher_number = models.CharField(max_length=50, null=True, blank=True)
+    transaction_date = models.DateField(null=True, blank=True)
+    narration = models.TextField(null=True, blank=True)
+    
+    ledger = models.ForeignKey(
+        MasterLedger, 
+        on_delete=models.RESTRICT, 
+        related_name='journal_entries',
+        db_column='ledger_id',
+        null=True,
+        blank=True
+    )
+    ledger_name = models.CharField(max_length=255, null=True, blank=True)
     debit = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     credit = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     
+    # Direct mappings
+    customer = models.ForeignKey(
+        'customerportal.CustomerMasterCustomerBasicDetails',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        db_column='customer_id'
+    )
+    vendor = models.ForeignKey(
+        'vendors.VendorMasterBasicDetail',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        db_column='vendor_id'
+    )
+    
     class Meta:
         managed = False
-        db_table = 'journal_entries'
+        db_table = 'entries'
         indexes = [
-            models.Index(fields=['voucher', 'tenant_id']),
+            models.Index(fields=['tenant_id', 'voucher_type', 'voucher_id']),
+            models.Index(fields=['tenant_id', 'ledger']),
         ]
+
+    def save(self, *args, **kwargs):
+        from customerportal.database import CustomerMasterCustomerBasicDetails
+        from vendors.models import VendorMasterBasicDetail
+        from django.core.exceptions import ValidationError
+
+        if self.customer and self.vendor:
+            raise ValidationError("A journal entry cannot belong to both a customer and a vendor.")
+
+        if not self.customer and not self.vendor and self.ledger_name:
+            v_type = (self.voucher_type or '').lower()
+            if 'sale' in v_type or 'receipt' in v_type or (self.ledger and self.ledger.group == 'Sundry Debtors'):
+                mapped_customer = CustomerMasterCustomerBasicDetails.objects.filter(
+                    tenant_id=self.tenant_id, 
+                    customer_name=self.ledger_name
+                ).first()
+                if mapped_customer:
+                    self.customer = mapped_customer
+            elif 'purchase' in v_type or 'payment' in v_type or (self.ledger and self.ledger.group == 'Sundry Creditors'):
+                mapped_vendor = VendorMasterBasicDetail.objects.filter(
+                    tenant_id=self.tenant_id, 
+                    vendor_name=self.ledger_name
+                ).first()
+                if mapped_vendor:
+                    self.vendor = mapped_vendor
+
+        super().save(*args, **kwargs)
 
 
 class AmountTransaction(BaseModel):

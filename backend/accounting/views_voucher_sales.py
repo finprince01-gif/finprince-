@@ -1,16 +1,169 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
+from rest_framework.decorators import action
+from django.db import transaction as db_transaction
 from .models_voucher_sales import VoucherSalesInvoiceDetails
 from .serializers_voucher_sales import VoucherSalesInvoiceDetailsSerializer
+from .models import Voucher, JournalEntry, MasterLedger
+from .models_voucher_receipt import VoucherReceiptSingle
 from core.utils import TenantQuerysetMixin
+import datetime
 
 class VoucherSalesViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
     queryset = VoucherSalesInvoiceDetails.objects.all().order_by('-date', '-created_at')
     serializer_class = VoucherSalesInvoiceDetailsSerializer
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        # Filter for the current tenant
+        user = self.request.user
+        tenant_id = getattr(user, 'tenant_id', None)
+        
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+
+        # MANDATORY: Only show vouchers with positive outstanding payable
+        # This filters out zero, negative, or NULL payable invoices at the DB level
+        queryset = queryset.filter(
+            payment_details__payment_payable__isnull=False,
+            payment_details__payment_payable__gt=0
+        ).select_related('payment_details')
+
+        # Exclude invoices that already have a receipt voucher linked to them
+        # (vouchers with reference_id = invoice_id and type = 'receipt')
+        # This keeps the "Due Invoices" list clean
+        if tenant_id:
+            receipt_invoice_ids = Voucher.objects.filter(
+                type='receipt', 
+                tenant_id=tenant_id
+            ).values_list('reference_id', flat=True)
+            
+            queryset = queryset.exclude(id__in=receipt_invoice_ids)
+        
+        return queryset
+
     def perform_create(self, serializer):
         super().perform_create(serializer)
 
+    @action(detail=True, methods=['post'], url_path='post-receipt')
+    def post_receipt(self, request, pk=None):
+        invoice = self.get_object()
+        tenant_id = invoice.tenant_id
+        data = request.data
+        
+        # Required fields from request
+        receipt_date = data.get('dateOfReceipt')
+        method = data.get('methodOfReceipt') # 'Cash' or 'Bank'
+        ledger_id = data.get('ledger_id') or data.get('bankAccount') # ID of Bank/Cash ledger
+        amount = data.get('amount', 0)
+        reference_no = data.get('bankReferenceNo', '')
+        narration = data.get('narration') or f"Receipt against Invoice {invoice.sales_invoice_no}"
+
+        if not receipt_date or not method:
+            return Response({"error": "Missing required fields"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if method == 'Bank' and not ledger_id:
+             return Response({"error": "Bank account selection is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            with db_transaction.atomic():
+                # 1. Resolve Ledgers
+                # receive_in_ledger (Bank/Cash)
+                if method == 'Cash' and not ledger_id:
+                     receive_in_ledger = MasterLedger.objects.filter(
+                        tenant_id=tenant_id, 
+                        group__icontains='Cash',
+                        category='Asset'
+                    ).first()
+                     if not receive_in_ledger:
+                         return Response({"error": "No default Cash ledger found."}, status=status.HTTP_400_BAD_REQUEST)
+                else:
+                    receive_in_ledger = MasterLedger.objects.get(id=ledger_id, tenant_id=tenant_id)
+                
+                # receive_from_ledger (Customer)
+                # We need to find the ledger associated with this customer
+                # Assuming customer name matches ledger name or linked via customer_id
+                if invoice.customer_id:
+                    # Try to find by customer_id if we have a way, else by name
+                    receive_from_ledger = MasterLedger.objects.filter(name=invoice.customer_name, tenant_id=tenant_id).first()
+                else:
+                    receive_from_ledger = MasterLedger.objects.filter(name=invoice.customer_name, tenant_id=tenant_id).first()
+
+                if not receive_from_ledger:
+                    return Response({"error": f"Customer ledger '{invoice.customer_name}' not found"}, status=status.HTTP_400_BAD_REQUEST)
+
+                # 2. Create Unified Voucher
+                voucher_no = f"REC-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
+                voucher = Voucher.objects.create(
+                    tenant_id=tenant_id,
+                    type='receipt',
+                    voucher_number=voucher_no,
+                    date=receipt_date,
+                    party=invoice.customer_name,
+                    account=receive_in_ledger.name,
+                    amount=amount,
+                    total=amount,
+                    narration=narration,
+                    reference_id=invoice.id,
+                    source='customer_portal'
+                )
+
+                # 3. Create VoucherReceiptSingle
+                VoucherReceiptSingle.objects.create(
+                    tenant_id=tenant_id,
+                    date=receipt_date,
+                    voucher_type='receipt',
+                    voucher_number=voucher_no,
+                    total_receipt=amount,
+                    receive_in=receive_in_ledger,
+                    receive_from=receive_from_ledger,
+                    bank_reference_number=reference_no
+                )
+
+                # 4. Create Journal Entries
+                # NEW: Populating denormalized columns
+                
+                # Debit: Bank/Cash
+                JournalEntry.objects.create(
+                    tenant_id=tenant_id,
+                    voucher_type='receipt',
+                    voucher_id=voucher.id,
+                    voucher_number=voucher_no,
+                    transaction_date=receipt_date,
+                    narration=narration,
+                    ledger=receive_in_ledger,
+                    ledger_name=receive_in_ledger.name,
+                    debit=amount,
+                    credit=0
+                )
+                
+                # Credit: Customer
+                JournalEntry.objects.create(
+                    tenant_id=tenant_id,
+                    voucher_type='receipt',
+                    voucher_id=voucher.id,
+                    voucher_number=voucher_no,
+                    transaction_date=receipt_date,
+                    narration=narration,
+                    ledger=receive_from_ledger,
+                    ledger_name=receive_from_ledger.name,
+                    debit=0,
+                    credit=amount
+                )
+
+                # 5. Mark Invoice as Paid (Implicitly by linking)
+                # We'll also update a status if it exists.
+                # For now, the "Due Invoices" query should exclude this.
+                # The user says "Once posted, the due sales invoice is no longer displayed here"
+                
+                return Response({"message": "Receipt posted successfully", "voucher_no": voucher_no}, status=status.HTTP_201_CREATED)
+
+        except MasterLedger.DoesNotExist:
+            return Response({"error": "Selected ledger not found"}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     def create(self, request, *args, **kwargs):
-        # Override create to handle file uploads properly if mixed with JSON
         return super().create(request, *args, **kwargs)

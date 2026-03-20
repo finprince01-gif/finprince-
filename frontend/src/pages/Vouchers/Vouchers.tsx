@@ -197,7 +197,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [scannerFiles, setScannerFiles] = useState<FileList | null>(null);
   const [scanType, setScanType] = useState<'single' | 'bulk'>('single');
   const scannerInputRef = useRef<HTMLInputElement>(null);
-  const [extractionMode, setExtractionMode] = useState<'finpixe' | 'tally'>('finpixe');
+  const [extractionMode, setExtractionMode] = useState<'finpixe' | 'tally' | 'zoho' | 'sap'>('finpixe');
+
+  // Zoho / SAP Scanner refs
+  const zohoScannerInputRef = useRef<HTMLInputElement>(null);
+  const sapScannerInputRef = useRef<HTMLInputElement>(null);
 
   // Tally Master Scanner Modal state
   const [isTallyMasterScannerOpen, setIsTallyMasterScannerOpen] = useState(false);
@@ -258,6 +262,30 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       setMasterScannerFiles(files);
       setIsTallyMasterScannerOpen(true);
     }
+  };
+
+  // Zoho multi-file handler
+  const handleZohoScannerFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      setExtractionMode('zoho');
+      setScanType('bulk');
+      setScannerFiles(files);
+      setIsInvoiceScannerOpen(true);
+    }
+    if (zohoScannerInputRef.current) zohoScannerInputRef.current.value = '';
+  };
+
+  // SAP multi-file handler
+  const handleSapScannerFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      setExtractionMode('sap');
+      setScanType('bulk');
+      setScannerFiles(files);
+      setIsInvoiceScannerOpen(true);
+    }
+    if (sapScannerInputRef.current) sapScannerInputRef.current.value = '';
   };
 
   const handleInvoiceUploadResults = (results: any[]) => {
@@ -438,6 +466,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
   // Sales/Purchase
   const [invoiceNo, setInvoiceNo] = useState('');
+  const [supplierInvoiceDate, setSupplierInvoiceDate] = useState(getTodayDate());
   const [gstin, setGstin] = useState('');
   const [isInterState, setIsInterState] = useState(false);
   const [items, setItems] = useState<VoucherItem[]>([{ name: '', qty: 1, rate: 0, taxableAmount: 0, cgstAmount: 0, sgstAmount: 0, igstAmount: 0, totalAmount: 0 }]);
@@ -456,47 +485,46 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [purchaseActiveTab, setPurchaseActiveTab] = useState<'supplier' | 'supply' | 'supply_foreign' | 'supply_inr' | 'due' | 'transit'>('supplier');
   const [grnRefNo, setGrnRefNo] = useState('');
   // Unified full-address fields (single textarea per section)
-  const [billFromAddress, setBillFromAddress] = useState('');
-  const [shipFromAddress, setShipFromAddress] = useState('');
-  const [sameAsBillFrom, setSameAsBillFrom] = useState(false);
+  // Granular address fields
+  const [billFromAddress1, setBillFromAddress1] = useState('');
+  const [billFromAddress2, setBillFromAddress2] = useState('');
+  const [billFromAddress3, setBillFromAddress3] = useState('');
+  const [billFromCity, setBillFromCity] = useState('');
+  const [billFromPincode, setBillFromPincode] = useState('');
+  const [billFromState, setBillFromState] = useState('');
+  const [billFromCountry, setBillFromCountry] = useState('India');
 
-  // Legacy setters kept as no-ops to avoid breaking other code that may reference them
-  const setBillFromAddress1 = (v: string) => { };
-  const setBillFromAddress2 = (v: string) => { };
-  const setBillFromAddress3 = (v: string) => { };
-  const setBillFromCity = (v: string) => { };
-  const setBillFromPincode = (v: string) => { };
-  const setBillFromState = (v: string) => { };
-  const setBillFromCountry = (v: string) => { };
-  const setShipFromAddress1 = (v: string) => { };
-  const setShipFromAddress2 = (v: string) => { };
-  const setShipFromAddress3 = (v: string) => { };
-  const setShipFromCity = (v: string) => { };
-  const setShipFromPincode = (v: string) => { };
-  const setShipFromState = (v: string) => { };
-  const setShipFromCountry = (v: string) => { };
-  // Legacy read stubs
-  const billFromAddress1 = '';
-  const billFromAddress2 = '';
-  const billFromAddress3 = '';
-  const billFromCity = '';
-  const billFromPincode = '';
-  const billFromState = '';
-  const billFromCountry = 'India';
-  const shipFromAddress1 = '';
-  const shipFromAddress2 = '';
-  const shipFromAddress3 = '';
-  const shipFromCity = '';
-  const shipFromPincode = '';
-  const shipFromState = '';
-  const shipFromCountry = 'India';
+  const [shipFromAddress1, setShipFromAddress1] = useState('');
+  const [shipFromAddress2, setShipFromAddress2] = useState('');
+  const [shipFromAddress3, setShipFromAddress3] = useState('');
+  const [shipFromCity, setShipFromCity] = useState('');
+  const [shipFromPincode, setShipFromPincode] = useState('');
+  const [shipFromState, setShipFromState] = useState('');
+  const [shipFromCountry, setShipFromCountry] = useState('India');
+
+  const [sameAsBillFrom, setSameAsBillFrom] = useState(false);
 
   // Sync Ship From with Bill From when toggle is on
   useEffect(() => {
     if (sameAsBillFrom) {
-      setShipFromAddress(billFromAddress);
+      setShipFromAddress1(billFromAddress1);
+      setShipFromAddress2(billFromAddress2);
+      setShipFromAddress3(billFromAddress3);
+      setShipFromCity(billFromCity);
+      setShipFromPincode(billFromPincode);
+      setShipFromState(billFromState);
+      setShipFromCountry(billFromCountry);
     }
-  }, [sameAsBillFrom, billFromAddress]);
+  }, [
+    sameAsBillFrom,
+    billFromAddress1,
+    billFromAddress2,
+    billFromAddress3,
+    billFromCity,
+    billFromPincode,
+    billFromState,
+    billFromCountry
+  ]);
 
 
   const [purchaseInputTypes, setPurchaseInputTypes] = useState<string[]>(['Intrastate']); // Default to Same State
@@ -845,7 +873,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             id: (Date.now() + idx + Math.random()).toString(),
             itemCode: item.item_code || '',
             itemName: item.item_name || item.name || '',
-            hsnSac: item.hsn_code || item.hsn_sac || '',
+            hsnSac: item.hsn_sac_code || item.hsn_code || item.hsn_sac || '',
             qty: qty,
             uom: item.uom || item.unit || '',
             rate: rate,
@@ -1772,6 +1800,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const resetForm = useCallback(() => {
     setDate(getTodayDate());
     setInvoiceNo('');
+    setSupplierInvoiceDate(getTodayDate());
     setParty('');
     setVendorId(null);
     setItems([{ name: '', qty: 1, rate: 0, taxableAmount: 0, cgstAmount: 0, sgstAmount: 0, igstAmount: 0, totalAmount: 0 }]);
@@ -2019,12 +2048,16 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   }, [prefilledData, clearPrefilledData, stockItems, ledgers, companyDetails.state, allItems]);
 
   const setAddressFields = useCallback((addressData: any) => {
-    // Build a full address string from whatever data we get
-    let fullAddr = '';
     if (typeof addressData === 'string') {
-      fullAddr = addressData;
+      const parts = addressData.split(',').map(p => p.trim());
+      setBillFromAddress1(parts[0] || '');
+      setBillFromAddress2(parts[1] || '');
+      setBillFromAddress3(parts[2] || '');
+      setBillFromCity(parts[3] || '');
+      setBillFromPincode(parts[4] || '');
+      setBillFromState(parts[5] || '');
+      setBillFromCountry(parts[6] || 'India');
     } else if (addressData) {
-      const parts: string[] = [];
       const a1 = addressData.addressLine1 || addressData.address_line_1 || '';
       const a2 = addressData.addressLine2 || addressData.address_line_2 || '';
       const a3 = addressData.addressLine3 || addressData.address_line_3 || '';
@@ -2033,22 +2066,15 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       const state = addressData.state || '';
       const country = addressData.country || 'India';
 
-      if (a1) parts.push(a1);
-      if (a2) parts.push(a2);
-      if (a3) parts.push(a3);
-      const cityPin = [city, pincode].filter(Boolean).join('- ');
-      if (cityPin) parts.push(cityPin);
-      if (state && state !== country) parts.push(state);
-      if (country && country !== 'India') parts.push(country);
-
-      fullAddr = parts.join(', ');
+      setBillFromAddress1(a1);
+      setBillFromAddress2(a2);
+      setBillFromAddress3(a3);
+      setBillFromCity(city);
+      setBillFromPincode(pincode);
+      setBillFromState(state);
+      setBillFromCountry(country);
     }
-
-    setBillFromAddress(fullAddr);
-    if (!sameAsBillFrom) {
-      setShipFromAddress(fullAddr);
-    }
-  }, [sameAsBillFrom]);
+  }, []);
 
   // Sync Input Type and Interstate status based on Party and Foreign Currency
   useEffect(() => {
@@ -2071,7 +2097,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     });
   }, [party, ledgers, companyDetails, invoiceInForeignCurrency]);
 
-  const { partyLedgers, accountLedgers, allLedgers, partyOptions } = useMemo(() => {
+  const { partyLedgers, accountLedgers, allLedgers, partyOptions, purchasePartyOptions, salesPartyOptions } = useMemo(() => {
     // Helper to identify cash/bank accounts robustly
     const isCashBank = (l: Ledger) => {
       const g = (l.group || '').toLowerCase();
@@ -2095,9 +2121,16 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       ...richVendors.map(v => v.vendor_name),
       ...richCustomers.map(c => c.customer_name)
     ])].filter(Boolean);
-    // Note: Branch/reference names are now shown in the separate "Branch" dropdown
 
-    return { partyLedgers, accountLedgers, allLedgers, partyOptions };
+    const purchasePartyOptions = [...new Set([
+      ...richVendors.map(v => v.vendor_name)
+    ])].filter(Boolean);
+
+    const salesPartyOptions = [...new Set([
+      ...richCustomers.map(c => c.customer_name)
+    ])].filter(Boolean);
+
+    return { partyLedgers, accountLedgers, allLedgers, partyOptions, purchasePartyOptions, salesPartyOptions };
   }, [ledgers, cashBankLedgers, richVendors, vendorGstDetails, richCustomers]);
 
   const handlePartyChange = useCallback((value: string, forcedId?: number | null) => {
@@ -2111,6 +2144,22 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
     // Auto-population logic for Vouchers
     if (voucherType === 'Purchase' || voucherType === 'Sales') {
+      if (!value) {
+        setGstin('');
+        setSelectedBranch('');
+        setBillFromAddress1('');
+        setBillFromAddress2('');
+        setBillFromAddress3('');
+        setBillFromCity('');
+        setBillFromPincode('');
+        setBillFromState('');
+        setBillFromCountry('India');
+        setVendorAddresses([]);
+        setPurchaseTerms('');
+        setMasterTermsData(null);
+        return;
+      }
+
       const match = value.match(/^(.*) \((.*)\)$/);
       const entityName = match ? match[1] : value;
       const refName = match ? match[2] : null;
@@ -2389,6 +2438,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       const purchaseData: any = {
         date: date,
         supplier_invoice_no: invoiceNo,
+        supplier_invoice_date: supplierInvoiceDate,
         purchase_voucher_series: selectedPurchaseConfig,
         purchase_voucher_no: voucherNumber,
         vendor_id: currentVendorId,
@@ -2396,8 +2446,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         branch: selectedBranch,
         gstin: gstin,
         grn_reference: grnRefNo,
-        bill_from: billFromAddress,
-        ship_from: sameAsBillFrom ? billFromAddress : shipFromAddress,
+        bill_from: [billFromAddress1, billFromAddress2, billFromAddress3, billFromCity, billFromPincode, billFromState, billFromCountry].filter(Boolean).join(', '),
+        ship_from: sameAsBillFrom 
+          ? [billFromAddress1, billFromAddress2, billFromAddress3, billFromCity, billFromPincode, billFromState, billFromCountry].filter(Boolean).join(', ')
+          : [shipFromAddress1, shipFromAddress2, shipFromAddress3, shipFromCity, shipFromPincode, shipFromState, shipFromCountry].filter(Boolean).join(', '),
         input_type: purchaseInputTypes.join(', '),
         invoice_in_foreign_currency: invoiceInForeignCurrency,
 
@@ -3029,7 +3081,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 </div>
               </div>
 
-              {/* Row 2: Vendor Name, Branch, GSTIN, Upload */}
+              {/* Row 2: Vendor Name, Branch, GSTIN, Supplier Invoice Date */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -3039,7 +3091,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <SearchableSelect
                       value={party}
                       onChange={handlePartyChange}
-                      options={partyOptions}
+                      options={purchasePartyOptions}
                       placeholder="Select Vendor"
                       className="w-full"
                       disabled={isVendorDisabled}
@@ -3107,13 +3159,20 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   <SearchableSelect
                     value={selectedBranch}
                     onChange={(val) => setSelectedBranch(val)}
-                    options={inventoryLocations.map((loc: any) => loc.name || loc.location_name || loc).filter(Boolean)}
+                    options={
+                      vendorId
+                        ? vendorGstDetails
+                          .filter(g => g.vendor_basic_detail === vendorId)
+                          .map(g => g.reference_name)
+                          .filter(Boolean)
+                        : []
+                    }
                     placeholder="Select Branch"
                     className="w-full"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                <div className="md:col-span-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2 whitespace-nowrap">
                     GSTIN
                   </label>
                   <input
@@ -3124,8 +3183,46 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     placeholder="Enter GSTIN"
                   />
                 </div>
+
+                <div className="md:col-span-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2 whitespace-nowrap">
+                    Supplier Invoice Date <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={supplierInvoiceDate}
+                    onChange={(e) => setSupplierInvoiceDate(e.target.value)}
+                    max={getTodayDate()}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Row 3: Create GRN & Upload */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="flex flex-col gap-1">
+                  <label className="block text-sm font-semibold text-gray-800">GRN Reference No.</label>
+                  <div className="flex-1">
+                    <SearchableSelect
+                      value={grnRefNo === '+ Create GRN' ? '' : grnRefNo}
+                      onChange={(val) => {
+                        if (val === '+ Create GRN') {
+                          setIsCreateGRNModalOpen(true);
+                        } else {
+                          setGrnRefNo(val);
+                        }
+                      }}
+                      options={['+ Create GRN', ...new Set(pendingGRNs.map(g => g.grn_no).filter(Boolean))]}
+                      placeholder="Select Pending GRN or Create"
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+
+                {/* Upload Section Moved Here */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-semibold text-gray-800 mb-1">
                     Upload Supporting Document
                   </label>
                   <div className="relative group">
@@ -3197,65 +3294,120 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 </div>
               </div>
 
-              {/* Row 3: Create GRN */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="flex flex-col gap-1">
-                  <label className="block text-sm font-semibold text-gray-800">GRN Reference No.</label>
-                  <div className="flex-1">
-                    <SearchableSelect
-                      value={grnRefNo === '+ Create GRN' ? '' : grnRefNo}
-                      onChange={(val) => {
-                        if (val === '+ Create GRN') {
-                          setIsCreateGRNModalOpen(true);
+              {/* Row 4: Address Headers & Toggle */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-3 pt-4 border-t border-gray-100">
+                <label className="block text-sm font-semibold text-gray-800 uppercase tracking-wider">Bill From (Full Address)</label>
+                <div className="flex justify-between items-center">
+                  <label className="block text-sm font-semibold text-gray-800 uppercase tracking-wider">Ship From</label>
+                  <label className="flex items-center gap-2 cursor-pointer text-[10px] font-bold text-gray-500 uppercase tracking-tight">
+                    <input
+                      type="checkbox"
+                      checked={sameAsBillFrom}
+                      onChange={(e) => {
+                        setSameAsBillFrom(e.target.checked);
+                        if (e.target.checked) {
+                          setShipFromAddress1(billFromAddress1);
+                          setShipFromAddress2(billFromAddress2);
+                          setShipFromAddress3(billFromAddress3);
+                          setShipFromCity(billFromCity);
+                          setShipFromPincode(billFromPincode);
+                          setShipFromState(billFromState);
+                          setShipFromCountry(billFromCountry);
                         } else {
-                          setGrnRefNo(val);
+                          setShipFromAddress1('');
+                          setShipFromAddress2('');
+                          setShipFromAddress3('');
+                          setShipFromCity('');
+                          setShipFromPincode('');
+                          setShipFromState('');
+                          setShipFromCountry('India');
                         }
                       }}
-                      options={['+ Create GRN', ...pendingGRNs.map(g => g.grn_no).filter(Boolean)]}
-                      placeholder="Select Pending GRN or Create"
-                      className="w-full"
+                      className="w-3.5 h-3.5 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300"
                     />
-                  </div>
+                    Same as Bill From Address
+                  </label>
                 </div>
               </div>
 
-              {/* Row 4: Address Headers & Toggle */}
-              <div className="flex justify-between items-end mb-3 pt-4 border-t border-gray-100">
-                <label className="block text-sm font-semibold text-gray-800">Bill From (Full Address)</label>
-                <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-gray-600">
-                  <span className="font-semibold text-gray-700">Ship From</span>
+              {/* Row 5: Granular Address Fields */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Bill From Column */}
+                <div className="space-y-3">
                   <input
-                    type="checkbox"
-                    checked={sameAsBillFrom}
-                    onChange={(e) => {
-                      setSameAsBillFrom(e.target.checked);
-                      if (e.target.checked) setShipFromAddress(billFromAddress);
-                    }}
-                    className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                    type="text"
+                    value={billFromAddress1}
+                    onChange={(e) => setBillFromAddress1(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                    placeholder="Address Line 1"
                   />
-                  Same as Bill From Address
-                </label>
-              </div>
-
-              {/* Row 5: Full-address textareas */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Bill From */}
-                <div className="flex flex-col gap-1">
-                  <textarea
-                    rows={4}
-                    value={billFromAddress}
-                    onChange={(e) => {
-                      setBillFromAddress(e.target.value);
-                      if (sameAsBillFrom) setShipFromAddress(e.target.value);
-                    }}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 resize-none text-sm leading-relaxed"
-                    placeholder=""
+                  <input
+                    type="text"
+                    value={billFromAddress2}
+                    onChange={(e) => setBillFromAddress2(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                    placeholder="Address Line 2"
                   />
+                  <input
+                    type="text"
+                    value={billFromAddress3}
+                    onChange={(e) => setBillFromAddress3(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                    placeholder="Address Line 3"
+                  />
+                  <div className="grid grid-cols-2 gap-3">
+                    <input
+                      type="text"
+                      value={billFromCity}
+                      onChange={(e) => setBillFromCity(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                      placeholder="City"
+                    />
+                    <input
+                      type="text"
+                      value={billFromPincode}
+                      onChange={(e) => setBillFromPincode(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                      placeholder="Pincode"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <input
+                      type="text"
+                      value={billFromState}
+                      onChange={(e) => setBillFromState(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                      placeholder="State"
+                    />
+                    <input
+                      type="text"
+                      value={billFromCountry}
+                      onChange={(e) => setBillFromCountry(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                      placeholder="Country"
+                    />
+                  </div>
                   {vendorAddresses.length > 1 && (
                     <div className="mt-1">
                       <SearchableSelect
                         value={''}
-                        onChange={(val) => { if (val) setAddressFields(val); }}
+                        onChange={(val) => {
+                          if (val) {
+                            // Extract parts from the address if needed, or if setAddressFields handles it.
+                            // For simplicity, we assume setAddressFields is updated or we do it here.
+                            const addr = vendorAddresses.find(a => a === val);
+                            if (addr) {
+                              const parts = addr.split(',').map(p => p.trim());
+                              setBillFromAddress1(parts[0] || '');
+                              setBillFromAddress2(parts[1] || '');
+                              setBillFromAddress3(parts[2] || '');
+                              setBillFromCity(parts[3] || '');
+                              setBillFromPincode(parts[4] || '');
+                              setBillFromState(parts[5] || '');
+                              setBillFromCountry(parts[6] || 'India');
+                            }
+                          }
+                        }}
                         options={vendorAddresses}
                         placeholder="Select from saved vendor addresses..."
                         className="w-full"
@@ -3264,16 +3416,68 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   )}
                 </div>
 
-                {/* Ship From */}
-                <div className={`flex flex-col gap-1 ${sameAsBillFrom ? 'opacity-60 pointer-events-none' : ''}`}>
-                  <textarea
-                    rows={4}
-                    value={sameAsBillFrom ? billFromAddress : shipFromAddress}
-                    onChange={(e) => setShipFromAddress(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 resize-none text-sm leading-relaxed"
-                    placeholder=""
+                {/* Ship From Column */}
+                <div className={`space-y-3 ${sameAsBillFrom ? 'opacity-60 pointer-events-none' : ''}`}>
+                  <input
+                    type="text"
+                    value={shipFromAddress1}
+                    onChange={(e) => setShipFromAddress1(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                    placeholder="Address Line 1"
                     disabled={sameAsBillFrom}
                   />
+                  <input
+                    type="text"
+                    value={shipFromAddress2}
+                    onChange={(e) => setShipFromAddress2(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                    placeholder="Address Line 2"
+                    disabled={sameAsBillFrom}
+                  />
+                  <input
+                    type="text"
+                    value={shipFromAddress3}
+                    onChange={(e) => setShipFromAddress3(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                    placeholder="Address Line 3"
+                    disabled={sameAsBillFrom}
+                  />
+                  <div className="grid grid-cols-2 gap-3">
+                    <input
+                      type="text"
+                      value={shipFromCity}
+                      onChange={(e) => setShipFromCity(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                      placeholder="City"
+                      disabled={sameAsBillFrom}
+                    />
+                    <input
+                      type="text"
+                      value={shipFromPincode}
+                      onChange={(e) => setShipFromPincode(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                      placeholder="Pincode"
+                      disabled={sameAsBillFrom}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <input
+                      type="text"
+                      value={shipFromState}
+                      onChange={(e) => setShipFromState(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                      placeholder="State"
+                      disabled={sameAsBillFrom}
+                    />
+                    <input
+                      type="text"
+                      value={shipFromCountry}
+                      onChange={(e) => setShipFromCountry(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                      placeholder="Country"
+                      disabled={sameAsBillFrom}
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -3303,6 +3507,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     <button
                       type="button"
                       onClick={() => {
+                        setInvoiceInForeignCurrency('Yes');
                         setPurchaseInputTypes(prev => {
                           const rest = prev.filter(t => t !== 'Interstate' && t !== 'Intrastate');
                           return [...rest, 'Interstate'];
@@ -6887,7 +7092,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             {isTallySubmenuOpen && (
                               <div className="bg-gray-100/50 py-0.5 shadow-inner">
                                 <button
-                                  onClick={() => { openScanner('tally'); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); setIsTallySubmenuOpen(false); }}
+                                  onClick={() => { openScanner('tally', 'bulk'); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); setIsTallySubmenuOpen(false); }}
                                   className="flex items-center w-full text-left px-12 py-1.5 text-xs text-gray-500 hover:bg-gray-200"
                                   role="menuitem"
                                 >
@@ -6905,7 +7110,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               </div>
                             )}
                             <button
-                              onClick={() => { showInfo("Zoho import triggered"); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); }}
+                              onClick={() => { zohoScannerInputRef.current?.click(); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); }}
                               className="flex items-center w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
                               role="menuitem"
                             >
@@ -6913,7 +7118,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               Zoho
                             </button>
                             <button
-                              onClick={() => { showInfo("SAP import triggered"); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); }}
+                              onClick={() => { sapScannerInputRef.current?.click(); setIsScannerMenuOpen(false); setIsOthersSubmenuOpen(false); }}
                               className="flex items-center w-full text-left px-8 py-2 text-sm text-gray-600 hover:bg-gray-100"
                               role="menuitem"
                             >
@@ -6967,6 +7172,26 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   onClick={(e) => { if (e.target) (e.target as any).value = null; }}
                   onChange={handleMasterScannerFileChange}
                   accept="image/*,.pdf"
+                  multiple
+                  className="hidden"
+                />
+
+                {/* Zoho multi-file scanner input */}
+                <input
+                  type="file"
+                  ref={zohoScannerInputRef}
+                  onChange={handleZohoScannerFileChange}
+                  accept="image/*,.pdf,.xlsx,.xls,.csv"
+                  multiple
+                  className="hidden"
+                />
+
+                {/* SAP multi-file scanner input */}
+                <input
+                  type="file"
+                  ref={sapScannerInputRef}
+                  onChange={handleSapScannerFileChange}
+                  accept="image/*,.pdf,.xlsx,.xls,.csv"
                   multiple
                   className="hidden"
                 />
@@ -7154,7 +7379,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   refetch(); // Refresh usage after scan
                 }}
                 onExtractionSuccess={(extractedData) => {
-                  if (voucherType !== 'Purchase') return;
+                  if (voucherType !== 'Purchase' || extractionMode !== 'finpixe') return;
 
                   validateVendorFromInvoice(
                     extractedData.vendor_name,
@@ -7164,6 +7389,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     extractedData.branch
                   );
                 }}
+
                 onUpload={(data) => {
                   console.log('[VouchersPage] Data received from InvoiceScannerModal:', data);
                   const firstRow = data[0];
@@ -7187,8 +7413,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                     if (branchVal) setSelectedBranch(branchVal);
 
                     // Date — new schema: "Date"; legacy Tally: "Voucher Date"
-                    if (firstRow['Date'] || firstRow['Voucher Date'])
-                      setDate(formatDateForInput(firstRow['Date'] || firstRow['Voucher Date']) || getTodayDate());
+                    if (firstRow['Date'] || firstRow['Voucher Date']) {
+                      const formattedDate = formatDateForInput(firstRow['Date'] || firstRow['Voucher Date']) || getTodayDate();
+                      setDate(formattedDate);
+                      setSupplierInvoiceDate(formattedDate);
+                    }
 
                     // Bill From address — new schema uses granular sub-fields
                     if (firstRow['Bill From - Address Line 1']) setBillFromAddress1(firstRow['Bill From - Address Line 1']);
@@ -7408,6 +7637,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           {/* Create GRN Modal */}
           {isCreateGRNModalOpen && (
             <CreateGRNModal
+              mainVendorName={party}
+              mainBranch={selectedBranch}
+              mainGstin={gstin}
               onClose={() => setIsCreateGRNModalOpen(false)}
               onSave={async (data) => {
                 try {
@@ -7429,7 +7661,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         id: (index + 1).toString(),
                         itemCode: item.item_code || stockItem?.item_code || stockItem?.code || '',
                         itemName: item.item_name || stockItem?.item_name || stockItem?.name || '',
-                        hsnSac: stockItem?.hsn_sac || '',
+                        hsnSac: item.hsn_sac_code || item.hsn_code || item.hsn_sac || stockItem?.hsn_sac || stockItem?.hsn_code || '',
                         qty: qty,
                         uom: item.uom || stockItem?.uom || '',
                         rate: rate,
@@ -7451,10 +7683,6 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   if (response.grn_no) {
                     setPendingGRNs(prev => [...prev, response]);
                     setGrnRefNo(response.grn_no);
-                  }
-
-                  if (response.grn_no) {
-                    setPendingGRNs(prev => [...prev, response]);
                   }
 
                   setIsCreateGRNModalOpen(false);

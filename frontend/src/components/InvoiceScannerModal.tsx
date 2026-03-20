@@ -38,6 +38,8 @@ interface InvoiceResult {
     report?: IngestionReport;
     /** id column from invoice_ocr_temp — present when result was served from cache or freshly saved */
     cacheRecordId?: number | null;
+    /** hash to track and deduplicate bulk results */
+    file_hash?: string;
 }
 
 interface InvoiceScannerModalProps {
@@ -45,7 +47,7 @@ interface InvoiceScannerModalProps {
     onUpload?: (data: any[]) => void;
     initialFiles?: FileList | null;
     voucherType: string;
-    extractionMode?: 'finpixe' | 'tally';
+    extractionMode?: 'finpixe' | 'tally' | 'zoho' | 'sap';
     scanType?: 'single' | 'bulk';
     onExtractionSuccess?: (extractedData: any) => void;
 }
@@ -311,12 +313,15 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
     const LINE_ITEM_FIELDS = [
         // ── Core item identification ──────────────────────────────────────────
         "Item Code", "Item Name", "HSN/SAC", "HSN Description", "Description", "Sales Ledger",
+        "Item Description",
         // ── Quantity / Unit ───────────────────────────────────────────────────
         "Qty", "Quantity", "UOM", "UQC", "Alternate Unit",
+        "Actual Quantity", "Billed Quantity", "Quantity UOM",
         // ── Foreign currency ──────────────────────────────────────────────────
         "Rate (FC)", "Amount (FC)",
         // ── INR pricing ───────────────────────────────────────────────────────
         "Item Rate", "Rate", "Taxable Value",
+        "Item Rate per", "Disc%",
         // ── Tax columns ───────────────────────────────────────────────────────
         "CGST", "SGST", "SGST/UTGST", "IGST", "CESS", "Cess",
         "IGST Rate", "CGST Rate", "SGST/UTGST Rate",
@@ -324,8 +329,10 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         // ── Row total ─────────────────────────────────────────────────────────
         "Invoice Value", "Item Amount",
         // ── Tally-specific per-row fields ────────────────────────────────────
-        "GST Rate Details", "GST Taxability Type"
+        "GST Rate Details", "GST Taxability Type",
+        "Item Allocations - Tracking No.", "Item Allocations - Order No.", "Item Allocations - Batch/Lot No."
     ].filter(f => ALL_COLUMNS.includes(f));
+
 
     const HEADER_FIELDS = ALL_COLUMNS.filter(col => !LINE_ITEM_FIELDS.includes(col));
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -344,6 +351,11 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
     const [isCreateVendorModalOpen, setIsCreateVendorModalOpen] = useState(false);
     const [extractedVendorData, setExtractedVendorData] = useState<any>(null);
 
+    // -- Bulk Job State --
+    const [bulkJobId, setBulkJobId] = useState<number | null>(null);
+    const [bulkStatus, setBulkStatus] = useState<{ total: number; processed: number; failed: number; pending: number; status: string } | null>(null);
+    const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
     const firstInvoiceVendorStr = invoiceResults.length > 0 && !isExtracting && voucherType === 'Purchase'
         ? String(invoiceResults[0].invoice['Vendor Name'] || '') + '|' + String(invoiceResults[0].invoice['GSTIN'] || '') + '|' + String(invoiceResults[0].invoice['Branch'] || '')
         : '';
@@ -355,7 +367,9 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         }
 
         const checkVendor = async () => {
+            if (extractionMode !== 'finpixe') return;
             const firstRow = invoiceResults[0].invoice;
+
             const vendorName = firstRow['Vendor Name'] || firstRow['Bill From'] || firstRow['Buyer/Supplier - Mailing Name'] || '';
             if (!vendorName) return;
 
@@ -433,8 +447,12 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
     }, [initialFiles]);
 
     const processFiles = async (files: FileList | File[]) => {
+        if (isExtracting) return; // Point 1B fix
+        setIsExtracting(true);
+
         if (isLimitReached && extractionMode === 'finpixe') {
             showError('❌ AI Extraction limit reached for your plan. Please upgrade to continue.');
+            setIsExtracting(false);
             return;
         }
 
@@ -443,7 +461,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         let duplicateFound = false;
 
         // Enforce single file for Finpixe Single Scan
-        if (scanType === 'single' && files.length > 1) {
+        if (scanType === 'single' && files.length > 1 && extractionMode === 'finpixe') {
             showError('FINPIXE SINGLE SCAN allows only one invoice. Use FINPIXE BULK SCAN for multiple invoices.');
             return;
         }
@@ -486,9 +504,28 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         }
 
         try {
+            if (scanType === 'bulk') {
+                const formData = new FormData();
+                newFiles.forEach(f => formData.append('files', f));
+                
+                const response = await httpClient.postFormData<any>('/api/bulk-upload/', formData);
+                if (response.job_id) {
+                    setBulkJobId(response.job_id);
+                    setBulkStatus({
+                        total: response.total_files,
+                        processed: 0,
+                        failed: 0,
+                        pending: response.total_files,
+                        status: 'processing'
+                    });
+                    startPolling(response.job_id);
+                }
+                return;
+            }
+
             const allResults: InvoiceResult[] = [];
             let batchProcessedCount = 0;
-            const CONCURRENCY_LIMIT = 5;
+            const CONCURRENCY_LIMIT = 4;
 
             for (let i = 0; i < newFiles.length; i += CONCURRENCY_LIMIT) {
                 const batch = newFiles.slice(i, i + CONCURRENCY_LIMIT);
@@ -509,6 +546,8 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                     formData.append('voucher_type', voucherType);
                     formData.append('table_name', voucherType);
                     formData.append('columns', JSON.stringify(ALL_COLUMNS));
+                    formData.append('extraction_mode', extractionMode || 'finpixe');
+
 
                     try {
                         const result = await httpClient.postFormData<any>('/api/ai/extract-invoice/', formData);
@@ -563,7 +602,11 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
                         // Build a CLEAN flat rawHeader: invoice fields + summary totals only
                         // Do NOT spread resData (which contains container keys like "invoice", "items")
-                        const rawHeader: Record<string, any> = { ...invoicePart, ...summaryTotals };
+                        const rawHeader: Record<string, any> = { 
+                            ...invoicePart, 
+                            ...summaryTotals,
+                            voucher_type: resData.voucher_type || res.voucher_type || voucherType
+                        };
 
                         // Strip any nested objects or arrays (keep only scalar values)
                         Object.keys(rawHeader).forEach(k => {
@@ -572,6 +615,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                                 delete rawHeader[k];
                             }
                         });
+
 
                         // Items come from resData, not from invoicePart
                         const rawItems: any[] = resData.items || resData.line_items || resData.lineItems ||
@@ -617,6 +661,23 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                             }
                             normalizedHeader[field] = (val !== undefined && val !== null) ? String(val) : '';
                         });
+
+                        // ── 7.5 Tally-specific field fallbacks (to fill common missing fields) ──
+                        if (extractionMode === 'tally') {
+                            // Mirror Date -> Reference Date if only one exists
+                            if (!normalizedHeader['Reference Date'] && normalizedHeader['Voucher Date']) {
+                                normalizedHeader['Reference Date'] = normalizedHeader['Voucher Date'];
+                            } else if (normalizedHeader['Reference Date'] && !normalizedHeader['Voucher Date']) {
+                                normalizedHeader['Voucher Date'] = normalizedHeader['Reference Date'];
+                            }
+                            // Mirror Number -> Reference No if only one exists (common for supplier invoices)
+                            if (!normalizedHeader['Reference No.'] && normalizedHeader['Voucher Number']) {
+                                normalizedHeader['Reference No.'] = normalizedHeader['Voucher Number'];
+                            } else if (normalizedHeader['Reference No.'] && !normalizedHeader['Voucher Number']) {
+                                normalizedHeader['Voucher Number'] = normalizedHeader['Reference No.'];
+                            }
+                        }
+
 
                         // ── Build normalized items ──
                         const normalizedItems = rawItems.map((item: any, idx: number) => {
@@ -722,10 +783,102 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         } catch (error) {
             showError(`❌ Extraction Failed: ${(error as Error).message}. Please try again.`);
         } finally {
-            setIsExtracting(false);
+            if (scanType !== 'bulk') {
+                setIsExtracting(false);
+            }
             if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
+
+    const fetchStagingData = async () => {
+        try {
+            // Fetch the actual extracted data from the staging API
+            const stagedResults = await httpClient.get<any[]>('/api/ocr-staging/');
+            
+            // Map the OCR staging results to the format expected by our UI (InvoiceResult)
+            const mappedResults: InvoiceResult[] = stagedResults.map(item => {
+                const extracted = item.extracted_data || {};
+                
+                return {
+                    invoice: extracted.invoice || extracted.header || extracted,
+                    items: extracted.items || extracted.line_items || [],
+                    headerMapping: {}, 
+                    itemMapping: {},
+                    file_hash: item.file_hash,
+                    cacheRecordId: item.id
+                };
+            }).filter(res => res.items.length > 0 || Object.keys(res.invoice).length > 0);
+
+            if (mappedResults.length === 0) return;
+
+            // Update results: Replace existing entries with same hash, add new ones
+            setInvoiceResults(prev => {
+                const map = new Map<string, InvoiceResult>();
+                // Preserve original order as much as possible
+                prev.forEach(r => {
+                    if (r.file_hash) map.set(r.file_hash, r);
+                });
+                
+                // Overwrite with fresh data from staging
+                mappedResults.forEach(r => {
+                    if (r.file_hash) map.set(r.file_hash, r);
+                });
+
+                return Array.from(map.values());
+            });
+        } catch (err) {
+            console.error("Failed to fetch staging data:", err);
+        }
+    };
+
+    const startPolling = (jobId: number) => {
+        if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+
+        let currentInterval = 2000;
+        
+        const poll = async () => {
+            try {
+                const status = await httpClient.get<any>(`/api/bulk-status/${jobId}/`);
+                setBulkStatus(status);
+
+                if (status.processed > 0) {
+                    await fetchStagingData();
+                }
+
+                // Check for completion
+                if (status.status === 'completed' || status.status === 'failed' || status.status === 'success') {
+                    if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+                    setIsExtracting(false);
+                    await fetchStagingData();
+                    if (status.status !== 'failed') {
+                        showSuccess(`✅ Bulk processing completed! ${status.processed} processed, ${status.failed} failed.`);
+                    }
+                    return;
+                }
+
+                // Adaptive Polling: Slow down after 50% to reduce server load
+                const progress = (status.processed + status.failed) / status.total;
+                const nextInterval = progress >= 0.5 ? 5000 : 2000;
+
+                if (nextInterval !== currentInterval) {
+                   currentInterval = nextInterval;
+                   if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+                   pollingIntervalRef.current = setInterval(poll, currentInterval);
+                }
+
+            } catch (err) {
+                console.error("Polling error:", err);
+            }
+        };
+
+        pollingIntervalRef.current = setInterval(poll, currentInterval);
+    };
+
+    useEffect(() => {
+        return () => {
+            if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+        };
+    }, []);
 
     // ── Upload directly (no risk dashboard) ──────────────────────────────────────
     const handleUploadToFinpixe = () => {
@@ -877,20 +1030,23 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             });
         });
 
-        // Keep only columns that have at least one non-empty value (mirrors what's visible)
-        const activeCols = ALL_COLUMNS.filter(col =>
-            allRows.some(row => row[col] !== '' && row[col] !== undefined && row[col] !== null)
-        );
+        // For Tally: always export ALL columns so the file matches the exact Tally schema.
+        // For other modes: keep only columns that have at least one non-empty value.
+        const exportCols = extractionMode === 'tally'
+            ? ALL_COLUMNS
+            : ALL_COLUMNS.filter(col =>
+                allRows.some(row => row[col] !== '' && row[col] !== undefined && row[col] !== null)
+            );
 
-        // Rebuild rows with only the active columns — no '#' column
+        // Rebuild rows with the chosen columns
         const excelRows = allRows.map(row => {
             const out: Record<string, string> = {};
-            activeCols.forEach(col => { out[col] = row[col]; });
+            exportCols.forEach(col => { out[col] = row[col] ?? ''; });
             return out;
         });
 
-        const ws = XLSX.utils.json_to_sheet(excelRows, { header: activeCols });
-        ws['!cols'] = activeCols.map((h) => ({ wch: Math.max(h.length, 14) }));
+        const ws = XLSX.utils.json_to_sheet(excelRows, { header: exportCols });
+        ws['!cols'] = exportCols.map((h) => ({ wch: Math.max(h.length, 14) }));
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Invoices');
         XLSX.writeFile(wb, `Extracted_Invoices_${Date.now()}.xlsx`);
@@ -914,14 +1070,18 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             });
         });
 
-        // Keep only columns with actual data — no '#' column
-        const activeCols = ALL_COLUMNS.filter(col =>
-            allRows.some(row => row[col] !== '' && row[col] !== undefined)
-        );
-        let csvContent = activeCols.map(h => `"${h.replace(/"/g, '""')}"`).join(',') + '\n';
+        // For Tally: always export ALL columns. For other modes: active columns only.
+        const exportCols = (extractionMode === 'tally'
+            ? ALL_COLUMNS
+            : ALL_COLUMNS.filter(col =>
+                allRows.some(row => row[col] !== '' && row[col] !== undefined)
+            )
+        ).filter(c => !['S.No', 'Staging Status', 'Action', 'Validation Status', 'id', 'serial', 'cacheRecordId', 'file_hash'].includes(c));
+
+        let csvContent = exportCols.map(h => `"${h.replace(/"/g, '""')}"`).join(',') + '\n';
 
         allRows.forEach(row => {
-            const cells = activeCols.map(col => {
+            const cells = exportCols.map(col => {
                 const val = String(row[col] ?? '');
                 return `"${val.replace(/"/g, '""')}"`;
             });
@@ -991,12 +1151,20 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
             next[invoiceIdx] = res;
 
-            // ── Persist edit to OCR cache (fire-and-forget, non-blocking) ─────
-            if (res.cacheRecordId) {
-                apiService.updateOcrCache(res.cacheRecordId, {
-                    invoice: res.invoice,
-                    items: res.items,
-                }).catch((err: any) => {
+            // ── Persist edit to OCR cache / Staging table ─────
+            const extractedData = {
+                invoice: res.invoice,
+                items: res.items,
+            };
+
+            if (res.file_hash) {
+                // Bulk flow: Use staging API (triggers re-validation)
+                apiService.saveStagingEdit(res.file_hash, extractedData)
+                    .then(() => fetchStagingData()) // Refresh validation status (READY, etc.)
+                    .catch(err => console.warn('[Staging] Edit failed', err));
+            } else if (res.cacheRecordId) {
+                // Single scan fallback
+                apiService.updateOcrCache(res.cacheRecordId, extractedData).catch((err: any) => {
                     console.warn('[OCR Cache] Failed to persist edit for record', res.cacheRecordId, err);
                 });
             }
@@ -1040,9 +1208,11 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
     // ────────────────────────────────────────────────────────────────────────────
     const isSingleScan = scanType === 'single';
-    const modalTitle = isSingleScan
-        ? 'Finpixe Single Scan – Invoice Scanner'
-        : 'Finpixe Bulk Scan – Invoice Scanner';
+    const modePrefix = extractionMode === 'tally' ? 'Tally' : 
+                      (extractionMode === 'finpixe' ? 'Finpixe' : 
+                      (extractionMode.charAt(0).toUpperCase() + extractionMode.slice(1)));
+    
+    const modalTitle = `${modePrefix} ${isSingleScan ? 'Single' : 'Bulk'} Scan – Invoice Scanner`;
     const modalHint = isSingleScan
         ? 'Upload a single invoice for fast AI extraction.'
         : 'Upload multiple invoices for batch AI processing.';
@@ -1105,26 +1275,51 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                             )}
 
                             {isExtracting && (
-                                <div className="flex flex-col justify-center px-6 py-2">
-                                    <div className="flex items-center gap-2 text-sm font-medium text-indigo-600">
-                                        <Icon name="spinner" className="w-5 h-5 animate-spin" />
-                                        <span>Processing invoices...</span>
-                                    </div>
-                                    {countdownSeconds !== null && (
-                                        <div className="flex items-center gap-1.5 ml-7 mt-1">
-                                            <span style={{ fontSize: '15px', lineHeight: 1 }}>⏱</span>
-                                            <span className="text-xs font-semibold text-indigo-600 tabular-nums">
-                                                {countdownSeconds > 0
-                                                    ? (() => {
-                                                        const m = Math.floor(countdownSeconds / 60);
-                                                        const s = countdownSeconds % 60;
-                                                        return m > 0
-                                                            ? `${m}:${String(s).padStart(2, '0')} remaining`
-                                                            : `${s}s remaining`;
-                                                    })()
-                                                    : 'Almost done...'}
-                                            </span>
+                                <div className="flex flex-col justify-center px-6 py-2 w-full max-w-md">
+                                    <div className="flex items-center justify-between mb-1">
+                                        <div className="flex items-center gap-2 text-sm font-medium text-indigo-600">
+                                            <Icon name="spinner" className="w-5 h-5 animate-spin" />
+                                            <span>{scanType === 'bulk' ? 'Processing Bulk Job...' : 'Processing invoices...'}</span>
                                         </div>
+                                        {bulkStatus && (
+                                            <span className="text-xs font-bold text-indigo-600">
+                                                {Math.round(((bulkStatus.processed + bulkStatus.failed) / bulkStatus.total) * 100)}%
+                                            </span>
+                                        )}
+                                    </div>
+                                    
+                                    {bulkStatus ? (
+                                        <div className="space-y-1.5">
+                                            <div className="w-full bg-gray-200 rounded-full h-2">
+                                                <div 
+                                                    className="bg-indigo-600 h-2 rounded-full transition-all duration-500" 
+                                                    style={{ width: `${((bulkStatus.processed + bulkStatus.failed) / bulkStatus.total) * 100}%` }}
+                                                ></div>
+                                            </div>
+                                            <div className="flex justify-between text-[10px] text-gray-500 font-medium">
+                                                <span>Total: {bulkStatus.total}</span>
+                                                <span className="text-emerald-600">Processed: {bulkStatus.processed}</span>
+                                                <span className="text-red-500">Failed: {bulkStatus.failed}</span>
+                                                <span>Pending: {bulkStatus.pending}</span>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        countdownSeconds !== null && (
+                                            <div className="flex items-center gap-1.5 ml-7 mt-1">
+                                                <span style={{ fontSize: '15px', lineHeight: 1 }}>⏱</span>
+                                                <span className="text-xs font-semibold text-indigo-600 tabular-nums">
+                                                    {countdownSeconds > 0
+                                                        ? (() => {
+                                                            const m = Math.floor(countdownSeconds / 60);
+                                                            const s = countdownSeconds % 60;
+                                                            return m > 0
+                                                                ? `${m}:${String(s).padStart(2, '0')} remaining`
+                                                                : `${s}s remaining`;
+                                                        })()
+                                                        : 'Almost done...'}
+                                                </span>
+                                            </div>
+                                        )
                                     )}
                                 </div>
                             )}
@@ -1145,7 +1340,8 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                                         <Icon name="download" className="w-5 h-5 mr-2" />
                                         Download CSV
                                     </button>
-                                    {extractionMode !== 'tally' && (
+                                    {extractionMode === 'finpixe' && (
+
                                         <div className="flex items-center">
                                             <button
                                                 onClick={handleUploadToFinpixe}

@@ -28,6 +28,7 @@ interface ItemRow {
     salesLedger: string;
     description: string;
     alternateUnit: string;
+    gstRate: string;
     sourceDoc?: string;
     selected?: boolean;
 }
@@ -170,7 +171,9 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
 
             setDate(prefilledData.invoiceDate || new Date().toISOString().split('T')[0]);
             setSalesInvoiceNo(prefilledData.invoiceNumber || '');
-            setCustomerName(prefilledData.sellerName || ''); // Maps Seller/Party -> Customer Name
+            const sellerName = prefilledData.sellerName || '';
+            setCustomerName(sellerName);
+            if (sellerName) handleCustomerChange(sellerName);
             if (prefilledData.gstin) setGstin(prefilledData.gstin);
             if (prefilledData.placeOfSupply) setPlaceOfSupply(prefilledData.placeOfSupply);
             if (prefilledData.invoiceType) setInvoiceType(prefilledData.invoiceType);
@@ -238,7 +241,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                         sgst: sgst.toFixed(2),
                         cess: cess.toFixed(2),
                         invoiceValue: invVal.toFixed(2),
-                        alternateUnit: ''
+                        alternateUnit: '',
+                        gstRate: (hasExtractedTax && taxable !== 0) ? (item.igst ? ((item.igst / taxable) * 100).toFixed(0) : ((item.cgst * 2 / taxable) * 100).toFixed(0)) : '18'
                     };
                 });
                 setItemRows(newRows);
@@ -419,6 +423,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
     }, [fetchOutwardSlips]);
 
     const [customerName, setCustomerName] = useState('');
+    const [customerId, setCustomerId] = useState<number | string | null>(null);
     const [customerBranch, setCustomerBranch] = useState('');
     const [masterCustomers, setMasterCustomers] = useState<any[]>([]);
     const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
@@ -508,12 +513,19 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
     // Handle Customer Selection
     const handleCustomerChange = (val: string) => {
         setCustomerName(val);
+        setCustomerId(null); // Reset
         setCustomerBranch(''); // reset branch on customer change
         setCustomerBillingCurrency('');
 
         const allCustomers = [...(customers || []), ...(masterCustomers || [])];
-        const customer = allCustomers.find(c => c.customer_name === val);
+        const valTrimmed = val.trim().toLowerCase();
+        const customer = allCustomers.find(c => {
+            const cName = (c.customer_name || '').trim().toLowerCase();
+            const cAlt = (c.name || '').trim().toLowerCase();
+            return cName === valTrimmed || cAlt === valTrimmed;
+        });
         if (customer) {
+            setCustomerId(customer.id);
             const branches: any[] = customer.gst_details?.branches || [];
             const refs = branches.map((b: any) => b.defaultRef || b.referenceName || '').filter(Boolean);
 
@@ -885,7 +897,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                         id: Date.now(),
                         itemCode: '', itemName: '', hsnSac: '', qty: '', uom: '', alternateUnit: '',
                         itemRate: '', taxableValue: '', igst: '', cgst: '', sgst: '', cess: '',
-                        invoiceValue: '', salesLedger: '', description: ''
+                        invoiceValue: '', salesLedger: '', description: '', gstRate: ''
                     }];
                 }
                 return filtered;
@@ -965,6 +977,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                         salesLedger: '',
                         description: item.description || '',
                         alternateUnit: item.alternative_unit || item.alternate_uom || '',
+                        gstRate: (item.gst_rate || item.gstRate || '0').toString(),
                         sourceDoc: val,
                         selected: true
                     };
@@ -993,6 +1006,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                         salesLedger: '',
                         description: item.description || '',
                         alternateUnit: item.alternative_unit || item.alternate_uom || '',
+                        gstRate: (item.gst_rate || item.gstRate || '0').toString(),
                         sourceDoc: val,
                         selected: true
                     };
@@ -1018,6 +1032,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 }
                 if (!customerName && customerToSet) {
                     handleCustomerChange(customerToSet);
+                    if (fullDoc.customer_id) setCustomerId(fullDoc.customer_id);
                 }
             }
         } catch (error) {
@@ -1099,6 +1114,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
             invoiceValue: '',
             salesLedger: '',
             description: '',
+            gstRate: '0',
             selected: true
         }
     ]);
@@ -1121,6 +1137,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
             salesLedger: '',
             description: '',
             alternateUnit: '',
+            gstRate: '0',
             selected: true
         }
     ]);
@@ -1623,6 +1640,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 voucher_name: voucherName,
                 outward_slip_no: outwardSlipNo,
                 customer_name: customerName,
+                customer_id: customerId,
                 bill_to: JSON.stringify(billTo),
                 ship_to: JSON.stringify(shipTo),
                 gstin,
@@ -1805,7 +1823,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
 
             const payload = {
                 date: formatDate(date), sales_invoice_no: salesInvoiceNo, voucher_name: voucherName, outward_slip_no: outwardSlipNo,
-                customer_name: customerName, bill_to: JSON.stringify(billTo), ship_to: JSON.stringify(shipTo), gstin, contact, tax_type: taxType,
+                customer_name: customerName, customer_id: customerId, bill_to: JSON.stringify(billTo), ship_to: JSON.stringify(shipTo), gstin, contact, tax_type: taxType,
                 state_type: stateType, export_type: exportType, exchange_rate: exchangeRate, supporting_document: supportingDocument,
                 sales_order_no: salesOrderNos.join(', '), place_of_supply: placeOfSupply || null, reverse_charge: reverseCharge, invoice_type: invoiceType,
                 gst_export_type: stateType === 'export' ? gstExportType : null, port_code: stateType === 'export' ? portCode : null,
@@ -1906,6 +1924,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                             inrRate = parseFloat(matchedItem.rate || matchedItem.standard_rate || '0');
                             updatedRow.itemRate = inrRate.toString();
                         }
+                        updatedRow.gstRate = (matchedItem.gst_rate || matchedItem.gstRate || '0').toString();
 
                         // Recalculate values
                         const qty = parseFloat(updatedRow.qty) || 0;
@@ -1964,6 +1983,28 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                     updatedRow.invoiceValue = (taxableVal + igst + cgst + sgst + cess).toFixed(2);
                 }
 
+                // Automatic Tax Calculation based on GST Rate
+                if (field === 'itemCode' || field === 'itemName' || field === 'qty' || field === 'itemRate' || field === 'taxableValue') {
+                    const taxableVal = parseFloat(updatedRow.taxableValue) || 0;
+                    const gstRate = parseFloat(updatedRow.gstRate) || 0;
+                    const cess = parseFloat(updatedRow.cess) || 0;
+
+                    if (isInterState) {
+                        updatedRow.igst = (taxableVal * gstRate / 100).toFixed(2);
+                        updatedRow.cgst = '0.00';
+                        updatedRow.sgst = '0.00';
+                    } else {
+                        updatedRow.igst = '0.00';
+                        updatedRow.cgst = (taxableVal * gstRate / 100 * 0.5).toFixed(2);
+                        updatedRow.sgst = (taxableVal * gstRate / 100 * 0.5).toFixed(2);
+                    }
+
+                    const igst = parseFloat(updatedRow.igst) || 0;
+                    const cgst = parseFloat(updatedRow.cgst) || 0;
+                    const sgst = parseFloat(updatedRow.sgst) || 0;
+                    updatedRow.invoiceValue = (taxableVal + igst + cgst + sgst + cess).toFixed(2);
+                }
+
                 return updatedRow;
             }
             return row;
@@ -2016,6 +2057,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
             salesLedger: '',
             description: '',
             alternateUnit: '',
+            gstRate: '0',
             selected: true
         };
         setItemRows(prev => [...prev, newRow]);
@@ -2039,7 +2081,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 id: newId,
                 itemCode: '', itemName: '', hsnSac: '', qty: '0', uom: '', alternateUnit: '',
                 itemRate: '0', taxableValue: '0', igst: '0', cgst: '0', sgst: '0', cess: '0',
-                invoiceValue: '0', salesLedger: '', description: '', selected: true
+                invoiceValue: '0', salesLedger: '', description: '', gstRate: '0', selected: true
             };
             setItemRows([blankRow]);
             setForeignItemRows([blankRow]);
@@ -2241,6 +2283,32 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         };
     };
 
+    // Recalculate all row taxes when Inter-State status changes
+    React.useEffect(() => {
+        setItemRows(prev => prev.map(row => {
+            const taxableVal = parseFloat(row.taxableValue) || 0;
+            const gstRate = parseFloat(row.gstRate) || 0;
+            const cess = parseFloat(row.cess) || 0;
+            let updatedRow = { ...row };
+
+            if (isInterState) {
+                updatedRow.igst = (taxableVal * gstRate / 100).toFixed(2);
+                updatedRow.cgst = '0.00';
+                updatedRow.sgst = '0.00';
+            } else {
+                updatedRow.igst = '0.00';
+                updatedRow.cgst = (taxableVal * gstRate / 100 * 0.5).toFixed(2);
+                updatedRow.sgst = (taxableVal * gstRate / 100 * 0.5).toFixed(2);
+            }
+
+            const igstNum = parseFloat(updatedRow.igst) || 0;
+            const cgstNum = parseFloat(updatedRow.cgst) || 0;
+            const sgstNum = parseFloat(updatedRow.sgst) || 0;
+            updatedRow.invoiceValue = (taxableVal + igstNum + cgstNum + sgstNum + cess).toFixed(2);
+            return updatedRow;
+        }));
+    }, [isInterState]);
+
     React.useEffect(() => {
         const totals = calculateTotals();
         const invVal = totals.invoiceValue;
@@ -2272,18 +2340,23 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
     }, [itemRows, customerTcsRate, customerTdsRate]);
 
     // Auto-calculate TDS/TCS under GST
-    // Rule 1 (2% TDS): "TDS Applicable" is "Yes" in Master AND Taxable Value > 2,50,000
-    // Rule 2 (1% TCS): "Sales through E-Commerce Operator" is "Yes" in the voucher
+    // Condition 1: Check Customer Master - customerGstTdsApplicable
+    // Condition 2: Total Taxable Value > Rs. 2,50,000.
+    // Calculation: Total Taxable Value * 2%
     React.useEffect(() => {
         const taxableVal = calculateTotals().taxableValue;
-        
+
+        // Use >= for threshold if exactly 2,50,000 should trigger it, 
+        // but strictly following the written rule of "> 2,50,000"
         const isTdsApplicable = customerGstTdsApplicable && taxableVal > 250000;
+
+        // Keep Ecommerce Tcs logic as fallback if existing
         const isEcommerceTcs = isEcommerceSales === 'Yes';
 
-        if (isTdsApplicable) {
-            setPaymentTdsGst((taxableVal * 0.02).toFixed(2));
-        } else if (isEcommerceTcs) {
+        if (isEcommerceTcs) {
             setPaymentTdsGst((taxableVal * 0.01).toFixed(2));
+        } else if (isTdsApplicable) {
+            setPaymentTdsGst((taxableVal * 0.02).toFixed(2));
         } else {
             setPaymentTdsGst('0.00');
         }
@@ -3190,8 +3263,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                         }}
                                         disabled={!!outwardSlipError}
                                         className={`px-6 py-2 rounded-[4px] transition-colors flex items-center gap-2 font-medium shadow-none border border-slate-200-none border border-slate-200 ${outwardSlipError
-                                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                                : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                            : 'bg-indigo-600 hover:bg-indigo-700 text-white'
                                             }`}
                                     >
                                         NEXT
@@ -3457,9 +3530,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                                     <input
                                                                         type="number"
                                                                         value={row.igst}
-                                                                        min="0"
-                                                                        onChange={(e) => handleItemRowChange(row.id, 'igst', e.target.value)}
-                                                                        className="w-20 px-2 py-1 border-0 focus:ring-1 focus:ring-indigo-500 rounded text-sm bg-transparent"
+                                                                        readOnly
+                                                                        className="w-20 px-2 py-1 border-0 rounded text-sm bg-gray-50 bg-opacity-50 text-gray-700 cursor-not-allowed"
                                                                         placeholder="IGST"
                                                                     />
                                                                 </td>
@@ -3640,8 +3712,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                         }}
                                         disabled={!!outwardSlipError}
                                         className={`px-6 py-2 rounded-[4px] transition-colors flex items-center gap-2 font-medium ${outwardSlipError
-                                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                                : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                            : 'bg-indigo-600 hover:bg-indigo-700 text-white'
                                             }`}
                                     >
                                         NEXT

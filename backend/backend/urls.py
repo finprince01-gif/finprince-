@@ -1,5 +1,4 @@
 
-
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
@@ -17,6 +16,7 @@ from accounting.sales_excel_api import (
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 from vendors.vendorpo_api import get_pending_pos
 from vendors.vendor_api import PurchaseVendorValidateView, PurchaseVendorCreateView, PurchaseVendorResolveConflictView
+from inventory.views import HsnDetailsAPIView
 import threading
 import sys
 
@@ -80,7 +80,7 @@ urlpatterns = [
     path('api/services/', include('services.urls')),
     
     # Vouchers - NEW refactored module
-    # path('api/', include('vouchers.urls')),  # Commented out - vouchers module being rebuilt
+    path('api/', include('vouchers.urls')),
     
     # Settings - NEW refactored module
     path('api/', include('settings.urls')),
@@ -108,4 +108,7 @@ urlpatterns = [
     path('api/sales-excel/workflow/upload/', SalesExcelWorkflowUploadView.as_view(), name='sales-excel-workflow-upload'),
     path('api/sales-excel/workflow/update/', SalesExcelWorkflowUpdateView.as_view(), name='sales-excel-workflow-update'),
     path('api/sales-excel/workflow/finalize/', SalesExcelWorkflowFinalizeView.as_view(), name='sales-excel-workflow-finalize'),
+
+    # Hsn Details API
+    path('api/hsn-details/', HsnDetailsAPIView.as_view(), name='hsn-details'),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
