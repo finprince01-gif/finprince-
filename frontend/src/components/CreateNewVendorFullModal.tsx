@@ -8,6 +8,7 @@ import React, { useState, useEffect } from 'react';
 import { httpClient } from '../services/httpClient';
 import { showError, showSuccess, showInfo } from '../utils/toast';
 import { BILLING_CURRENCIES } from '../constants/customerPortalConstants';
+import { ChevronDown } from 'lucide-react';
 
 /* ─── Types ──────────────────────────────────────────────── */
 interface PlaceOfBusiness {
@@ -45,6 +46,7 @@ interface BankAccount {
     bankName: string;
     branchName: string;
     swiftCode: string;
+    vendorBranch: string[];
     accountType: 'Savings' | 'Current';
 }
 
@@ -101,6 +103,13 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
     const [isAlsoCustomer, setIsAlsoCustomer] = useState(false);
     const [tcsApplicable, setTcsApplicable] = useState(false);
 
+    // Customer search states
+    const [matchingCustomer, setMatchingCustomer] = useState<any | null>(null);
+    const [isLoadingCustomer, setIsLoadingCustomer] = useState(false);
+    const [linkVendorToCustomer, setLinkVendorToCustomer] = useState<boolean | null>(null);
+    const [createCustomerOption, setCreateCustomerOption] = useState<boolean | null>(null);
+    const [customerSearchAttempted, setCustomerSearchAttempted] = useState(false);
+
     /* ── GST Details State ──────────────────── */
     const [gstRecords, setGstRecords] = useState<GSTRecord[]>([{
         id: genId(), gstin: '', registrationType: 'Regular',
@@ -123,7 +132,7 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
     /* ── Banking State ──────────────────────── */
     const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([{
         id: 1, accountNumber: '', bankName: '', ifscCode: '',
-        branchName: '', swiftCode: '', accountType: 'Savings',
+        branchName: '', swiftCode: '', vendorBranch: [], accountType: 'Savings',
     }]);
 
     /* ── Terms State ────────────────────────── */
@@ -131,7 +140,72 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
     const [creditPeriod, setCreditPeriod] = useState('');
     const [creditTerms, setCreditTerms] = useState('');
     const [penaltyTerms, setPenaltyTerms] = useState('');
+    const [ifscCache, setIfscCache] = useState<Record<string, { bank: string, branch: string }>>({});
     const [deliveryTerms, setDeliveryTerms] = useState('');
+
+    const [uploadedFiles, setUploadedFiles] = useState<{
+        msmeFile: File | null;
+        fssaiFile: File | null;
+        iecFile: File | null;
+    }>({
+        msmeFile: null,
+        fssaiFile: null,
+        iecFile: null,
+    });
+
+    const handleFileUpload = (type: keyof typeof uploadedFiles, file: File | null) => {
+        if (file) {
+            setUploadedFiles(prev => ({ ...prev, [type]: file }));
+            showSuccess(`${file.name} uploaded successfully!`);
+        }
+    };
+
+    // Customer search function
+    const searchCustomer = async (name: string, pan: string) => {
+        if (!name || !pan) return;
+
+        setIsLoadingCustomer(true);
+        setCustomerSearchAttempted(true);
+        try {
+            // Using search or filter query params
+            const res: any = await httpClient.get(`/api/customerportal/customer-master/?pan_number=${pan}&customer_name=${name}`);
+            const data = Array.isArray(res) ? res : (res.results || []);
+
+            // Filter manually for exact match to be safe
+            const match = data.find((c: any) =>
+                (c.pan_number === pan || c.pan === pan) &&
+                c.customer_name.toLowerCase() === name.toLowerCase()
+            );
+
+            if (match) {
+                setMatchingCustomer(match);
+                setLinkVendorToCustomer(null);
+            } else {
+                setMatchingCustomer(null);
+                setCreateCustomerOption(null);
+            }
+        } catch (error) {
+            console.error('Error searching customer:', error);
+            setMatchingCustomer(null);
+        } finally {
+            setIsLoadingCustomer(false);
+        }
+    };
+
+    // Trigger search when relevant fields change
+    useEffect(() => {
+        if (isAlsoCustomer && vendorName && panNo) {
+            const delayDebounceFn = setTimeout(() => {
+                searchCustomer(vendorName, panNo);
+            }, 500); // Small debounce
+            return () => clearTimeout(delayDebounceFn);
+        } else if (!isAlsoCustomer) {
+            setMatchingCustomer(null);
+            setCustomerSearchAttempted(false);
+            setLinkVendorToCustomer(null);
+            setCreateCustomerOption(null);
+        }
+    }, [isAlsoCustomer, vendorName, panNo]);
 
     /* ─── GST helpers ──────────────────────── */
     const addGstRecord = () => setGstRecords(prev => [...prev, {
@@ -182,14 +256,65 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
     /* ─── Bank helpers ─────────────────────── */
     const addBank = () => setBankAccounts(prev => [...prev, {
         id: prev.length + 1, accountNumber: '', bankName: '', ifscCode: '',
-        branchName: '', swiftCode: '', accountType: 'Savings',
+        branchName: '', swiftCode: '', vendorBranch: [], accountType: 'Savings'
     }]);
 
     const removeBank = (id: number) =>
         setBankAccounts(prev => prev.length > 1 ? prev.filter(b => b.id !== id) : prev);
 
-    const updateBank = (id: number, field: keyof BankAccount, value: string) =>
-        setBankAccounts(prev => prev.map(b => b.id === id ? { ...b, [field]: value } : b));
+    const updateBank = async (id: number, field: keyof BankAccount, value: any) => {
+        // Update the field first in local state
+        const updatedAccounts = bankAccounts.map(b => b.id === id ? { ...b, [field]: value } : b);
+        setBankAccounts(updatedAccounts);
+
+        const currentBank = updatedAccounts.find(b => b.id === id);
+        if (!currentBank) return;
+
+        const checkMismatch = (ifsc: string, bName: string, brName: string, cachedData: { bank: string, branch: string }) => {
+            if (ifsc.length !== 11) return;
+            const bMismatch = bName && cachedData.bank.toLowerCase() !== bName.toLowerCase();
+            const brMismatch = brName && cachedData.branch.toLowerCase() !== brName.toLowerCase();
+            if (bMismatch || brMismatch) {
+                showError('Bank Name, Branch Name, & IFSC Code mismatch');
+            }
+        };
+
+        // If field being updated is bankName, branchName or ifscCode, check against cache
+        if (field === 'bankName' || field === 'branchName' || field === 'ifscCode') {
+            const ifsc = currentBank.ifscCode;
+            if (ifsc.length === 11) {
+                if (ifscCache[ifsc]) {
+                    checkMismatch(ifsc, currentBank.bankName, currentBank.branchName, ifscCache[ifsc]);
+                    if (field === 'ifscCode') {
+                        updateBank(id, 'bankName', ifscCache[ifsc].bank);
+                        updateBank(id, 'branchName', ifscCache[ifsc].branch);
+                    }
+                } else if (field === 'ifscCode') {
+                    // Fetch for first time
+                    try {
+                        const res = await fetch(`https://ifsc.razorpay.com/${ifsc}`);
+                        if (res.ok) {
+                            const data = await res.json();
+                            const fetched = { bank: data.BANK, branch: data.BRANCH };
+                            setIfscCache(prev => ({ ...prev, [ifsc]: fetched }));
+
+                            checkMismatch(ifsc, currentBank.bankName, currentBank.branchName, fetched);
+
+                            setBankAccounts(prev => prev.map(b => b.id === id ? {
+                                ...b,
+                                bankName: fetched.bank,
+                                branchName: fetched.branch
+                            } : b));
+                        } else {
+                            showError('Invalid IFSC Code or lookup failed');
+                        }
+                    } catch (error) {
+                        console.error('IFSC Lookup Error:', error);
+                    }
+                }
+            }
+        }
+    };
 
     /* ─── Registration type map ────────────── */
     const mapRegType = (type: string): string => ({
@@ -203,6 +328,50 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
             showError('Vendor Name is required.');
             setActiveTab('basic');
             return;
+        }
+
+        // Validation for Also Customer logic
+        if (isAlsoCustomer) {
+            if (matchingCustomer && linkVendorToCustomer === null) {
+                showError('Please decide whether to link the vendor to the existing customer.');
+                setActiveTab('basic');
+                return;
+            }
+            if (!matchingCustomer && createCustomerOption === null) {
+                showError('Please decide whether to create a new customer.');
+                setActiveTab('basic');
+                return;
+            }
+            if (matchingCustomer && linkVendorToCustomer === false && createCustomerOption === null) {
+                showError('Please decide whether to create a new customer.');
+                setActiveTab('basic');
+                return;
+            }
+        }
+
+        // Statutory Validations
+        if (msmeUdyamNo) {
+            const msmeRegex = /^(UDYAM|UDHYAM)-[A-Z]{2}-\d{2}-\d{7}$/;
+            if (!msmeRegex.test(msmeUdyamNo)) {
+                showError('Invalid MSME Udyam No format. Expected: UDYAM-TN-01-2345678 (or UDHYAM)');
+                setActiveTab('tds');
+                return;
+            }
+        }
+        if (fssaiLicenseNo) {
+            if (fssaiLicenseNo.length !== 14 || !/^\d+$/.test(fssaiLicenseNo)) {
+                showError('Invalid FSSAI License No. Must be exactly 14 digits.');
+                setActiveTab('tds');
+                return;
+            }
+        }
+        if (importExportCode) {
+            const iecRegex = /^[A-Z]{5}\d{4}[A-Z]{1}$/;
+            if (!iecRegex.test(importExportCode)) {
+                showError('Invalid IEC format. Expected: ABCDE1234F');
+                setActiveTab('tds');
+                return;
+            }
         }
 
         setIsSaving(true);
@@ -322,6 +491,7 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
                         ifsc_code: bank.ifscCode || '',
                         branch_name: bank.branchName || '',
                         swift_code: bank.swiftCode || '',
+                        vendor_branch: (bank.vendorBranch || []).join(','),
                         account_type: bank.accountType ? bank.accountType.toLowerCase().replace(' ', '_') : 'savings',
                         is_active: true,
                     };
@@ -446,18 +616,81 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
                         </button>
                     ))}
                 </div>
-                <div className="flex items-center gap-3">
-                    <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">tcs applicable under gst</span>
-                    {[true, false].map(v => (
-                        <button key={String(v)} type="button" onClick={() => setTcsApplicable(v)}
-                            className={`px-5 py-1.5 text-sm border-2 rounded transition-colors ${tcsApplicable === v
-                                ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-semibold'
-                                : 'border-gray-300 text-gray-600 hover:border-gray-400'}`}>
-                            {v ? 'Yes' : 'No'}
-                        </button>
-                    ))}
-                </div>
             </div>
+
+            {isAlsoCustomer && (
+                <div className="mt-4 space-y-4">
+                    {isLoadingCustomer ? (
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                            <div className="w-3 h-3 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                            Searching for matching customer...
+                        </div>
+                    ) : matchingCustomer ? (
+                        <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-[4px]">
+                            <label className="block text-sm font-medium text-indigo-700">
+                                Link the Vendor to this Customer &lt;{matchingCustomer.customer_code}- {matchingCustomer.customer_name}&gt;?
+                            </label>
+                            <div className="flex gap-2 mt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setLinkVendorToCustomer(true)}
+                                    className={`px-4 py-1.5 text-xs border rounded transition-colors ${linkVendorToCustomer === true
+                                        ? 'border-indigo-600 bg-indigo-600 text-white font-semibold'
+                                        : 'border-indigo-300 text-indigo-600 bg-white hover:bg-indigo-50'
+                                        }`}
+                                >
+                                    Yes
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setLinkVendorToCustomer(false)}
+                                    className={`px-4 py-1.5 text-xs border rounded transition-colors ${linkVendorToCustomer === false
+                                        ? 'border-indigo-600 bg-indigo-600 text-white font-semibold'
+                                        : 'border-indigo-300 text-indigo-600 bg-white hover:bg-indigo-50'
+                                        }`}
+                                >
+                                    No
+                                </button>
+                            </div>
+                        </div>
+                    ) : customerSearchAttempted && vendorName && panNo ? (
+                        <div className="p-4 bg-orange-50 border border-orange-100 rounded-[4px]">
+                            <p className="text-xs text-orange-700 mb-1 font-medium italic">No matching customer found in Masters.</p>
+                        </div>
+                    ) : null}
+
+                    {/* Create Customer Prompt: shown if mismatch or linking declined */}
+                    {((matchingCustomer && linkVendorToCustomer === false) || (!matchingCustomer && customerSearchAttempted && vendorName && panNo)) && (
+                        <div className="p-4 bg-teal-50 border border-teal-100 rounded-[4px]">
+                            <label className="block text-sm font-medium text-teal-700">
+                                Create a Customer?
+                            </label>
+                            <div className="flex gap-2 mt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setCreateCustomerOption(true)}
+                                    className={`px-4 py-1.5 text-xs border rounded transition-colors ${createCustomerOption === true
+                                        ? 'border-teal-600 bg-teal-600 text-white font-semibold'
+                                        : 'border-teal-300 text-teal-600 bg-white hover:bg-teal-50'
+                                        }`}
+                                >
+                                    Yes
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setCreateCustomerOption(false)}
+                                    className={`px-4 py-1.5 text-xs border rounded transition-colors ${createCustomerOption === false
+                                        ? 'border-teal-600 bg-teal-600 text-white font-semibold'
+                                        : 'border-teal-300 text-teal-600 bg-white hover:bg-teal-50'
+                                        }`}
+                                >
+                                    No
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 
@@ -623,16 +856,60 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
             <p className={sectionTitle}>TDS & Other Statutory Details</p>
             <div className="grid grid-cols-2 gap-4">
                 <div>
-                    <label className={labelCls}>MSME / UDYAM No.</label>
-                    <input className={inputCls} value={msmeUdyamNo} onChange={e => setMsmeUdyamNo(e.target.value)} placeholder="UDYAM-XX-00-0000000" />
+                    <label className={labelCls}>MSME / UDYAM No. (UDHYAM-TN-0123456)</label>
+                    <div className="flex gap-2">
+                        <input className={`${inputCls} flex-1`}
+                            value={msmeUdyamNo}
+                            onChange={e => setMsmeUdyamNo(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
+                            placeholder="UDHYAM-TN-0123456" />
+                        <input type="file" id="modal-msme-upload" className="hidden" accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={e => handleFileUpload('msmeFile', e.target.files?.[0] || null)} />
+                        <button type="button" onClick={() => document.getElementById('modal-msme-upload')?.click()}
+                            className="px-2 py-1 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                        </button>
+                    </div>
+                    {uploadedFiles.msmeFile && <p className="text-[10px] text-indigo-600 truncate mt-0.5">{uploadedFiles.msmeFile.name}</p>}
                 </div>
                 <div>
-                    <label className={labelCls}>FSSAI License No.</label>
-                    <input className={inputCls} value={fssaiLicenseNo} onChange={e => setFssaiLicenseNo(e.target.value)} placeholder="14-digit license number" />
+                    <label className={labelCls}>FSSAI License No. (14 digits)</label>
+                    <div className="flex gap-2">
+                        <input className={`${inputCls} flex-1`}
+                            value={fssaiLicenseNo}
+                            onChange={e => {
+                                const val = e.target.value.replace(/[^0-9]/g, '');
+                                if (val.length <= 14) setFssaiLicenseNo(val);
+                            }}
+                            maxLength={14}
+                            placeholder="14-digit numeric code" />
+                        <input type="file" id="modal-fssai-upload" className="hidden" accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={e => handleFileUpload('fssaiFile', e.target.files?.[0] || null)} />
+                        <button type="button" onClick={() => document.getElementById('modal-fssai-upload')?.click()}
+                            className="px-2 py-1 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                        </button>
+                    </div>
+                    {uploadedFiles.fssaiFile && <p className="text-[10px] text-indigo-600 truncate mt-0.5">{uploadedFiles.fssaiFile.name}</p>}
                 </div>
                 <div>
                     <label className={labelCls}>Import / Export Code (IEC)</label>
-                    <input className={inputCls} value={importExportCode} onChange={e => setImportExportCode(e.target.value)} placeholder="10-digit IEC code" />
+                    <div className="flex gap-2">
+                        <input className={`${inputCls} flex-1`}
+                            value={importExportCode}
+                            onChange={e => {
+                                const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                                if (val.length <= 10) setImportExportCode(val);
+                            }}
+                            maxLength={10}
+                            placeholder="ABCDE1234F" />
+                        <input type="file" id="modal-iec-upload" className="hidden" accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={e => handleFileUpload('iecFile', e.target.files?.[0] || null)} />
+                        <button type="button" onClick={() => document.getElementById('modal-iec-upload')?.click()}
+                            className="px-2 py-1 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                        </button>
+                    </div>
+                    {uploadedFiles.iecFile && <p className="text-[10px] text-indigo-600 truncate mt-0.5">{uploadedFiles.iecFile.name}</p>}
                 </div>
                 <div>
                     <label className={labelCls}>EOU Status</label>
@@ -711,6 +988,77 @@ const CreateNewVendorFullModal: React.FC<CreateNewVendorFullModalProps> = ({
                             <label className={labelCls}>SWIFT Code</label>
                             <input className={inputCls} value={bank.swiftCode}
                                 onChange={e => updateBank(bank.id, 'swiftCode', e.target.value.toUpperCase())} placeholder="HDFCINBB" maxLength={11} />
+                        </div>
+                        <div className="col-span-2">
+                            <label className={labelCls}>Associate to a vendor branch</label>
+                            <div className="relative">
+                                <button
+                                    type="button"
+                                    className={inputCls + " w-full text-left flex justify-between items-center"}
+                                    onClick={() => {
+                                        const dropdown = document.getElementById(`vendor-branch-dropdown-${bank.id}`);
+                                        if (dropdown) dropdown.classList.toggle('hidden');
+                                    }}
+                                >
+                                    <span className="truncate">
+                                        {bank.vendorBranch && bank.vendorBranch.length > 0
+                                            ? `${bank.vendorBranch.length} Selected`
+                                            : "Select vendor branch"}
+                                    </span>
+                                    <ChevronDown className="w-4 h-4 text-gray-500" />
+                                </button>
+
+                                <div
+                                    id={`vendor-branch-dropdown-${bank.id}`}
+                                    className="hidden absolute z-[100] mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm"
+                                >
+                                    {(() => {
+                                        const allBranches = [...new Set(
+                                            (gstRecords || []).flatMap((record, rIdx) => {
+                                                const branches = (record?.placesOfBusiness || [])
+                                                    .map((pob, pIdx) => {
+                                                        const name = (pob.referenceName || '').trim();
+                                                        return name || `Branch ${pIdx + 1} (${record.gstin || 'New GST'})`;
+                                                    })
+                                                    .filter(name => name !== '');
+
+                                                if (branches.length === 0) {
+                                                    return [record.gstin || record.tradeName || `GST Detail #${rIdx + 1}`];
+                                                }
+                                                return branches;
+                                            })
+                                        )];
+
+                                        if (allBranches.length === 0) {
+                                            return <div className="px-4 py-2 text-gray-500 text-xs italic">No branch reference names found.</div>;
+                                        }
+
+                                        return allBranches.map((branchName, bIdx) => {
+                                            const isSelected = (bank.vendorBranch || []).includes(branchName);
+                                            return (
+                                                <div key={bIdx} className="flex items-center px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const current = bank.vendorBranch || [];
+                                                        const next = isSelected
+                                                            ? current.filter(b => b !== branchName)
+                                                            : [...current, branchName];
+                                                        updateBank(bank.id, 'vendorBranch', next);
+                                                    }}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isSelected}
+                                                        readOnly
+                                                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded mr-3"
+                                                    />
+                                                    <span className="text-gray-900">{branchName}</span>
+                                                </div>
+                                            );
+                                        });
+                                    })()}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
