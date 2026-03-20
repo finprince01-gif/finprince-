@@ -3016,3 +3016,30 @@ CREATE TABLE hsn_gst_master (
     CONSTRAINT `invoice_processing_items_job_fk` FOREIGN KEY (`job_id`) REFERENCES `bulk_invoice_jobs` (`id`) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Individual invoices within a bulk processing job';
+
+
+
+-- ADDED A NEW TABLE customer_masters_salesorder
+
+CREATE TABLE `customer_masters_salesorder` (
+              `id` int(11) NOT NULL AUTO_INCREMENT,
+              `tenant_id` varchar(36) NOT NULL,
+              `series_name` varchar(100) NOT NULL,
+              `customer_category` varchar(100) DEFAULT NULL,
+              `prefix` varchar(20) DEFAULT 'SO/',
+              `suffix` varchar(20) DEFAULT '/24-25',
+              `required_digits` int(11) DEFAULT '4',
+              `current_number` int(11) DEFAULT '0',
+              `auto_year` tinyint(1) DEFAULT '0',
+              `is_active` tinyint(1) NOT NULL DEFAULT '1',
+              `is_deleted` tinyint(1) NOT NULL DEFAULT '0',
+              `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+              `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+              `created_by` varchar(100) DEFAULT NULL,
+              PRIMARY KEY (`id`),
+              UNIQUE KEY `customer_so_tenant_series_unique` (`tenant_id`,`series_name`),
+              KEY `customer_so_tenant_id_idx` (`tenant_id`),
+              KEY `customer_so_category_idx` (`customer_category`),
+              KEY `customer_so_is_active_idx` (`is_active`),
+              KEY `customer_so_is_deleted_idx` (`is_deleted`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -31,9 +31,12 @@ interface CreateGRNModalProps {
     onSave: (data: any) => void;
     initialSupplierInvoiceNo?: string;
     initialExtractedData?: any;
+    mainVendorName?: string;
+    mainBranch?: string;
+    mainGstin?: string;
 }
 
-const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initialSupplierInvoiceNo = '', initialExtractedData }) => {
+const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initialSupplierInvoiceNo = '', initialExtractedData, mainVendorName, mainBranch, mainGstin }) => {
     // Form State
     const [grnType, setGrnType] = useState<'purchases' | 'sales_return'>('purchases');
     const [grnNo, setGrnNo] = useState('');
@@ -207,8 +210,13 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
                 }));
                 setItems(prefilledItems);
             }
+        } else if (grnType === 'purchases') {
+            // Priority 2: Use values from main Voucher form
+            if (mainVendorName) setVendorName(mainVendorName);
+            if (mainBranch) setBranch(mainBranch);
+            if (mainGstin) setGstin(mainGstin);
         }
-    }, [initialExtractedData]);
+    }, [initialExtractedData, mainVendorName, mainBranch, mainGstin, grnType]);
 
     // Handle Vendor Change (Manual)
     const handleVendorChange = (selectedVendorName: string) => {
@@ -267,7 +275,7 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
 
                     // Fetch Pending Purchase Orders specifically for this vendor
                     console.log('[CreateGRNModal] Fetching pending POs for vendor:', vendorName, 'ID:', vendor.id);
-                    const poResponse = await apiService.getPendingPOs(vendor.id);
+                    const poResponse = await apiService.getPendingPOs(vendor.id, vendor.vendor_name);
                     console.log('[CreateGRNModal] Pending PO Fetch Response:', poResponse);
                     
                     if (Array.isArray(poResponse)) {
@@ -455,9 +463,13 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
                 const received = parseFloat(updatedItem.receivedQty) || 0;
                 const accepted = parseFloat(updatedItem.acceptedQty) || 0;
                 updatedItem.rejectedQty = (received - accepted).toString();
+            }
 
-                // Short/Excess logic could be added here if needed, comparing with Ref/Sec Qty
-                // But for now keeping it manual or based on inventory logic
+            // Calculation Logic: Short/Excess = Inv Qty - Received
+            if (field === 'secondaryQty' || field === 'receivedQty') {
+                const invQty = parseFloat(updatedItem.secondaryQty) || 0;
+                const received = parseFloat(updatedItem.receivedQty) || 0;
+                updatedItem.shortExcessQty = (invQty - received).toString();
             }
 
             return updatedItem;
@@ -470,6 +482,19 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
         if (grnType === 'purchases' && !vendorName) { alert('Please select a Vendor'); return; }
         if (grnType === 'sales_return' && !customerName) { alert('Please select a Customer'); return; }
         if (!location) { alert('Please select a Location'); return; }
+
+        // Comparison Warning logic
+        if (grnType === 'purchases') {
+            if (mainVendorName && vendorName !== mainVendorName) {
+                showWarning(`Vendor mismatch: GRN is for "${vendorName}" but Voucher is for "${mainVendorName}"`);
+            }
+            if (mainBranch && branch !== mainBranch) {
+                showWarning(`Branch mismatch: GRN is for "${branch}" but Voucher is for "${mainBranch}"`);
+            }
+            if (mainGstin && gstin !== mainGstin) {
+                showWarning(`GSTIN mismatch: GRN is for "${gstin}" but Voucher is for "${mainGstin}"`);
+            }
+        }
 
         // Construct payload
         const payload = {
@@ -836,7 +861,7 @@ const CreateGRNModal: React.FC<CreateGRNModalProps> = ({ onClose, onSave, initia
                                             <td className="p-2"><input type="number" value={item.receivedQty} onChange={(e) => handleItemChange(item.id, 'receivedQty', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-xs" /></td>
                                             <td className="p-2"><input type="number" value={item.acceptedQty} onChange={(e) => handleItemChange(item.id, 'acceptedQty', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-xs" /></td>
                                             <td className="p-2"><input type="number" value={item.rejectedQty} readOnly className="w-full px-2 py-1 border border-gray-300 rounded text-xs bg-red-50" /></td>
-                                            <td className="p-2"><input type="number" value={item.shortExcessQty} onChange={(e) => handleItemChange(item.id, 'shortExcessQty', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-xs" /></td>
+                                            <td className="p-2"><input type="number" value={item.shortExcessQty} readOnly className="w-full px-2 py-1 border border-gray-300 rounded text-xs bg-gray-50" /></td>
                                             <td className="p-2"><input type="text" value={item.remarks} onChange={(e) => handleItemChange(item.id, 'remarks', e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-xs" /></td>
                                             <td className="p-2 text-center">
                                                 <button onClick={() => handleRemoveItem(item.id)} className="text-red-500 hover:text-red-700">
