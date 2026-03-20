@@ -486,7 +486,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             const response: any = await httpClient.get('/api/vendors/purchase-orders/');
             const payload = response?.data?.data || response?.data || response || [];
             if (Array.isArray(payload)) {
-                 const mapped = payload.map((po: any) => ({
+                const mapped = payload.map((po: any) => ({
                     id: po.id,
                     poNumber: po.po_number,
                     poDate: po.created_at ? po.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
@@ -1361,6 +1361,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const [showPostPaymentModal, setShowPostPaymentModal] = useState(false);
     const [selectedBillForPayment, setSelectedBillForPayment] = useState<PaymentBill | null>(null);
     const [selectedVoucherForView, setSelectedVoucherForView] = useState<PaymentBill | null>(null);
+    const [ifscCache, setIfscCache] = useState<Record<string, { bank: string, branch: string }>>({});
 
     // Payment Bills Filters State
     const [paymentBillFilters, setPaymentBillFilters] = useState({
@@ -1403,11 +1404,64 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         }
     };
 
-    // Update bank field
-    const handleBankChange = (id: number, field: keyof BankAccount, value: string | string[]) => {
-        setBankAccounts(bankAccounts.map(bank =>
+    const handleBankChange = async (id: number, field: keyof BankAccount, value: string | string[]) => {
+        // Update the field first in local state
+        const updatedAccounts = bankAccounts.map(bank =>
             bank.id === id ? { ...bank, [field]: value } : bank
-        ));
+        );
+        setBankAccounts(updatedAccounts);
+
+        const currentBank = updatedAccounts.find(b => b.id === id);
+        if (!currentBank) return;
+
+        const checkMismatch = (ifsc: string, bName: string, brName: string, cachedData: { bank: string, branch: string }) => {
+            if (ifsc.length !== 11) return;
+            const bMismatch = bName && cachedData.bank.toLowerCase() !== bName.toLowerCase();
+            const brMismatch = brName && cachedData.branch.toLowerCase() !== brName.toLowerCase();
+            if (bMismatch || brMismatch) {
+                showError('Bank Name, Branch Name, & IFSC Code mismatch');
+            }
+        };
+
+        // If field being updated is bankName or branchName, check against existing cache if any
+        if (field === 'bankName' || field === 'branchName' || field === 'ifscCode') {
+            const ifsc = currentBank.ifscCode;
+            if (ifsc.length === 11) {
+                if (ifscCache[ifsc]) {
+                    // Check against cache
+                    checkMismatch(ifsc, currentBank.bankName, currentBank.branchName, ifscCache[ifsc]);
+
+                    // If it was the IFSC that was just filled, we also update the names
+                    if (field === 'ifscCode') {
+                        handleBankChange(id, 'bankName', ifscCache[ifsc].bank);
+                        handleBankChange(id, 'branchName', ifscCache[ifsc].branch);
+                    }
+                } else if (field === 'ifscCode') {
+                    // Fetch for first time
+                    try {
+                        const res = await fetch(`https://ifsc.razorpay.com/${ifsc}`);
+                        if (res.ok) {
+                            const data = await res.json();
+                            const fetched = { bank: data.BANK, branch: data.BRANCH };
+                            setIfscCache(prev => ({ ...prev, [ifsc]: fetched }));
+
+                            checkMismatch(ifsc, currentBank.bankName, currentBank.branchName, fetched);
+
+                            // Automatically fill/suggest
+                            setBankAccounts(prev => prev.map(b => b.id === id ? {
+                                ...b,
+                                bankName: fetched.bank,
+                                branchName: fetched.branch
+                            } : b));
+                        } else {
+                            showError('Invalid IFSC Code or lookup failed');
+                        }
+                    } catch (error) {
+                        console.error('IFSC Lookup Error:', error);
+                    }
+                }
+            }
+        }
     };
 
 
@@ -1424,6 +1478,13 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const [tcsApplicable, setTcsApplicable] = useState(false);
     const [createCustomerPrompt, setCreateCustomerPrompt] = useState<boolean | null>(null);
 
+    // Customer search states
+    const [matchingCustomer, setMatchingCustomer] = useState<any | null>(null);
+    const [isLoadingCustomer, setIsLoadingCustomer] = useState(false);
+    const [linkVendorToCustomer, setLinkVendorToCustomer] = useState<boolean | null>(null);
+    const [createCustomerOption, setCreateCustomerOption] = useState<boolean | null>(null);
+    const [customerSearchAttempted, setCustomerSearchAttempted] = useState(false);
+
 
     // Handle Basic Details Form Submit (Navigation Only)
     const handleBasicDetailsSubmit = (e: React.FormEvent) => {
@@ -1433,8 +1494,73 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             showError('Please fill in all required fields (Vendor Name, Email, Contact No, Vendor Category)');
             return;
         }
+
+        // Validation for Also Customer logic
+        if (isAlsoCustomer) {
+            if (matchingCustomer && linkVendorToCustomer === null) {
+                showError('Please decide whether to link the vendor to the existing customer.');
+                return;
+            }
+            if (!matchingCustomer && createCustomerOption === null) {
+                showError('Please decide whether to create a new customer.');
+                return;
+            }
+            if (matchingCustomer && linkVendorToCustomer === false && createCustomerOption === null) {
+                showError('Please decide whether to create a new customer.');
+                return;
+            }
+        }
+
         setActiveMasterSubTab('Branch details');
     };
+
+    // Customer search function
+    const searchCustomer = async (name: string, pan: string) => {
+        if (!name || !pan) return;
+
+        setIsLoadingCustomer(true);
+        setCustomerSearchAttempted(true);
+        try {
+            // Using search or filter query params
+            const res: any = await httpClient.get(`/api/customerportal/customer-master/?pan_number=${pan}&customer_name=${name}`);
+            const data = Array.isArray(res) ? res : (res.results || []);
+
+            // Filter manually for exact match to be safe
+            const match = data.find((c: any) =>
+                (c.pan_number === pan || c.pan === pan) &&
+                c.customer_name.toLowerCase() === name.toLowerCase()
+            );
+
+            if (match) {
+                setMatchingCustomer(match);
+                setLinkVendorToCustomer(null);
+            } else {
+                setMatchingCustomer(null);
+                setCreateCustomerOption(null);
+            }
+        } catch (error) {
+            console.error('Error searching customer:', error);
+            // Non-fatal error
+            setMatchingCustomer(null);
+        } finally {
+            setIsLoadingCustomer(false);
+        }
+    };
+
+    // Trigger search when relevant fields change
+    useEffect(() => {
+        if (isAlsoCustomer && vendorName && panNo) {
+            const delayDebounceFn = setTimeout(() => {
+                searchCustomer(vendorName, panNo);
+            }, 500); // Small debounce
+            return () => clearTimeout(delayDebounceFn);
+        } else if (!isAlsoCustomer) {
+            setMatchingCustomer(null);
+            setCustomerSearchAttempted(false);
+            setLinkVendorToCustomer(null);
+            setCreateCustomerOption(null);
+        }
+    }, [isAlsoCustomer, vendorName, panNo]);
 
 
     // Vendor GST Details State
@@ -1491,6 +1617,32 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     // Handle TDS Details Form Submit (Navigation Only)
     const handleTDSDetailsSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+
+        // 1. MSME Validation (UDYAM-TN-0123456)
+        if (msmeUdyamNo) {
+            const msmeRegex = /^(UDYAM|UDHYAM)-[A-Z]{2}-\d{2}-\d{7}$/;
+            if (!msmeRegex.test(msmeUdyamNo)) {
+                showError('Invalid MSME Udyam No format. Expected: UDYAM-TN-01-2345678 (or UDHYAM)');
+                return;
+            }
+        }
+
+        // 2. FSSAI Validation (14 digit numeric code)
+        if (fssaiLicenseNo) {
+            if (fssaiLicenseNo.length !== 14 || !/^\d+$/.test(fssaiLicenseNo)) {
+                showError('Invalid FSSAI License No. Must be exactly 14 digits.');
+                return;
+            }
+        }
+
+        // 3. Import Export Code (IEC) Validation (5 Letters, 4 Numbers, 1 Letter)
+        if (importExportCode) {
+            const iecRegex = /^[A-Z]{5}\d{4}[A-Z]{1}$/;
+            if (!iecRegex.test(importExportCode)) {
+                showError('Invalid IEC format. Expected: ABCDE1234F (5 Letters, 4 Numbers, 1 Letter)');
+                return;
+            }
+        }
 
         setActiveMasterSubTab('Banking Info');
     };
@@ -2853,39 +3005,80 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 </button>
                                             </div>
                                             {isAlsoCustomer && (
-                                                <p className="mt-2 text-xs text-teal-600">
-                                                    System will search for customer using PAN No & Vendor Name
-                                                </p>
+                                                <div className="mt-4 space-y-4">
+                                                    {isLoadingCustomer ? (
+                                                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                                                            <div className="w-3 h-3 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                                                            Searching for matching customer...
+                                                        </div>
+                                                    ) : matchingCustomer ? (
+                                                        <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-[4px]">
+                                                            <label className="label-text text-indigo-700">
+                                                                Link the Vendor to this Customer &lt;{matchingCustomer.customer_code}- {matchingCustomer.customer_name}&gt;
+                                                            </label>
+                                                            <div className="flex gap-2 mt-2">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setLinkVendorToCustomer(true)}
+                                                                    className={`px-4 py-1 text-xs border rounded transition-colors ${linkVendorToCustomer === true
+                                                                        ? 'border-indigo-600 bg-indigo-600 text-white font-medium'
+                                                                        : 'border-indigo-300 text-indigo-600 bg-white hover:bg-indigo-50'
+                                                                        }`}
+                                                                >
+                                                                    Yes
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setLinkVendorToCustomer(false)}
+                                                                    className={`px-4 py-1 text-xs border rounded transition-colors ${linkVendorToCustomer === false
+                                                                        ? 'border-indigo-600 bg-indigo-600 text-white font-medium'
+                                                                        : 'border-indigo-300 text-indigo-600 bg-white hover:bg-indigo-50'
+                                                                        }`}
+                                                                >
+                                                                    No
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ) : customerSearchAttempted && vendorName && panNo ? (
+                                                        <div className="p-4 bg-orange-50 border border-orange-100 rounded-[4px]">
+                                                            <p className="text-xs text-orange-700 mb-2 font-medium italic">No matching customer found in Masters.</p>
+                                                        </div>
+                                                    ) : null}
+
+                                                    {/* Create Customer Prompt: shown if mismatch or linking declined */}
+                                                    {((matchingCustomer && linkVendorToCustomer === false) || (!matchingCustomer && customerSearchAttempted && vendorName && panNo)) && (
+                                                        <div className="p-4 bg-teal-50 border border-teal-100 rounded-[4px]">
+                                                            <label className="label-text text-teal-700">
+                                                                Create a Customer?
+                                                            </label>
+                                                            <div className="flex gap-2 mt-2">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setCreateCustomerOption(true)}
+                                                                    className={`px-4 py-1 text-xs border rounded transition-colors ${createCustomerOption === true
+                                                                        ? 'border-teal-600 bg-teal-600 text-white font-medium'
+                                                                        : 'border-teal-300 text-teal-600 bg-white hover:bg-teal-50'
+                                                                        }`}
+                                                                >
+                                                                    Yes
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setCreateCustomerOption(false)}
+                                                                    className={`px-4 py-1 text-xs border rounded transition-colors ${createCustomerOption === false
+                                                                        ? 'border-teal-600 bg-teal-600 text-white font-medium'
+                                                                        : 'border-teal-300 text-teal-600 bg-white hover:bg-teal-50'
+                                                                        }`}
+                                                                >
+                                                                    No
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             )}
                                         </div>
 
-                                        <div className="col-span-1">
-                                            <label className="label-text">
-                                                TCS Applicable under GST?
-                                            </label>
-                                            <div className="flex gap-2">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setTcsApplicable(true)}
-                                                    className={`px-6 py-1.5 text-sm border-2 rounded focus:outline-none transition-colors ${tcsApplicable
-                                                        ? 'border-teal-500 bg-teal-50 text-teal-700 font-medium'
-                                                        : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                                                        }`}
-                                                >
-                                                    Yes
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setTcsApplicable(false)}
-                                                    className={`px-6 py-1.5 text-sm border-2 rounded focus:outline-none transition-colors ${!tcsApplicable
-                                                        ? 'border-teal-500 bg-teal-50 text-teal-700 font-medium'
-                                                        : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                                                        }`}
-                                                >
-                                                    No
-                                                </button>
-                                            </div>
-                                        </div>
                                     </div>
 
 
@@ -3190,9 +3383,11 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         type="text"
                                                         value={msmeUdyamNo}
                                                         onChange={(e) => {
+                                                            // Alphanumeric with hyphen, specific format: UDHYAM-TN-0123456
                                                             const value = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '');
                                                             setMsmeUdyamNo(value);
                                                         }}
+                                                        placeholder="UDHYAM-TN-0123456"
                                                         className="flex-1 px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                     />
                                                     <input
@@ -3226,11 +3421,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         type="text"
                                                         value={fssaiLicenseNo}
                                                         onChange={(e) => {
+                                                            // 14 digit numeric code
                                                             const value = e.target.value.replace(/[^0-9]/g, '');
                                                             if (value.length <= 14) {
                                                                 setFssaiLicenseNo(value);
                                                             }
                                                         }}
+                                                        placeholder="14-digit numeric code"
+                                                        maxLength={14}
                                                         className="flex-1 px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                     />
                                                     <input
@@ -3264,11 +3462,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         type="text"
                                                         value={importExportCode}
                                                         onChange={(e) => {
+                                                            // Alphanumeric similar to PAN (5 Letters, 4 Numbers, 1 Letter)
                                                             const value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
                                                             if (value.length <= 10) {
                                                                 setImportExportCode(value);
                                                             }
                                                         }}
+                                                        placeholder="ABCDE1234F"
+                                                        maxLength={10}
                                                         className="flex-1 px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
                                                     />
                                                     <input
@@ -3298,12 +3499,17 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     EOU Status
                                                 </label>
                                                 <div className="flex gap-2">
-                                                    <input
-                                                        type="text"
+                                                    <select
                                                         value={eouStatus}
                                                         onChange={(e) => setEouStatus(e.target.value)}
                                                         className="flex-1 px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                    />
+                                                    >
+                                                        <option value="">Select Status</option>
+                                                        <option value="EOU">EOU (Export Oriented Unit)</option>
+                                                        <option value="STPI">STPI Unit</option>
+                                                        <option value="SEZ">SEZ Unit</option>
+                                                        <option value="Non-EOU">Non-EOU</option>
+                                                    </select>
                                                     <input
                                                         type="file"
                                                         id="eou-file-upload"
@@ -3315,7 +3521,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         type="button"
                                                         onClick={() => document.getElementById('eou-file-upload')?.click()}
                                                         className="px-4 py-2 bg-indigo-50/50 border border-indigo-300 rounded-[4px] hover:bg-indigo-50 transition-colors flex items-center gap-2 text-slate-700"
-                                                        title="Upload Letter of Permission / Green Card"
+                                                        title="Upload EOU/STPI/SEZ Certificate"
                                                     >
                                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
@@ -3323,7 +3529,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     </button>
                                                 </div>
                                                 {uploadedFiles.eouFile && (
-                                                    <p className="mt-1 text-xs text-indigo-600">? {uploadedFiles.eouFile.name}</p>
+                                                    <p className="mt-1 text-xs text-indigo-600">📄 {uploadedFiles.eouFile.name}</p>
                                                 )}
                                             </div>
                                         </div>
@@ -3823,21 +4029,28 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                             >
                                                                 {(() => {
                                                                     // Combine all extracted reference names
-                                                                    const liveBranches = (gstRecords || []).flatMap(record =>
-                                                                        ((record && record.placesOfBusiness) || [])
-                                                                            .map(pob => {
+                                                                    const liveBranches = (gstRecords || []).flatMap((record, rIdx) => {
+                                                                        const branches = ((record && record.placesOfBusiness) || [])
+                                                                            .map((pob, pIdx) => {
                                                                                 const name = (pob.referenceName ||
                                                                                     (pob as any).reference_name ||
                                                                                     (pob as any).branch_name ||
                                                                                     (pob as any).branchName ||
                                                                                     (pob as any).branch_reference_name || '').trim();
-                                                                                return name;
+                                                                                // If user added a branch but hasn't named it, give it a placeholder
+                                                                                return name || `Branch ${pIdx + 1} (${record.gstin || 'New GST Record'})`;
                                                                             })
-                                                                            .filter(name => name !== '')
-                                                                    );
+                                                                            .filter(name => name !== '');
+
+                                                                        // If no specific branch reference names exist, use GSTIN or a record placeholder
+                                                                        if (branches.length === 0) {
+                                                                            return [record.gstin || record.tradeName || `GST Detail #${rIdx + 1}`];
+                                                                        }
+                                                                        return branches;
+                                                                    });
 
                                                                     const dbBranches = (availableBranches || [])
-                                                                        .map(b => (b.reference_name || b.referenceName || (b as any).branch_name || (b as any).branchName || '').trim())
+                                                                        .map(b => (b.reference_name || b.referenceName || (b as any).branch_name || (b as any).branchName || b.gstin || '').trim())
                                                                         .filter(name => name !== '');
 
                                                                     const allBranches = [...new Set([...liveBranches, ...dbBranches])];
@@ -3846,9 +4059,6 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                         return (
                                                                             <div className="px-4 py-2 text-gray-500 text-xs italic">
                                                                                 <div>No branch reference names found.</div>
-                                                                                <div className="mt-1 opacity-70">
-                                                                                    (Live: {liveBranches.length}, Saved: {dbBranches.length}, GST Recs: {(gstRecords || []).length})
-                                                                                </div>
                                                                             </div>
                                                                         );
                                                                     }
@@ -4099,11 +4309,11 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 {['Create PO', 'Pending PO', 'Executed PO']
                                                     .filter(tab => isSuperuser || hasTabAccess('Vendor Portal', tab))
                                                     .map((tab) => {
-                                                        const count = tab === 'Pending PO' 
+                                                        const count = tab === 'Pending PO'
                                                             ? purchaseOrders.filter(po => ['Pending Approval', 'Approved', 'Mailed', 'Draft'].includes(po.status)).length
                                                             : tab === 'Executed PO'
-                                                            ? purchaseOrders.filter(po => po.status === 'Closed').length
-                                                            : 0;
+                                                                ? purchaseOrders.filter(po => po.status === 'Closed').length
+                                                                : 0;
 
                                                         return (
                                                             <button
@@ -4202,7 +4412,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         </nav>
                                                     </div>
 
-                                                     {/* Content for Create PO Sub-tabs */}
+                                                    {/* Content for Create PO Sub-tabs */}
                                                     <div className="p-4 bg-gray-50 border border-slate-200 rounded-[4px]">
 
                                                         {activeCreatePOSubTab === 'Pending for Approval' && (
@@ -4343,11 +4553,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                         <td className="px-6 py-4 text-sm text-gray-500">{po.deliveryDate ? formatDate(po.deliveryDate) : '-'}</td>
                                                                         <td className="px-6 py-4 text-sm text-gray-500">{po.amount ? `₹${po.amount}` : '-'}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-center">
-                                                                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] border ${
-                                                                                po.status === 'Draft' ? 'bg-slate-100 text-slate-700 border-slate-200' :
-                                                                                po.status === 'Pending Approval' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                                                                                'bg-green-50 text-green-700 border-green-200'
-                                                                            }`}>
+                                                                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] border ${po.status === 'Draft' ? 'bg-slate-100 text-slate-700 border-slate-200' :
+                                                                                    po.status === 'Pending Approval' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                                                                        'bg-green-50 text-green-700 border-green-200'
+                                                                                }`}>
                                                                                 {po.status}
                                                                             </span>
                                                                         </td>
@@ -4904,12 +5113,11 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                     <p className="text-xs text-slate-400 uppercase tracking-widest font-bold">{selectedVoucherForView.category}</p>
                                                                 </div>
                                                             </div>
-                                                            <span className={`inline-flex px-3 py-1 text-xs font-bold rounded-full uppercase tracking-wider ${
-                                                                selectedVoucherForView.status === 'Posted' ? 'bg-emerald-100 text-emerald-800' :
-                                                                selectedVoucherForView.status === 'Approved' ? 'bg-blue-100 text-blue-800' :
-                                                                selectedVoucherForView.status === 'Initiated' ? 'bg-purple-100 text-purple-800' :
-                                                                'bg-amber-100 text-amber-800'
-                                                            }`}>
+                                                            <span className={`inline-flex px-3 py-1 text-xs font-bold rounded-full uppercase tracking-wider ${selectedVoucherForView.status === 'Posted' ? 'bg-emerald-100 text-emerald-800' :
+                                                                    selectedVoucherForView.status === 'Approved' ? 'bg-blue-100 text-blue-800' :
+                                                                        selectedVoucherForView.status === 'Initiated' ? 'bg-purple-100 text-purple-800' :
+                                                                            'bg-amber-100 text-amber-800'
+                                                                }`}>
                                                                 {selectedVoucherForView.status}
                                                             </span>
                                                         </div>
@@ -5194,12 +5402,11 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                         {/* Status Column */}
                                                                         <td className="px-6 py-4 whitespace-nowrap">
                                                                             <div className="flex items-center space-x-2">
-                                                                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${
-                                                                                    bill.status === 'Posted' ? 'bg-slate-100 text-slate-700' :
-                                                                                    bill.status === 'Approved' ? 'bg-blue-100 text-slate-700' :
-                                                                                    bill.status === 'Initiated' ? 'bg-purple-100 text-purple-800' :
-                                                                                    'bg-yellow-100 text-yellow-800'
-                                                                                }`}>
+                                                                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${bill.status === 'Posted' ? 'bg-slate-100 text-slate-700' :
+                                                                                        bill.status === 'Approved' ? 'bg-blue-100 text-slate-700' :
+                                                                                            bill.status === 'Initiated' ? 'bg-purple-100 text-purple-800' :
+                                                                                                'bg-yellow-100 text-yellow-800'
+                                                                                    }`}>
                                                                                     {bill.status}
                                                                                 </span>
                                                                                 {bill.actionLog && bill.actionLog.length > 0 && (
@@ -5495,7 +5702,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                             const gstRateVal = selectedInvItem ? parseFloat(selectedInvItem.gst_rate as string) || 0 : 0;
                                                                                             const cessRateVal = selectedInvItem ? parseFloat(selectedInvItem.cess_rate as string) || 0 : 0;
                                                                                             const taxableVal = parseFloat(pItem.taxableValue) || 0;
-                                                                                            
+
                                                                                             let igstAmt = 0, cgstAmt = 0, sgstAmt = 0;
                                                                                             if (supplyType === 'interstate') {
                                                                                                 igstAmt = (taxableVal * gstRateVal) / 100;
@@ -5544,7 +5751,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                             const gstRateVal = selectedInvItem ? parseFloat(selectedInvItem.gst_rate as string) || 0 : 0;
                                                                                             const cessRateVal = selectedInvItem ? parseFloat(selectedInvItem.cess_rate as string) || 0 : 0;
                                                                                             const taxableVal = parseFloat(pItem.taxableValue) || 0;
-                                                                                            
+
                                                                                             let igstAmt = 0, cgstAmt = 0, sgstAmt = 0;
                                                                                             if (supplyType === 'interstate') {
                                                                                                 igstAmt = (taxableVal * gstRateVal) / 100;
