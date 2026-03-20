@@ -57,7 +57,7 @@ class Tenant(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
-        managed = False
+
         db_table = 'tenants'
 
     def __str__(self):
@@ -96,7 +96,7 @@ class User(AbstractBaseUser):
     REQUIRED_FIELDS = ['company_name']
 
     class Meta:
-        managed = False
+
         db_table = 'users'
         # Removed unique_together constraint - usernames can be duplicated
         # Email uniqueness is enforced at the field level
@@ -112,7 +112,7 @@ class BaseModel(models.Model):
     updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
 
     class Meta:
-        managed = False
+
         abstract = True
     
     def save(self, *args, **kwargs):
@@ -160,7 +160,7 @@ class CompanyFullInfo(BaseModel):
     voucher_numbering = models.JSONField(null=True, blank=True)
     
     class Meta:
-        managed = False
+
         db_table = 'company_informations'
 
 class PasswordResetOTP(models.Model):
@@ -172,7 +172,7 @@ class PasswordResetOTP(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        managed = False
+
         db_table = 'password_reset_otps'
 
 class AIUsage(models.Model):
@@ -182,7 +182,7 @@ class AIUsage(models.Model):
     used_count = models.IntegerField(default=0)
 
     class Meta:
-        managed = False
+
         db_table = 'ai_usage'
         unique_together = ('tenant', 'year', 'month')
 
@@ -195,6 +195,6 @@ class ExtractionPerformance(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        managed = False
+
         db_table = 'extraction_performance'
 

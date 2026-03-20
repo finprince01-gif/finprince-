@@ -154,7 +154,7 @@ const CreateSalesOrder: React.FC<CreateSalesOrderProps> = ({ onCancel, editId })
 
         const fetchSOSeries = async () => {
             try {
-                const response = await httpClient.get<any[]>('/api/customerportal/sales-orders-series/');
+                const response = await httpClient.get<any[]>('/api/customerportal/sales-order-series/');
                 setSOSeriesList(Array.isArray(response) ? response : (response as any).results || []);
             } catch (error) {
                 handleApiError(error, 'Fetch Sales Order Series');

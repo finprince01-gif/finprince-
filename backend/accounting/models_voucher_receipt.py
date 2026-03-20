@@ -38,7 +38,7 @@ class VoucherReceiptSingle(BaseModel):
     bank_reference_number = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
-        managed = False
+
         db_table = 'voucher_receipt_single'
         ordering = ['-date', '-created_at']
 
@@ -82,7 +82,7 @@ class VoucherReceiptBulk(BaseModel):
     bank_reference_number = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
-        managed = False
+
         db_table = 'voucher_receipt_bulk'
         ordering = ['-date', '-created_at']
 

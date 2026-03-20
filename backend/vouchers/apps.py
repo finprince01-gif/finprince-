@@ -9,6 +9,7 @@ HARD RULES:
     does not crash the server, so developers can still work on non-bulk features.
 """
 import os
+import time
 import logging
 from django.apps import AppConfig
 
@@ -39,40 +40,38 @@ class VouchersConfig(AppConfig):
 
         logger.info("[STARTUP] Checking infrastructure dependencies...")
 
-        # Redis check
-        try:
-            from vouchers.pipeline.health import check_redis
+        # 1. Wait/Check Redis (Non-crashing for startup, logged as error)
+        max_retries = 5
+        wait_seconds = 2
+        redis_ok = False
+        
+        logger.info(f"[STARTUP] Checking Redis availability (Max retries: {max_retries})...")
+        from vouchers.pipeline.health import check_redis
+        
+        for attempt in range(max_retries):
             if check_redis():
-                logger.info("[STARTUP] ✅ Redis: OK")
+                logger.info("[STARTUP] [OK] Redis: OK")
+                redis_ok = True
+                break
             else:
-                if is_prod:
-                    raise RuntimeError(
-                        "[STARTUP] ❌ Redis is DOWN. Cannot start in production. "
-                        "Set REDIS_URL and ensure Redis is running."
-                    )
-                else:
-                    logger.critical(
-                        "[STARTUP] ❌ Redis UNAVAILABLE. "
-                        "Bulk processing pipeline will NOT work until Redis is running. "
-                        "Set REDIS_URL=redis://localhost:6379/0 and start Redis."
-                    )
-        except RuntimeError:
-            raise
-        except Exception as e:
-            logger.critical(f"[STARTUP] Redis check exception: {e}")
-            if is_prod:
-                raise
+                logger.warning(f"[STARTUP] Redis NOT ready (Attempt {attempt+1}/{max_retries}). Waiting {wait_seconds}s...")
+                time.sleep(wait_seconds)
+        
+        if not redis_ok:
+            logger.critical(
+                "[STARTUP] [ERROR] Redis UNAVAILABLE. "
+                "Bulk processing and AI features will NOT work until Redis is running."
+            )
 
-        # Kafka check (non-fatal at startup — workers start separately)
+        # 2. Kafka check (non-fatal, logged as warning)
         try:
             from vouchers.pipeline.health import check_kafka
             if check_kafka():
-                logger.info("[STARTUP] ✅ Kafka: OK")
+                logger.info("[STARTUP] [OK] Kafka: OK")
             else:
                 logger.warning(
-                    "[STARTUP] ⚠️  Kafka UNAVAILABLE. "
-                    "Bulk upload API will return 503 until Kafka is running. "
-                    "Set KAFKA_BOOTSTRAP=localhost:9092"
+                    "[STARTUP] [WARNING] Kafka UNAVAILABLE. "
+                    "Bulk upload API will return 503 until Kafka is running."
                 )
         except Exception:
             pass

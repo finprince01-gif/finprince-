@@ -23,7 +23,7 @@ class MasterVoucherSales(models.Model):
     updated_by = models.CharField(max_length=100, blank=True, null=True)
 
     class Meta:
-        managed = False
+
         db_table = 'master_voucher_sales'
         verbose_name = 'Sales Voucher Master'
         verbose_name_plural = 'Sales Voucher Masters'
@@ -51,7 +51,7 @@ class MasterVoucherCreditNote(models.Model):
     updated_by = models.CharField(max_length=100, blank=True, null=True)
 
     class Meta:
-        managed = False
+
         db_table = 'master_voucher_creditnote'
         verbose_name = 'Credit Note Voucher Master'
         verbose_name_plural = 'Credit Note Voucher Masters'
@@ -79,7 +79,7 @@ class MasterVoucherReceipts(models.Model):
     updated_by = models.CharField(max_length=100, blank=True, null=True)
 
     class Meta:
-        managed = False
+
         db_table = 'master_voucher_receipts'
         verbose_name = 'Receipts Voucher Master'
         verbose_name_plural = 'Receipts Voucher Masters'
@@ -107,7 +107,7 @@ class MasterVoucherPurchases(models.Model):
     updated_by = models.CharField(max_length=100, blank=True, null=True)
 
     class Meta:
-        managed = False
+
         db_table = 'master_voucher_purchases'
         verbose_name = 'Purchases Voucher Master'
         verbose_name_plural = 'Purchases Voucher Masters'
@@ -135,7 +135,7 @@ class MasterVoucherDebitNote(models.Model):
     updated_by = models.CharField(max_length=100, blank=True, null=True)
 
     class Meta:
-        managed = False
+
         db_table = 'master_voucher_debitnote'
         verbose_name = 'Debit Note Voucher Master'
         verbose_name_plural = 'Debit Note Voucher Masters'
@@ -163,7 +163,7 @@ class MasterVoucherPayments(models.Model):
     updated_by = models.CharField(max_length=100, blank=True, null=True)
 
     class Meta:
-        managed = False
+
         db_table = 'master_voucher_payments'
         verbose_name = 'Payments Voucher Master'
         verbose_name_plural = 'Payments Voucher Masters'
@@ -191,7 +191,7 @@ class MasterVoucherExpenses(models.Model):
     updated_by = models.CharField(max_length=100, blank=True, null=True)
 
     class Meta:
-        managed = False
+
         db_table = 'master_voucher_expenses'
         verbose_name = 'Expenses Voucher Master'
         verbose_name_plural = 'Expenses Voucher Masters'
@@ -219,7 +219,7 @@ class MasterVoucherJournal(models.Model):
     updated_by = models.CharField(max_length=100, blank=True, null=True)
 
     class Meta:
-        managed = False
+
         db_table = 'master_voucher_journal'
         verbose_name = 'Journal Voucher Master'
         verbose_name_plural = 'Journal Voucher Masters'
@@ -247,7 +247,7 @@ class MasterVoucherContra(models.Model):
     updated_by = models.CharField(max_length=100, blank=True, null=True)
 
     class Meta:
-        managed = False
+
         db_table = 'master_voucher_contra'
         verbose_name = 'Contra Voucher Master'
         verbose_name_plural = 'Contra Voucher Masters'

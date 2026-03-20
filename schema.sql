@@ -1645,6 +1645,7 @@ CREATE TABLE `voucher_sales_invoicedetails` (
   `customer_id` BIGINT DEFAULT NULL COMMENT 'Link to customer_master_customer_basicdetails.id',
   `customer_branch` VARCHAR(100) DEFAULT NULL,
   `voucher_id` BIGINT DEFAULT NULL COMMENT 'Link to unified vouchers table',
+  `outward_slip_id` BIGINT NULL COMMENT 'Link to inventory_operation_outward.id',
 
   `bill_to` LONGTEXT,
   `ship_to` LONGTEXT,
@@ -1680,7 +1681,11 @@ CREATE TABLE `voucher_sales_invoicedetails` (
     FOREIGN KEY (`customer_id`) 
     REFERENCES `customer_master_customer_basicdetails` (`id`)
     ON DELETE RESTRICT
-    ON UPDATE CASCADE
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_sales_outward`
+    FOREIGN KEY (`outward_slip_id`)
+    REFERENCES `inventory_operation_outward` (`id`)
+    ON DELETE SET NULL
 ) ENGINE=InnoDB
 DEFAULT CHARSET=utf8mb4
 COLLATE=utf8mb4_unicode_ci;
@@ -2324,6 +2329,7 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_new_grn` (
   
   `grn_type` VARCHAR(50) DEFAULT 'purchases' COMMENT 'purchases, sales_return',
   `grn_no` VARCHAR(100) DEFAULT NULL,
+  `grn_series_name` VARCHAR(255) DEFAULT NULL,
   `date` DATE DEFAULT NULL,
   `time` TIME DEFAULT NULL,
   
@@ -2369,6 +2375,7 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_outward` (
   `location_id` BIGINT NULL,
   `sales_order_no` VARCHAR(100) NULL,
   `customer_name` VARCHAR(255) NULL,
+  `customer_id` BIGINT NULL COMMENT 'Link to customer_master_customer_basicdetails.id',
   `supplier_invoice_no` VARCHAR(100) NULL,
   `vendor_name` VARCHAR(255) NULL,
   `branch` VARCHAR(100) NULL,
@@ -2376,6 +2383,8 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_outward` (
   `gstin` VARCHAR(20) NULL,
   `total_boxes` VARCHAR(50) NULL,
   `posting_note` TEXT NULL,
+  `status` VARCHAR(20) DEFAULT 'PENDING',
+  `linked_sales_voucher_id` BIGINT NULL COMMENT 'Link to voucher_sales_invoicedetails.id',
   
   `items` JSON DEFAULT NULL COMMENT 'List of items: item_code, quantity, hsn, etc.',
 
@@ -2396,7 +2405,16 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_outward` (
   PRIMARY KEY (`id`),
   KEY `idx_ioo_tenant` (`tenant_id`),
   KEY `idx_ioo_outward_slip` (`outward_slip_no`),
-  KEY `idx_ioo_location` (`location_id`)
+  KEY `idx_ioo_location` (`location_id`),
+  UNIQUE KEY `idx_ioo_linked_voucher` (`linked_sales_voucher_id`),
+  CONSTRAINT `fk_outward_customer`
+    FOREIGN KEY (`customer_id`)
+    REFERENCES `customer_master_customer_basicdetails` (`id`)
+    ON DELETE RESTRICT,
+  CONSTRAINT `fk_outward_sales_voucher`
+    FOREIGN KEY (`linked_sales_voucher_id`)
+    REFERENCES `voucher_sales_invoicedetails` (`id`)
+    ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
@@ -2585,8 +2603,7 @@ ADD COLUMN country VARCHAR(100) NULL,
 ADD COLUMN pincode VARCHAR(20) NULL;
 
 -- Updates for Inventory Operation Schema (2026-02-21)
-ALTER TABLE `inventory_operation_new_grn`
-ADD COLUMN `grn_series_name` VARCHAR(255) DEFAULT NULL AFTER `grn_no`;
+-- Consolidated into main table definition above
 
 -- Updates to prevent duplication in category tables (2026-02-21)
 UPDATE `inventory_master_category` SET `group` = '' WHERE `group` IS NULL;
@@ -2816,8 +2833,8 @@ CREATE TABLE IF NOT EXISTS `bank_reconciliation_links` (
     `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_bank_transaction` (`bank_transaction_id`),
+    UNIQUE KEY `uk_voucher` (`voucher_id`),
     KEY `idx_bank_rec_tenant` (`tenant_id`),
-    KEY `idx_bank_rec_voucher` (`voucher_id`),
     CONSTRAINT `fk_bank_rec_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
     CONSTRAINT `fk_bank_rec_transaction` FOREIGN KEY (`bank_transaction_id`) REFERENCES `bank_statement_transactions` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -2912,7 +2929,18 @@ CREATE TABLE `vouchers` (
   `narration` TEXT DEFAULT NULL,
   `source` VARCHAR(100) DEFAULT 'manual',
   `invoice_no` VARCHAR(50) DEFAULT NULL,
+  `is_inter_state` TINYINT(1) DEFAULT 0,
+  `total_taxable_amount` DECIMAL(15,2) DEFAULT 0.00,
+  `total_cgst` DECIMAL(15,2) DEFAULT 0.00,
+  `total_sgst` DECIMAL(15,2) DEFAULT 0.00,
+  `total_igst` DECIMAL(15,2) DEFAULT 0.00,
+  `total_debit` DECIMAL(15,2) DEFAULT 0.00,
+  `total_credit` DECIMAL(15,2) DEFAULT 0.00,
+  `from_account` VARCHAR(255) DEFAULT NULL,
+  `to_account` VARCHAR(255) DEFAULT NULL,
+  `items_data` JSON DEFAULT NULL,
   `reference_id` BIGINT DEFAULT NULL COMMENT 'ID of source document',
+  `dummy_force` INT DEFAULT NULL,
   PRIMARY KEY (`id`),
   INDEX `idx_vouchers_tenant` (`tenant_id`),
   INDEX `idx_vouchers_type_number` (`tenant_id`, `type`, `voucher_number`),

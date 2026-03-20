@@ -39,6 +39,7 @@ async def handle_ai_event(payload: dict):
     page_hash   = payload.get('page_hash')
     tenant_id   = payload.get('tenant_id', '')
 
+    print(f"🔨 [MERGE] Received Page {page_number}/{page_count} for Job {job_id}")
     logger.info(f"[MERGE] Job {job_id} page {page_number}/{page_count}")
 
     try:

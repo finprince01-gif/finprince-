@@ -1,14 +1,19 @@
-# Stage 1: Build
-FROM node:22-alpine AS build
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
-RUN npm run build
+FROM node:18-alpine
 
-# Stage 2: Serve with Nginx
-FROM nginx:alpine
-COPY --from=build /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+WORKDIR /app
+
+# Copy package files
+COPY package.json package-lock.json* ./
+
+# Install dependencies
+RUN npm install
+
+# Copy project files
+COPY . .
+
+# Use environment variable for port
+ENV VITE_PORT=5173
+EXPOSE 5173
+
+# Standard dev command
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

@@ -56,7 +56,7 @@ class MasterQuestion(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        managed = False
+
         db_table = 'master_questions'
         ordering = ['display_order', 'question_code']
         indexes = [
@@ -131,7 +131,7 @@ class HierarchyQuestionMapping(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        managed = False
+
         db_table = 'hierarchy_question_mapping'
         indexes = [
             models.Index(fields=['question']),

@@ -10,6 +10,7 @@ from accounting.services.ledger_service import post_transaction
 from accounting.utils_ledger import get_standard_ledger
 from customerportal.database import CustomerMasterCustomerBasicDetails
 from .models import Voucher
+from inventory.models import InventoryOperationOutward
 
 class VoucherSalesItemsSerializer(serializers.ModelSerializer):
     class Meta:
@@ -57,7 +58,7 @@ class VoucherSalesInvoiceDetailsSerializer(TenantModelSerializerMixin, serialize
             'sales_order_no', 'place_of_supply', 'reverse_charge', 'invoice_type',
             'gst_export_type', 'port_code', 'shipping_bill_number', 'shipping_bill_date',
             'ecommerce_gstin', 'irn', 'ack_no', 'created_at', 'updated_at',
-            'posting_status', 'posting_error',
+            'posting_status', 'posting_error', 'outward_slip_id',
             # Nested Fields
             'items', 'foreign_items', 'payment_details', 'dispatch_details', 'eway_bill_details'
         ]
@@ -83,6 +84,20 @@ class VoucherSalesInvoiceDetailsSerializer(TenantModelSerializerMixin, serialize
             # Create Invoice header
             invoice = super().create(validated_data)
             tenant_id = invoice.tenant_id
+
+            # NEW: Link and Mark Outward Slip as USED
+            outward_slip_id = validated_data.get('outward_slip_id')
+            if outward_slip_id:
+                try:
+                    outward_slip = InventoryOperationOutward.objects.get(id=outward_slip_id, tenant_id=tenant_id)
+                    if outward_slip.status == 'USED':
+                         raise serializers.ValidationError({"outward_slip_id": "This outward slip has already been used in another invoice."})
+                    
+                    outward_slip.status = 'USED'
+                    outward_slip.linked_sales_voucher_id = invoice.id
+                    outward_slip.save(update_fields=['status', 'linked_sales_voucher_id'])
+                except InventoryOperationOutward.DoesNotExist:
+                    raise serializers.ValidationError({"outward_slip_id": "Invalid outward slip ID."})
             
             # Create Items
             for item in items_data:

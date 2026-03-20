@@ -67,7 +67,7 @@ class APIKeyManager:
         genai.configure(api_key=api_key)
         try:
             # Try a standard model for health check
-            genai.GenerativeModel('models/gemini-2.5-flash').generate_content("test")
+            genai.GenerativeModel('models/gemini-1.5-flash').generate_content("test")
             self.unhealthy_keys.discard(api_key)
             logger.info(f"Rechecked API key {api_key[:10]}... - now healthy")
         except Exception:
@@ -360,10 +360,8 @@ def execute_with_retry(prompt: str, request_data: dict, api_key: str) -> str:
     api_key_used = api_key
     
     candidate_models = [
-        'models/gemini-2.5-flash',
-        'models/gemini-2.5-pro',
-        'models/gemini-2.0-flash',
         'models/gemini-1.5-flash',
+        'models/gemini-2.0-flash-exp',
         'models/gemini-1.5-flash-latest',
         'models/gemini-1.5-flash-001',
         'models/gemini-1.5-flash-002',
@@ -371,7 +369,6 @@ def execute_with_retry(prompt: str, request_data: dict, api_key: str) -> str:
         'models/gemini-1.5-pro-latest',
         'models/gemini-pro',
         'models/gemini-1.0-pro',
-        'models/gemini-2.0-flash-exp',
     ]
 
     for attempt in range(max_attempts):
