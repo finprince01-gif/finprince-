@@ -397,10 +397,37 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
     }, []); // empty deps — reads from ref, never stale
 
 
+    const [customerName, setCustomerName] = useState('');
+    const [customerId, setCustomerId] = useState<number | string | null>(null);
+    const [customerBranch, setCustomerBranch] = useState('');
+
     const [outwardSlipNo, setOutwardSlipNo] = useState('');
     const [outwardSlipId, setOutwardSlipId] = useState<number | null>(null);
-    const [outwardSlipOptions, setOutwardSlipOptions] = useState<string[]>([]);
     const [outwardSlipsData, setOutwardSlipsData] = useState<any[]>([]);
+
+    // Filtered options for Outward Slip dropdown
+    const outwardSlipOptions = useMemo(() => {
+        if (!customerName) return [];
+
+        const filtered = outwardSlipsData.filter(item => {
+            const slipCustomer = (item.customer_name || item.customerName || '').toString().trim().toLowerCase();
+            const currentCustomer = (customerName || '').toString().trim().toLowerCase();
+
+            const matchesCustomer = slipCustomer === currentCustomer;
+
+            // Optional: Filter by branch if it's available and selected
+            if (customerBranch) {
+                const slipBranch = (item.branch || item.branch_name || '').toString().trim().toLowerCase();
+                const currentBranch = (customerBranch || '').toString().trim().toLowerCase();
+                return matchesCustomer && (slipBranch === currentBranch || !slipBranch);
+            }
+
+            return matchesCustomer;
+        });
+
+        const options = filtered.map(item => (item.outward_slip_no || item.slip_no || '').toString().trim()).filter(Boolean);
+        return [...new Set(options)].sort((a, b) => b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' }));
+    }, [outwardSlipsData, customerName, customerBranch]);
 
     // Fetch Outward Slips
     const fetchOutwardSlips = React.useCallback(async () => {
@@ -409,16 +436,12 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
             const data = await httpClient.get<any[]>(`/api/inventory/operations/outward/?_t=${Date.now()}`).catch(() => []);
             if (Array.isArray(data)) {
                 // FILTER: Only show PENDING slips, or the currently selected one (for edit mode)
-                const filteredData = data.filter(item => 
-                    item.status === 'PENDING' || 
-                    !item.status || 
+                const filteredData = data.filter(item =>
+                    item.status === 'PENDING' ||
+                    !item.status ||
                     item.outward_slip_no === outwardSlipNo
                 );
                 setOutwardSlipsData(filteredData);
-                // Extract unique slip numbers, trim them, and sort descending
-                const options = filteredData.map(item => (item.outward_slip_no || item.slip_no || '').toString().trim()).filter(Boolean);
-                const uniqueOptions = [...new Set(options)].sort((a, b) => b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' }));
-                setOutwardSlipOptions(uniqueOptions);
                 return filteredData;
             }
         } catch (e) {
@@ -431,9 +454,6 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         fetchOutwardSlips();
     }, [fetchOutwardSlips]);
 
-    const [customerName, setCustomerName] = useState('');
-    const [customerId, setCustomerId] = useState<number | string | null>(null);
-    const [customerBranch, setCustomerBranch] = useState('');
     const [masterCustomers, setMasterCustomers] = useState<any[]>([]);
     const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
     const [customerBillingCurrency, setCustomerBillingCurrency] = useState('');
@@ -946,14 +966,9 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                     const inrRate = rateFromDoc * convRate;
                     const taxableInr = qty * inrRate;
 
-                    const igst = parseFloat(item.igst || item.igst_amount) || 0;
-                    const cgst = parseFloat(item.cgst || item.cgst_amount) || 0;
-                    const sgst = parseFloat(item.sgst || item.sgst_amount) || 0;
-                    const totalTax = igst + cgst + sgst;
+                    const code = item.item_code || item.itemCode || '';
+                    const name = item.item_name || item.itemName || '';
 
-                    // Fetch cessRate from master
-                    const code = item.item_code || '';
-                    const name = item.item_name || '';
                     const masterItem = inventoryItems.find(i =>
                         (code && i.item_code === code) ||
                         (name && (i.name === name || i.item_name === name))
@@ -961,45 +976,59 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                         (code && (i.serviceCode === code || i.service_code === code)) ||
                         (name && (i.serviceName === name || i.service_name === name))
                     );
-                    const cessRate = masterItem ? parseFloat(masterItem.cess_rate || masterItem.cessRate || '0') : 0;
-                    const cess = (totalTax * cessRate / 100);
-                    const invValInr = taxableInr + igst + cgst + sgst + cess;
 
-                    // Lookup HSN/SAC from master if missing
+                    // Determine HSN/SAC
                     let hsn = item.hsn_sac || item.hsn_code || item.hsnSac || item.hsnCode || '';
-                    if (!hsn) {
-                        const code = item.item_code || '';
-                        const name = item.item_name || '';
-                        const masterItem = inventoryItems.find(i =>
-                            (code && i.item_code === code) ||
-                            (name && (i.name === name || i.item_name === name))
-                        ) || serviceItems.find(i =>
-                            (code && (i.serviceCode === code || i.service_code === code)) ||
-                            (name && (i.serviceName === name || i.service_name === name))
-                        );
-                        if (masterItem) {
-                            hsn = masterItem.hsn_code || masterItem.hsnCode || masterItem.hsn_sac || masterItem.hsnSac || masterItem.sac_code || masterItem.sacCode || '';
-                        }
+                    if (!hsn && masterItem) {
+                        hsn = masterItem.hsn_code || masterItem.hsnCode || masterItem.hsn_sac || masterItem.hsn_sac || masterItem.sac_code || masterItem.sacCode || '';
                     }
+
+                    // Determine GST rate
+                    let gstRate = parseFloat(item.gst_rate || item.gstRate || '0');
+                    if (gstRate === 0 && masterItem) {
+                        gstRate = parseFloat(masterItem.gst_rate || masterItem.gstRate || '0');
+                    }
+
+                    // Determine CESS rate
+                    let cessRate = parseFloat(item.cess_rate || item.cessRate || '0');
+                    if (cessRate === 0 && masterItem) {
+                        cessRate = parseFloat(masterItem.cess_rate || masterItem.cessRate || '0');
+                    }
+
+                    // Split taxes based on counts/state
+                    let calculatedIgst = 0;
+                    let calculatedCgst = 0;
+                    let calculatedSgst = 0;
+                    if (isInterState) {
+                        calculatedIgst = (taxableInr * gstRate / 100);
+                    } else {
+                        calculatedCgst = (taxableInr * gstRate / 100 * 0.5);
+                        calculatedSgst = (taxableInr * gstRate / 100 * 0.5);
+                    }
+
+                    const totalTaxVal = calculatedIgst + calculatedCgst + calculatedSgst;
+                    const calculatedCess = (totalTaxVal * cessRate / 100);
+                    const invValInr = taxableInr + calculatedIgst + calculatedCgst + calculatedSgst + calculatedCess;
 
                     return {
                         id: Date.now() + idx,
-                        itemCode: item.item_code || '',
-                        itemName: item.item_name || '',
+                        itemCode: code,
+                        itemName: name,
                         hsnSac: hsn,
                         qty: qty.toString(),
                         uom: item.uom || '',
                         itemRate: inrRate.toFixed(2),
+                        gstRate: gstRate.toString(),
+                        cessRate: cessRate.toString(),
                         taxableValue: taxableInr.toFixed(2),
-                        igst: igst.toFixed(2),
-                        cgst: cgst.toFixed(2),
-                        sgst: sgst.toFixed(2),
-                        cess: cess.toFixed(2),
+                        igst: calculatedIgst.toFixed(2),
+                        cgst: calculatedCgst.toFixed(2),
+                        sgst: calculatedSgst.toFixed(2),
+                        cess: calculatedCess.toFixed(2),
                         invoiceValue: invValInr.toFixed(2),
                         salesLedger: '',
                         description: item.description || '',
-                        alternateUnit: item.alternative_unit || item.alternate_uom || '',
-                        gstRate: (item.gst_rate || item.gstRate || '0').toString(),
+                        alternateUnit: item.alternate_unit || item.alternate_uom || '',
                         sourceDoc: val,
                         selected: true
                     };
@@ -1101,20 +1130,6 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         });
 
         let filtered = Array.from(uniqueMap.values());
-        if (customerName) {
-            const lowerCustomer = customerName.toLowerCase();
-            filtered = filtered.filter(doc =>
-                // Always keep already selected ones
-                salesOrderNos.includes(doc.uniqueKey) ||
-                salesOrderNos.includes(doc.number) ||
-                // Or matches customer
-                !doc.customer ||
-                doc.customer.toLowerCase() === lowerCustomer ||
-                // Or if it's a category doc, maybe it's compatible? 
-                // Let's be a bit more permissive if it's from quotations
-                (doc.type === 'Quotation' && doc.customer && (doc.customer.includes('B2C') || doc.customer.includes('B2B')))
-            );
-        }
         return filtered;
     }, [salesOrders, salesQuotations, customerName, masterCustomers, salesOrderNos]);
 
@@ -1436,35 +1451,56 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         } else {
             setOutwardSlipId(null);
         }
-        
+
         if (selectedSlip && selectedSlip.items) {
             const slipItems = Array.isArray(selectedSlip.items) ? selectedSlip.items : [];
             const newRows: ItemRow[] = slipItems.map((item: any, idx: number) => {
                 const qtyNum = parseFloat(item.qty || item.quantity || '0');
                 const rateNum = parseFloat(item.rate || item.item_rate || '0');
                 const taxableValNum = parseFloat(item.taxable_value || '0') || (qtyNum * rateNum);
-                const igstNum = parseFloat(item.igst || '0');
-                const cgstNum = parseFloat(item.cgst || '0');
-                const sgstNum = parseFloat(item.sgst || '0');
-                const cessNum = parseFloat(item.cess || '0');
-                const invoiceValNum = parseFloat(item.invoice_value || '0') || (taxableValNum + igstNum + cgstNum + sgstNum + cessNum);
-
                 // Lookup HSN/SAC from master if missing
                 let hsn = item.hsn_code || item.hsnCode || item.hsn_sac || item.hsnSac || item.sacCode || item.sac_code || '';
-                if (!hsn) {
-                    const code = (item.item_code || item.itemCode || item.serviceCode || item.service_code || '').toString();
-                    const name = (item.item_name || item.itemName || item.serviceName || item.service_name || '').toString();
-                    const masterItem = inventoryItems.find(i =>
-                        (code && i.item_code === code) ||
-                        (name && (i.name === name || i.item_name === name))
-                    ) || serviceItems.find(i =>
-                        (code && (i.serviceCode === code || i.service_code === code)) ||
-                        (name && (i.serviceName === name || i.service_name === name))
-                    );
-                    if (masterItem) {
-                        hsn = masterItem.hsn_code || masterItem.hsnCode || masterItem.hsn_sac || masterItem.hsnSac || masterItem.sac_code || masterItem.sacCode || '';
-                    }
+                const code = (item.item_code || item.itemCode || item.serviceCode || item.service_code || '').toString();
+                const name = (item.item_name || item.itemName || item.serviceName || item.service_name || '').toString();
+
+                const masterItem = inventoryItems.find(i =>
+                    (code && i.item_code === code) ||
+                    (name && (i.name === name || i.item_name === name))
+                ) || serviceItems.find(i =>
+                    (code && (i.serviceCode === code || i.service_code === code)) ||
+                    (name && (i.serviceName === name || i.service_name === name))
+                );
+
+                if (!hsn && masterItem) {
+                    hsn = masterItem.hsn_code || masterItem.hsnCode || masterItem.hsn_sac || masterItem.hsn_sac || masterItem.sac_code || masterItem.sacCode || '';
                 }
+
+                // Determine GST rate
+                let gstRate = parseFloat(item.gst_rate || item.gstRate || '0');
+                if (gstRate === 0 && masterItem) {
+                    gstRate = parseFloat(masterItem.gst_rate || masterItem.gstRate || '0');
+                }
+
+                // Split taxes based on counts/state
+                let calculatedIgst = 0;
+                let calculatedCgst = 0;
+                let calculatedSgst = 0;
+                if (isInterState) {
+                    calculatedIgst = (taxableValNum * gstRate / 100);
+                } else {
+                    calculatedCgst = (taxableValNum * gstRate / 100 * 0.5);
+                    calculatedSgst = (taxableValNum * gstRate / 100 * 0.5);
+                }
+
+                // CESS Calculation
+                let cessRateVal = parseFloat(item.cess_rate || item.cessRate || '0');
+                if (cessRateVal === 0 && masterItem) {
+                    cessRateVal = parseFloat(masterItem.cess_rate || masterItem.cessRate || '0');
+                }
+                const totalTaxVal = calculatedIgst + calculatedCgst + calculatedSgst;
+                const calculatedCess = (totalTaxVal * cessRateVal / 100);
+
+                const finalInvoiceVal = taxableValNum + calculatedIgst + calculatedCgst + calculatedSgst + calculatedCess;
 
                 return {
                     id: Date.now() + idx,
@@ -1474,16 +1510,17 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                     qty: qtyNum.toString(),
                     uom: item.uom || '',
                     itemRate: rateNum.toString(),
+                    gstRate: gstRate.toString(),
+                    cessRate: cessRateVal.toString(),
                     taxableValue: taxableValNum.toFixed(2),
-                    igst: igstNum.toFixed(2),
-                    cgst: cgstNum.toFixed(2),
-                    sgst: sgstNum.toFixed(2),
-                    cess: cessNum.toFixed(2),
-                    invoiceValue: invoiceValNum.toFixed(2),
+                    igst: calculatedIgst.toFixed(2),
+                    cgst: calculatedCgst.toFixed(2),
+                    sgst: calculatedSgst.toFixed(2),
+                    cess: calculatedCess.toFixed(2),
+                    invoiceValue: finalInvoiceVal.toFixed(2),
                     salesLedger: '',
                     description: item.description || '',
                     alternateUnit: item.alternate_uom || item.alternateUnit || '',
-                    cessRate: (cessNum > 0 && (igstNum + cgstNum + sgstNum) > 0) ? ((cessNum / (igstNum + cgstNum + sgstNum)) * 100).toFixed(2) : '0',
                     sourceDoc: 'Outward Slip: ' + val,
                     selected: true
                 };
@@ -2322,34 +2359,48 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
 
     // Recalculate all row taxes when Inter-State status changes
     React.useEffect(() => {
-        setItemRows(prev => prev.map(row => {
+        let anyChanged = false;
+        const recalculated = itemRows.map(row => {
             const taxableVal = parseFloat(row.taxableValue) || 0;
             const gstRate = parseFloat(row.gstRate) || 0;
-            const cess = parseFloat(row.cess) || 0;
-            let updatedRow = { ...row };
+            const cessRateVal = parseFloat(row.cessRate) || 0;
+
+            let newIgst = '0.00';
+            let newCgst = '0.00';
+            let newSgst = '0.00';
 
             if (isInterState) {
-                updatedRow.igst = (taxableVal * gstRate / 100).toFixed(2);
-                updatedRow.cgst = '0.00';
-                updatedRow.sgst = '0.00';
+                newIgst = (taxableVal * gstRate / 100).toFixed(2);
+                newCgst = '0.00';
+                newSgst = '0.00';
             } else {
-                updatedRow.igst = '0.00';
-                updatedRow.cgst = (taxableVal * gstRate / 100 * 0.5).toFixed(2);
-                updatedRow.sgst = (taxableVal * gstRate / 100 * 0.5).toFixed(2);
+                newIgst = '0.00';
+                newCgst = (taxableVal * gstRate / 100 * 0.5).toFixed(2);
+                newSgst = (taxableVal * gstRate / 100 * 0.5).toFixed(2);
             }
 
-            const igstNum = parseFloat(updatedRow.igst) || 0;
-            const cgstNum = parseFloat(updatedRow.cgst) || 0;
-            const sgstNum = parseFloat(updatedRow.sgst) || 0;
-            const cessRateVal = parseFloat(updatedRow.cessRate) || 0;
-            const totalTaxVal = igstNum + cgstNum + sgstNum;
-            const calculatedCess = (totalTaxVal * cessRateVal / 100);
-            updatedRow.cess = calculatedCess.toFixed(2);
+            const totalTaxVal = parseFloat(newIgst) + parseFloat(newCgst) + parseFloat(newSgst);
+            const newCess = (totalTaxVal * cessRateVal / 100).toFixed(2);
+            const newInvVal = (taxableVal + totalTaxVal + parseFloat(newCess)).toFixed(2);
 
-            updatedRow.invoiceValue = (taxableVal + totalTaxVal + calculatedCess).toFixed(2);
-            return updatedRow;
-        }));
-    }, [isInterState]);
+            if (row.igst !== newIgst || row.cgst !== newCgst || row.sgst !== newSgst || row.cess !== newCess || row.invoiceValue !== newInvVal) {
+                anyChanged = true;
+                return {
+                    ...row,
+                    igst: newIgst,
+                    cgst: newCgst,
+                    sgst: newSgst,
+                    cess: newCess,
+                    invoiceValue: newInvVal
+                };
+            }
+            return row;
+        });
+
+        if (anyChanged) {
+            setItemRows(recalculated);
+        }
+    }, [isInterState, itemRows.length, outwardSlipNo, salesOrderNos.length]);
 
     React.useEffect(() => {
         const totals = calculateTotals();
@@ -3788,10 +3839,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                 </>
                                             )}
                                             {!isCessHidden && (
-                                                <>
-                                                    <th className="px-4 py-2 text-sm font-semibold text-gray-700 border-r border-gray-300">Cess</th>
-                                                    <th className="px-4 py-2 text-sm font-semibold text-gray-700">State Cess</th>
-                                                </>
+                                                <th className="px-4 py-2 text-sm font-semibold text-gray-700">Cess</th>
                                             )}
                                         </tr>
                                     </thead>
@@ -3836,24 +3884,14 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                 </>
                                             )}
                                             {!isCessHidden && (
-                                                <>
-                                                    <td className="px-4 py-3 border-r border-gray-300">
-                                                        <input
-                                                            type="text"
-                                                            value={calculateTotals().cess.toFixed(2)}
-                                                            readOnly
-                                                            className="w-full px-2 py-1 bg-gray-50 border-0 rounded text-sm text-center"
-                                                        />
-                                                    </td>
-                                                    <td className="px-4 py-3">
-                                                        <input
-                                                            type="text"
-                                                            value={paymentStateCess}
-                                                            readOnly
-                                                            className="w-full px-2 py-1 bg-gray-50 border-0 rounded text-sm text-center"
-                                                        />
-                                                    </td>
-                                                </>
+                                                <td className="px-4 py-3">
+                                                    <input
+                                                        type="text"
+                                                        value={calculateTotals().cess.toFixed(2)}
+                                                        readOnly
+                                                        className="w-full px-2 py-1 bg-gray-50 border-0 rounded text-sm text-center"
+                                                    />
+                                                </td>
                                             )}
                                         </tr>
                                     </tbody>
@@ -4046,9 +4084,15 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                             <button
                                                 type="button"
                                                 onClick={openTermsModal}
-                                                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors text-sm font-medium shadow-none border border-slate-200-none border border-slate-200"
+                                                disabled={!customerName}
+                                                title={!customerName ? "Please select a customer first" : "Edit Customer Terms"}
+                                                className={`px-4 py-2 rounded-[4px] transition-colors text-sm font-medium shadow-none border border-slate-200 ${
+                                                    !customerName 
+                                                        ? 'bg-indigo-300 text-white cursor-not-allowed opacity-70' 
+                                                        : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                                                }`}
                                             >
-                                                Edit Masters
+                                                EDIT MASTERS
                                             </button>
                                         </div>
 
@@ -5493,7 +5537,6 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                 { label: 'TDS (Income Tax)', value: postedVoucherData.payment_details?.payment_tds_income_tax },
                                                 { label: 'TDS (GST)', value: postedVoucherData.payment_details?.payment_tds_gst },
                                                 { label: 'Advance Paid', value: postedVoucherData.payment_details?.payment_advance },
-                                                ...(Number(postedVoucherData.payment_details?.payment_state_cess || 0) > 0 ? [{ label: 'State Cess', value: postedVoucherData.payment_details?.payment_state_cess }] : []),
                                                 { label: 'Net Payable', value: postedVoucherData.payment_details?.payment_payable },
                                             ].map((row, i) => (
                                                 <div key={i} className="bg-gray-50 rounded-lg p-3 border border-gray-100">

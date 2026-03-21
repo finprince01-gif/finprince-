@@ -2178,6 +2178,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
   const handlePartyChange = useCallback((value: string, forcedId?: number | null) => {
     setParty(value);
+    
+    // Clear GRN, PO and items when vendor changes to prevent stale data
+    if (voucherType === 'Purchase') {
+      setGrnRefNo('');
+      setSelectedPurchasePOs([]);
+      setPurchaseItems([{ id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', poRate: null, invoiceRate: null, rateMismatch: false, poQty: null, invoiceQty: null, qtyMismatch: false, grnQty: null, sourcePoNo: null }]);
+    }
 
     if (forcedId !== undefined) {
       setVendorId(forcedId);
@@ -2307,7 +2314,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         setVendorAddresses([]);
       }
     }
-  }, [richVendors, richCustomers, vendorGstDetails, voucherType, setAddressFields, setGstin, setVendorBillingCurrency, setVendorAddresses, setPurchaseTerms, setMasterTermsData, ledgers]);
+  }, [richVendors, richCustomers, vendorGstDetails, voucherType, setAddressFields, setGstin, setVendorBillingCurrency, setVendorAddresses, setPurchaseTerms, setMasterTermsData, ledgers, setGrnRefNo, setSelectedPurchasePOs, setPurchaseItems]);
 
   const validateVendorFromInvoice = async (vendorName: string, gstin: string, state: string, address: string, branch: string = '') => {
     try {

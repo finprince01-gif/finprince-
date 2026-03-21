@@ -3083,3 +3083,17 @@ CREATE TABLE `customer_masters_salesorder` (
               KEY `customer_so_is_active_idx` (`is_active`),
               KEY `customer_so_is_deleted_idx` (`is_deleted`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+-- Alter the customer_transaction_salesorder_basicdetails table by adding a new column status
+ALTER TABLE customer_transaction_salesorder_basicdetails
+ADD COLUMN status VARCHAR(20) DEFAULT 'pending' COMMENT 'SO Status: pending, approved, cancelled, completed' AFTER gst_no;
+
+-- Alter the inventory_operation_outward table by adding a new column customer_id, status, and linked_sales_voucher_id
+ALTER TABLE inventory_operation_outward
+ADD COLUMN customer_id BIGINT NULL COMMENT 'Link to customer master' AFTER customer_name,
+ADD COLUMN status VARCHAR(20) DEFAULT 'PENDING' AFTER posting_note,
+ADD COLUMN linked_sales_voucher_id BIGINT NULL UNIQUE COMMENT 'Link to unified vouchers.id' AFTER status;
+
+-- Add Foreign Keys for inventory_operation_outward
+ALTER TABLE inventory_operation_outward
+ADD CONSTRAINT fk_outward_customer FOREIGN KEY (customer_id) REFERENCES customer_master_customer_basicdetails (id) ON DELETE RESTRICT,
+ADD CONSTRAINT fk_outward_sales_voucher FOREIGN KEY (linked_sales_voucher_id) REFERENCES voucher_sales_invoicedetails (id) ON DELETE SET NULL;
