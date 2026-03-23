@@ -1638,9 +1638,9 @@ CREATE TABLE IF NOT EXISTS `voucher_sales_invoicedetails` (
   `updated_at` DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
 
   `date` DATE,
-  `sales_invoice_no` VARCHAR(50),
-  `voucher_name` VARCHAR(100),
-  `outward_slip_no` VARCHAR(50),
+  `sales_invoice_no` VARCHAR(100),
+  `voucher_name` VARCHAR(255),
+  `outward_slip_no` VARCHAR(100),
   `customer_name` VARCHAR(255),
   `customer_id` BIGINT DEFAULT NULL,
   `customer_branch` VARCHAR(100) DEFAULT NULL,
@@ -1659,7 +1659,7 @@ CREATE TABLE IF NOT EXISTS `voucher_sales_invoicedetails` (
   `export_type` VARCHAR(50),
   `exchange_rate` VARCHAR(50),
   `supporting_document` VARCHAR(100),
-  `sales_order_no` VARCHAR(50),
+  `sales_order_no` VARCHAR(255),
 
   `place_of_supply` VARCHAR(2),
   `reverse_charge` VARCHAR(1) DEFAULT 'N',
@@ -1670,7 +1670,7 @@ CREATE TABLE IF NOT EXISTS `voucher_sales_invoicedetails` (
   `shipping_bill_date` DATE,
   `ecommerce_gstin` VARCHAR(15),
   `irn` VARCHAR(255),
-  `ack_no` VARCHAR(100),
+  `ack_no` VARCHAR(255),
   `posting_status` VARCHAR(20) DEFAULT 'SKIPPED',
   `posting_error` TEXT,
 
@@ -2916,7 +2916,7 @@ CREATE TABLE `vouchers` (
   `created_at` DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   `type` VARCHAR(20) NOT NULL COMMENT 'sales, purchase, payment, receipt, contra, journal',
-  `voucher_number` VARCHAR(50) NOT NULL,
+  `voucher_number` VARCHAR(100) NOT NULL,
   `date` DATE NOT NULL,
   `party` VARCHAR(255) DEFAULT NULL,
   `account` VARCHAR(255) DEFAULT NULL,
@@ -2924,7 +2924,7 @@ CREATE TABLE `vouchers` (
   `total` DECIMAL(15,2) DEFAULT 0.00,
   `narration` TEXT DEFAULT NULL,
   `source` VARCHAR(100) DEFAULT 'manual',
-  `invoice_no` VARCHAR(50) DEFAULT NULL,
+  `invoice_no` VARCHAR(100) DEFAULT NULL,
   `is_inter_state` TINYINT(1) DEFAULT 0,
   `total_taxable_amount` DECIMAL(15,2) DEFAULT 0.00,
   `total_cgst` DECIMAL(15,2) DEFAULT 0.00,
@@ -3099,4 +3099,17 @@ ADD CONSTRAINT fk_outward_sales_voucher FOREIGN KEY (linked_sales_voucher_id) RE
 ALTER TABLE voucher_sales_invoicedetails
 ADD COLUMN status VARCHAR(20) DEFAULT 'draft' COMMENT 'Workflow Status' AFTER ack_no,
 ADD COLUMN current_step INT DEFAULT 1 COMMENT 'Current Workflow Step (1-5)' AFTER status;
+
+-- Update field lengths for Sales Vouchers to prevent data truncation
+ALTER TABLE voucher_sales_invoicedetails
+MODIFY COLUMN sales_invoice_no VARCHAR(100),
+MODIFY COLUMN voucher_name VARCHAR(255),
+MODIFY COLUMN outward_slip_no VARCHAR(100),
+MODIFY COLUMN sales_order_no VARCHAR(255),
+MODIFY COLUMN ack_no VARCHAR(255);
+
+-- Update field lengths for Unified Vouchers
+ALTER TABLE vouchers
+MODIFY COLUMN voucher_number VARCHAR(100),
+MODIFY COLUMN invoice_no VARCHAR(100);
             

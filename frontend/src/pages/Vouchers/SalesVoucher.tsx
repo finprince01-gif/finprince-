@@ -308,7 +308,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
             if (res && res.next_invoice_number) {
                 // Update local configs cache with new current_number
                 setSalesVoucherConfigs(prev => prev.map(c =>
-                    c.id === seriesId ? { ...c, current_number: res.new_current_number } : c
+                    String(c.id) === String(seriesId) ? { ...c, current_number: res.new_current_number } : c
                 ));
                 setSalesInvoiceNo(res.next_invoice_number);
                 return res.assigned_number;
@@ -318,6 +318,96 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         }
         return salesInvoiceNo;
     }, [salesInvoiceNo]);
+
+    const resetSalesForm = React.useCallback(async (keepSeries = true) => {
+        setCustomerName('');
+        setCustomerId(null);
+        setCustomerBranch('');
+        setGstin('');
+        setContact('');
+        setPlaceOfSupply('');
+        setOutwardSlipNo('');
+        setOutwardSlipId(null);
+        setSalesOrderNos([]);
+        setSupportingDocument(null);
+        setIsEcommerceSales('No');
+        setEcommerceGstin('');
+        setReverseCharge('N');
+        setInvoiceType('Regular');
+        setExportType('');
+        setGstExportType('');
+        setPortCode('');
+        setShippingBillNumber('');
+        setShippingBillDate('');
+        
+        // Reset items
+        setItemRows([{ id: 1, itemCode: '', itemName: '', hsnSac: '', qty: '', uom: '', itemRate: '', taxableValue: '0', salesLedger: '', description: '', igst: '0', cgst: '0', sgst: '0', cess: '0', cessRate: '0', invoiceValue: '0', alternateUnit: '', gstRate: '0', selected: true }]);
+        setForeignItemRows([]);
+        
+        setPaymentTdsIncomeTax('');
+        setPaymentTdsGst('');
+        setPaymentAdvance('');
+        setPaymentPayable('');
+        setPaymentPostingNote('');
+        setTermsConditions('');
+        setAdvanceReferences([{ id: 1, date: '', refNo: '', amount: '', appliedNow: false }]);
+        
+        setDispatchFrom('');
+        setModeOfTransport('Road');
+        setDispatchDate('');
+        setDispatchTime('');
+        setDeliveryType('');
+        setSelfThirdParty('');
+        setTransporterId('');
+        setTransporterName('');
+        setVehicleNo('');
+        setLrGrConsignment('');
+        setDispatchDocument(null);
+        setBeyondPortShippingBillNo('');
+        setBeyondPortShippingBillDate('');
+        setBeyondPortShipPortCode('');
+        setBeyondPortOrigin('');
+        setBeyondPortOriginCountry('');
+        setBeyondPortVesselFlightNo('');
+        setBeyondPortPortOfLoading('');
+        setBeyondPortPortOfDischarge('');
+        setBeyondPortFinalDestination('');
+        setBeyondPortDestCountry('');
+        setRailUptoPortDeliveryType('');
+        setRailUptoPortTransporterId('');
+        setRailUptoPortTransporterName('');
+        setRailUptoPortVehicleNo('');
+        setRailUptoPortLrGrConsignment('');
+        setRailBeyondPortRailwayReceiptNo('');
+        setRailBeyondPortRailwayReceiptDate('');
+        setRailBeyondPortOrigin('');
+        setRailBeyondPortOriginCountry('');
+        setRailBeyondPortRailNo('');
+        setRailBeyondPortFnrNo('');
+        setRailBeyondPortStationOfLoading('');
+        setRailBeyondPortStationOfDischarge('');
+        setRailBeyondPortFinalDestination('');
+        setRailBeyondPortDestCountry('');
+        setEwayValidationEntries([]);
+        setIrn('');
+        setAckNo('');
+        setAckDate('');
+
+        if (!keepSeries) {
+            setVoucherName('');
+            setSelectedSeriesId(null);
+            setSalesInvoiceNo('');
+        } else if (selectedSeriesId) {
+            // Optional: Re-fetch next number to be sure it's fresh
+            try {
+                const res: any = await httpClient.get(`/api/masters/master-voucher-sales/${selectedSeriesId}/next-number/`);
+                if (res?.invoice_number) setSalesInvoiceNo(res.invoice_number);
+            } catch (e) {
+                console.error("Failed to re-fetch invoice number during reset", e);
+            }
+        }
+    }, [selectedSeriesId]);
+
 
     React.useEffect(() => {
         const fetchSalesConfigs = async () => {
@@ -347,14 +437,14 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                         }
                     }
                 } else {
-                    setSalesVoucherConfigs([{ voucher_name: 'Main' }]);
+                    setSalesVoucherConfigs([]);
                     if (!voucherName) {
                         setVoucherName('');
                         setSalesInvoiceNo('');
                     }
                 }
             } catch (e) {
-                setSalesVoucherConfigs([{ voucher_name: 'Main' }]);
+                setSalesVoucherConfigs([]);
                 if (!voucherName) {
                     setVoucherName('');
                     setSalesInvoiceNo('');
@@ -1853,10 +1943,16 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                 await incrementInvoiceNumber(selectedSeriesId);
             }
 
-            // Reset form or redirect logic here if needed
-        } catch (error) {
-            console.error('Failed to save sales voucher:');
-            showError('Failed to save voucher. Please check inputs.');
+            // Reset form for next entry
+            await resetSalesForm(true);
+
+        } catch (error: any) {
+            console.error('Failed to save sales voucher:', error);
+            const serverError = error.response?.data;
+            const errorMessage = serverError 
+                ? (typeof serverError === 'object' ? JSON.stringify(serverError, null, 2) : serverError)
+                : error.message;
+            showError(`Failed to save voucher.\n${errorMessage}`);
         }
 
     };
@@ -1919,9 +2015,16 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
             setPostedVoucherData({ ...payload, totals, billTo, shipTo });
             setShowPrintPreview(true);
 
-        } catch (error) {
-            console.error('Failed to save sales voucher:');
-            showError('Failed to save voucher. Please check inputs.');
+            // Note: Don't full reset form here so user can print, but number is already incremented
+
+
+        } catch (error: any) {
+            console.error('Failed to save sales voucher:', error);
+            const serverError = error.response?.data;
+            const errorMessage = serverError 
+                ? (typeof serverError === 'object' ? JSON.stringify(serverError, null, 2) : serverError)
+                : error.message;
+            showError(`Failed to save voucher.\n${errorMessage}`);
         }
     };
 
