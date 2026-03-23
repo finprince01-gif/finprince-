@@ -864,9 +864,9 @@ const BulkOCRStagingWorkflow: React.FC<BulkOCRStagingWorkflowProps> = ({
                 const invData = inv.extracted_data?.invoice || inv.extracted_data?.header || inv.extracted_data || {};
                 const items = inv.extracted_data?.items || inv.extracted_data?.line_items || [];
                 const supplierItems = items.map((item: any) => ({
-                    supplierItemCode: item['Item Code'] || '',
-                    supplierItemName: item['Item Name'] || item['Item'] || '',
-                    hsnSac: item['HSN/SAC'] || '',
+                    supplierItemCode: item['Item Code'] || item['item_code'] || item['Part No'] || '',
+                    supplierItemName: item['Item Name'] || item['item_name'] || item['Description'] || item['description'] || item['Item'] || '',
+                    hsnSac: item['HSN/SAC'] || item['hsn_sac'] || item['HSN Code'] || item['hsnSac'] || '',
                 }));
                 return (
                     <CreateVendorModal

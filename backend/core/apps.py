@@ -28,3 +28,13 @@ class CoreConfig(AppConfig):
                 except Exception as e:
                     print("\033[91m" + "[ERROR] Database Connection: UNEXPECTED ERROR" + "\033[0m")
                     print("\033[91m" + f"Error: {str(e)}" + "\033[0m")
+
+            # AI Model Validation
+            try:
+                from core.ai_proxy import validate_ai_on_startup
+                if not validate_ai_on_startup():
+                    print("\033[91m" + "[ERROR] AI Model Connection: FAILED. Check GOOGLE_API_KEY." + "\033[0m")
+                else:
+                    print("\033[92m" + "[OK] AI Model Connection: SUCCESS (gemini-2.5-flash)" + "\033[0m")
+            except Exception as ai_e:
+                print("\033[91m" + f"[ERROR] AI Startup Error: {str(ai_e)}" + "\033[0m")

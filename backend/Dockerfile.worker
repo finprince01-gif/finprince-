@@ -27,9 +27,9 @@ ENV DJANGO_SETTINGS_MODULE=backend.settings
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 
-# Health check
+# Health check (pings the Django app)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8001/health || exit 1
+    CMD curl -f http://localhost:8000/health/ || exit 1
 
 # Default command for worker
 CMD ["python", "manage_workers.py", "start", "2"]

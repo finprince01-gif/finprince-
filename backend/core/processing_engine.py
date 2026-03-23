@@ -36,6 +36,9 @@ NUMERIC_FIELDS = {
     'Amount'
 }
 
+# Junk values to ignore in critical fields
+JUNK_VALUES = {'DATED', 'DATE', 'NO', 'NUMBER', 'BILL', 'INV', 'INVOICE', 'PARTICULARS', 'DETAILS'}
+
 def clean_numeric_fields(obj: dict):
     """Recursively cleans numeric strings in a dictionary."""
     for k, v in list(obj.items()):
@@ -45,7 +48,13 @@ def clean_numeric_fields(obj: dict):
             
         if isinstance(v, str):
             # Normalize strings to UPPERCASE and clean noise
-            v_clean = ' '.join(v.split()).upper()
+            v_clean = ' '.join(v.split()).upper().strip()
+            
+            # Junk Filter: If field is just a junk keyword, clear it
+            if v_clean in JUNK_VALUES:
+                obj[k] = ''
+                continue
+
             obj[k] = v_clean
             
             # Extract numeric values rigorously if key is in NUMERIC_FIELDS
@@ -54,7 +63,12 @@ def clean_numeric_fields(obj: dict):
                 if val:
                     # Remove commas and all non-numeric chars except dot and minus
                     cleaned = re.sub(r'[^\d.\-]', '', val.replace(',', ''))
-                    obj[k] = cleaned if cleaned else '0'
+                    # Ensure it's a valid float
+                    try:
+                        float(cleaned)
+                        obj[k] = cleaned if cleaned else '0'
+                    except ValueError:
+                        obj[k] = '0'
                 else:
                     obj[k] = '0'
         elif isinstance(v, (int, float)):
@@ -66,48 +80,81 @@ def parse_and_process_ocr(raw_text: str):
     The engine that powers 'Finpixe Scan'.
     Cleans OCR raw output, parses JSON, and normalizes fields for the ERP.
     """
-    raw_text = raw_text.strip()
-    
-    # 1. Clean Markdown Fences
-    if raw_text.startswith('```json'):
-        raw_text = raw_text[7:]
-    if raw_text.startswith('```'):
-        raw_text = raw_text[3:]
-    if raw_text.endswith('```'):
-        raw_text = raw_text[:-3]
-    raw_text = raw_text.strip()
+    # STEP 2: CLEAN RESPONSE
+    clean_text = raw_text.strip()
+    if clean_text.startswith("```"):
+        parts = clean_text.split("```")
+        clean_text = parts[1] if len(parts) > 1 else clean_text
+    clean_text = clean_text.replace("json", "").strip()
+    print("🧹 CLEANED AI RESPONSE:", clean_text, flush=True)
 
-    # 2. JSON Parsing with salvage logic
+    # STEP 3: SAFE JSON PARSE
     try:
-        extracted = json.loads(raw_text)
-    except Exception:
-        match = re.search(r'\{[\s\S]*\}', raw_text)
+        extracted = json.loads(clean_text)
+        print("📦 PARSED JSON:", extracted, flush=True)
+    except Exception as e:
+        match = re.search(r'\{[\s\S]*\}', clean_text)
         if match:
-            extracted = json.loads(match.group(0))
+            try:
+                extracted = json.loads(match.group(0))
+                print("📦 PARSED JSON (via salvage):", extracted, flush=True)
+            except Exception:
+                print("❌ JSON PARSE FAILED:", str(e))
+                raise Exception("AI RESPONSE NOT VALID JSON")
         else:
-            raise ValueError("Failed to parse AI response as JSON.")
+            print("❌ JSON PARSE FAILED:", str(e))
+            raise Exception("AI RESPONSE NOT VALID JSON")
 
-    # 3. Structural Normalization (Support dynamic and legacy formats)
-    invoice_data = {}
-    items = []
-
+    # Handle structural flattening
+    if isinstance(extracted, list) and extracted:
+        extracted = extracted[0]
     if isinstance(extracted, dict) and 'data' in extracted:
-        data_obj = extracted['data']
-        if isinstance(data_obj, list) and data_obj:
-            data_obj = data_obj[0]
-        if isinstance(data_obj, dict):
-            items = data_obj.pop('items', [])
-            invoice_data = data_obj
-    elif isinstance(extracted, dict) and ('invoice' in extracted or 'header' in extracted):
-        invoice_data = extracted.get('invoice', extracted.get('header', {}))
-        items = extracted.get('items', extracted.get('line_items', []))
-    else:
-        invoice_data = extracted if isinstance(extracted, dict) else {}
-        items = []
+        extracted = extracted['data']
+        if isinstance(extracted, list) and extracted:
+            extracted = extracted[0]
 
-    # Ensure items is a list
-    if not isinstance(items, list):
-        items = [items] if items else []
+    # STEP 4: NORMALIZE KEYS (CRITICAL)
+    inv_obj = extracted.get('invoice', extracted.get('header', extracted))
+    if not isinstance(inv_obj, dict): inv_obj = {}
+
+    normalized = {
+        "invoice_number": str(inv_obj.get("invoice_number") or inv_obj.get("invoice_no") or inv_obj.get("inv_number") or inv_obj.get("Supplier Invoice No") or ""),
+        "invoice_date":   str(inv_obj.get("invoice_date") or inv_obj.get("date") or inv_obj.get("Voucher Date") or ""),
+        "vendor_name":    str(inv_obj.get("vendor_name") or inv_obj.get("supplier") or inv_obj.get("vendor") or inv_obj.get("Vendor Name") or ""),
+        "vendor_gstin":   str(inv_obj.get("vendor_gstin") or inv_obj.get("gstin") or inv_obj.get("GSTIN") or ""),
+        "total_amount":   str(inv_obj.get("total_amount") or inv_obj.get("amount") or inv_obj.get("total") or inv_obj.get("Total Invoice Value") or inv_obj.get("Grand Total") or "")
+    }
+    
+    # STEP 5: STRIP + CLEAN VALUES
+    for key, value in normalized.items():
+        if isinstance(value, str):
+            normalized[key] = value.strip()
+    
+    print("🔁 NORMALIZED DATA:", normalized, flush=True)
+
+    # STEP 6: VALIDATE CORE FIELDS
+    if not any([normalized.get("invoice_number"), normalized.get("vendor_name"), normalized.get("total_amount")]):
+        print("❌ ALL CRITICAL FIELDS EMPTY")
+    
+    # STEP 7: LOG FINAL MAPPED DATA
+    print("💾 FINAL DATA TO STORE:", normalized, flush=True)
+
+    # STEP 8: STORE EXACT VALUES & CONTINUE PROCESSING
+    invoice_data = inv_obj.copy()
+    items = extracted.get('items', extracted.get('line_items', []))
+    if not isinstance(items, list): items = [items] if items else []
+
+    invoice_data['Supplier Invoice No'] = normalized['invoice_number']
+    invoice_data['Vendor Name']         = normalized['vendor_name']
+    invoice_data['Total Invoice Value'] = normalized['total_amount']
+    invoice_data['Voucher Date']        = normalized['invoice_date']
+    invoice_data['GSTIN']               = normalized['vendor_gstin']
+
+    # Remove duplicated raw keys to clean up UI display
+    for k in ["invoice_number", "invoice_no", "inv_number", "invoice_date", "date", 
+              "supplier", "vendor", "vendor_name", "vendor_gstin", "gstin", 
+              "total_amount", "amount", "total"]:
+        invoice_data.pop(k, None)
 
     # 4. Rigorous Field-Level Normalization
     clean_numeric_fields(invoice_data)
@@ -161,6 +208,72 @@ def parse_and_process_ocr(raw_text: str):
 
     return {'invoice': invoice_data, 'items': items}
 
+def extract_invoice_data_fallback(text: str) -> dict:
+    """Robust regex-based extraction fallback as requested by user."""
+    import re
+    
+    def find(patterns):
+        for p in patterns:
+            match = re.search(p, text, re.I | re.M)
+            if match:
+                val = match.group(1).strip()
+                # Secondary junk check for the captured group
+                if val.upper() in JUNK_VALUES: continue
+                return val
+        return ""
+
+    invoice_no = find([
+        r"invoice\s*no[:\s]*([A-Z0-9\-\/]+)",
+        r"bill\s*no[:\s]*([A-Z0-9\-\/]+)",
+        r"Inv\s*#\s*[:\s]*([A-Z0-9\-\/]+)"
+    ])
+
+    date = find([
+        r"date[:\s]*([0-9]{1,2}[\/\-][0-9]{1,2}[\/\-][0-9]{2,4})"
+    ])
+
+    amount = find([
+        r"total\s*amount[:\s]*₹?\s*([0-9,]+\.?[0-9]*)",
+        r"grand\s*total[:\s]*₹?\s*([0-9,]+\.?[0-9]*)",
+        r"Total[:\s]*₹?\s*([0-9,]+\.?[0-9]*)",
+        r"amount[:\s]*₹?\s*([0-9,]+\.?[0-9]*)"
+    ])
+
+    # Vendor fallback: Look for lines that look like company names (no digits, multi-word)
+    lines = [l.strip() for l in text.split("\n") if l.strip()]
+    candidate_vendor = ""
+    for line in lines[:5]: # Check first 5 lines
+        if line.upper() in JUNK_VALUES: continue
+        # If line contains digits, it's likely part of an address or date
+        if any(char.isdigit() for char in line): continue
+        if len(line.split()) >= 1:
+            candidate_vendor = line
+            break
+
+    return {
+        "invoice_no": invoice_no,
+        "vendor": candidate_vendor,
+        "date": date,
+        "amount": amount,
+        "_fallback": True # Mark as low confidence
+    }
+
+def validate_extraction(data: dict):
+    """Validation layer to check for missing fields."""
+    missing = []
+    inv = data.get('invoice', {})
+    
+    # Map requested fields to our schema keys
+    # 'Vendor Name', 'Supplier Invoice No', 'Total Invoice Value'
+    if not inv.get('Supplier Invoice No'):
+        missing.append("invoice_no")
+    if not inv.get('Vendor Name'):
+        missing.append("vendor")
+    if not inv.get('Total Invoice Value'):
+        missing.append("amount")
+
+    return missing
+
 def run_invoice_processing_pipeline(file_hash, tenant_id, voucher_type='Purchase'):
     """
     The full pipeline: Parse -> Normalize -> Validate (Vendor/Customer) -> Update Staging.
@@ -175,13 +288,31 @@ def run_invoice_processing_pipeline(file_hash, tenant_id, voucher_type='Purchase
         return None
         
     raw_text = record.get('ocr_raw_text', '')
-    if not raw_text:
-        logger.error("Pipeline failure: No raw OCR text available")
+    extracted_data = record.get('extracted_data')
+    
+    if not raw_text and not extracted_data:
+        logger.error("Pipeline failure: No raw OCR text or extracted data available")
         return None
 
     try:
-        # 2. Mapping Engine (Parse & Normalize)
-        processed_data = parse_and_process_ocr(raw_text)
+        # 2. Mapping Engine (Parse & Normalize if needed)
+        if extracted_data and isinstance(extracted_data, dict) and extracted_data.get('invoice'):
+            processed_data = extracted_data
+        else:
+            processed_data = parse_and_process_ocr(raw_text)
+
+        # 2b. FALLBACK EXTRACTION (If core fields missing)
+        invoice_header = processed_data.get('invoice', {})
+        if not invoice_header.get('Supplier Invoice No') or not invoice_header.get('Vendor Name'):
+            logger.info(f"Primary extraction incomplete for {file_hash}, running regex fallback...")
+            fallback = extract_invoice_data_fallback(raw_text)
+            if not invoice_header.get('Supplier Invoice No'):
+                invoice_header['Supplier Invoice No'] = fallback.get('invoice_no', '')
+            if not invoice_header.get('Vendor Name'):
+                invoice_header['Vendor Name'] = fallback.get('vendor', '')
+            if not invoice_header.get('Total Invoice Value'):
+                invoice_header['Total Invoice Value'] = fallback.get('amount', '')
+            processed_data['invoice'] = invoice_header
         
         # 3. Validation (Vendor or Customer)
         invoice_header = processed_data.get('invoice', {})
@@ -224,24 +355,40 @@ def run_invoice_processing_pipeline(file_hash, tenant_id, voucher_type='Purchase
             )
             matched_id = val_result.get('vendor_id')
             matched_by = val_result.get('matched_by')
+        # 3b. Determine if this extraction is LOW CONFIDENCE
+        is_low_confidence = processed_data.get('_fallback', False)
+        
+        # 3c. Final Status Mapping
         taxable_val = invoice_header.get('Total Taxable Value') or invoice_header.get('taxable_value') or ''
         grand_total = invoice_header.get('Total Invoice Value') or invoice_header.get('Grand Total') or invoice_header.get('total_amount') or ''
         
-        fields_valid = bool(party_name and inv_no and taxable_val and grand_total)
+        # Clean numeric check: must be > 0
+        try:
+            total_float = float(grand_total) if grand_total else 0
+            is_valid_amount = total_float > 0
+        except:
+            is_valid_amount = False
+
+        fields_valid = bool(party_name and inv_no and taxable_val and grand_total and is_valid_amount)
         val_status_raw = val_result.get('status')
         
-        if val_status_raw == 'DUPLICATE_INVOICE':
+        if is_low_confidence:
+            final_status = 'NEEDS_ATTENTION'
+            conflict_msg = "Low-confidence OCR extraction. Please review all fields manually."
+        elif val_status_raw == 'DUPLICATE_INVOICE':
             final_status = 'DUPLICATE'
             conflict_msg = val_result.get('message')
         elif val_status_raw == 'GSTIN_CONFLICT':
-            final_status = 'CONFLICT'
-            conflict_msg = val_result.get('message')
-        elif val_status_raw == 'CUSTOMER_MISSING' or val_status_raw == 'VENDOR_MISSING' or val_status_raw == 'MISSING':
-            final_status = 'PARTY_MISSING'
+            final_status = 'GSTIN_CONFLICT'
+            conflict_msg = val_result.get('message', 'GSTIN Conflict detected.')
+        elif val_status_raw in ('CUSTOMER_MISSING', 'VENDOR_MISSING', 'MISSING'):
+            final_status = 'VENDOR_MISSING' # Rename to match frontend expectation
             conflict_msg = val_result.get('message', 'Party not found in master.')
         elif not fields_valid:
-            final_status = 'VALIDATION_FAILED'
-            conflict_msg = 'Missing required fields (Party, GSTIN, Invoice No, Taxable Value, or Grand Total).'
+            missing_fields = validate_extraction(processed_data)
+            if not is_valid_amount and "amount" not in missing_fields: missing_fields.append("amount invalid (>0)")
+            final_status = 'NEEDS_ATTENTION'
+            conflict_msg = f"Invalid or missing required fields: {', '.join(missing_fields)}" if missing_fields else 'Validation failure.'
         else:
             final_status = 'READY'
             conflict_msg = None
@@ -256,6 +403,13 @@ def run_invoice_processing_pipeline(file_hash, tenant_id, voucher_type='Purchase
             conflict_message=conflict_msg,
             vendor_id=matched_id # We reuse vendor_id column for customer_id in sales context or we could rename it in DB but for now reused
         )
+        # STEP 9: VERIFY DB WRITE
+        h = processed_data.get('invoice', {})
+        print("💾 DB STORED VALUES:", {
+            "invoice_number": h.get('Supplier Invoice No'),
+            "vendor_name": h.get('Vendor Name'),
+            "total_amount": h.get('Total Invoice Value')
+        }, flush=True)
         
         return {
             'success': True,
@@ -265,4 +419,16 @@ def run_invoice_processing_pipeline(file_hash, tenant_id, voucher_type='Purchase
         }
     except Exception as e:
         logger.exception(f"Pipeline error for {file_hash}: {str(e)}")
-        return None
+        # STEP 6 & 8: GUARANTEE DB UPDATE (NO SILENT SKIP)
+        try:
+            update_staged_invoice_extracted_data(
+                file_hash=file_hash,
+                tenant_id=tenant_id,
+                extracted_data={},
+                validation_status='NEEDS_ATTENTION',
+                conflict_message=f"Processing failed: {str(e)[:200]}"
+            )
+        except Exception as db_err:
+            logger.error(f"Failed to record pipeline error: {db_err}")
+        return {'success': False, 'error': str(e)}
+

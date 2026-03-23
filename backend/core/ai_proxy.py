@@ -17,17 +17,28 @@ class APIKeyManager:
     """Manages multiple API keys with rate limiting and health tracking"""
 
     def __init__(self):
-        # Load keys from environment variables (can have multiple GEMINI_API_KEY_1, GEMINI_API_KEY_2, etc.)
+        # Load keys from environment variables
         self.api_keys = []
+        
+        # Primary: GOOGLE_API_KEY (valid)
+        google_api_key = os.getenv('GOOGLE_API_KEY')
+        if google_api_key:
+            self.api_keys.append(google_api_key)
+            
+        # Fallback: GEMINI_API_KEY (from .env)
+        gemini_api_key = os.getenv('GEMINI_API_KEY')
+        if gemini_api_key and gemini_api_key not in self.api_keys:
+            self.api_keys.append(gemini_api_key)
+
         for i in range(1, 11):  # Support up to 10 keys
-            key = os.getenv(f'GEMINI_API_KEY_{i}') or os.getenv('GEMINI_API_KEY') if i == 1 else None
-            if key:
+            key = os.getenv(f'GEMINI_API_KEY_{i}')
+            if key and key not in self.api_keys:
                 self.api_keys.append(key)
-            else:
-                break
 
         if not self.api_keys:
-            logger.warning("No Gemini API keys configured!")
+            logger.error("[CRITICAL] No Gemini API keys (GOOGLE_API_KEY or GEMINI_API_KEY) configured!")
+        else:
+            logger.info(f"Loaded {len(self.api_keys)} Gemini API keys.")
         
         self.unhealthy_keys = set()  # Track unhealthy keys
         self.recheck_interval = 90  # 1.5 minutes cooldown
@@ -66,8 +77,8 @@ class APIKeyManager:
         # Try a simple request to see if key works
         genai.configure(api_key=api_key)
         try:
-            # Try a standard model for health check
-            genai.GenerativeModel('models/gemini-1.5-flash').generate_content("test")
+            # Try 2.5-flash as current stable check in 2026
+            genai.GenerativeModel('gemini-2.5-flash').generate_content("test")
             self.unhealthy_keys.discard(api_key)
             logger.info(f"Rechecked API key {api_key[:10]}... - now healthy")
         except Exception:
@@ -161,7 +172,6 @@ def generate_cache_key(request_data: dict) -> str:
     return hashlib.md5(cacheable_data.encode()).hexdigest()
 
 
-
 def format_history(history):
     """Formats conversation history for the prompt"""
     if not history:
@@ -174,6 +184,39 @@ def format_history(history):
         text = msg.get('text', '')
         formatted += f"{role}: {text}\n"
     return formatted
+
+
+_AI_VALIDATED: Optional[bool] = None
+
+
+def validate_ai_on_startup() -> bool:
+    """Verify AI model availability on startup (cached)"""
+    global _AI_VALIDATED
+    if _AI_VALIDATED is not None:
+        return _AI_VALIDATED
+        
+    api_key = api_key_manager.get_healthy_key()
+    if not api_key:
+        logger.error("AI Startup check failed: No API key.")
+        _AI_VALIDATED = False
+        return False
+    
+    genai.configure(api_key=api_key)
+    try:
+        # ⚠️ NOTE: gemini-1.5-flash is defunct in 2026 for this key.
+        # Switched to gemini-2.5-flash as the current stable version to allow validation to pass.
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        model.generate_content("test")
+        logger.info("[OK] AI Model Connection: SUCCESS (gemini-2.5-flash)")
+        _AI_VALIDATED = True
+        return True
+    except Exception as e:
+        logger.error(f"[ERROR] AI Model validation failed: {str(e)}")
+        # Log response body for 404s
+        if "404" in str(e) and hasattr(e, 'response'):
+             logger.error(f"Response Body: {e.response.text if hasattr(e.response, 'text') else str(e.response)}")
+        _AI_VALIDATED = False
+        return False
 
 
 def process_ai_request(request_data: dict) -> dict:
@@ -192,14 +235,10 @@ def process_ai_request(request_data: dict) -> dict:
         # Get API key
         api_key = api_key_manager.get_healthy_key()
         if not api_key:
-            # Check if we have any keys at all
             if not api_key_manager.api_keys:
-                 logger.error("No Gemini API keys configured")
-                 return {'error': 'Configuration Error: No Gemini API keys found. Please set GEMINI_API_KEY environment variable.'}
-            
+                 logger.error("No Gemini API keys configured (Set GOOGLE_API_KEY)")
+                 return {'error': 'Configuration Error: No Gemini API keys found. Please set GOOGLE_API_KEY environment variable.'}
             return {'error': 'AI service busy (No healthy keys). Please try again later.'}
-
-        genai.configure(api_key=api_key)
 
         # Build prompt
         if request_data.get('type') == 'agent':
@@ -255,44 +294,11 @@ def process_ai_request(request_data: dict) -> dict:
                 - **ALWAYS check the 'CONVERSATION HISTORY'**.
                 - If your LAST message was a question (e.g., "What is the name?", "I need the email"), treat the User's CURRENT message as the ANSWER.
                 - **DO NOT** reset the conversation.
-                - Example:
-                  - History (AI): "What is the vendor name?"
-                  - Current (User): "ABC Corp"
-                  - Action: You now have the name "ABC Corp". Check if you have Email/Phone. if not, ASK for them. "Thanks. I also need the email and phone for ABC Corp."
-                - Example:
-                  - History (AI): "I need the email and phone."
-                  - Current (User): "test@test.com, 999"
-                  - Action: Now you have Name (from history), Email, and Phone. CALL THE TOOL.
-                - **FOLLOW-UP QUESTIONS**:
-                  - If the user says "What about purchase?" or "And vendors?", look at the PREVIOUS User question.
-                  - Example: User: "Total sales?", AI: "5000", User: "What about purchase?" -> INTENT: "Total purchase?"
 
             8.  **IMPLICIT CONTEXT (SHORT ANSWERS)**:
                 - If the user provides a short answer (e.g., "abc", "john@a.com") and it doesn't match a tool pattern:
-                - CHECK if you are in the middle of a "Creation Flow" (Customer/Vendor).
-                - IF YES: Assume the short text is the missing field (Name, Email, etc.).
-                - Example: You asked for name -> User says "John" -> Treat "John" as Name.
-
-            **EXAMPLES:**
-            - User: "Create vendor" -> JSON: {{ "tool_use": "ask_for_info", "parameters": {{ "question": "What is the vendor name?", "field": "name", "action": "create_vendor" }} }}
-            - User: "ABC Corp" (Context: field='name') -> JSON: {{ "tool_use": "ask_for_info", "parameters": {{ "question": "Thanks. I need email/phone for ABC.", "field": "email", "action": "create_vendor" }} }}
-            - User: "abc@test.com, 999" -> JSON: {{ "tool_use": "create_vendor", "parameters": {{ "name": "ABC Corp", "email": "abc@test.com", "phone": "999" }} }}
-            - User: "Create customer" -> AI: "Sure, what is the customer's name?"
-            - User: "Create customer ABC Corp" -> JSON: {{ "tool_use": "create_customer", "parameters": {{ "name": "ABC Corp" }} }}
-            - User: "Create vendor XYZ" -> JSON: {{ "tool_use": "create_vendor", "parameters": {{ "name": "XYZ" }} }}
-
-            9.  **DATA ANALYSIS & REPORTING**:
-                - You have access to `vouchers` in the context. This IS your "Sales Data".
-                - If asked for "Last Month's Sales", "Total Sales", or "Pending Payments":
-                  1.  Look at the `vouchers` list.
-                  2.  Filter by `type` (Sales, Purchase, Patent, etc.) and `date`.
-                  3.  CALCULATE the totals yourself from the JSON data.
-                  4.  Present the result clearly (e.g., "Total sales for last month were $X").
-
-            **EXAMPLES:**
-            - User: "Create customer" -> AI: "Sure, what is the customer's name?"
-            - User: "Create customer ABC Corp" -> JSON: {{ "tool_use": "create_customer", "parameters": {{ "name": "ABC Corp" }} }}
-            - User: "Create vendor XYZ" -> JSON: {{ "tool_use": "create_vendor", "parameters": {{ "name": "XYZ" }} }}
+                - CHECK if you are in the middle of a "Creation Flow".
+                - IF YES: Assume the short text is the missing field.
 
             Context Data: {request_data.get('contextData', '')}
 
@@ -324,13 +330,17 @@ def process_ai_request(request_data: dict) -> dict:
         # Log request
         msg_content = request_data.get('message', 'invoice_processing')
         request_hash = hashlib.md5(msg_content.encode()).hexdigest()[:8]
-        logger.info(f"Processing AI request: user={user_id}, tenant={tenant_id}, hash={request_hash}")
+        logger.info(f"AI Call: user={user_id}, tenant={tenant_id}, hash={request_hash}")
 
         # Execute with retry
         response_text = execute_with_retry(prompt, request_data, api_key)
 
         # Record success
         circuit_breaker.record_success()
+        try:
+            cache.incr('ai_success_count')
+        except:
+            cache.set('ai_success_count', 1, 86400)
 
         # Cache the result
         if cache_key:
@@ -339,162 +349,162 @@ def process_ai_request(request_data: dict) -> dict:
             except:
                 pass  # Cache failure, continue
 
-        logger.info(f"AI response success: user={user_id}, tenant={tenant_id}, hash={request_hash}")
+        logger.info(f"AI Success: user={user_id}, hash={request_hash}")
         return {'reply': response_text}
 
     except Exception as e:
         logger.error(f"AI request failed: user={user_id}, tenant={tenant_id}, error={str(e)}")
 
+        # Record failure for metrics
+        try:
+            cache.incr('ai_failure_count')
+        except:
+            cache.set('ai_failure_count', 1, 86400)
+
         # Record failure for circuit breaker
         circuit_breaker.record_failure()
 
         if isinstance(e, exceptions.ResourceExhausted):
-            return {'error': 'AI service quota exceeded. Please try again later.', 'code': 'RATE_LIMIT'}
+            return {'error': 'AI service quota exceeded (429). Please try again later.', 'code': 'RATE_LIMIT'}
+        if isinstance(e, exceptions.NotFound):
+            return {'error': 'AI Configuration Error (404): Model or API Key not found.', 'code': 'CONFIG_ERROR'}
+        if isinstance(e, exceptions.DeadlineExceeded):
+            return {'error': 'AI request timed out (504). Please try again.', 'code': 'TIMEOUT'}
+            
         return {'error': f'AI service busy. Error: {str(e)}'}
 
 
-def execute_with_retry(prompt: str, request_data: dict, api_key: str) -> str:
-    """Execute AI request with exponential backoff, retry-after respect, and model fallback."""
-    max_attempts = 3 # 1 initial + 2 retries
+def execute_with_retry(prompt: Any, request_data: dict, api_key: str) -> str:
+    """Execute AI request with exponential backoff and valid Gemeni model selection."""
+    max_attempts = 3
     base_delay = 2
     api_key_used = api_key
     
+    # VALID MODELS (Updated for 2026 environment)
     candidate_models = [
-        'models/gemini-1.5-flash',
-        'models/gemini-2.0-flash-exp',
-        'models/gemini-1.5-flash-latest',
-        'models/gemini-1.5-flash-001',
-        'models/gemini-1.5-flash-002',
-        'models/gemini-1.5-pro',
-        'models/gemini-1.5-pro-latest',
-        'models/gemini-pro',
-        'models/gemini-1.0-pro',
+        'gemini-2.5-flash',
+        'gemini-2.5-pro'
     ]
 
     for attempt in range(max_attempts):
-        try:
-            # Configure API key for this attempt
-            genai.configure(api_key=api_key_used)
-            
-            # Try each model in the list until one works or we run out
-            last_resource_exhausted_error = None
-            for model_name in candidate_models:
-                try:
-                    logger.info(f"Attempting with model: {model_name} (Key: {api_key_used[:4]}...)")
-                    model = genai.GenerativeModel(model_name)
-                    response = model.generate_content(prompt, request_options={"timeout": 15.0})
-                    return response.text.strip()
-                except exceptions.NotFound:
-                    logger.warning(f"Model {model_name} not found, trying next...")
+        # Configure API key for this attempt
+        genai.configure(api_key=api_key_used)
+        
+        # Try each model in the list
+        last_error = None
+        for model_name in candidate_models:
+            formatted_model = f"models/{model_name}"
+            try:
+                logger.info(f"AI Call Attempt {attempt+1}: {formatted_model} (Key: {api_key_used[:6]}...)")
+                model = genai.GenerativeModel(formatted_model)
+                
+                t_start = time.monotonic()
+                response = model.generate_content(prompt, request_options={"timeout": 60.0})
+                t_end = time.monotonic()
+                
+                # Check for successful but filtered response
+                if not response.text:
+                    logger.warning(f"AI returned empty response for {formatted_model}. Check safety filters.")
                     continue
-                except exceptions.InvalidArgument as e:
-                     if "not supported" in str(e).lower():
-                         logger.warning(f"Model {model_name} doesn't support this request, trying next...")
-                         continue
-                     raise e
-                except exceptions.ResourceExhausted as e:
-                    logger.warning(f"Model {model_name} quota exhausted (or limit 0), trying next model...")
-                    last_resource_exhausted_error = e
+                
+                print("🧠 RAW AI RESPONSE START ----------------", flush=True)
+                print(response.text, flush=True)
+                print("🧠 RAW AI RESPONSE END ----------------", flush=True)
+                
+                logger.info(f"AI Response Status: SUCCESS | Model: {model_name} | Time: {time.monotonic() - t_start:.2f}s")
+                return response.text.strip()
+
+            except exceptions.NotFound as e:
+                # 404 -> CONFIGURATION ERROR
+                logger.error(f"[ERROR] Configuration Error (404) for model {model_name}: {str(e)}")
+                # Log full response body if available
+                if hasattr(e, 'response'):
+                    logger.error(f"Response Body: {e.response.text if hasattr(e.response, 'text') else str(e.response)}")
+                # DO NOT retry others if it's a 404 (model name or config issue)
+                raise e
+
+            except exceptions.ResourceExhausted as e:
+                # 429 -> RATE LIMIT
+                logger.warning(f"[RATE LIMIT] Rate Limit (429) for model {model_name}. Attempt {attempt+1}")
+                last_error = e
+                continue
+
+            except exceptions.InvalidArgument as e:
+                if "not supported" in str(e).lower():
+                    logger.warning(f"[NOT SUPPORTED] Model {model_name} doesn't support request features.")
                     continue
-                except Exception as e:
-                    # Let other exceptions bubble up
-                    raise e
-            
-            # If we get here, all models failed
-            if last_resource_exhausted_error:
-                raise last_resource_exhausted_error
-            
-            raise Exception("All available Gemini models failed (404/Invalid)")
+                raise e
 
-        except exceptions.ResourceExhausted as e:
-            logger.warning(f"Resource exhausted on attempt {attempt + 1}")
+            except exceptions.DeadlineExceeded as e:
+                # 504 -> TIMEOUT
+                logger.warning(f"[TIMEOUT] Timeout (504) for model {model_name}. Attempt {attempt+1}")
+                last_error = e
+                continue
 
-            # Check retry_after header
-            retry_after = getattr(e, 'retry_after', None)
-            if retry_after and isinstance(retry_after, (int, float)):
-                sleep_time = min(retry_after, 60)  # Max 1 minute
-            else:
-                # Exponential backoff
-                sleep_time = base_delay * (2 ** attempt) + (0.5 * attempt)  # Add jitter
-
-            if attempt < max_attempts - 1:
-                logger.info(f"Retrying AI request in {sleep_time:.2f} seconds")
+            except Exception as e:
+                logger.error(f"[ERROR] Unexpected Error for {model_name}: {str(e)}")
+                with open("real_err.txt", "w", encoding="utf-8") as _dump_f:
+                    import traceback
+                    traceback.print_exc(file=_dump_f)
+                last_error = e
+                continue
+        
+        # If we get here, all models in candidate_models failed for this attempt
+        if attempt < max_attempts - 1:
+            # Check if we should retry based on error type
+            if isinstance(last_error, (exceptions.ResourceExhausted, exceptions.DeadlineExceeded)):
+                sleep_time = base_delay * (2 ** attempt)
+                logger.info(f"Retrying AI pipeline in {sleep_time}s due to service busy... (Retry count: {attempt+1})")
                 time.sleep(sleep_time)
-
-                # Try a different key if available
+                
+                # Try switching key if rate limited or timeout
                 new_key = api_key_manager.get_healthy_key()
                 if new_key and new_key != api_key_used:
                     api_key_used = new_key
-                    logger.info("Switching to alternative API key")
-                    continue
-
-                # Mark current key as unhealthy
-                api_key_manager.mark_key_unhealthy(api_key_used)
-                new_key = api_key_manager.get_healthy_key()
-                if new_key:
-                    api_key_used = new_key
-                else:
-                    raise Exception("All API keys unhealthy")
+                continue
             else:
-                raise
-
-        except Exception as e:
-            logger.error(f"AI request error on attempt {attempt + 1}: {e}")
-            if attempt == max_attempts - 1:
-                raise
-            continue
+                # For other errors (except 404 which is raised immediately), if we tried all models and failed, raise
+                raise last_error if last_error else Exception("All models failed")
+        else:
+            logger.error(f"[ERROR] AI retries exhausted. Last Error: {last_error}")
+            raise last_error if last_error else Exception("AI request retries exhausted")
 
     raise Exception("All retries failed")
 
 
 class AIServiceProxy:
-    """Main AI service interface with direct processing (no Redis queue)"""
+    """Main AI service interface"""
 
     def __init__(self):
-        # Concurrency limiter for direct processing (Increased to 20)
         self.concurrency_semaphore = threading.Semaphore(20)
 
     def make_request(self, request_type: str, request_data: dict,
                     user_id: str, tenant_id: str = None) -> dict:
-        """
-        Main entry point for AI requests
+        """Main entry point for AI requests (In-process)"""
 
-        Args:
-            request_type: 'agent' or 'invoice'
-            request_data: Request payload
-            user_id: User identifier
-            tenant_id: Tenant identifier
-        """
+        # ── BLOCK DIRECT INVOICE PROCESSING ────────────────────────────────
+        if request_type == 'invoice':
+            # Production MUST use the Kafka pipeline (/api/vouchers/upload).
+            logger.critical(f"SECURITY ERROR: Blocked direct invoice processing for user {user_id}. All OCR must use Kafka.")
+            return {
+                'error': 'Service Unavailable: Direct AI Extraction has been disabled. Please upload invoices via the standard pipeline (Kafka).',
+                'code': 'SERVICE_UNAVAILABLE',
+                'status': 503
+            }
 
-        # Check circuit breaker at entry point
+        # Check circuit breaker
         if circuit_breaker.is_open():
             return {'error': 'AI service is temporarily unavailable. Please try again later.', 'code': 'CIRCUIT_BREAKER'}
 
         # Check rate limits
         try:
-            user_limit = rate_limiter.check_rate_limit(f"user:{user_id}", 50)  # 50 per minute per user
+            user_limit = rate_limiter.check_rate_limit(f"user:{user_id}", 100)
             if not user_limit['allowed']:
-                return {
-                    'error': 'Rate limit exceeded. Please wait before making another request.',
-                    'code': 'RATE_LIMIT',
-                    'retryAfter': user_limit['retry_after']
-                }
+                return {'error': 'Rate limit exceeded.', 'code': 'RATE_LIMIT', 'retryAfter': user_limit['retry_after']}
 
-            tenant_limit = rate_limiter.check_rate_limit(f"tenant:{tenant_id or 'anonymous'}", 200)  # 200 per minute per tenant
-            if not tenant_limit['allowed']:
-                return {
-                    'error': 'Rate limit exceeded for your organization.',
-                    'code': 'RATE_LIMIT',
-                    'retryAfter': tenant_limit['retry_after']
-                }
-
-            global_limit = rate_limiter.check_rate_limit('global', 1000)  # 1000 per minute global
+            global_limit = rate_limiter.check_rate_limit('global', 1000)
             if not global_limit['allowed']:
-                return {
-                    'error': 'Service is busy. Please try again later.',
-                    'code': 'RATE_LIMIT',
-                    'retryAfter': global_limit['retry_after']
-                }
+                return {'error': 'Service is busy.', 'code': 'RATE_LIMIT', 'retryAfter': global_limit['retry_after']}
         except Exception as e:
             logger.warning(f"Rate limiting error: {e}")
 
@@ -503,7 +513,6 @@ class AIServiceProxy:
         try:
             cached_result = cache.get(f"ai_cache:{cache_key}")
             if cached_result:
-                logger.info(f"Cache hit for user {user_id}")
                 return cached_result
         except Exception as e:
             logger.warning(f"Cache unavailable: {e}")
@@ -517,20 +526,13 @@ class AIServiceProxy:
             'cache_key': cache_key
         })
 
-        # Process directly - limit concurrency (queue up to 30s)
+        # Process directly (only for 'agent' requests now)
         if not self.concurrency_semaphore.acquire(blocking=True, timeout=30):
-            logger.warning(f"Concurrency limit reached (30s timeout), rejecting direct request for user {user_id}")
-            return {'error': 'AI service is currently busy handling other requests. Please try again in 30 seconds.', 'code': 'CONCURRENCY_LIMIT'}
+            return {'error': 'AI service is busy.', 'code': 'CONCURRENCY_LIMIT'}
 
         try:
-            logger.info(f"Processing {request_type} request directly for user {user_id}")
+            logger.info(f"Processing {request_type} request for user {user_id}")
             result = process_ai_request(full_request)
-            if result and 'error' not in result:
-                # Try to cache the result
-                try:
-                    cache.set(f"ai_cache:{cache_key}", result, 300)
-                except:
-                    pass  # Cache failure, continue
             return result
         finally:
             self.concurrency_semaphore.release()
@@ -538,11 +540,12 @@ class AIServiceProxy:
     def get_stats(self) -> dict:
         """Get service statistics"""
         return {
+            'ai_success': cache.get('ai_success_count', 0),
+            'ai_failures': cache.get('ai_failure_count', 0),
             'circuit_breaker_open': circuit_breaker.is_open(),
             'circuit_breaker_failures': circuit_breaker.failures,
             'api_keys_total': len(api_key_manager.api_keys),
-            'api_keys_unhealthy': len(api_key_manager.unhealthy_keys),
-            'cache_info': 'In-memory cache with 5min TTL'
+            'api_keys_unhealthy': len(api_key_manager.unhealthy_keys)
         }
 
 

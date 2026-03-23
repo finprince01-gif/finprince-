@@ -89,7 +89,7 @@ HEADER_FIELDS = [
     'Stat Payment (TCS) - Bank Name', 'Stat Payment (TCS) - Branch Name'
 ]
 
-def perform_ocr_extraction(file_bytes, mime_type, api_key=None):
+def perform_ocr_extraction(file_bytes, mime_type, api_key=None, pre_extracted_text=None, hint_data=None):
     if not api_key:
         api_key = api_key_manager.get_healthy_key()
     
@@ -216,8 +216,17 @@ Return the data in this EXACT JSON structure:
 Return ONLY the raw JSON object. No markdown, no code fences, no explanation.
 """
 
+    hint = ""
+    if pre_extracted_text:
+        hint += f"\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nOCR HINT (FOR REFERENCE):\n{pre_extracted_text}\n"
+    
+    if hint_data:
+        hint += f"\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nRULE-BASED EXTRACTION HINTS (USE THESE TO VALIDATE/FIX):\n{json.dumps(hint_data, indent=2)}\n"
+
+    final_prompt = prompt_text + hint
+
     raw_text = execute_with_retry(
-        [prompt_text, {'mime_type': mime_type, 'data': file_bytes}],
+        [final_prompt, {'mime_type': mime_type, 'data': file_bytes}],
         {},
         api_key
     )

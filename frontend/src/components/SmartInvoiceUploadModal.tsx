@@ -21,7 +21,7 @@ import { VOUCHER_COLUMN_SCHEMAS } from '../services/mappingEngine';
 // ─────────────────────────────────────────────────────────────────────────────
 
 type VendorStatus = 'FOUND' | 'MISSING' | 'RESOLVED' | 'ERROR';
-type ValidationStatus = 'READY' | 'VENDOR_MISSING' | 'VALIDATION_FAILED' | 'EXTRACTION_FAILED' | 'PENDING' | 'RESOLVED' | 'FOUND' | 'NOT_FOUND' | 'GSTIN_CONFLICT' | 'ERROR' | 'VOUCHER_CREATED';
+type ValidationStatus = 'READY' | 'VENDOR_MISSING' | 'VALIDATION_FAILED' | 'EXTRACTION_FAILED' | 'PENDING' | 'RESOLVED' | 'FOUND' | 'NOT_FOUND' | 'GSTIN_CONFLICT' | 'ERROR' | 'VOUCHER_CREATED' | 'NEEDS_ATTENTION' | 'LOW_CONFIDENCE' | 'processing';
 
 interface ScanResult {
     id: number;
@@ -34,10 +34,9 @@ interface ScanResult {
     invoice_number: string;
     invoice_date: string;
     total_amount: string | number;
-    status: string; // "Found" | "Vendor Missing" | "Error"
+    status: string; // Legacy UI status label
     extracted_data: any;
     created_at: string;
-    // ── Fields from re-validation ──
     validationStatus: ValidationStatus;
     matchedBy?: string;
     conflictMessage?: string;
@@ -75,16 +74,20 @@ const StatusBadge: React.FC<{ status: ValidationStatus, title?: string }> = ({ s
         RESOLVED: { label: 'Resolved', cls: 'bg-blue-100 text-blue-800 border border-blue-300', icon: '🔗' },
         VENDOR_MISSING: { label: 'Vendor Missing', cls: 'bg-amber-100 text-amber-800 border border-amber-300', icon: '⚠️' },
         NOT_FOUND: { label: 'Vendor Missing', cls: 'bg-amber-100 text-amber-800 border border-amber-300', icon: '⚠️' },
-        VALIDATION_FAILED: { label: 'Invalid Data', cls: 'bg-red-100 text-red-800 border border-red-300', icon: '⚠️' },
-        EXTRACTION_FAILED: { label: 'Scan Failed', cls: 'bg-red-100 text-red-800 border border-red-300', icon: '❌' },
         GSTIN_CONFLICT: { label: 'Conflict', cls: 'bg-red-100 text-red-800 border border-red-300', icon: '⚠️' },
-        PENDING: { label: '...', cls: 'bg-gray-100 text-gray-600 border border-gray-200', icon: '⏳' },
+        PENDING: { label: 'Validating...', cls: 'bg-blue-50 text-blue-700 border border-blue-200', icon: '⏳' },
+        PROCESSING: { label: 'Processing...', cls: 'bg-blue-50 text-blue-700 border border-blue-200', icon: '⏳' },
+        NEEDS_ATTENTION: { label: 'Needs Attention', cls: 'bg-orange-100 text-orange-800 border border-orange-300', icon: '⚠️' },
+        LOW_CONFIDENCE: { label: 'Low Confidence', cls: 'bg-amber-100 text-amber-800 border border-amber-300', icon: '🤏' },
+        EXTRACTION_FAILED: { label: 'Extraction Failed', cls: 'bg-red-50 text-red-700 border border-red-200', icon: '❌' },
+        VALIDATION_FAILED: { label: 'Validation Failed', cls: 'bg-red-50 text-red-700 border border-red-200', icon: '❌' },
         VOUCHER_CREATED: { label: 'Voucher Created', cls: 'bg-indigo-100 text-indigo-800 border border-indigo-300', icon: '🧾' },
         ERROR: { label: 'Error', cls: 'bg-red-100 text-red-800 border border-red-300', icon: '❌' },
     };
-    const { label, cls, icon } = cfg[status as string] || cfg.ERROR;
+    const s = (status as string || 'ERROR').toUpperCase();
+    const { label, cls, icon } = cfg[s] || cfg.ERROR;
     return (
-        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold tracking-tight cursor-help ${cls}`} title={title}>
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold tracking-tight cursor-help ${cls}`} title={title || label}>
             {icon} {label}
         </span>
     );
@@ -478,6 +481,25 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
 
     // State
     const [step, setStep] = useState<ModalStep>('upload');
+    const [isLoading, setIsLoading] = useState(false);
+    const [fetchError, setFetchError] = useState<string | null>(null);
+    const [retryCount, setRetryCount] = useState(0);
+    const isMounted = useRef(true);
+    // Use a ref for the polling interval so it can be cleared from anywhere
+    const pollingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const pollingIntervalRef2 = useRef<NodeJS.Timeout | null>(null); // setInterval handle
+    const retryCountRef = useRef(0); // Mirror retryCount in a ref for non-stale access in interval
+
+    useEffect(() => {
+        isMounted.current = true;
+        return () => {
+            isMounted.current = false;
+            // Clear both timeout and interval on unmount
+            if (pollingTimeoutRef.current) clearTimeout(pollingTimeoutRef.current);
+            if (pollingIntervalRef2.current) clearInterval(pollingIntervalRef2.current);
+        };
+    }, []);
+
     const [dragOver, setDragOver] = useState(false);
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [scanId, setScanId] = useState<string>('');
@@ -639,102 +661,287 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
 
     // ── STEP 1 — SCAN ────────────────────────────────────────────────────────
 
-    const fetchStagedInvoices = useCallback(async (seedData?: any[]) => {
+    const MAX_RETRIES = 30; // 90 seconds (3000ms poll) for complex AI extraction
+    const POLL_INTERVAL_MS = 3000;
+
+    /**
+     * Stop the active polling interval.
+     */
+    const stopPolling = useCallback(() => {
+        if (pollingIntervalRef2.current) {
+            clearInterval(pollingIntervalRef2.current);
+            pollingIntervalRef2.current = null;
+        }
+        if (pollingTimeoutRef.current) {
+            clearTimeout(pollingTimeoutRef.current);
+            pollingTimeoutRef.current = null;
+        }
+        retryCountRef.current = 0;
+        setRetryCount(0);
+    }, []);
+
+    /**
+     * Execute a single fetch of staged invoices and update state.
+     * Returns true if polling should stop (completed or max retries).
+     */
+    const doFetch = useCallback(async (sid: string): Promise<boolean> => {
         try {
-            let res: any[];
-            if (seedData) {
-                res = seedData;
-            } else {
-                // Use ref so this stable callback always reads the latest value
-                const allUnresolved = useAllUnresolvedRef.current;
-                const queryParam = allUnresolved ? '' : `?upload_session_id=${uploadSessionId}`;
-                res = await httpClient.get(`/api/ocr-staging/${queryParam}`);
-            }
-            console.log("OCR staging rows:", useAllUnresolvedRef.current ? "ALL" : uploadSessionId, res);
+            console.log("Calling /api/ocr-staging/ with sessionId:", sid);
+            const res: any = await httpClient.get(`/api/ocr-staging/${sid}/`);
 
+            if (!isMounted.current) return true;
+            setIsLoading(false);
+            setFetchError(null);
+
+            // ── Handle both envelope {status, data:[]} and legacy plain array ──
+            let rows: any[];
+            let pipelineStatus: string;
             if (Array.isArray(res)) {
-                const seeded: ScanResult[] = res.map((r: any) => {
-                    // Back-compat: map backend 'status' or 'validation_status'
-                    const backendStatus = r.validation_status || r.status;
-                    let vStatus: ValidationStatus = 'PENDING';
+                // Legacy plain-array response (backward compat)
+                rows = res;
+                pipelineStatus = rows.every(r => !['PENDING', 'processing'].includes(r.validation_status || '')) ? 'completed' : 'processing';
+            } else if (res && Array.isArray(res.data)) {
+                rows = res.data;
+                pipelineStatus = res.status || 'processing';
+            } else {
+                console.error("Unexpected API response format:", res);
+                setScanResults([]);
+                return false;
+            }
 
-                    if (backendStatus === 'READY') vStatus = 'READY';
-                    else if (backendStatus === 'VENDOR_MISSING') vStatus = 'VENDOR_MISSING';
-                    else if (backendStatus === 'VALIDATION_FAILED') vStatus = 'VALIDATION_FAILED';
-                    else if (backendStatus === 'EXTRACTION_FAILED') vStatus = 'EXTRACTION_FAILED';
-                    else if (backendStatus === 'FOUND') vStatus = 'READY'; // Convert legacy FOUND to READY
-                    else if (backendStatus === 'NOT_FOUND' || backendStatus === 'Vendor Missing') vStatus = 'VENDOR_MISSING';
-                    else if (backendStatus === 'GSTIN_CONFLICT') vStatus = 'GSTIN_CONFLICT';
-                    else if (backendStatus === 'RESOLVED') vStatus = 'RESOLVED';
-                    else if (backendStatus === 'Voucher Created' || backendStatus === 'VOUCHER_CREATED') vStatus = 'VOUCHER_CREATED';
-                    else if (backendStatus === 'ERROR') vStatus = 'EXTRACTION_FAILED';
+            console.log(`OCR staging: status=${pipelineStatus}, rows=${rows.length}`);
 
-                    // ✅ KEY FIX: A row can NEVER be "Ready" if there is no vendor_id.
-                    // The backend sometimes returns stale FOUND/READY with vendor_id=null.
-                    // Catch it here so "Create Vendor" shows immediately without needing to edit.
-                    if (vStatus === 'READY' && !r.vendor_id) {
-                        vStatus = 'VENDOR_MISSING';
-                    }
+            // ── Diagnostic: log the first row's full structure so mapping issues are visible ──
+            if (rows.length > 0) {
+                console.log('[OCR Staging] Full API row[0]:', JSON.stringify(rows[0], null, 2));
+            }
 
-                    return {
-                        ...r,
-                        extracted_data: r.extracted_data || {},
-                        validationStatus: vStatus,
-                        // legacy fields
-                        vendor_status: (vStatus === 'READY' || vStatus === 'RESOLVED') ? 'FOUND' : 'MISSING'
-                    };
-                });
-                setScanResults(seeded);
+            // Bad OCR values that should be treated as missing
+            const JUNK_VALUES = new Set([
+                'DATED', 'DATE', 'NO', 'NUMBER', 'BILL', 'INV', 'INVOICE',
+                'PARTICULARS', '—', '-', 'N/A', 'NA', 'NIL', 'NULL', 'NONE', 'UNDEFINED'
+            ]);
 
-                // If there are any PENDING rows, schedule a re-fetch to catch when backend finishes validation
-                const hasPending = seeded.some(r => r.validationStatus === 'PENDING');
-                if (hasPending) {
-                    setTimeout(() => fetchStagedInvoices(), 3000);
+            /**
+             * Returns the value as a display string, or '—' if it is empty/junk.
+             * Accepts multiple candidate values — returns the first valid one.
+             */
+            const clean = (...candidates: any[]): string => {
+                for (const val of candidates) {
+                    if (!val && val !== 0) continue;
+                    const s = String(val).trim();
+                    if (!s) continue;
+                    if (JUNK_VALUES.has(s.toUpperCase())) continue;
+                    return s;
+                }
+                return '—';
+            };
+
+            const seeded: ScanResult[] = rows.map((r: any) => {
+                const rawExtracted = r.extracted_data || {};
+                // Try all known nesting patterns
+                const inv: Record<string, any> =
+                    rawExtracted.invoice ||
+                    rawExtracted.header ||
+                    rawExtracted.header_fields ||
+                    rawExtracted || {};
+
+                const backendStatus = r.validation_status || r.status || 'PENDING';
+                let vStatus: ValidationStatus = 'PENDING';
+
+                if (backendStatus === 'READY' || backendStatus === 'found' || backendStatus === 'FOUND') vStatus = 'READY';
+                else if (backendStatus === 'RESOLVED' || backendStatus === 'resolved') vStatus = 'RESOLVED';
+                else if (['VENDOR_MISSING', 'NOT_FOUND', 'not_found', 'Vendor Missing'].includes(backendStatus)) vStatus = 'VENDOR_MISSING';
+                else if (backendStatus === 'GSTIN_CONFLICT' || backendStatus === 'gstin_conflict') vStatus = 'GSTIN_CONFLICT';
+                else if (backendStatus === 'NEEDS_ATTENTION' || backendStatus === 'needs_attention') vStatus = 'NEEDS_ATTENTION';
+                else if (backendStatus === 'VOUCHER_CREATED' || backendStatus === 'Voucher Created') vStatus = 'VOUCHER_CREATED';
+                else if (['EXTRACTION_FAILED', 'extraction_failed', 'ERROR'].includes(backendStatus)) vStatus = 'EXTRACTION_FAILED';
+                else if (backendStatus === 'VALIDATION_FAILED' || backendStatus === 'validation_failed') vStatus = 'VALIDATION_FAILED';
+                else if (backendStatus === 'processing') vStatus = 'processing';
+
+                if (rawExtracted._fallback || r.conflict_message?.toLowerCase().includes('low-confidence')) {
+                    vStatus = 'LOW_CONFIDENCE';
                 }
 
-                // Auto-revalidate rows that are VENDOR_MISSING with no vendor_id via PATCH
-                // so the backend does a fresh lookup — status will update to correct value immediately.
-                const needsRevalidation = seeded.filter(r => r.validationStatus === 'VENDOR_MISSING' && !r.vendor_id);
-                if (needsRevalidation.length > 0) {
-                    setTimeout(async () => {
-                        for (const row of needsRevalidation) {
-                            try {
-                                const result: any = await httpClient.patch(
-                                    `/api/ocr-staging/${row.file_hash}/`,
-                                    { extracted_data: row.extracted_data }
-                                );
-                                setScanResults(prev => prev.map(r => {
-                                    if (r.file_hash !== row.file_hash) return r;
-                                    const s = result.status || '';
-                                    let newStatus: ValidationStatus = 'VENDOR_MISSING';
-                                    if (s === 'READY' || s === 'found' || s === 'FOUND') newStatus = 'READY';
-                                    else if (s === 'VENDOR_MISSING' || s === 'NOT_FOUND' || s === 'not_found') newStatus = 'VENDOR_MISSING';
-                                    else if (s === 'GSTIN_CONFLICT' || s === 'gstin_conflict') newStatus = 'GSTIN_CONFLICT';
-                                    return {
-                                        ...r,
-                                        validationStatus: newStatus,
-                                        vendor_id: result.vendor_id ?? r.vendor_id,
-                                        vendor_name: result.vendor_name || r.vendor_name,
-                                        matchedBy: result.matched_by || r.matchedBy,
-                                    };
-                                }));
-                            } catch {
-                                // Silently ignore — row stays VENDOR_MISSING showing Create Vendor button
+                // A row can NEVER be "Ready" if vendor_id is absent
+                if (vStatus === 'READY' && !r.vendor_id) vStatus = 'VENDOR_MISSING';
+
+                // ── Resolve display fields using variadic clean() ──
+                // Backend now sends '' for missing fields (not '—'), so empty string
+                // cascades to the next candidate correctly.
+                const invoiceNumber = clean(
+                    r.invoice_number,
+                    inv['Supplier Invoice No'], inv['Supplier Invoice No.'],
+                    inv['invoice_number'], inv['Invoice No'], inv['Invoice Number'],
+                );
+                const invoiceDate = clean(
+                    r.invoice_date,
+                    inv['Voucher Date'], inv['Invoice Date'], inv['Date'], inv['invoice_date'],
+                );
+                const vendorName = clean(
+                    r.vendor_name,
+                    inv['Vendor Name'], inv['vendor_name'],
+                    inv['Supplier Name'], inv['Party Name'], inv['Bill From'],
+                );
+                const vendorGstin = clean(
+                    r.vendor_gstin,
+                    inv['GSTIN'], inv['vendor_gstin'], inv['Supplier GSTIN'], inv['Party GSTIN'],
+                );
+                const totalAmount = clean(
+                    r.total_amount,
+                    inv['Total Invoice Value'], inv['Grand Total'],
+                    inv['total_amount'], inv['Invoice Value'], inv['Amount'],
+                );
+
+                // Hardening: Only treat as NEEDS_ATTENTION if it is explicitly set by backend.
+                // Do not eagerly override PENDING here while the pipeline is still active.
+                const hasAnyData = invoiceNumber !== '—' || vendorName !== '—' || totalAmount !== '—';
+                const isCompletelyEmpty = !hasAnyData && Object.keys(inv).length === 0;
+
+                if (vStatus === 'PENDING' && isCompletelyEmpty) {
+                    // Let it stay as PENDING (will show 'Validating...' or spinner in UI)
+                    // unless we are at the very end of retries (handled by stopPolling logic).
+                }
+
+                return {
+                    id: r.id,
+                    file_hash: r.file_hash,
+                    file_path: r.file_path,
+                    invoice_number: invoiceNumber,
+                    invoice_date: invoiceDate,
+                    vendor_name: vendorName,
+                    vendor_gstin: vendorGstin,
+                    total_amount: totalAmount,
+                    validationStatus: vStatus,
+                    vendor_id: r.vendor_id || null,
+                    vendor_status: (vStatus === 'READY' || vStatus === 'RESOLVED') ? 'FOUND' : 'MISSING' as VendorStatus,
+                    matchedBy: r.matched_by || '',
+                    conflictMessage: r.conflict_message || '',
+                    extracted_data: rawExtracted,
+                    status: r.status || backendStatus,
+                    created_at: r.created_at || new Date().toISOString(),
+                };
+            });
+
+            setScanResults(seeded);
+
+            // ── Stop polling if backend says completed or all rows settled ──
+            if (pipelineStatus === 'completed') {
+                console.log('✅ Backend reported completed — stopping poll.');
+                return true; // Signal caller to stop
+            }
+
+            // ── AUTO-PATCH MISSING VENDORS (opportunistic, silent) ──
+            const needsRevalidation = seeded.filter(r => r.validationStatus === 'VENDOR_MISSING' && !r.vendor_id);
+            if (needsRevalidation.length > 0) {
+                setTimeout(async () => {
+                    for (const row of needsRevalidation) {
+                        try {
+                            const patchResult: any = await httpClient.patch(`/api/ocr-staging/${row.file_hash}/`, { extracted_data: row.extracted_data });
+                            if (patchResult.status === 'READY') {
+                                setScanResults(prev => prev.map(r => r.id === row.id ? { ...r, ...patchResult, validationStatus: 'READY' } : r));
                             }
-                        }
-                    }, 400);
-                }
-            } // end if (Array.isArray(res))
-        } catch (err) {
-            console.error("Failed to fetch staged invoices", err);
+                        } catch { /* silent */ }
+                    }
+                }, 1000);
+            }
+
+            return false; // Keep polling
+
+        } catch (err: any) {
+            if (!isMounted.current) return true;
+            setIsLoading(false);
+            console.error("Failed to fetch staged invoices:", err);
+
+            const httpStatus = err?.response?.status;
+            // Never retry on invalid request — would loop forever on bad URL
+            if (httpStatus === 400 || httpStatus === 404) {
+                setFetchError('Invalid request — check session ID.');
+                console.error('Not retrying (bad request):', err);
+                return true;
+            }
+            if (httpStatus === 500) setFetchError('Server error (500). Please check backend logs.');
+            else if (httpStatus === 503) setFetchError('Service unavailable (Kafka/AI). Retrying...');
+            else setFetchError('Could not sync with server. Check connection.');
+
+            return false; // Allow retry up to MAX_RETRIES
         }
     }, [uploadSessionId]);
 
-    useEffect(() => {
-        if (step === 'review' && scanResults.length === 0) {
-            fetchStagedInvoices();
+    /**
+     * Fetch staged invoices once and start a polling interval if the
+     * pipeline is still processing.  The interval stops automatically
+     * when the backend reports status=completed or MAX_RETRIES is hit.
+     */
+    const fetchStagedInvoices = useCallback(async (forcedSid?: any, _isAutoRetry = false) => {
+        if (!isMounted.current) return;
+
+        // ── Resolve session ID ──
+        let sid = '';
+        if (typeof forcedSid === 'string' && forcedSid) {
+            sid = forcedSid;
+        } else if (forcedSid && typeof forcedSid === 'object' && !Array.isArray(forcedSid)) {
+            sid = forcedSid.upload_session_id || forcedSid.id || uploadSessionId;
+        } else {
+            sid = useAllUnresolvedRef.current ? '' : uploadSessionId;
         }
-    }, [step, fetchStagedInvoices, scanResults.length]);
+
+        if (!sid || typeof sid !== 'string') {
+            console.error('Invalid sessionId passed to fetchStagedInvoices:', forcedSid);
+            return;
+        }
+
+        // ── Stop any existing poll before starting a new one ──
+        stopPolling();
+        setFetchError(null);
+        setRetryCount(0);
+        retryCountRef.current = 0;
+        setIsLoading(true);
+
+        // ── Initial fetch ──
+        const shouldStop = await doFetch(sid);
+        if (shouldStop || !isMounted.current) return;
+
+        // ── Start polling interval ──
+        pollingIntervalRef2.current = setInterval(async () => {
+            if (!isMounted.current) {
+                clearInterval(pollingIntervalRef2.current!);
+                pollingIntervalRef2.current = null;
+                return;
+            }
+
+            retryCountRef.current += 1;
+            setRetryCount(retryCountRef.current);
+
+            if (retryCountRef.current > MAX_RETRIES) {
+                // Hard stop — mark remaining PENDING as NEEDS_ATTENTION
+                console.warn(`Polling stopped after ${MAX_RETRIES} retries.`);
+                clearInterval(pollingIntervalRef2.current!);
+                pollingIntervalRef2.current = null;
+                setScanResults(prev => prev.map(r =>
+                    (r.validationStatus === 'PENDING' || r.validationStatus === 'processing')
+                        ? { ...r, validationStatus: 'NEEDS_ATTENTION', conflictMessage: 'Extraction timeout – please review manually.' }
+                        : r
+                ));
+                return;
+            }
+
+            const done = await doFetch(sid);
+            if (done) {
+                console.log('Polling complete — clearing interval.');
+                clearInterval(pollingIntervalRef2.current!);
+                pollingIntervalRef2.current = null;
+            }
+        }, POLL_INTERVAL_MS);
+
+    }, [uploadSessionId, doFetch, stopPolling]);
+
+    useEffect(() => {
+        if (!uploadSessionId) return;
+        if (step === 'review' && scanResults.length === 0) {
+            fetchStagedInvoices(uploadSessionId);
+        }
+    }, [step, uploadSessionId]); // Removed dependencies that cause re-triggering
 
     // ── STEP 1 — SCAN ────────────────────────────────────────────────────────
 
@@ -799,7 +1006,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
 
             // Use the returned staged list directly to avoid redundant GET & race conditions
             if (res?.staged) {
-                fetchStagedInvoices(res.staged);
+                fetchStagedInvoices(uploadSessionId);
             }
             setStep('review');
         } catch (err: any) {
@@ -1087,7 +1294,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     const pendingCount = scanResults.filter(r => r.validationStatus === 'PENDING').length;
     const vouchersCreatedCount = scanResults.filter(r => r.validationStatus === 'VOUCHER_CREATED').length;
 
-    const attentionNeededCount = scanResults.filter(r => !['READY', 'FOUND', 'RESOLVED'].includes(r.validationStatus)).length;
+    const attentionNeededCount = scanResults.filter(r => !['READY', 'FOUND', 'RESOLVED', 'PENDING', 'PROCESSING', 'scanning'].includes(r.validationStatus)).length;
 
     // Auto-switch to appropriate view based on what needs attention
     useEffect(() => {
@@ -1121,9 +1328,9 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                     || resolvingRow.extracted_data?.line_items
                     || [];
                 const supplier_items = rawItems.map((it: any) => ({
-                    supplierItemCode: it['Item Code'] || it['Part No'] || '',
-                    supplierItemName: it['Item Name'] || it['Description'] || '',
-                    hsnSacCode: it['HSN/SAC'] || it['HSN Code'] || ''
+                    supplierItemCode: it['Item Code'] || it['item_code'] || it['Part No'] || '',
+                    supplierItemName: it['Item Name'] || it['item_name'] || it['Description'] || it['description'] || '',
+                    hsnSac: it['HSN/SAC'] || it['hsn_sac'] || it['HSN Code'] || it['hsnSac'] || ''
                 }));
 
                 return (
@@ -1454,9 +1661,27 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                     </div>
                                 )}
                                 {pendingCount > 0 && (
-                                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex gap-2 text-sm text-gray-600 font-medium">
-                                        <span className="flex-shrink-0 text-base">⏳</span>
-                                        <span>Validating <strong>{pendingCount}</strong> vendor(s)…</span>
+                                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center justify-between text-sm text-blue-800 font-medium animate-pulse">
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex-shrink-0 text-base">⏳</span>
+                                            <span>Validating <strong>{pendingCount}</strong> vendor(s) via AI pipeline…</span>
+                                        </div>
+                                        <div className="text-[10px] bg-blue-100 px-2 py-0.5 rounded-full">Attempt {retryCount}/3</div>
+                                    </div>
+                                )}
+
+                                {fetchError && (
+                                    <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center justify-between text-sm text-red-800 font-medium">
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex-shrink-0 text-base">❌</span>
+                                            <span>{fetchError}</span>
+                                        </div>
+                                        <button
+                                            onClick={() => fetchStagedInvoices()}
+                                            className="px-3 py-1 bg-red-600 text-white rounded-lg text-[10px] font-bold hover:bg-red-700 transition-colors uppercase"
+                                        >
+                                            Retry Sync
+                                        </button>
                                     </div>
                                 )}
 
@@ -1549,6 +1774,10 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                                     <button onClick={() => setResolvingRow(row)} className="px-2 py-1 bg-amber-500 text-white rounded text-[10px] font-bold hover:bg-amber-600 uppercase">Create Vendor</button>
                                                                 ) : row.validationStatus === 'GSTIN_CONFLICT' ? (
                                                                     <button onClick={() => setEditingRow(row)} className="px-2 py-1 bg-red-500 text-white rounded text-[10px] font-bold hover:bg-red-600 uppercase">Resolve</button>
+                                                                ) : row.validationStatus === 'LOW_CONFIDENCE' ? (
+                                                                    <button onClick={() => setEditingRow(row)} className="px-2 py-1 bg-amber-600 text-white rounded text-[10px] font-bold hover:bg-amber-700 uppercase" title={row.conflictMessage || "Low confidence OCR – manual review needed"}>Review</button>
+                                                                ) : row.validationStatus === 'NEEDS_ATTENTION' ? (
+                                                                    <button onClick={() => setEditingRow(row)} className="px-2 py-1 bg-orange-500 text-white rounded text-[10px] font-bold hover:bg-orange-600 uppercase" title={row.conflictMessage || "Manual review required"}>Review</button>
                                                                 ) : row.validationStatus === 'VALIDATION_FAILED' ? (
                                                                     <span className="text-red-500 text-[10px] uppercase font-bold text-center px-1" title={row.conflictMessage || "Invalid data"}>Fix Data</span>
                                                                 ) : ['EXTRACTION_FAILED', 'ERROR'].includes(row.validationStatus) ? (

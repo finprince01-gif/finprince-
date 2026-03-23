@@ -479,6 +479,10 @@ class VendorViewSet(viewsets.ModelViewSet):
                 return Response({
                     "error": "GSTIN already exists."
                 }, status=status.HTTP_400_BAD_REQUEST)
+            if len(gstin) > 15:
+                return Response({
+                    "error": f"GSTIN '{gstin}' exceeds the 15-character limit (Length: {len(gstin)}). Please correct."
+                }, status=status.HTTP_400_BAD_REQUEST)
                 
         vendor_data = {
             "vendor_name": vendor_name,
@@ -529,6 +533,10 @@ class PurchaseVendorCreateView(APIView):
         gstin = request.data.get('gstin', '')
         if gstin:
             gstin = gstin.strip().upper()
+            if len(gstin) > 15:
+                return Response({
+                    "error": f"GSTIN '{gstin}' cannot exceed 15 characters. Please correct it."
+                }, status=status.HTTP_400_BAD_REQUEST)
         branch = request.data.get('branch', '').strip()
         address = request.data.get('address', '').strip()
         state = request.data.get('state', '').strip()

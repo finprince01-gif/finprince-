@@ -388,11 +388,11 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                     branch
                 });
 
-                const items = invoiceResults[0].items.filter((pi: any) => pi['Item Name'] || pi['Item Code'])
+                const items = invoiceResults[0].items.filter((pi: any) => pi['Item Name'] || pi['Item Code'] || pi['item_name'] || pi['Description'] || pi['description'] || pi['Item'])
                     .map((pi: any) => ({
-                        supplierItemCode: String(pi['Item Code'] || ''),
-                        supplierItemName: String(pi['Item Name'] || ''),
-                        hsnSac: String(pi['HSN/SAC'] || ''),
+                        supplierItemCode: String(pi['Item Code'] || pi['item_code'] || pi['Part No'] || ''),
+                        supplierItemName: String(pi['Item Name'] || pi['item_name'] || pi['Description'] || pi['description'] || pi['Item'] || ''),
+                        hsnSac: String(pi['HSN/SAC'] || pi['hsn_sac'] || pi['HSN Code'] || pi['hsnSac'] || ''),
                     }));
 
                 if (res?.status === 'FOUND') {
@@ -507,7 +507,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             if (scanType === 'bulk') {
                 const formData = new FormData();
                 newFiles.forEach(f => formData.append('files', f));
-                
+
                 const response = await httpClient.postFormData<any>('/api/bulk-upload/', formData);
                 if (response.job_id) {
                     setBulkJobId(response.job_id);
@@ -602,8 +602,8 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
                         // Build a CLEAN flat rawHeader: invoice fields + summary totals only
                         // Do NOT spread resData (which contains container keys like "invoice", "items")
-                        const rawHeader: Record<string, any> = { 
-                            ...invoicePart, 
+                        const rawHeader: Record<string, any> = {
+                            ...invoicePart,
                             ...summaryTotals,
                             voucher_type: resData.voucher_type || res.voucher_type || voucherType
                         };
@@ -794,15 +794,15 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         try {
             // Fetch the actual extracted data from the staging API
             const stagedResults = await httpClient.get<any[]>('/api/ocr-staging/');
-            
+
             // Map the OCR staging results to the format expected by our UI (InvoiceResult)
             const mappedResults: InvoiceResult[] = stagedResults.map(item => {
                 const extracted = item.extracted_data || {};
-                
+
                 return {
                     invoice: extracted.invoice || extracted.header || extracted,
                     items: extracted.items || extracted.line_items || [],
-                    headerMapping: {}, 
+                    headerMapping: {},
                     itemMapping: {},
                     file_hash: item.file_hash,
                     cacheRecordId: item.id
@@ -818,7 +818,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                 prev.forEach(r => {
                     if (r.file_hash) map.set(r.file_hash, r);
                 });
-                
+
                 // Overwrite with fresh data from staging
                 mappedResults.forEach(r => {
                     if (r.file_hash) map.set(r.file_hash, r);
@@ -835,7 +835,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
 
         let currentInterval = 2000;
-        
+
         const poll = async () => {
             try {
                 const status = await httpClient.get<any>(`/api/bulk-status/${jobId}/`);
@@ -861,9 +861,9 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                 const nextInterval = progress >= 0.5 ? 5000 : 2000;
 
                 if (nextInterval !== currentInterval) {
-                   currentInterval = nextInterval;
-                   if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
-                   pollingIntervalRef.current = setInterval(poll, currentInterval);
+                    currentInterval = nextInterval;
+                    if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+                    pollingIntervalRef.current = setInterval(poll, currentInterval);
                 }
 
             } catch (err) {
@@ -1208,10 +1208,10 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
     // ────────────────────────────────────────────────────────────────────────────
     const isSingleScan = scanType === 'single';
-    const modePrefix = extractionMode === 'tally' ? 'Tally' : 
-                      (extractionMode === 'finpixe' ? 'Finpixe' : 
-                      (extractionMode.charAt(0).toUpperCase() + extractionMode.slice(1)));
-    
+    const modePrefix = extractionMode === 'tally' ? 'Tally' :
+        (extractionMode === 'finpixe' ? 'Finpixe' :
+            (extractionMode.charAt(0).toUpperCase() + extractionMode.slice(1)));
+
     const modalTitle = `${modePrefix} ${isSingleScan ? 'Single' : 'Bulk'} Scan – Invoice Scanner`;
     const modalHint = isSingleScan
         ? 'Upload a single invoice for fast AI extraction.'
@@ -1287,12 +1287,12 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                                             </span>
                                         )}
                                     </div>
-                                    
+
                                     {bulkStatus ? (
                                         <div className="space-y-1.5">
                                             <div className="w-full bg-gray-200 rounded-full h-2">
-                                                <div 
-                                                    className="bg-indigo-600 h-2 rounded-full transition-all duration-500" 
+                                                <div
+                                                    className="bg-indigo-600 h-2 rounded-full transition-all duration-500"
                                                     style={{ width: `${((bulkStatus.processed + bulkStatus.failed) / bulkStatus.total) * 100}%` }}
                                                 ></div>
                                             </div>
