@@ -31,6 +31,8 @@ class VoucherSalesPaymentDetailsSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'created_at', 'updated_at')
 
 class VoucherSalesDispatchDetailsSerializer(serializers.ModelSerializer):
+    dispatch_document = serializers.FileField(required=False, allow_null=True)
+
     class Meta:
         model = VoucherSalesDispatchDetails
         exclude = ('invoice', 'tenant_id')
@@ -48,6 +50,10 @@ class VoucherSalesInvoiceDetailsSerializer(TenantModelSerializerMixin, serialize
     payment_details = VoucherSalesPaymentDetailsSerializer(required=False)
     dispatch_details = VoucherSalesDispatchDetailsSerializer(required=False)
     eway_bill_details = VoucherSalesEwayBillSerializer(many=True, required=False) 
+    
+    # Explicitly define to avoid "Not a valid string" error from ChoiceField/other weirdness
+    reverse_charge = serializers.CharField(required=False, default='N', max_length=1)
+    supporting_document = serializers.FileField(required=False, allow_null=True)
 
     class Meta:
         model = VoucherSalesInvoiceDetails

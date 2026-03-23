@@ -175,6 +175,13 @@ class VoucherSalesViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
             # Manually expand nested keys from FormData
             data = nested_multipart_to_nested_dict(request.data)
             
+            # SANITIZATION: Remove empty strings for file fields which cause validation errors
+            if data.get('supporting_document') == '':
+                data['supporting_document'] = None
+            if isinstance(data.get('dispatch_details'), dict):
+                if data['dispatch_details'].get('dispatch_document') == '':
+                    data['dispatch_details']['dispatch_document'] = None
+
             # Re-initialize the serializer with the expanded data
             serializer = self.get_serializer(data=data)
             serializer.is_valid(raise_exception=True)
