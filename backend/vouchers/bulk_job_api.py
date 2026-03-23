@@ -20,7 +20,7 @@ from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 
 from .models import BulkInvoiceJob, InvoiceProcessingItem
-from .pipeline import storage, kafka_client
+from .pipeline import storage
 from .pipeline.health import SystemHealth, IdempotencyLock, MAX_PAGES_PER_JOB
 
 logger = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ class BulkUploadAPIView(APIView):
         if not files:
             return Response({'error': 'No files uploaded'}, status=400)
 
-        tenant_id = getattr(request.user, 'tenant_id', 'default_tenant')
+        tenant_id = str(getattr(request.user, 'tenant_id', '88fe4389-58a9-4244-9878-8a4e646898bd'))
 
         # ── GATE 1: System health ────────────────────────────────────────────
         ready, reason = SystemHealth.is_ready()
@@ -132,17 +132,18 @@ class BulkUploadAPIView(APIView):
             )
 
             # Only trigger: Kafka publish. No direct AI. No Celery. No threads.
-            kafka_client.publish_sync('upload', {
-                'job_id':      job.id,
-                'tenant_id':   tenant_id,
-                'item_id':     master.id,
-                'storage_key': key,
-                'filename':    uploaded_file.name,
-                'file_hash':   file_hash,
-            }, key=str(tenant_id))
+            print(f"📤 [SKIPPING KAFKA - DEPRECATED]: {{'item_id': {master.id}, 'filename': '{uploaded_file.name}'}}")
+            # kafka_client.publish_sync('upload', {
+            #     'job_id':      job.id,
+            #     'tenant_id':   tenant_id,
+            #     'item_id':     master.id,
+            #     'storage_key': key,
+            #     'filename':    uploaded_file.name,
+            #     'file_hash':   file_hash,
+            # }, key=str(tenant_id))
 
         lock.release()
-        logger.info(f"[UPLOAD] Job {job.id} published to Kafka pipeline")
+        logger.info(f"[UPLOAD] Job {job.id} registered (no Kafka pipeline deployed)")
 
         return Response({
             'status':      'processing_started',

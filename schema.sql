@@ -1631,7 +1631,7 @@ CREATE TABLE `voucher_sales_ewaybill` (
 DEFAULT CHARSET=utf8mb4
 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE `voucher_sales_invoicedetails` (
+CREATE TABLE IF NOT EXISTS `voucher_sales_invoicedetails` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `tenant_id` VARCHAR(36) NOT NULL,
   `created_at` DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
@@ -1642,10 +1642,12 @@ CREATE TABLE `voucher_sales_invoicedetails` (
   `voucher_name` VARCHAR(100),
   `outward_slip_no` VARCHAR(50),
   `customer_name` VARCHAR(255),
-  `customer_id` BIGINT DEFAULT NULL COMMENT 'Link to customer_master_customer_basicdetails.id',
+  `customer_id` BIGINT DEFAULT NULL,
   `customer_branch` VARCHAR(100) DEFAULT NULL,
-  `voucher_id` BIGINT DEFAULT NULL COMMENT 'Link to unified vouchers table',
-  `outward_slip_id` BIGINT NULL COMMENT 'Link to inventory_operation_outward.id',
+  `voucher_id` BIGINT DEFAULT NULL,
+
+  -- Logical link (NO FK here)
+  `outward_slip_id` BIGINT NULL,
 
   `bill_to` LONGTEXT,
   `ship_to` LONGTEXT,
@@ -1659,36 +1661,28 @@ CREATE TABLE `voucher_sales_invoicedetails` (
   `supporting_document` VARCHAR(100),
   `sales_order_no` VARCHAR(50),
 
-  -- GST-Compliant Fields
-  `place_of_supply` VARCHAR(2) DEFAULT NULL COMMENT 'State code (01-38)',
-  `reverse_charge` VARCHAR(1) DEFAULT 'N' COMMENT 'Y or N',
-  `invoice_type` VARCHAR(50) DEFAULT 'Regular' COMMENT 'Regular, SEZ with payment, etc.',
-  `gst_export_type` VARCHAR(10) DEFAULT NULL COMMENT 'WPAY or WOPAY for exports',
-  `port_code` VARCHAR(6) DEFAULT NULL COMMENT '6-digit port code for exports',
-  `shipping_bill_number` VARCHAR(50) DEFAULT NULL COMMENT 'Shipping bill number for exports',
-  `shipping_bill_date` DATE DEFAULT NULL COMMENT 'Shipping bill date for exports',
-  `ecommerce_gstin` VARCHAR(15) DEFAULT NULL COMMENT 'E-commerce GSTIN',
-  `irn` VARCHAR(255) DEFAULT NULL,
-  `ack_no` VARCHAR(100) DEFAULT NULL,
+  `place_of_supply` VARCHAR(2),
+  `reverse_charge` VARCHAR(1) DEFAULT 'N',
+  `invoice_type` VARCHAR(50) DEFAULT 'Regular',
+  `gst_export_type` VARCHAR(10),
+  `port_code` VARCHAR(6),
+  `shipping_bill_number` VARCHAR(50),
+  `shipping_bill_date` DATE,
+  `ecommerce_gstin` VARCHAR(15),
+  `irn` VARCHAR(255),
+  `ack_no` VARCHAR(100),
   `posting_status` VARCHAR(20) DEFAULT 'SKIPPED',
-  `posting_error` TEXT DEFAULT NULL,
-  
+  `posting_error` TEXT,
+
   PRIMARY KEY (`id`),
-  KEY `idx_tenant_id` (`tenant_id`),
-  KEY `idx_sales_invoice_no` (`sales_invoice_no`),
-  KEY `idx_sales_tenant_customer` (`tenant_id`, `customer_id`),
+
   CONSTRAINT `fk_sales_invoice_customer` 
     FOREIGN KEY (`customer_id`) 
     REFERENCES `customer_master_customer_basicdetails` (`id`)
     ON DELETE RESTRICT
-    ON UPDATE CASCADE,
-  CONSTRAINT `fk_sales_outward`
-    FOREIGN KEY (`outward_slip_id`)
-    REFERENCES `inventory_operation_outward` (`id`)
-    ON DELETE SET NULL
-) ENGINE=InnoDB
-DEFAULT CHARSET=utf8mb4
-COLLATE=utf8mb4_unicode_ci;
+    ON UPDATE CASCADE
+
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `voucher_sales_items` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
@@ -2362,7 +2356,6 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_new_grn` (
 
 
 -- 8. OUTWARD 
-
 CREATE TABLE IF NOT EXISTS `inventory_operation_outward` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `tenant_id` VARCHAR(36) NOT NULL,
@@ -2371,11 +2364,11 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_outward` (
   `outward_slip_no` VARCHAR(100) NOT NULL,
   `date` DATE NULL,
   `time` TIME NULL,
-  `outward_type` VARCHAR(50) NOT NULL DEFAULT 'sales' COMMENT 'sales or purchase_return',
+  `outward_type` VARCHAR(50) NOT NULL DEFAULT 'sales',
   `location_id` BIGINT NULL,
   `sales_order_no` VARCHAR(100) NULL,
   `customer_name` VARCHAR(255) NULL,
-  `customer_id` BIGINT NULL COMMENT 'Link to customer_master_customer_basicdetails.id',
+  `customer_id` BIGINT NULL,
   `supplier_invoice_no` VARCHAR(100) NULL,
   `vendor_name` VARCHAR(255) NULL,
   `branch` VARCHAR(100) NULL,
@@ -2384,10 +2377,11 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_outward` (
   `total_boxes` VARCHAR(50) NULL,
   `posting_note` TEXT NULL,
   `status` VARCHAR(20) DEFAULT 'PENDING',
-  `linked_sales_voucher_id` BIGINT NULL COMMENT 'Link to voucher_sales_invoicedetails.id',
-  
-  `items` JSON DEFAULT NULL COMMENT 'List of items: item_code, quantity, hsn, etc.',
 
+  -- ✅ REAL FK HERE
+  `linked_sales_voucher_id` BIGINT NULL,
+
+  `items` JSON DEFAULT NULL,
   `delivery_challan` JSON DEFAULT NULL,
   `eway_bill_details` JSON DEFAULT NULL,
   `dispatch_from` TEXT DEFAULT NULL,
@@ -2400,23 +2394,24 @@ CREATE TABLE IF NOT EXISTS `inventory_operation_outward` (
   `vehicle_no` VARCHAR(100) DEFAULT NULL,
   `lr_gr_consignment` VARCHAR(100) DEFAULT NULL,
 
-
-
   PRIMARY KEY (`id`),
+
   KEY `idx_ioo_tenant` (`tenant_id`),
   KEY `idx_ioo_outward_slip` (`outward_slip_no`),
   KEY `idx_ioo_location` (`location_id`),
   UNIQUE KEY `idx_ioo_linked_voucher` (`linked_sales_voucher_id`),
+
   CONSTRAINT `fk_outward_customer`
     FOREIGN KEY (`customer_id`)
     REFERENCES `customer_master_customer_basicdetails` (`id`)
     ON DELETE RESTRICT,
+
   CONSTRAINT `fk_outward_sales_voucher`
     FOREIGN KEY (`linked_sales_voucher_id`)
     REFERENCES `voucher_sales_invoicedetails` (`id`)
     ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 9. (LEGACY) GRN - REMOVED
 -- This table has been deprecated and replaced by inventory_operation_new_grn
@@ -2754,6 +2749,7 @@ ALTER TABLE customer_master_customer_productservice ADD COLUMN packing_notes TEX
 ALTER TABLE `invoice_ocr_temp` 
     ADD COLUMN `upload_session_id` VARCHAR(255) DEFAULT NULL,
     ADD COLUMN `processed` BOOLEAN DEFAULT FALSE,
+    ADD COLUMN `status` VARCHAR(50) DEFAULT 'PENDING',
     ADD COLUMN `validation_status` VARCHAR(50) DEFAULT 'PENDING',
     ADD COLUMN `matched_by` VARCHAR(50) DEFAULT NULL,
     ADD COLUMN `conflict_message` TEXT DEFAULT NULL,
@@ -3083,3 +3079,24 @@ CREATE TABLE `customer_masters_salesorder` (
               KEY `customer_so_is_active_idx` (`is_active`),
               KEY `customer_so_is_deleted_idx` (`is_deleted`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Alter the customer_transaction_salesorder_basicdetails table by adding a new column status
+ALTER TABLE customer_transaction_salesorder_basicdetails
+ADD COLUMN status VARCHAR(20) DEFAULT 'pending' COMMENT 'SO Status: pending, approved, cancelled, completed' AFTER gst_no;
+
+-- Alter the inventory_operation_outward table by adding a new column customer_id, status, and linked_sales_voucher_id
+ALTER TABLE inventory_operation_outward
+ADD COLUMN customer_id BIGINT NULL COMMENT 'Link to customer master' AFTER customer_name,
+ADD COLUMN status VARCHAR(20) DEFAULT 'PENDING' AFTER posting_note,
+ADD COLUMN linked_sales_voucher_id BIGINT NULL UNIQUE COMMENT 'Link to unified vouchers.id' AFTER status;
+
+-- Add Foreign Keys for inventory_operation_outward
+ALTER TABLE inventory_operation_outward
+ADD CONSTRAINT fk_outward_customer FOREIGN KEY (customer_id) REFERENCES customer_master_customer_basicdetails (id) ON DELETE RESTRICT,
+ADD CONSTRAINT fk_outward_sales_voucher FOREIGN KEY (linked_sales_voucher_id) REFERENCES voucher_sales_invoicedetails (id) ON DELETE SET NULL;
+
+-- Alter the voucher_sales_invoicedetails table by adding a new column status and current_step
+ALTER TABLE voucher_sales_invoicedetails
+ADD COLUMN status VARCHAR(20) DEFAULT 'draft' COMMENT 'Workflow Status' AFTER ack_no,
+ADD COLUMN current_step INT DEFAULT 1 COMMENT 'Current Workflow Step (1-5)' AFTER status;
+            

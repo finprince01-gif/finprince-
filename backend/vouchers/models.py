@@ -9,6 +9,7 @@ class BulkInvoiceJob(models.Model):
         ('partial', 'Partial Success'),
     ]
     tenant_id = models.CharField(max_length=100)
+    upload_session_id = models.CharField(max_length=255, null=True)
     file_hash = models.CharField(max_length=64, null=True)
     total_files = models.IntegerField(default=0)
     processed_count = models.IntegerField(default=0)
