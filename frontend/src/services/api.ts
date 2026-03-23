@@ -969,43 +969,45 @@ class ApiService {
     }
 
     /**
-     * Create a new sales voucher (Full JSON Payload)
+     * Helper to convert nested object to FormData for DRF MultipartParser
+     */
+    private toFormData(obj: any, formData: FormData = new FormData(), parentKey: string = '') {
+        if (obj === null || obj === undefined) return formData;
+
+        if (obj instanceof File) {
+            formData.append(parentKey, obj);
+        } else if (Array.isArray(obj)) {
+            obj.forEach((item, index) => {
+                this.toFormData(item, formData, `${parentKey}[${index}]`);
+            });
+        } else if (typeof obj === 'object' && !(obj instanceof Date)) {
+            Object.keys(obj).forEach(key => {
+                this.toFormData(obj[key], formData, parentKey ? `${parentKey}.${key}` : key);
+            });
+        } else {
+            formData.append(parentKey, obj);
+        }
+        return formData;
+    }
+
+    /**
+     * Create a new sales voucher (Full JSON or Multipart Payload)
      * Mirrors the frontend state directly to backend keys
      */
     async createSalesVoucherNew(data: any) {
-        // If data contains files, we might need multipart, but for now assuming mostly JSON
-        // If supportingDocument is a File, we handle it
-        if (data.supportingDocument instanceof File || data.dispatchDetails?.dispatchDocument instanceof File) {
-            const formData = new FormData();
+        // Detect if any files are present in the payload
+        const hasFiles = (obj: any): boolean => {
+            if (obj instanceof File) return true;
+            if (Array.isArray(obj)) return obj.some(hasFiles);
+            if (obj !== null && typeof obj === 'object') {
+                return Object.values(obj).some(hasFiles);
+            }
+            return false;
+        };
 
-            // Extracts files and appends them separate from JSON if needed, 
-            // OR use DRF's nested multipart support if available.
-            // For simplicity in DRF, usually sending specific file fields at top level or handling separately is best.
-            // However, the user asked for "exact column from frontend", so we try to send JSON first.
-            // If the user needs file upload, we might need a separate call or specific FormData construction.
-
-            // Let's assume for now we send JSON, and if there are files, we might handle them slightly differently.
-            // But standard JSON is safest for nested data unless we flatten it.
-
-            // NOTE: Uploading files in deep nested structures via FormData is tricky without custom backend parsing.
-            // For now, I will omit the file object if it's a File instance to avoid serialization errors,
-            // or we suggest a separate upload step.
-            // Let's proceed with standard JSON POST for data.
-
-            // Iterate and remove File objects to avoid empty {} in JSON
-            const cleanData = JSON.parse(JSON.stringify(data, (key, value) => {
-                if (value instanceof File) return null;
-                return value;
-            }));
-
-            // If we really need to send the file, we can append it to formData 
-            // and send the rest as a JSON string field 'data'
-            // formData.append('supporting_document', data.supportingDocument);
-            // formData.append('data', JSON.stringify(cleanData));
-            // return httpClient.postFormData('/api/voucher-sales-new/', formData);
-
-            // Fallback: Just send JSON (files won't work yet without more logic)
-            return httpClient.post<any>('/api/voucher-sales-new/', cleanData);
+        if (hasFiles(data)) {
+            const formData = this.toFormData(data);
+            return httpClient.postFormData<any>('/api/voucher-sales-new/', formData);
         }
 
         return httpClient.post<any>('/api/voucher-sales-new/', data);

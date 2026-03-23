@@ -166,4 +166,20 @@ class VoucherSalesViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def create(self, request, *args, **kwargs):
+        from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+        from core.utils import nested_multipart_to_nested_dict
+        
+        # Check if it's multipart
+        content_type = request.content_type or ''
+        if 'multipart/form-data' in content_type:
+            # Manually expand nested keys from FormData
+            data = nested_multipart_to_nested_dict(request.data)
+            
+            # Re-initialize the serializer with the expanded data
+            serializer = self.get_serializer(data=data)
+            serializer.is_valid(raise_exception=True)
+            self.perform_create(serializer)
+            headers = self.get_success_headers(serializer.data)
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+            
         return super().create(request, *args, **kwargs)
