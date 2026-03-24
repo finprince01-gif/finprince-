@@ -1760,7 +1760,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             let isNewVendor = false;
             if (!createdVendorId) {
                 isNewVendor = true;
-                console.log('Creating new vendor basic details...');
+                console.log('Wizard Summary: Creating new vendor basic details...');
                 const basicRes: any = await httpClient.post('/api/vendors/basic-details/', basicPayload);
                 newId = basicRes.id;
                 setCreatedVendorId(newId);
@@ -1768,7 +1768,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 localStorage.removeItem('currentVendorId');
                 console.log('✅ Basic details created. Vendor ID:', newId);
             } else {
-                console.log('Updating existing vendor basic details for ID:', newId);
+                console.log('Wizard Summary: Updating existing vendor basic details for ID:', newId);
                 await httpClient.patch(`/api/vendors/basic-details/${newId}/`, basicPayload);
                 console.log('✅ Basic details updated.');
             }
@@ -1818,9 +1818,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                             branch_country: branch.country || ''
                         };
 
-                        const existingRecord = existingGstList.find((g: any) =>
-                            g.gstin === gst.gstin && g.reference_name === (branch.referenceName || '')
-                        );
+                        const existingRecord = existingGstList.find((g: any) => {
+                            // Match by ID if available (from database)
+                            if (branch.id && !branch.id.startsWith('gst-')) {
+                                return g.id.toString() === branch.id.toString();
+                            }
+                            // Fallback to GSTIN + Name match for new entries or when ID is missing
+                            return g.gstin === gst.gstin && g.reference_name === (branch.referenceName || '');
+                        });
 
                         if (existingRecord) {
                             await httpClient.patch(`/api/vendors/gst-details/${existingRecord.id}/`, gstPayload);
@@ -1939,8 +1944,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                         is_active: true
                     };
 
-                    // Check if this account number already exists for this vendor
-                    const existingRecord = existingBankingList.find((b: any) => b.bank_account_no === bank.accountNumber);
+                    // Check if this branch/account already exists
+                    const existingRecord = existingBankingList.find((b: any) => b.id === bank.id);
 
                     if (existingRecord) {
                         // Update existing
@@ -2057,8 +2062,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             setForceMajeure('');
             setDisputeRedressalTerms('');
 
-            // Back to first tab
-            setActiveMasterSubTab('Basic Details');
+            // Back to first tab and close wizard
+            setActiveMasterSubTab('Vendor Creation'); // Go back to the hub/list tab
+            setIsCreatingVendor(false); // Close the wizard and return to management list
+            
+            // Cleanup on full success
+            setCreatedVendorId(null);
+            sessionStorage.removeItem('currentVendorId');
+            localStorage.removeItem('currentVendorId');
 
             // Refresh vendor list
             fetchVendors();
@@ -2806,8 +2817,15 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             >
                                                 <ChevronDown className="w-4 h-4 rotate-90" /> BACK TO VENDOR LIST
                                             </button>
-                                            <h3 className="text-xl font-bold text-gray-900">Create New Vendor</h3>
-                                            <p className="text-sm text-gray-500 mt-1">Select a tab below to configure vendor details:</p>
+                                            <h3 className="text-xl font-bold text-gray-900">
+                                                {createdVendorId ? 'Edit Vendor Details' : 'Create New Vendor'}
+                                            </h3>
+                                            <p className="text-sm text-gray-500 mt-1">
+                                                {createdVendorId 
+                                                    ? `Editing active vendor: ${vendorName}` 
+                                                    : 'Select a tab below to configure vendor details:'
+                                                }
+                                            </p>
                                         </div>
 
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
