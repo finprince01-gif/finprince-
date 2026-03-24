@@ -942,6 +942,7 @@ const InventoryPage: React.FC = () => {
       gstRate: item.gst_rate || item.gstRate,
       cessRate: item.cess_rate || item.cessRate,
       reorderLevel: item.reorder_level || item.reorderLevel,
+      reorderLevel2: item.reorder_level_2 || item.reorderLevel2,
       isSaleable: item.is_saleable || item.isSaleable,
       vendorName: item.vendor_specific_name || item.vendorName,
       vendorSuffix: item.vendor_specific_suffix || item.vendorSuffix
@@ -982,6 +983,7 @@ const InventoryPage: React.FC = () => {
         cess_rate: editFormData.cessRate || null,
 
         reorder_level: editFormData.reorderLevel || null,
+        reorder_level_2: editFormData.reorderLevel2 || null,
         is_saleable: editFormData.isSaleable || false
       };
 
@@ -7289,18 +7291,8 @@ const InventoryPage: React.FC = () => {
                       <div className="flex items-center gap-2">
                         <input
                           type="text"
-                          value={
-                            editFormData?.reorderLevel && editFormData?.conversionFactor
-                              ? (parseFloat(editFormData.reorderLevel) * parseFloat(editFormData.conversionFactor)).toFixed(2)
-                              : ''
-                          }
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (val && editFormData?.conversionFactor) {
-                              const primaryVal = (parseFloat(val) / parseFloat(editFormData.conversionFactor)).toFixed(2);
-                              handleFormChange('reorderLevel', primaryVal);
-                            }
-                          }}
+                          value={editFormData?.reorderLevel2 || ''}
+                          onChange={(e) => handleFormChange('reorderLevel2', e.target.value)}
                           className="w-48 px-4 py-2 border-2 border-slate-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
                         />
                         <span className="text-sm font-semibold text-emerald-700 bg-emerald-50 px-4 py-2 rounded border border-emerald-100 min-w-[100px] text-center shadow-sm">

@@ -51,6 +51,8 @@ interface InventoryCategoryWizardProps {
     showSubgroup?: boolean; // Optional prop to control visibility of Subgroups
     excludeGroups?: string[]; // Names of groups to exclude mainly from view
     defaultSubgroupsOnlyFor?: string[]; // If provided, default subgroups are ONLY prepopulated for these categories
+    allowCreateItem?: boolean; // If false, the Item (Sub-subgroup) level is completely hidden and uncreatable
+    showChangeParent?: boolean; // If false, hide the Change Parent button entirely
 }
 
 // Hardcoded base categories (System Categories) - Default
@@ -88,7 +90,9 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
     allowCreateGroup = true,
     showSubgroup = true, // Default to true to maintain existing behavior,
     excludeGroups = DEFAULT_EXCLUDE_GROUPS,
-    defaultSubgroupsOnlyFor
+    defaultSubgroupsOnlyFor,
+    allowCreateItem = true,
+    showChangeParent = false
 }) => {
     const [loading, setLoading] = useState(false);
     const [treeData, setTreeData] = useState<TreeNode[]>([]);
@@ -502,7 +506,7 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                 showSuccess('Subgroup created successfully!');
             }
             // 3. Create Item (under Subgroup)
-            else if (showSubgroup && selectedNode.data.category === 'Stores and Spares' && (selectedNode.level === 2 || (selectedNode.level === 1 && selectedNode.data.subgroup)) && !selectedNode.data.sub_subgroup) {
+            else if (allowCreateItem && showSubgroup && selectedNode.data.category === 'Stores and Spares' && (selectedNode.level === 2 || (selectedNode.level === 1 && selectedNode.data.subgroup)) && !selectedNode.data.sub_subgroup) {
                 await onCreateCategory({
                     category: selectedNode.data.category,
                     group: selectedNode.data.group || '',
@@ -519,11 +523,11 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
         } catch (error: any) {
             // Check for duplicate error (409 status or specific error strings)
             const errorMsg = error.toString();
-            const isDuplicate = error.status === 409 || 
-                               error.response?.status === 409 ||
-                               errorMsg.includes('Duplicate') || 
-                               errorMsg.includes('IntegrityError') || 
-                               errorMsg.includes('already exists');
+            const isDuplicate = error.status === 409 ||
+                error.response?.status === 409 ||
+                errorMsg.includes('Duplicate') ||
+                errorMsg.includes('IntegrityError') ||
+                errorMsg.includes('already exists');
 
             if (isDuplicate) {
                 // It's a duplicate! Reveal it if it was hidden.
@@ -638,8 +642,8 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                     <div className="p-5">
                         <h3 className="section-title text-sm mb-2">Category Preview</h3>
                         <p className="text-xs text-indigo-600 font-medium mb-4">
-                            {selectedNode 
-                                ? (selectedNode.level === 0 ? `Creating New Group under ${selectedNode.name}` : `Creating New Subgroup under ${selectedNode.name}`)
+                            {selectedNode
+                                ? (selectedNode.level === 0 ? (allowCreateGroup ? `Creating New Group under ${selectedNode.name}` : `Select a Group under ${selectedNode.name} to continue`) : `Creating New Subgroup under ${selectedNode.name}`)
                                 : "Please select a category to begin"}
                         </p>
                         <form onSubmit={handleSubmit} className="space-y-5">
@@ -653,14 +657,14 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                                             <div className="text-gray-900 font-semibold text-base">
                                                 {selectedNode.level === 0 ? selectedNode.name : selectedNode.data.category}
                                             </div>
-                                            {(selectedNode.level > 0) && (
-                                                <button 
+                                            {(showChangeParent && selectedNode.level > 0 && allowCreateGroup) && (
+                                                <button
                                                     type="button"
                                                     onClick={() => {
                                                         const rootNode = treeData.find(n => n.name === selectedNode.data.category);
                                                         if (rootNode) handleNodeSelect(rootNode);
                                                     }}
-                                                    className="text-indigo-600 hover:text-indigo-800 text-xs font-medium"
+                                                    className="text-indigo-600 hover:text-indigo-800 text-xs font-medium tracking-wide uppercase"
                                                 >
                                                     Change Parent
                                                 </button>
@@ -674,22 +678,23 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                                 </div>
 
                                 {/* 2. Group Input/Display */}
-                                {selectedNode && (
+                                {selectedNode && !(selectedNode.level === 0 && !allowCreateGroup) && (
                                     <div>
                                         <label className="label-text">
                                             GROUP
                                         </label>
 
                                         {selectedNode && selectedNode.level === 0 ? (
-                                            // If Root selected, allow typing Group
+                                            // If Root selected, allow typing Group (if permitted)
                                             <input
                                                 type="text"
                                                 name="group"
                                                 value={formData.group}
                                                 onChange={handleInputChange}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all placeholder-gray-400 bg-white text-gray-800 text-sm"
-                                                placeholder="Enter Group Name"
-                                                autoFocus
+                                                disabled={!allowCreateGroup}
+                                                className={`w-full px-3 py-2 border rounded focus:outline-none transition-all text-sm ${!allowCreateGroup ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed' : 'border-gray-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 placeholder-gray-400 bg-white text-gray-800'}`}
+                                                placeholder={!allowCreateGroup ? "Group creation disabled directly under category" : "Enter Group Name"}
+                                                autoFocus={allowCreateGroup}
                                             />
                                         ) : selectedNode && selectedNode.level === 1 && selectedNode.data.group && !selectedNode.data.subgroup ? (
                                             // If GROUP (not subgroup) selected at level 1
@@ -766,9 +771,9 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                                         )}
                                     </div>
                                 )}
-                                
+
                                 {/* 4. Item Input - CONDITIONAL */}
-                                {showSubgroup && selectedNode && selectedNode.level >= 2 && selectedNode.data.category === 'Stores and Spares' && (
+                                {allowCreateItem && showSubgroup && selectedNode && selectedNode.level >= 2 && selectedNode.data.category === 'Stores and Spares' && (
                                     <div className="mt-4">
                                         <label className="label-text">
                                             ITEM (SUB-SUBGROUP)
@@ -871,21 +876,21 @@ export const InventoryCategoryWizard: React.FC<InventoryCategoryWizardProps> = (
                                     <button
                                         type="submit"
                                         disabled={!selectedNode || (
-                                            selectedNode.level === 0 ? !formData.group.trim() : 
-                                            (selectedNode.level === 1 && !selectedNode.data.subgroup) ? !formData.subgroup.trim() :
-                                            (selectedNode.data.category === 'Stores and Spares' && (selectedNode.level === 2 || (selectedNode.level === 1 && selectedNode.data.subgroup)) && !selectedNode.data.sub_subgroup) ? !formData.sub_subgroup.trim() :
-                                            true
+                                            selectedNode.level === 0 ? (!allowCreateGroup || !formData.group.trim()) :
+                                                (selectedNode.level === 1 && !selectedNode.data.subgroup) ? !formData.subgroup.trim() :
+                                                    (selectedNode.data.category === 'Stores and Spares' && allowCreateItem && (selectedNode.level === 2 || (selectedNode.level === 1 && selectedNode.data.subgroup)) && !selectedNode.data.sub_subgroup) ? !formData.sub_subgroup.trim() :
+                                                        true
                                         )}
                                         className={`w-full py-2.5 px-4 rounded font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm ${selectedNode && (
-                                            (selectedNode.level === 0 && formData.group.trim()) || 
+                                            (selectedNode.level === 0 && allowCreateGroup && formData.group.trim()) ||
                                             (selectedNode.level === 1 && !selectedNode.data.subgroup && formData.subgroup.trim()) ||
-                                            (selectedNode.data.category === 'Stores and Spares' && (selectedNode.level === 2 || (selectedNode.level === 1 && selectedNode.data.subgroup)) && formData.sub_subgroup.trim())
+                                            (selectedNode.data.category === 'Stores and Spares' && allowCreateItem && (selectedNode.level === 2 || (selectedNode.level === 1 && selectedNode.data.subgroup)) && formData.sub_subgroup.trim())
                                         )
                                             ? 'bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer focus:ring-indigo-500'
                                             : selectedNode
                                                 ? 'bg-gray-300 text-gray-700 hover:bg-gray-400 cursor-pointer focus:ring-gray-400'
                                                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                                            }`}
+                                            } ${selectedNode && ((selectedNode.level === 0 && !allowCreateGroup) || (selectedNode.level === 2 && !allowCreateItem)) ? 'hidden' : ''}`}
                                     >
                                         {selectedNode ? (selectedNode.level === 0 ? "Create Group" : selectedNode.level === 1 ? "Create Subgroup" : "Create Item") : "Create"}
                                     </button>

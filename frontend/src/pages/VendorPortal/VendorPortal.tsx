@@ -601,6 +601,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                 contactPerson: g.branch_contact_person || '',
                                 email: g.branch_email || '',
                                 contactNumber: g.branch_contact_no || '',
+                                pincode: g.branch_pincode || '',
+                                city: g.branch_city || '',
+                                state: g.branch_state || '',
+                                country: g.branch_country || '',
                                 isExpanded: false
                             });
                         }
@@ -1780,7 +1784,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
                     const branches = gst.placesOfBusiness && gst.placesOfBusiness.length > 0
                         ? gst.placesOfBusiness
-                        : [{ referenceName: '', address: '', contactPerson: '', email: '', contactNumber: '', pincode: '' }];
+                        : [{ id: '', referenceName: '', address: '', contactPerson: '', email: '', contactNumber: '', pincode: '', city: '', state: '', country: '' } as PlaceOfBusiness];
 
                     for (const branch of branches) {
                         const mapRegistrationType = (type: string) => {
@@ -2449,6 +2453,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                             <InventoryCategoryWizard
                                 apiEndpoint="/api/vendors/categories/"
                                 allowCreateGroup={false}
+                                allowCreateItem={false}
                                 systemCategories={VENDOR_SYSTEM_CATEGORIES}
                                 defaultGroups={VENDOR_DEFAULT_GROUPS}
                                 defaultSubgroupsOnlyFor={['Stores and Spares']}

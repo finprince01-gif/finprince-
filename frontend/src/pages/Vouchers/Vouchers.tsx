@@ -111,6 +111,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [selectedBranch, setSelectedBranch] = useState('');
   const [inventoryLocations, setInventoryLocations] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<any[]>([]);
 
   const fetchRichData = useCallback(async () => {
     // 1. Rich Vendors & Customers
@@ -157,6 +158,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       setServices(Array.isArray(srv) ? srv : ((srv as any).results || []));
     } catch (err) {
       console.warn('Failed to fetch Services', err);
+    }
+
+    // 4.1 Stock Items
+    try {
+      const items = await apiService.getStockItems();
+      setInventoryItems(Array.isArray(items) ? items : ((items as any).results || []));
+    } catch (err) {
+      console.warn('Failed to fetch Stock Items', err);
     }
 
     // 5. Pending GRNs
@@ -606,7 +615,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
   // Combine Stock Items and Services for a unified list
   const allItems = React.useMemo(() => {
-    const combined = stockItems.map(si => ({
+    // Favor local fetched inventoryItems; fallback to stockItems prop if needed
+    const itemsSource = inventoryItems && inventoryItems.length > 0 ? inventoryItems : stockItems;
+    const combined = itemsSource.map(si => ({
       ...si,
       // Ensure specific fields are mapped consistently
       item_code: si.item_code || si.code,
@@ -630,7 +641,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       });
     });
     return combined;
-  }, [stockItems, services]);
+  }, [stockItems, inventoryItems, services]);
 
   // Item Options for Dropdowns
   const itemCodeOptions = React.useMemo(() =>
@@ -1237,6 +1248,24 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       }
     }
   }, [selectedPurchaseConfig, purchaseVoucherConfigs, voucherType]);
+
+  const incrementPurchaseNumber = useCallback(async (seriesId: string): Promise<string> => {
+    try {
+      const res: any = await httpClient.post(`/api/masters/master-voucher-purchases/${seriesId}/increment-number/`, {});
+      if (res && res.next_invoice_number) {
+        // Update local configs cache with new current_number
+        setPurchaseVoucherConfigs(prev => prev.map(c =>
+          String(c.id) === String(seriesId) ? { ...c, current_number: res.new_current_number } : c
+        ));
+        setVoucherNumber(res.next_invoice_number);
+        return res.assigned_number;
+      }
+    } catch (e) {
+      console.error('Failed to increment purchase number', e);
+    }
+    return voucherNumber;
+  }, [voucherNumber]);
+
 
   // Update balance when account is selected
   useEffect(() => {
@@ -2175,6 +2204,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
   const handlePartyChange = useCallback((value: string, forcedId?: number | null) => {
     setParty(value);
+    
+    // Clear GRN, PO and items when vendor changes to prevent stale data
+    if (voucherType === 'Purchase') {
+      setGrnRefNo('');
+      setSelectedPurchasePOs([]);
+      setPurchaseItems([{ id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', poRate: null, invoiceRate: null, rateMismatch: false, poQty: null, invoiceQty: null, qtyMismatch: false, grnQty: null, sourcePoNo: null }]);
+    }
 
     if (forcedId !== undefined) {
       setVendorId(forcedId);
@@ -2304,7 +2340,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         setVendorAddresses([]);
       }
     }
-  }, [richVendors, richCustomers, vendorGstDetails, voucherType, setAddressFields, setGstin, setVendorBillingCurrency, setVendorAddresses, setPurchaseTerms, setMasterTermsData, ledgers]);
+  }, [richVendors, richCustomers, vendorGstDetails, voucherType, setAddressFields, setGstin, setVendorBillingCurrency, setVendorAddresses, setPurchaseTerms, setMasterTermsData, ledgers, setGrnRefNo, setSelectedPurchasePOs, setPurchaseItems]);
 
   const validateVendorFromInvoice = async (vendorName: string, gstin: string, state: string, address: string, branch: string = '') => {
     try {
@@ -2547,11 +2583,19 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
         showSuccess('Purchase Voucher Saved Successfully!');
 
+        // Increment the voucher number if a series was selected
+        if (selectedPurchaseConfig && purchaseVoucherConfigs.length > 0) {
+          const config = purchaseVoucherConfigs.find(c => c.voucher_name === selectedPurchaseConfig);
+          if (config && config.enable_auto_numbering) {
+            await incrementPurchaseNumber(config.id);
+          }
+        }
 
         // Optional: Handle file upload separately if needed, or if we switch to FormData later.
 
         resetForm();
         refetch(); // Refresh usage statistics
+
       } catch (error: any) {
         console.error('Error saving purchase voucher:');
         const serverError = error.response?.data;

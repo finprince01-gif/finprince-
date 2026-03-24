@@ -21,7 +21,19 @@ dependencies = [
     "djangorestframework-simplejwt",
     "django-cors-headers",
     "python-dotenv",
-    "mysqlclient"
+    "mysqlclient",
+    "PyMySQL",
+    "celery",
+    "redis",
+    "django-redis",
+    "whitenoise",
+    "drf-spectacular",
+    "PyMuPDF",
+    "google-generativeai",
+    "requests",
+    "twilio",
+    "gunicorn",
+    "aiokafka"
 ]
 
 [project.optional-dependencies]

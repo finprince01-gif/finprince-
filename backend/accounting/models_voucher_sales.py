@@ -12,11 +12,11 @@ class VoucherSalesInvoiceDetails(BaseModel):
     
     # Invoice No
     # Invoice No
-    sales_invoice_no = models.CharField(max_length=50, help_text="Sales Invoice Number")
+    sales_invoice_no = models.CharField(max_length=100, help_text="Sales Invoice Number")
     
     # New Fields matching Frontend
-    voucher_name = models.CharField(max_length=100, null=True, blank=True)
-    outward_slip_no = models.CharField(max_length=50, null=True, blank=True)
+    voucher_name = models.CharField(max_length=255, null=True, blank=True)
+    outward_slip_no = models.CharField(max_length=100, null=True, blank=True)
     
     # Customer
     customer_name = models.CharField(max_length=255, help_text="Customer Name as entered/selected")
@@ -47,7 +47,7 @@ class VoucherSalesInvoiceDetails(BaseModel):
     supporting_document = models.FileField(upload_to='voucher_documents/sales/', null=True, blank=True)
 
     # Reference from Item Tab (logically header info)
-    sales_order_no = models.CharField(max_length=50, null=True, blank=True)
+    sales_order_no = models.CharField(max_length=255, null=True, blank=True)
 
     # GST-Compliant Fields
     place_of_supply = models.CharField(
