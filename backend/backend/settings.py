@@ -243,68 +243,22 @@ SPECTACULAR_SETTINGS = {
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# ============================================================================
-# REDIS + CELERY CONFIGURATION
-# ============================================================================
-# Cache Configuration - Use Redis if available, with foolproof fallback
-REDIS_URL = os.getenv('REDIS_URL')
-USE_REDIS = REDIS_URL and os.getenv('USE_REDIS', 'True') == 'True'
-
-if USE_REDIS:
-    CACHES = {
-        'default': {
-            'BACKEND': 'django_redis.cache.RedisCache',
-            'LOCATION': REDIS_URL,
-            'OPTIONS': {
-                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-                'IGNORE_EXCEPTIONS': True,  # Prevent 500 error if Redis is down
-                'SOCKET_CONNECT_TIMEOUT': 5,
-                'SOCKET_TIMEOUT': 5,
-                'RETRY_ON_TIMEOUT': True,
-                'MAX_CONNECTIONS': 100,
-            },
-            'KEY_PREFIX': 'finpixe',
-            'TIMEOUT': 3600,
-        }
+# Cache Configuration - Cleaned (Redis removed)
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
     }
-else:
-    # Fallback to local memory cache for development or if Redis is down
-    CACHES = {
-        'default': {
-            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-            'LOCATION': 'unique-snowflake',
-        }
-    }
-
-# Celery Configuration
-CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', REDIS_URL)
-CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', REDIS_URL)
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = 'Asia/Kolkata'
-CELERY_ENABLE_UTC = True
-CELERY_TASK_TRACK_STARTED = True
-CELERY_TASK_TIME_LIMIT = 300        # 5 min hard kill
-CELERY_TASK_SOFT_TIME_LIMIT = 240   # 4 min soft
-CELERY_WORKER_PREFETCH_MULTIPLIER = 1  # One task at a time per worker (fair)
-CELERY_TASK_ACKS_LATE = True           # Ack only after completion (no lost tasks)
-CELERY_WORKER_CANCEL_LONG_RUNNING_TASKS_ON_CONNECTION_LOSS = True
-
-# Priority-aware Queues
-CELERY_TASK_ROUTES = {
-    'vouchers.tasks.process_invoice_page': {'queue': 'invoice_pages'},
-    'vouchers.tasks.process_invoice_file': {'queue': 'invoice_files'},
-    'vouchers.tasks.finalize_invoice_job': {'queue': 'invoice_merge'},
 }
-CELERY_TASK_QUEUE_MAX_PRIORITY = 10   # 1=high, 10=low
-CELERY_TASK_DEFAULT_PRIORITY = 5
+
+# Celery Configuration - REMOVED
+# Celery is no longer used. Processing is synchronous/thread-pool based.
 
 # ============================================================================
 # BULK PROCESSING PIPELINE SETTINGS
 # ============================================================================
-BULK_MAX_ACTIVE_JOBS_PER_TENANT = int(os.getenv('BULK_MAX_ACTIVE_JOBS', '5'))
-BULK_AI_RATE_LIMITER_SLOTS = int(os.getenv('BULK_AI_SLOTS', '10'))
+BULK_MAX_ACTIVE_JOBS_PER_TENANT = int(os.getenv('BULK_MAX_ACTIVE_JOBS', '50000'))
+BULK_AI_RATE_LIMITER_SLOTS = int(os.getenv('BULK_AI_SLOTS', '100000'))
 BULK_AI_CALL_GAP_SECONDS = float(os.getenv('BULK_AI_CALL_GAP', '0.5'))
 BULK_MAX_RETRIES = int(os.getenv('BULK_MAX_RETRIES', '3'))
 BULK_STUCK_THRESHOLD_MINUTES = int(os.getenv('BULK_STUCK_THRESHOLD', '5'))

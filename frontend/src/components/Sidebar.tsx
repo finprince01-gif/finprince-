@@ -21,7 +21,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, co
     { name: 'Masters', icon: 'ledger' },
     { name: 'Inventory', icon: 'inventory' },
     { name: 'Vouchers', icon: 'vouchers' },
-    { name: 'Banking', icon: 'bank' },
     { name: 'Vendor Portal', icon: 'vendor-portal' },
     { name: 'Customer Portal', icon: 'customer-portal' },
     { name: 'Payroll', icon: 'payroll' },
@@ -103,7 +102,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, co
                     <div className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
                   )}
                 </button>
-                {/* Divider removed */}
               </React.Fragment>
             );
           })}

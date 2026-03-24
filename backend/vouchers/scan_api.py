@@ -315,139 +315,20 @@ def extract_invoice(request):
                     chunk_mime = mime_type
                     chunk_label = original_name
 
-                # ── Existing prompt (unchanged) ──────────────────────────────
-                prompt_text = f"""
-You are a precision invoice OCR and data-extraction system.
-Extract every figure exactly where it is printed — correct column, correct row — with zero shifting, duplication, or guessing.
+                from vouchers.extraction_logic import perform_ocr_extraction
+                raw_text = json.dumps(perform_ocr_extraction(
+                    chunk_bytes, 
+                    chunk_mime, 
+                    api_key=api_key
+                ))
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PHASE 1 — LOCK COLUMN BOUNDARIES (do this first)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Find the table header row (S.No, Description, HSN, Qty, Rate, Amount, etc.).
-2. Record the left/right boundary of each column. LOCK them.
-3. Typical order: S.No | Item Name | Purchase Ledger | HSN/SAC | Qty | UOM | Rate | Disc% | Taxable Amt | GST% | IGST | CGST | SGST | Cess | Amount
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SEMANTIC MAPPING GUIDE (Strict Schema Enforcement)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Every extracted field MUST be assigned to its matching header key.
-
-- Voucher Date                <- The invoice date printed on the document.
-- Supplier Invoice No         <- The main invoice/bill number.
-- Vendor Name                 <- The seller/company providing the invoice.
-- GSTIN                       <- The seller's GST number.
-- PAN                         <- The seller's PAN (if printed).
-- Bill From                   <- The seller's full address.
-- Ship From                   <- The shipping origin address.
-- Total Invoice Value         <- The final grand total payable amount.
-- Total Taxable Value         <- The sum of pre-tax item amounts.
-- Total IGST/CGST/SGST        <- Corresponding invoice-level tax totals.
-
-- Item Name                   <- The main product name or description. MANDATORY.
-- Description                 <- Extra details ONLY.
-- Quantity                    <- The numeric unit count.
-- UOM                         <- The unit abbreviation (PCS, BOX, KGS, etc.).
-- Rate                        <- The unit price.
-- Taxable Value (Item)        <- Item pre-tax total (Qty x Rate).
-- GST %                       <- The tax percentage for that item row.
-
-For any field not explicitly printed, leave as "".
-Never shift a value into the wrong column key.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PHASE 2 — EXTRACT BY LOCKED COLUMN (for every data row)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-For every row, read the value that sits inside each locked column boundary.
-Rules:
-  • A value belongs to a column ONLY if its center falls INSIDE that zone.
-  • No dynamic key creation. Use provided keys only.
-  • Ambiguous? -> null.
-  • Strict header-based mapping — NO positional shifting.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-FIELD RULES (mandatory for every row)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Item Name
-  → The main product name or description. MANDATORY.
-  → Map "Description", "Particulars", or "Item Name" to this field.
-
-HSN/SAC
-  → Map the 4-8 digit code here.
-Quantity     → numeric part only. "8 NOS" → "8".
-UOM          → unit part only. "8 NOS" → "NOS". Never combine with Quantity.
-Rate         → per-unit price from Rate column only. Not the line total.
-Taxable Value → pre-tax line total for THIS row only (Qty × Rate − disc). Not invoice total.
-Item Amount  → final line total from Amount column for THIS row only.
-
-ABSOLUTE PROHIBITIONS:
-✗ NEVER put Grand Total / Invoice Total into any line_item field.
-✗ NEVER swap Rate and Amount columns.
-✗ NEVER merge two printed rows into one object.
-✗ NEVER concatenate descriptions from different rows.
-✗ NEVER duplicate a row.
-✗ NEVER carry values from previous row into next row.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ROW RULES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Each visually distinct printed data row = ONE object in "line_items".
-2. Description wrapping → attach ALL wrapped text to the "Description" field of the same object.
-3. Summary rows (Sub Total, Grand Total, Tax Summary) → "invoice" fields ONLY, not items.
-4. S.No increments 1, 2, 3 … by actual distinct item rows.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-HEADER RULES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- "Bill From" & "Ship From" → join all address lines with ", ".
-- Dates → dd/mm/yyyy. All values → strings. Missing → "".
-
-Return the data in this EXACT JSON structure:
-
-{{
-  "invoice": {{
-    {', '.join([f'"{f}": ""' for f in HEADER_FIELDS])}
-  }},
-  "items": [
-    {{
-      "S.No": "1",
-      "Item Name": "",
-      "Purchase Ledger": "",
-      "HSN/SAC": "",
-      "Quantity": "",
-      "UOM": "",
-      "Rate": "",
-      "Disc %": "",
-      "Disc Amount": "",
-      "Taxable Value": "",
-      "GST %": "",
-      "Integrated Tax (IGST)": "",
-      "Central Tax (CGST)": "",
-      "State Tax (SGST)": "",
-      "Cess": "",
-      "Item Amount": "",
-      "Description": ""
-    }}
-  ]
-}}
-Return ONLY the raw JSON object. No markdown, no code fences, no explanation.
-"""
-
-                raw_text = execute_with_retry(
-                    [
-                        prompt_text,
-                        {'mime_type': chunk_mime, 'data': chunk_bytes}
-                    ],
-                    {},
-                    api_key
-                )
-
-                # ── Existing mapping engine (unchanged) ───────────────────────
+                # ── Standardized mapping (Architecture Aligned) ───────────────
                 from core.processing_engine import parse_and_process_ocr
                 try:
                     processed_data = parse_and_process_ocr(raw_text)
-                    invoice_data = processed_data.get('invoice', {})
-                    items = processed_data.get('items', [])
+                    # Use the new flat structure
+                    invoice_data = processed_data
+                    items = processed_data.get('line_items', [])
                 except Exception as e:
                     return {
                         'error': f'Failed to parse AI response: {str(e)}',
@@ -478,13 +359,15 @@ Return ONLY the raw JSON object. No markdown, no code fences, no explanation.
                     cell.font = header_font
                     cell.alignment = Alignment(horizontal="center", wrap_text=True)
 
+                from core.processing_engine import normalize_key
                 _items = items if items else [{}]
                 for row_idx, item in enumerate(_items, start=2):
                     for col, field in enumerate(ALL_HEADERS, start=1):
+                        nk = normalize_key(field)
                         if field in HEADER_FIELDS:
-                            value = invoice_data.get(field, '')
+                            value = invoice_data.get(nk, '')
                         else:
-                            value = item.get(field, '')
+                            value = item.get(nk, '')
                         ws.cell(row=row_idx, column=col, value=value)
 
                 for column in ws.columns:
@@ -620,20 +503,9 @@ def bulk_scan_invoices(request):
 
             file_bytes = uploaded_file.read()
             
-            # Prompt (Simplified version of extract_invoice prompt)
-            prompt_text = f"""
-Extract invoice data in JSON:
-{{
-  "invoice": {{
-    "Voucher Date": "", "Supplier Invoice No": "", "Vendor Name": "", "GSTIN": "",
-    "Total Invoice Value": "", "Total Taxable Value": "", "Total IGST": "", "Total CGST": "", "Total SGST": ""
-  }},
-  "items": [
-    {{ "Item Name": "", "Quantity": "", "UOM": "", "Rate": "", "Taxable Value": "", "GST %": "" }}
-  ]
-}}
-"""
-            raw_text = execute_with_retry([prompt_text, {'mime_type': uploaded_file.content_type, 'data': file_bytes}], {}, api_key)
+            from vouchers.extraction_logic import perform_ocr_extraction
+            extracted_json = perform_ocr_extraction(file_bytes, uploaded_file.content_type, api_key=api_key)
+            raw_text = json.dumps(extracted_json)
             raw_text = raw_text.strip().strip('```json').strip('```').strip()
             extracted_json = json.loads(raw_text)
             
@@ -649,8 +521,8 @@ Extract invoice data in JSON:
                 'file_name': uploaded_file.name,
                 'vendor_status': status,
                 'vendor_id': vendor.id if vendor else None,
-                'vendor_name': vendor.vendor_name if vendor else vendor_name,
-                'gstin': vendor.gstin if (vendor and hasattr(vendor, 'gstin')) else gstin,
+                'vendor_name': vendor.vendor_name if vendor else extracted_json.get('vendor_name'),
+                'gstin': vendor.gstin if (vendor and hasattr(vendor, 'gstin')) else extracted_json.get('gstin'),
                 'extracted_data': extracted_json
             })
             

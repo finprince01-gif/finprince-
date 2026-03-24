@@ -52,7 +52,6 @@ const BankingPage = React.lazy(() => import('../pages/Banking'));
 const LoginPage = React.lazy(() => import('../pages/Login').then(m => ({ default: m.default })));
 const ForgotPasswordPage = React.lazy(() => import('../pages/Login').then(m => ({ default: m.ForgotPassword })));
 const SignupPage = React.lazy(() => import('../pages/Register'));
-const MassUploadResultPage = React.lazy(() => import('../pages/MassUploadResult'));
 
 // Shared UI Components
 import Sidebar from '../components/Sidebar';  // Left navigation sidebar
@@ -141,7 +140,7 @@ const App: React.FC = () => {
 
     // Map legacy names to new names and handle casing
     let activePlan = plan || 'Free';
-    // Normalize casing (e.g., 'FREE' -> 'Free', 'STARTER' -> 'Starter')
+    // Normalize casing (e.e.g., 'FREE' -> 'Free', 'STARTER' -> 'Starter')
     if (activePlan.toUpperCase() === 'FREE') activePlan = 'Free';
     if (activePlan.toUpperCase() === 'STARTER' || activePlan === 'Basic') activePlan = 'Starter';
     if (activePlan.toUpperCase() === 'PRO' || activePlan === 'Enterprise') activePlan = 'Pro';
@@ -243,9 +242,6 @@ const App: React.FC = () => {
 
   // CONTEXT STATE: Stores what the AI is waiting for (Name, Email, etc.)
   const [pendingContext, setPendingContext] = useState<{ field: string, action: string, data?: any } | null>(null);
-
-  // Mass upload results - stores vouchers from bulk upload for review
-  const [massUploadResult, setMassUploadResult] = useState<Voucher[] | null>(null);
 
   // Deactivation modal - shown when user account is deactivated
   const [showDeactivationModal, setShowDeactivationModal] = useState(false);
@@ -723,7 +719,6 @@ const App: React.FC = () => {
     }
 
     setVouchers(prevVouchers => prevVouchers.map(v => v.id === updatedVoucher.id ? updatedVoucher : v));
-    setMassUploadResult(prevResult => prevResult ? prevResult.map(v => v.id === updatedVoucher.id ? updatedVoucher : v) as Voucher[] : null);
   }, []);
 
   const handleMassUploadComplete = useCallback(async (vouchersToCreate: Voucher[]) => {
@@ -740,9 +735,8 @@ const App: React.FC = () => {
       }
 
       setVouchers(prev => [...prev, ...createdVouchers].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-      setMassUploadResult(createdVouchers);
       setImportSummary({ success: createdVouchers.length, failed: 0 });
-      setCurrentPage('MassUploadResult');
+      setCurrentPage('Vouchers');
     } catch (err) {
       console.error('Mass upload save error:');
       setError('Failed to save mass uploaded vouchers');
@@ -1127,11 +1121,11 @@ const App: React.FC = () => {
         ledgers={ledgers}
         stockItems={stockItems}
         onAddVouchers={handleAddVouchers}
+        onNavigate={handleNavigate}
         prefilledData={prefilledVoucherData}
         clearPrefilledData={() => setPrefilledVoucherData(null)}
         onInvoiceUpload={handleInvoiceUpload}
         companyDetails={companyDetails}
-        onMassUploadComplete={handleMassUploadComplete}
         permissions={[]}
       />;
       case 'Reports': return <ErrorBoundary><ReportsPage
@@ -1149,24 +1143,6 @@ const App: React.FC = () => {
       case 'GST': return <GSTPage />;
       case 'Banking': return <BankingPage />;
       case 'Dashboard Builder': return <DashboardBuilderPage vouchers={vouchers} ledgers={ledgers} onNavigate={handleNavigate} />;
-      case 'MassUploadResult': return <MassUploadResultPage
-        results={massUploadResult || []}
-        onDone={() => {
-          const firstVoucher = (massUploadResult || [])[0];
-          if (firstVoucher) {
-            const prefilled = buildPrefilledDataFromVoucher(firstVoucher);
-            if (prefilled) {
-              setPrefilledVoucherData(prefilled as ExtractedInvoiceData);
-            }
-          }
-          setCurrentPage('Vouchers');
-          setMassUploadResult(null);
-        }}
-        onUpdateVoucher={handleUpdateVoucher}
-        ledgers={ledgers}
-        stockItems={stockItems}
-        companyDetails={companyDetails}
-      />;
       default: return <div>Page not found</div>;
     }
   };

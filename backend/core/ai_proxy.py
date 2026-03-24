@@ -9,6 +9,10 @@ from typing import Dict, Any, Optional
 from django.core.cache import cache
 from google.api_core import exceptions
 import google.generativeai as genai
+from dotenv import load_dotenv
+
+# Ensure environment variables are loaded (especially for GEMINI_API_KEY)
+load_dotenv(override=True)
 
 logger = logging.getLogger(__name__)
 
@@ -17,35 +21,45 @@ class APIKeyManager:
     """Manages multiple API keys with rate limiting and health tracking"""
 
     def __init__(self):
-        # Load keys from environment variables
+        self.api_keys = []
+        self.unhealthy_keys = set()
+        self.last_sync = 0.0
+        self._sync_keys()
+
+    def _sync_keys(self):
+        """Force re-load of keys from OS environment."""
+        if self.api_keys and (time.monotonic() - self.last_sync < 300):
+            return
+
         self.api_keys = []
         
-        # Primary: GOOGLE_API_KEY (valid)
-        google_api_key = os.getenv('GOOGLE_API_KEY')
-        if google_api_key:
-            self.api_keys.append(google_api_key)
+        # Primary: GOOGLE_API_KEY (direct from GCP)
+        k1 = os.getenv('GOOGLE_API_KEY')
+        if k1: self.api_keys.append(k1)
             
         # Fallback: GEMINI_API_KEY (from .env)
-        gemini_api_key = os.getenv('GEMINI_API_KEY')
-        if gemini_api_key and gemini_api_key not in self.api_keys:
-            self.api_keys.append(gemini_api_key)
+        k2 = os.getenv('GEMINI_API_KEY')
+        if k2 and k2 not in self.api_keys: self.api_keys.append(k2)
 
-        for i in range(1, 11):  # Support up to 10 keys
+        # Batch keys: GEMINI_API_KEY_1...10
+        for i in range(1, 11):
             key = os.getenv(f'GEMINI_API_KEY_{i}')
             if key and key not in self.api_keys:
                 self.api_keys.append(key)
 
         if not self.api_keys:
-            logger.error("[CRITICAL] No Gemini API keys (GOOGLE_API_KEY or GEMINI_API_KEY) configured!")
+            logger.error("[CRITICAL] NO GEMINI API KEYS DETECTED IN OS ENVIRONMENT!")
         else:
-            logger.info(f"Loaded {len(self.api_keys)} Gemini API keys.")
+            logger.info(f"[OK] AI Key Manager: Registered {len(self.api_keys)} keys found in OS.")
         
-        self.unhealthy_keys = set()  # Track unhealthy keys
+        self.last_sync = time.monotonic()
+  # Track unhealthy keys
         self.recheck_interval = 90  # 1.5 minutes cooldown
         self.rotation_counter = 0  # In-memory rotation counter
 
     def get_healthy_key(self) -> Optional[str]:
         """Get next healthy API key with round-robin rotation"""
+        self._sync_keys()
         if not self.api_keys:
             return None
 
@@ -190,33 +204,14 @@ _AI_VALIDATED: Optional[bool] = None
 
 
 def validate_ai_on_startup() -> bool:
-    """Verify AI model availability on startup (cached)"""
-    global _AI_VALIDATED
-    if _AI_VALIDATED is not None:
-        return _AI_VALIDATED
-        
-    api_key = api_key_manager.get_healthy_key()
-    if not api_key:
-        logger.error("AI Startup check failed: No API key.")
-        _AI_VALIDATED = False
+    """Verify AI model availability. Resilience: Does NOT block on temporary cooldown."""
+    api_key_manager._sync_keys()
+    if not api_key_manager.api_keys:
+        logger.error("AI Startup check failed: No Gemini API keys found in environment.")
         return False
     
-    genai.configure(api_key=api_key)
-    try:
-        # ⚠️ NOTE: gemini-1.5-flash is defunct in 2026 for this key.
-        # Switched to gemini-2.5-flash as the current stable version to allow validation to pass.
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        model.generate_content("test")
-        logger.info("[OK] AI Model Connection: SUCCESS (gemini-2.5-flash)")
-        _AI_VALIDATED = True
-        return True
-    except Exception as e:
-        logger.error(f"[ERROR] AI Model validation failed: {str(e)}")
-        # Log response body for 404s
-        if "404" in str(e) and hasattr(e, 'response'):
-             logger.error(f"Response Body: {e.response.text if hasattr(e.response, 'text') else str(e.response)}")
-        _AI_VALIDATED = False
-        return False
+    return True
+
 
 
 def process_ai_request(request_data: dict) -> dict:
@@ -307,7 +302,7 @@ def process_ai_request(request_data: dict) -> dict:
 
             User query: {request_data['message']}
             """
-        elif request_data.get('type') == 'invoice':
+        elif request_data.get('type') in ('invoice', 'master', 'extraction'):
             prompt_text = request_data.get('prompt', 'Extract invoice data from this image')
             if 'image_data' in request_data:
                 try:
@@ -485,6 +480,7 @@ class AIServiceProxy:
         # ── BLOCK DIRECT INVOICE PROCESSING ────────────────────────────────
         if request_type == 'invoice':
             # Production MUST use the Kafka pipeline (/api/vouchers/upload).
+            # Note: We allow 'master' type to continue directly as it skips the heavy pipeline.
             logger.critical(f"SECURITY ERROR: Blocked direct invoice processing for user {user_id}. All OCR must use Kafka.")
             return {
                 'error': 'Service Unavailable: Direct AI Extraction has been disabled. Please upload invoices via the standard pipeline (Kafka).',

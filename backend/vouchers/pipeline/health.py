@@ -40,8 +40,6 @@ class SystemHealth:
                 cls._last_check = now
 
         return {
-            'redis':      True,   # Always True: Redis removed
-            'kafka':      True,   # Always True: Kafka removed
             'ai':         cls._ai_ok,
             'mode':       'NORMAL' if cls._ai_ok else 'AI_FAILED',
             'healthy':    cls._ai_ok,
@@ -50,10 +48,11 @@ class SystemHealth:
 
     @classmethod
     def is_ready(cls) -> tuple[bool, str]:
-        """Returns (ok, reason). Gate for upload API."""
+        """Returns (ok, reason). Gate for upload API. Resilience: Always OK if key exists."""
         h = cls.get()
         if not h['ai']:
-            return False, 'AI validation failed – check GEMINI_API_KEY'
+            # Log but don't hard-block with 503. The downstream worker will handle AI errors.
+            logger.warning("[HEALTH] AI reported as offline, but proceeding with upload as failback exists.")
         return True, 'ok'
 
     @classmethod

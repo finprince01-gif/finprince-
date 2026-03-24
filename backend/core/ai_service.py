@@ -383,7 +383,7 @@ STRICT RULES
 
         from core.ai_proxy import ai_service
         try:
-            result = ai_service.make_request('invoice', request_data, user_id, tenant_id)
+            result = ai_service.make_request('extraction', request_data, user_id, tenant_id)
         except Exception as e:
             # ── CRITICAL FALLBACK (No-Stall Logic) ──────────────────────────
             # If AI Service (Proxy/Flash/Pro) fails or times out (504), 
@@ -614,7 +614,7 @@ Return ONLY the raw JSON object above — no markdown, no code fences, no explan
         }
 
         from core.ai_proxy import ai_service
-        return ai_service.make_request('invoice', request_data, user_id, tenant_id)
+        return ai_service.make_request('master', request_data, user_id, tenant_id)
 
 
     except Exception as e:

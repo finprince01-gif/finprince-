@@ -24,11 +24,6 @@ services:
     depends_on:
       - db
 
-  redis:
-    image: redis:7-alpine
-    restart: always
-    volumes:
-      - redis_data:/data
 
   backend:
     build: 
@@ -39,20 +34,9 @@ services:
       - ./backend/.env
     depends_on:
       - db
-      - redis
     ports:
       - "8000:8000"
 
-  ai-worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.worker
-    restart: always
-    env_file:
-      - ./backend/.env
-    depends_on:
-      - redis
-      - db
 
   frontend:
     build:
@@ -74,4 +58,3 @@ services:
 
 volumes:
   db_data:
-  redis_data:
