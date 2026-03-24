@@ -7,24 +7,20 @@
         "**/__pycache__",
         "**/migrations"
     ],
-    "pythonVersion": "3.14",
+    "pythonVersion": "3.12",
     "pythonPlatform": "Windows",
-    "reportMissingImports": "none",
-    "reportMissingModuleSource": "none",
-    "reportMissingTypeStubs": "none",
-    "typeCheckingMode": "off",
+    "typeCheckingMode": "basic",
     "useLibraryCodeForTypes": true,
     "extraPaths": [
-        "backend",
-        "C:/Python314/Lib/site-packages",
-        "C:/Users/Dharun/AppData/Roaming/Python/Python314/site-packages",
-        "."
+        "./backend"
     ],
     "executionEnvironments": [
         {
             "root": "backend",
             "extraPaths": [
-                "."
+                ".",
+                "C:/Users/ulaganathan/AppData/Local/Programs/Python/Python312/Lib/site-packages",
+                "C:/Users/ulaganathan/AppData/Roaming/Python/Python312/site-packages"
             ]
         }
     ]

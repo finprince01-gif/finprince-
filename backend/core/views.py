@@ -104,6 +104,7 @@ def check_phone(request):
     return Response({'exists': exists})
 
 from .ai_proxy import ai_service  # type: ignore
+from .processing_engine import safe_json_load
 
 @method_decorator(csrf_exempt, name='dispatch')
 class AgentMessageView(views.APIView):
@@ -346,7 +347,7 @@ class AIProxyView(views.APIView):
             import json as _json
             columns_data = request.data.get('columns', '[]')
             try:
-                columns_list = _json.loads(columns_data)
+                columns_list = safe_json_load(columns_data)
             except Exception:
                 columns_list = []
 
@@ -479,14 +480,9 @@ class AIProxyView(views.APIView):
             raw_text = raw_text.strip()
 
             try:
-                master_data = _json.loads(raw_text)
+                master_data = safe_json_load(raw_text)
             except Exception:
-                import re
-                match = re.search(r'\{[\s\S]*\}', raw_text)
-                if match:
-                    master_data = _json.loads(match.group(0))
-                else:
-                    return Response({'error': 'Failed to parse AI response as JSON.'}, status=500)
+                return Response({'error': 'Failed to parse AI response as JSON.'}, status=500)
 
             # Ensure it's a flat dict, not nested
             if not isinstance(master_data, dict):

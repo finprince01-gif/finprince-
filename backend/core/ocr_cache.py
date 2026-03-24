@@ -15,6 +15,7 @@ import hashlib
 import json
 import logging
 from datetime import datetime, timedelta
+from .processing_engine import safe_json_load
 
 logger = logging.getLogger(__name__)
 
@@ -79,8 +80,8 @@ def get_cached_ocr(file_hash: str, tenant_id: str) -> dict | None:
         # Deserialise the JSON blob stored in extracted_data
         if isinstance(record["extracted_data"], str):
             try:
-                record["extracted_data"] = json.loads(record["extracted_data"])
-            except (json.JSONDecodeError, TypeError):
+                record["extracted_data"] = safe_json_load(record["extracted_data"])
+            except Exception:
                 record["extracted_data"] = {}
 
         return record
@@ -97,14 +98,14 @@ def get_cached_ocr(file_hash: str, tenant_id: str) -> dict | None:
 def save_ocr_cache(
     file_hash: str,
     tenant_id: str,
-    upload_session_id: str = None,
+    upload_session_id: str | None = None,
     file_path: str = "",
     ocr_raw_text: str = "",
-    extracted_data: dict = None,
+    extracted_data: dict | None = None,
     validation_status: str = 'PENDING',
-    matched_by: str = None,
-    conflict_message: str = None,
-    vendor_id: int = None,
+    matched_by: str | None = None,
+    conflict_message: str | None = None,
+    vendor_id: int | None = None,
 ) -> int | None:
     """
     Persist an OCR result into invoice_ocr_temp.
@@ -189,10 +190,10 @@ def update_staged_invoice_extracted_data(
     file_hash: str, 
     tenant_id: str, 
     extracted_data: dict, 
-    validation_status: str = None,
-    matched_by: str = None,
-    conflict_message: str = None,
-    vendor_id: int = None
+    validation_status: str | None = None,
+    matched_by: str | None = None,
+    conflict_message: str | None = None,
+    vendor_id: int | None = None
 ) -> bool:
     """
     Update the extracted_data JSON for a staged invoice identified by file_hash + tenant_id.
@@ -367,8 +368,8 @@ def get_all_staged_invoices(tenant_id: str, upload_session_id: str = None) -> li
             record = dict(zip(col_names, row))
             if isinstance(record["extracted_data"], str):
                 try:
-                    record["extracted_data"] = json.loads(record["extracted_data"])
-                except (json.JSONDecodeError, TypeError):
+                    record["extracted_data"] = safe_json_load(record["extracted_data"])
+                except Exception:
                     record["extracted_data"] = {}
             results.append(record)
             
@@ -401,7 +402,11 @@ def remove_staged_invoice(file_hash: str, tenant_id: str) -> bool:
         return False
 
 
-def mark_invoice_as_processed(file_hash: str, tenant_id: str, voucher_id: int = None) -> bool:
+def mark_invoice_as_processed(
+    file_hash: str,
+    tenant_id: str,
+    voucher_id: int | None = None
+) -> bool:
     """
     Mark a staged invoice as processed after voucher creation.
     If voucher_id is provided, store it and update status to 'Voucher Created'.
@@ -513,7 +518,7 @@ def delete_expired_records() -> int:
             rows = cursor.fetchall()
 
         # ── Step 2: remove temp files from disk ───────────────────────────────
-        deleted_files = 0
+        deleted_files: int = 0
         for (file_path,) in rows:
             if file_path and os.path.isfile(file_path):
                 try:
