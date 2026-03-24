@@ -192,6 +192,7 @@ class VendorUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Vendor
         fields = [
+            'vendor_code',
             'vendor_name',
             'display_name',
             'vendor_type',
