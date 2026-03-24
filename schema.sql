@@ -590,6 +590,7 @@ CREATE TABLE `company_informations` (
     `gst_rate` DECIMAL(5,2) DEFAULT NULL,
     
     `reorder_level` VARCHAR(255) DEFAULT NULL COMMENT 'Reorder Level Information',
+    `reorder_level_2` VARCHAR(255) DEFAULT NULL COMMENT 'Alternate Unit Reorder Level Information',
     `is_saleable` TINYINT(1) NOT NULL DEFAULT 0,
     
     `is_active` TINYINT(1) NOT NULL DEFAULT 1,
@@ -612,7 +613,6 @@ CREATE TABLE `company_informations` (
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_unicode_ci
   COMMENT='Inventory Master Items';
-
 
   --
   -- Table structure for table `vendor_master_banking`

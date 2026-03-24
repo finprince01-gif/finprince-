@@ -125,6 +125,7 @@ class InventoryItem(BaseModel):
     
     # Other
     reorder_level = models.CharField(max_length=255, null=True, blank=True)
+    reorder_level_2 = models.CharField(max_length=255, null=True, blank=True)
     is_saleable = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
 
