@@ -99,45 +99,30 @@ export const extractInvoiceDataWithRetry = async (
         }
 
         // MAP BACKEND KEYS TO FRONTEND INTERFACE
-        // Backend returns: "Voucher Date", "Invoice Number", "Supplier Name", "Invoice Value", etc.
+        // Backend now returns STRICT snake_case: supplier_invoice_no, vendor_name, etc.
         const mappedData: ExtractedInvoiceData = {
-          sellerName: parsedData["Supplier Name"] || parsedData["Party Name"] || parsedData["sellerName"] || '',
-          invoiceNumber: parsedData["Invoice Number"] || parsedData["invoiceNumber"] || '',
-          invoiceDate: parsedData["Voucher Date"] || parsedData["invoiceDate"] || new Date().toISOString().split('T')[0],
-          dueDate: parsedData["Due Date"] || parsedData["dueDate"] || '',
-          subtotal: parseFloat(parsedData["Taxable Value"] || parsedData["subtotal"] || '0'),
-          cgstAmount: parseFloat(parsedData["CGST Amount"] || parsedData["cgstAmount"] || '0'),
-          sgstAmount: parseFloat(parsedData["SGST/UTGST Amount"] || parsedData["sgstAmount"] || '0'),
-          igstAmount: parseFloat(parsedData["IGST Amount"] || parsedData["igstAmount"] || '0'),
-          totalAmount: parseFloat(parsedData["Invoice Value"] || parsedData["totalAmount"] || '0'),
+          sellerName: parsedData.vendor_name || '',
+          invoiceNumber: parsedData.supplier_invoice_no || '',
+          invoiceDate: parsedData.invoice_date || new Date().toISOString().split('T')[0],
+          dueDate: parsedData.due_date || '',
+          subtotal: parseFloat(parsedData.total_taxable_value || '0'),
+          cgstAmount: parseFloat(parsedData.total_cgst || '0'),
+          sgstAmount: parseFloat(parsedData.total_sgst || '0'),
+          igstAmount: parseFloat(parsedData.total_igst || '0'),
+          totalAmount: parseFloat(parsedData.total_invoice_value || '0'),
           lineItems: []
         };
 
-        // If backend provided "lineItems" array directly (old format):
-        if (Array.isArray(parsedData.lineItems)) {
-          mappedData.lineItems = parsedData.lineItems.map((item: any) => ({
-            itemDescription: item.itemDescription || item.description || 'Item',
+        // Standardized line_items from backend
+        const rawItems = parsedData.line_items || parsedData.items || [];
+        if (Array.isArray(rawItems)) {
+          mappedData.lineItems = rawItems.map((item: any) => ({
+            itemDescription: item.description || item.item_name || 'Item',
             quantity: parseFloat(item.quantity || '0'),
             rate: parseFloat(item.rate || '0'),
-            amount: parseFloat(item.amount || '0') || (parseFloat(item.quantity || '0') * parseFloat(item.rate || '0')),
-            hsnCode: item.hsnCode || item.hsn_code || ''
+            amount: parseFloat(item.amount || '0'),
+            hsnCode: item.hsn_sac || item.hsn_code || ''
           }));
-        } else {
-          // Construct line item from flat fields ("Item/Description", "Quantity", "Item Rate")
-          // The backend prompt aggregates them into strings.
-          const desc = parsedData["Item/Description"] || 'Item';
-          const qty = parseFloat(parsedData["Quantity"] || '1');
-          const rate = parseFloat(parsedData["Item Rate"] || '0');
-          // If totalAmount is present but rate is 0, infer rate
-          const finalRate = rate === 0 && qty > 0 && mappedData.subtotal > 0 ? (mappedData.subtotal / qty) : rate;
-
-          mappedData.lineItems = [{
-            itemDescription: desc,
-            quantity: qty,
-            rate: finalRate,
-            amount: qty * finalRate,
-            hsnCode: parsedData["HSN/SAC Details"] || ''
-          }];
         }
 
         return mappedData;

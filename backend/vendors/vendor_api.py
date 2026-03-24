@@ -557,15 +557,15 @@ class PurchaseVendorCreateView(APIView):
             return Response({
                 "status": "CREATED",
                 "vendor_id": val_result['vendor_id'],
-                "message": val_result['message']
+                "message": val_result.get('message', 'Vendor already exists.')
             }, status=status.HTTP_200_OK)
             
         elif val_result['status'] == 'GSTIN_CONFLICT':
             # Rule 4: GSTIN matches but Name is different
             return Response({
                 "status": "VALIDATION_WARNING",
-                "message": val_result['message'],
-                "vendor_id": val_result['vendor_id']
+                "message": val_result.get('message', 'GSTIN Conflict detected.'),
+                "vendor_id": val_result.get('vendor_id')
             }, status=status.HTTP_400_BAD_REQUEST)
 
         # Rule 2 & 3: Allowed to continue (val_result['status'] == 'NOT_FOUND')

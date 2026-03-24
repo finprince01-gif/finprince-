@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Invoice header indicators located in the top section
 _HEADER_REGEX = re.compile(
-    r"\b(?:Tax Invoice|Sales Invoice|Invoice|Cash Bill|Service Bill|Original for Recipient|Invoice No|Bill No)\b",
+    r"\b(?:Tax Invoice|Sales Invoice|Invoice|Cash Bill|Service Bill|Original for Recipient|Invoice No|Bill No|Receipt|Voucher|Consignment|Reference No|Order No)\b",
     re.IGNORECASE
 )
 

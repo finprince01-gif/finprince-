@@ -84,56 +84,26 @@ class OCRStagingView(views.APIView):
             for inv in staged_invoices:
                 try:
                     raw_extracted = inv.get('extracted_data', {})
-                    # Hardening: Handle if extracted_data was stored as a JSON string
                     if isinstance(raw_extracted, str):
                         try:
                             extracted = json.loads(raw_extracted)
                         except Exception:
-                            logger.error(f"Failed to parse extracted_data JSON for invoice {inv.get('id')}")
                             extracted = {}
                     else:
                         extracted = raw_extracted if isinstance(raw_extracted, dict) else {}
                     
-                    # Support both {invoice, items} and {header, items} or flat
-                    invoice_data = extracted.get('invoice', extracted.get('header', extracted))
-                    if isinstance(invoice_data, list) and invoice_data:
-                        invoice_data = invoice_data[0]
-                    if not isinstance(invoice_data, dict):
-                        invoice_data = {}
-                    
-                    vendor_name = invoice_data.get('Vendor Name') or invoice_data.get('vendor_name') or '—'
-                    gstin = invoice_data.get('GSTIN') or invoice_data.get('vendor_gstin') or ''
-                    
-                    # Map items safely
-                    items = extracted.get('items', extracted.get('line_items', []))
-                    if not isinstance(items, list):
-                        items = []
-                    
-                    # Map flat keys for frontend — use empty string (not '—') so
-                    # frontend can fall through to nested extracted_data paths when empty
-                    ext_mapped = {
-                        'invoice_number': str(invoice_data.get('Supplier Invoice No') or invoice_data.get('invoice_number') or ''),
-                        'invoice_date': str(invoice_data.get('Voucher Date') or invoice_data.get('invoice_date') or ''),
-                        'vendor_name': str(invoice_data.get('Vendor Name') or invoice_data.get('vendor_name') or ''),
-                        'vendor_gstin': str(invoice_data.get('GSTIN') or invoice_data.get('vendor_gstin') or ''),
-                        'total_amount': str(
-                            invoice_data.get('Total Invoice Value')
-                            or invoice_data.get('Grand Total')
-                            or invoice_data.get('total_amount')
-                            or ''
-                        ),
-                        'items': items
-                    }
-
+                    # ENFORCE: Backend MUST use snake_case ONLY
+                    # Output the standardized structure directly to frontend
                     results.append({
                         'id': inv.get('id', 0),
                         'file_hash': inv.get('file_hash', ''),
                         'file_path': inv.get('file_path', 'unknown'),
-                        'invoice_number': ext_mapped['invoice_number'],
-                        'invoice_date': ext_mapped['invoice_date'],
-                        'vendor_name': ext_mapped['vendor_name'],
-                        'vendor_gstin': ext_mapped['vendor_gstin'],
-                        'total_amount': ext_mapped['total_amount'],
+                        'supplier_invoice_no': str(extracted.get('supplier_invoice_no') or ''),
+                        'invoice_date': str(extracted.get('invoice_date') or ''),
+                        'vendor_name': str(extracted.get('vendor_name') or ''),
+                        'gstin': str(extracted.get('gstin') or ''),
+                        'total_invoice_value': extracted.get('total_invoice_value') or 0,
+                        'line_items': extracted.get('line_items', []),
                         'status': inv.get('validation_status', 'PENDING'),
                         'validation_status': inv.get('validation_status', 'PENDING'),
                         'extracted_data': extracted,
@@ -146,7 +116,7 @@ class OCRStagingView(views.APIView):
                     continue
 
             # Determine overall pipeline status
-            # "processing" = at least one row still being worked on by Kafka worker
+            # "processing" = at least one row still being worked on
             # "completed"  = all rows have reached a terminal state
             PENDING_STATES = {'PENDING', 'processing', 'PROCESSING'}
             has_pending = any(
@@ -184,6 +154,7 @@ class OCRStagingView(views.APIView):
         user_id: str,
         upload_session_id: str,
         all_columns: list,
+        voucher_type: str = 'Purchase',
         job_id: int | None = None,
     ) -> bool:
         """
@@ -195,15 +166,23 @@ class OCRStagingView(views.APIView):
             # 1. Check if already staged (idempotency)
             existing = get_cached_ocr(file_hash, tenant_id)
             if existing:
-                valid_states = ['READY', 'DUPLICATE', 'GSTIN_CONFLICT', 'VENDOR_MISSING', 'Voucher Created']
-                if existing.get('validation_status') in valid_states:
-                    # Already successfully processed
+                # If already fully validated and successfully matched, just reuse it
+                valid_ready_states = ['READY', 'DUPLICATE', 'GSTIN_CONFLICT', 'Voucher Created']
+                if existing.get('validation_status') in valid_ready_states:
                     update_ocr_cache_session(existing['id'], upload_session_id)
                     return True
-                else:
-                    # It was PENDING, PROCESSING, or FAILED. Let's delete it so we can re-process safely.
-                    from core.ocr_cache import remove_staged_invoice
-                    remove_staged_invoice(file_hash, tenant_id)
+                
+                # If it has data but is in a "FIXABLE" state (Missing Vendor, Failed but has info), reuse info
+                if existing.get('extracted_data'):
+                    logger.info("Found existing info for %s, re-validating...", file_path)
+                    update_ocr_cache_session(existing['id'], upload_session_id)
+                    from core.processing_engine import run_invoice_processing_pipeline
+                    run_invoice_processing_pipeline(file_hash, tenant_id, voucher_type=voucher_type)
+                    return True
+
+                # If it was truly empty and failed, delete so we can re-extract
+                from core.ocr_cache import remove_staged_invoice
+                remove_staged_invoice(file_hash, tenant_id)
 
             # 2. Save to Storage
             storage_key = storage.make_key(job_id or 0, file_path)
@@ -233,9 +212,26 @@ class OCRStagingView(views.APIView):
             else:
                 item_id = None
 
-            # 5. Extract invoice data directly via Gemini (no separate service needed)
-            print(f"🚀 [GEMINI EXTRACT] Extracting {file_path} inline via Gemini...")
-            raw_extracted_data = self._extract_via_gemini(file_bytes, mime_type, file_path)
+            # 5. Extract invoice data directly via Gemini
+            # Check and increment AI usage (billing/subscription)
+            # Default to STARTER limit (100) if plan not found
+            plan = getattr(request.user, 'selected_plan', 'FREE') or 'FREE'
+            LIMITS = {'FREE': 5, 'STARTER': 100, 'PRO': float('inf')}
+            limit = LIMITS.get(plan.upper(), 5)
+            
+            if not check_and_increment_usage(tenant_id, limit):
+                update_ocr_cache_validation_status(file_hash, tenant_id, 'QUOTA_EXCEEDED')
+                if item_id:
+                    InvoiceProcessingItem.objects.filter(id=item_id).update(status='failed')
+                return False
+
+            from vouchers.extraction_logic import perform_ocr_extraction
+            print(f"🚀 [GEMINI EXTRACT] Extracting {file_path} via Centralized Logic...")
+            raw_extracted_data = perform_ocr_extraction(
+                file_bytes, 
+                mime_type, 
+                hint_data={'columns': all_columns}
+            )
 
             if not raw_extracted_data:
                 # Update DB to failed
@@ -244,78 +240,30 @@ class OCRStagingView(views.APIView):
                 if item_id:
                     InvoiceProcessingItem.objects.filter(id=item_id).update(status='failed')
                 return False
-                
-            # 6. Process and validate the extracted data
-            from core.processing_engine import parse_and_process_ocr
-            from vendors.vendor_validation_logic import validate_vendor
-            import json
 
-            try:
-                processed_data = parse_and_process_ocr(json.dumps(raw_extracted_data))
-                invoice_header = processed_data.get('invoice', processed_data.get('header', processed_data))
+            
+            # 6. Save extracted data to DB so pipeline can work on it
+            from core.ocr_cache import update_staged_invoice_extracted_data
+            update_staged_invoice_extracted_data(
+                file_hash=file_hash,
+                tenant_id=tenant_id,
+                extracted_data=raw_extracted_data
+            )
                 
-                v_name = invoice_header.get('Vendor Name') or invoice_header.get('vendor_name') or ''
-                v_gstin = invoice_header.get('GSTIN') or invoice_header.get('vendor_gstin') or ''
-                v_branch = invoice_header.get('Branch') or invoice_header.get('branch_name') or ''
-                v_address = invoice_header.get('Bill From - Address Line 1') or invoice_header.get('vendor_address') or ''
-                v_state = invoice_header.get('Bill From - State') or ''
-                inv_no = invoice_header.get('Supplier Invoice No') or invoice_header.get('Supplier Invoice No.') or invoice_header.get('invoice_number') or invoice_header.get('Invoice No') or invoice_header.get('Invoice Number') or ''
-
-                val_result = validate_vendor(
-                    tenant_id=tenant_id,
-                    vendor_name=v_name,
-                    gstin=v_gstin,
-                    branch=v_branch,
-                    address=v_address,
-                    state=v_state,
-                    supplier_invoice_no=inv_no
+            # 7. Process and validate the extracted data
+            from core.processing_engine import run_invoice_processing_pipeline
+            pipeline_res = run_invoice_processing_pipeline(
+                file_hash=file_hash, 
+                tenant_id=tenant_id,
+                voucher_type=voucher_type
+            )
+            final_status = pipeline_res.get('status', 'VALIDATION_FAILED')
+            
+            # Update item status if part of a job
+            if item_id:
+                InvoiceProcessingItem.objects.filter(id=item_id).update(
+                    status='success' if final_status in ['READY', 'DUPLICATE', 'GSTIN_CONFLICT', 'VENDOR_MISSING'] else 'failed'
                 )
-
-                vendor_status_raw = val_result.get('status')
-                
-                taxable_val = invoice_header.get('Total Taxable Value') or invoice_header.get('Taxable Value') or ''
-                grand_total = invoice_header.get('Total Invoice Value') or invoice_header.get('Grand Total') or invoice_header.get('total_amount') or ''
-                fields_valid = bool(v_name and v_gstin and inv_no and (taxable_val or grand_total))
-
-                if vendor_status_raw == 'DUPLICATE_INVOICE':
-                    final_status = 'DUPLICATE'
-                    conflict_msg = val_result.get('message', 'Duplicate invoice detected.')
-                elif vendor_status_raw == 'GSTIN_CONFLICT':
-                    final_status = 'GSTIN_CONFLICT'
-                    conflict_msg = val_result.get('message', 'GSTIN Conflict detected.')
-                elif vendor_status_raw != 'FOUND':
-                    final_status = 'VENDOR_MISSING'
-                    conflict_msg = val_result.get('message', 'Vendor not found in master.')
-                elif not fields_valid:
-                    final_status = 'VALIDATION_FAILED'
-                    conflict_msg = 'Missing required OCR fields.'
-                else:
-                    final_status = 'READY'
-                    conflict_msg = None
-
-                # Update the DB
-                from core.ocr_cache import update_staged_invoice_extracted_data
-                success = update_staged_invoice_extracted_data(
-                    file_hash=file_hash,
-                    tenant_id=tenant_id,
-                    extracted_data=processed_data,
-                    validation_status=final_status,
-                    matched_by=val_result.get('matched_by', ''),
-                    conflict_message=conflict_msg or '',
-                    vendor_id=val_result.get('vendor_id')
-                )
-                
-                # Update item status
-                if item_id:
-                    InvoiceProcessingItem.objects.filter(id=item_id).update(status='completed')
-
-            except Exception as e:
-                logger.error(f"Error processing extracted data for {file_path}: {e}")
-                from core.ocr_cache import update_ocr_cache_validation_status
-                update_ocr_cache_validation_status(file_hash, tenant_id, 'VALIDATION_FAILED')
-                if item_id:
-                    InvoiceProcessingItem.objects.filter(id=item_id).update(status='failed')
-                return False
 
             print(f"✅ [GEMINI EXTRACT] Extracted & Validated: {file_path} -> {final_status}")
             return True
@@ -334,92 +282,8 @@ class OCRStagingView(views.APIView):
                 pass
             return False
 
-    def _extract_via_gemini(self, file_bytes: bytes, mime_type: str, file_path: str):
-        """
-        Extract invoice data directly using Gemini API.
-        Supports PDF (converts first page to JPEG) and image files.
-        Returns parsed dict or None on failure.
-        """
-        import re
-        import io as _io
-        import google.generativeai as genai
-        from PIL import Image
+    # Removed _extract_via_gemini in favor of centralized vouchers.extraction_logic.perform_ocr_extraction
 
-        PROMPT = """You are an invoice data extraction engine.
-Return ONLY valid JSON. No explanation.
-
-{
-  "vendor_name": string or null,
-  "gstin": string or null,
-  "address": string or null,
-  "state": string or null,
-  "branch": string or null,
-  "invoice_number": string or null,
-  "invoice_date": string or null,
-  "total_amount": number or null,
-  "line_items": [
-    {
-      "item_code": string or null,
-      "description": string or null,
-      "hsn_sac": string or null,
-      "quantity": number or null,
-      "rate": number or null,
-      "amount": number or null
-    }
-  ]
-}"""
-
-        try:
-            fname = (file_path or '').lower()
-            image_bytes = None
-
-            if mime_type == 'application/pdf' or fname.endswith('.pdf'):
-                try:
-                    from pdf2image import convert_from_bytes
-                    poppler_path = r"c:\108\ocr_bins\poppler\poppler-24.08.0\Library\bin"
-                    if not os.path.exists(poppler_path):
-                        poppler_path = r"C:\poppler\Library\bin"
-                    if not os.path.exists(poppler_path):
-                        poppler_path = None
-                    images = convert_from_bytes(
-                        file_bytes, dpi=200, first_page=1, last_page=1,
-                        poppler_path=poppler_path
-                    )
-                    if images:
-                        buf = _io.BytesIO()
-                        images[0].save(buf, format='JPEG')
-                        image_bytes = buf.getvalue()
-                    else:
-                        logger.error(f"PDF->image conversion produced no pages for {file_path}")
-                        return None
-                except Exception as pdf_err:
-                    logger.error(f"PDF conversion failed for {file_path}: {pdf_err}")
-                    return None
-            elif fname.endswith(('.png', '.jpg', '.jpeg')):
-                image_bytes = file_bytes
-            else:
-                logger.error(f"Unsupported file type for inline extraction: {file_path}")
-                return None
-
-            if not image_bytes:
-                return None
-
-            image = Image.open(_io.BytesIO(image_bytes))
-            genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-            model = genai.GenerativeModel("gemini-2.5-flash")
-            response = model.generate_content([image, PROMPT])
-            text = response.text
-            clean = re.sub(r"```json|```", "", text).strip()
-            parsed = json.loads(clean)
-            logger.info(f"[GEMINI EXTRACT] Successfully extracted data for {file_path}")
-            return parsed
-
-        except json.JSONDecodeError as e:
-            logger.error(f"[GEMINI EXTRACT] Invalid JSON from Gemini for {file_path}: {e}")
-            return None
-        except Exception as e:
-            logger.error(f"[GEMINI EXTRACT] Extraction failed for {file_path}: {e}")
-            return None
 
     def post(self, request):
         try:
@@ -438,17 +302,60 @@ Return ONLY valid JSON. No explanation.
             if not files:
                 return Response({'error': 'No files uploaded'}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Columns for extraction
-            HEADER_FIELDS = [
-                'Voucher Date', 'Supplier Invoice No', 'Vendor Name', 'GSTIN',
-                'Bill From - Address Line 1', 'Place of Supply', 'Total Invoice Value',
-                'Total Taxable Value', 'Bill From - City', 'Bill From - State', 'Branch'
-            ]
-            LINE_ITEM_FIELDS = [
-                'Item Name', 'HSN/SAC', 'Quantity', 'UOM', 'Rate',
-                'Taxable Value', 'Item Amount', 'IGST', 'CGST', 'SGST/UTGST', 'Cess'
-            ]
-            all_columns = HEADER_FIELDS + LINE_ITEM_FIELDS
+            # ── DYNAMIC EXTRACTION SCHEMAS ──────────────────────────────
+            voucher_type = request.data.get('voucher_type') or request.POST.get('voucher_type') or request.query_params.get('voucher_type') or 'Purchase'
+            
+            # Map type to schemas (matching what's in mappingEngine.ts)
+            schemas = {
+                'Purchase': {
+                    'headers': [
+                        'Date', 'Supplier Invoice No', 'Vendor Name', 'GSTIN',
+                        'Bill From - Address Line 1', 'Bill From - City', 'Bill From - State', 
+                        'Branch', 'Total Invoice Value', 'Total Taxable Value', 'Place of Supply',
+                        'Purchase Order No', 'Reference No', 'Purchase Voucher No',
+                        'Total IGST', 'Total CGST', 'Total SGST/UTGST',
+                        'IRN', 'Ack. No.', 'Ack. Date'
+                    ],
+                    'items': [
+                        'Item Name', 'HSN/SAC', 'Qty', 'UOM', 'Item Rate',
+                        'Taxable Value', 'IGST', 'CGST', 'SGST/UTGST', 'Cess', 'Invoice Value'
+                    ]
+                },
+                'Sales': {
+                    'headers': [
+                        'Date', 'Invoice No', 'Customer Name', 'GSTIN',
+                        'Bill To - Address Line 1', 'Bill To - City', 'Bill To - State', 
+                        'Branch', 'Total Invoice Value', 'Total Taxable Value', 'Place of Supply',
+                        'Sales Order No', 'Reference No', 'Sales Voucher No',
+                        'Total IGST', 'Total CGST', 'Total SGST/UTGST',
+                        'IRN', 'Ack. No.', 'Ack. Date'
+                    ],
+                    'items': [
+                        'Item Name', 'HSN/SAC', 'Qty', 'UOM', 'Item Rate',
+                        'Taxable Value', 'IGST', 'CGST', 'SGST/UTGST', 'Cess', 'Invoice Value'
+                    ]
+                },
+                'Payment': {
+                    'headers': ['Voucher Date', 'Account', 'Party', 'Amount', 'Narration', 'Reference No', 'Bank Name'],
+                    'items': []
+                },
+                'Receipt': {
+                    'headers': ['Voucher Date', 'Account', 'Party', 'Amount', 'Narration', 'Reference No', 'Bank Name'],
+                    'items': []
+                },
+                'Contra': {
+                    'headers': ['Voucher Date', 'From Account', 'To Account', 'Amount', 'Narration'],
+                    'items': []
+                },
+                'Journal': {
+                    'headers': ['Voucher Date', 'Ledger (Debit)', 'Ledger (Credit)', 'Amount', 'Narration'],
+                    'items': []
+                }
+            }
+
+            active_schema = schemas.get(voucher_type, schemas['Purchase'])
+            print(f"DEBUG: Using schema for voucher_type: {voucher_type}")
+            all_columns = active_schema['headers'] + active_schema['items']
 
             import concurrent.futures
             import traceback
@@ -524,6 +431,7 @@ Return ONLY valid JSON. No explanation.
                         user_id=user_id,
                         upload_session_id=upload_session_id,
                         all_columns=all_columns,
+                        voucher_type=voucher_type,
                         job_id=job.id,
                     )
                     return success
@@ -538,6 +446,10 @@ Return ONLY valid JSON. No explanation.
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
                 list(executor.map(worker, tasks))
+
+            # Mark job as completed for polling UI
+            job.status = 'completed'
+            job.save()
 
             # Return the staged list (might be PENDING)
             response = self.get(request, file_hash=upload_session_id)
@@ -570,20 +482,19 @@ Return ONLY valid JSON. No explanation.
             # Since the data is already JSON, we just treat it as header/items
             processed_data = parse_and_process_ocr(json.dumps(extracted_data)) # Re-process via engine
             
-            # 2. Run Vendor Validation on the normalized data
-            invoice_header = processed_data.get('invoice', {})
-            v_name = invoice_header.get('Vendor Name') or invoice_header.get('vendor_name') or ''
-            v_gstin = invoice_header.get('GSTIN') or invoice_header.get('vendor_gstin') or ''
-            v_branch = invoice_header.get('Branch') or invoice_header.get('branch_name') or ''
-            v_address = invoice_header.get('Bill From - Address Line 1') or invoice_header.get('vendor_address') or ''
-            v_state = invoice_header.get('Bill From - State') or ''
+            # 2. Run Vendor Validation on the normalized data (handle flat structure)
+            v_name = processed_data.get('vendor_name') or ''
+            v_gstin = processed_data.get('gstin') or ''
+            v_branch = processed_data.get('branch') or processed_data.get('branch_name') or ''
+            v_address = processed_data.get('bill_from_address_line_1') or processed_data.get('address') or ''
+            v_state = processed_data.get('bill_from_state') or ''
 
             print("Purchase Vendor Validation API Hit (via Staging Patch)")
             print(f"Revalidating with credentials - Name: {v_name}, GSTIN: {v_gstin}, Branch: {v_branch}")
 
-            # Field validation - support multiple variants of keys
-            inv_no = invoice_header.get('Supplier Invoice No') or invoice_header.get('Supplier Invoice No.') or \
-                     invoice_header.get('invoice_number') or invoice_header.get('Invoice No') or invoice_header.get('Invoice Number') or ''
+            # Field validation
+            inv_no = processed_data.get('supplier_invoice_no') or processed_data.get('Supplier Invoice No') or \
+                     processed_data.get('invoice_number') or ''
 
             val_result = validate_vendor(
                 tenant_id=tenant_id,
@@ -595,18 +506,17 @@ Return ONLY valid JSON. No explanation.
                 supplier_invoice_no=inv_no
             )
                      
-            taxable_val = invoice_header.get('Total Taxable Value') or invoice_header.get('Taxable Value') or \
-                          invoice_header.get('taxable_value') or ''
-                          
-            grand_total = invoice_header.get('Total Invoice Value') or invoice_header.get('Invoice Value') or \
-                          invoice_header.get('Grand Total') or invoice_header.get('total_amount') or ''
+            taxable_val = processed_data.get('total_taxable_value') or processed_data.get('Total Taxable Value') or ''
+            grand_total = processed_data.get('total_invoice_value') or processed_data.get('Total Invoice Value') or ''
             
             fields_valid = bool(v_name and v_gstin and inv_no and (taxable_val or grand_total))
             vendor_status_raw = val_result.get('status')
             
+            # 3. Save to DB
+            # User specifically asked to bypass duplicate check during manual resolution
             if vendor_status_raw == 'DUPLICATE_INVOICE':
-                final_status = 'DUPLICATE'
-                conflict_msg = val_result.get('message', 'Duplicate invoice detected.')
+                final_status = 'READY' # Allow user to proceed even if duplicate
+                conflict_msg = val_result.get('message', 'Duplicate invoice detected (Proceeding as per user request).')
             elif vendor_status_raw == 'GSTIN_CONFLICT':
                 final_status = 'GSTIN_CONFLICT'
                 conflict_msg = val_result.get('message', 'GSTIN Conflict detected.')
@@ -615,12 +525,11 @@ Return ONLY valid JSON. No explanation.
                 conflict_msg = val_result.get('message', 'Vendor not found in master.')
             elif not fields_valid:
                 final_status = 'VALIDATION_FAILED'
-                conflict_msg = 'Missing required fields (Vendor, GSTIN, Invoice No, Taxable Value, or Grand Total).'
+                conflict_msg = f'Missing required fields (Found: V={bool(v_name)}, G={bool(v_gstin)}, I={bool(inv_no)}, T={bool(taxable_val or grand_total)}).'
             else:
                 final_status = 'READY'
                 conflict_msg = None
 
-            # 3. Save to DB
             success = update_staged_invoice_extracted_data(
                 file_hash=file_hash,
                 tenant_id=tenant_id,
@@ -716,46 +625,46 @@ class OCRStagingFinalizeView(views.APIView):
                 
                 items = extracted.get('items', extracted.get('line_items', []))
 
-                # ── Step 2: Validate Vendor (Trigger Validation Hub) ───────────
-                v_name = invoice_data.get('Vendor Name') or invoice_data.get('vendor_name') or ''
-                v_gstin = invoice_data.get('GSTIN') or invoice_data.get('vendor_gstin') or ''
-                v_branch = invoice_data.get('Branch') or invoice_data.get('branch_name') or ''
-                v_address = invoice_data.get('Bill From - Address Line 1') or invoice_data.get('vendor_address') or ''
-                v_state = invoice_data.get('Bill From - State') or ''
-                v_inv_no = invoice_data.get('Supplier Invoice No') or invoice_data.get('invoice_number') or ''
-
-                val_result = validate_vendor(
-                    tenant_id=tenant_id,
-                    vendor_name=v_name,
-                    gstin=v_gstin,
-                    branch=v_branch,
-                    address=v_address,
-                    state=v_state,
-                    supplier_invoice_no=v_inv_no
-                )
-                
-                vendor_id = val_result.get('vendor_id')
-                # Use validated metadata if found, else original
-                vendor_name_final = val_result.get('vendor_name') or v_name
-                gstin_final = val_result.get('gstin') or v_gstin
+                # ── Step 2: Resolve Vendor Identity ───────────────────────────
+                vendor_id = inv.get('vendor_id')
+                vendor_name_final = invoice_data.get('vendor_name') or invoice_data.get('Vendor Name')
+                gstin_final = invoice_data.get('gstin') or invoice_data.get('GSTIN')
 
                 # ── Step 3: Map & Create Purchase Voucher ──────────────────────
                 payload = {
-                    'date': self._parse_date(invoice_data.get('Voucher Date') or invoice_data.get('invoice_date')),
-                    'supplier_invoice_no': invoice_data.get('Supplier Invoice No') or invoice_data.get('invoice_number'),
+                    'date': self._parse_date(invoice_data.get('invoice_date')),
+                    'supplier_invoice_no': invoice_data.get('supplier_invoice_no') or invoice_data.get('invoice_no'),
                     'vendor_id': vendor_id,
                     'vendor_name': vendor_name_final,
-                    'branch': v_branch or "Main Branch",
                     'gstin': gstin_final,
-                    'bill_from': v_address,
-                    'place_of_supply': v_state or invoice_data.get('Place of Supply'),
+                    'total_invoice_value': invoice_data.get('total_invoice_value'),
                     'supply_inr_details': {
-                        'items': self._map_items(items),
+                        'items': [
+                            {
+                                'item_name': item.get('description', 'Item'),
+                                'qty': item.get('quantity', 0),
+                                'rate': item.get('rate', 0),
+                                'taxableValue': item.get('amount', item.get('taxable_value', 0)),
+                                'hsn_sac': item.get('hsn_sac', ''),
+                                'cgst': item.get('cgst', 0),
+                                'sgst': item.get('sgst', 0),
+                                'igst': item.get('igst', 0),
+                            } for item in (items or [])
+                        ],
                         'description': f"Created from AI Smart Upload: {inv['file_path']}"
+                    },
+                    'due_details': {
+                        'to_pay': invoice_data.get('total_invoice_value', 0)
                     }
                 }
 
                 with transaction.atomic():
+                    # Check for duplicates before attempting to save
+                    from accounting.models import Voucher
+                    voucher_num = payload.get('supplier_invoice_no')
+                    if voucher_num and Voucher.objects.filter(voucher_number=voucher_num, tenant_id=tenant_id, type='purchase').exists():
+                        raise Exception(f"Duplicate Invoice Number: {voucher_num} already exists for this tenant.")
+
                     serializer = VoucherPurchaseSupplierDetailsSerializer(data=payload, context={'request': request})
                     if serializer.is_valid():
                         voucher = serializer.save(tenant_id=tenant_id)
@@ -772,9 +681,10 @@ class OCRStagingFinalizeView(views.APIView):
                 summary['failed'] = int(summary['failed']) + 1 # pyre-ignore
                 summary['errors'].append({'file': inv['file_path'], 'error': str(e)})
 
-        # No longer deleting processed invoices instantly, to support status progression
-        # if processed_hashes:
-        #    remove_processed_invoices(processed_hashes, tenant_id, upload_session_id)
+        # Delete processed invoices from staging once finalized into ERP
+        if processed_hashes:
+            from core.ocr_cache import remove_processed_invoices
+            remove_processed_invoices(processed_hashes, tenant_id, upload_session_id)
 
         # ── Step 5: User Message ──────────────────────────────────────────────
         total_unresolved = int(summary['skipped']) + int(summary['failed']) # pyre-ignore

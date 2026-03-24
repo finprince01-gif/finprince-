@@ -17,16 +17,6 @@ services:
       timeout: 20s
       retries: 10
 
-  redis:
-    image: redis:7-alpine
-    restart: always
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   backend:
     build:
@@ -38,15 +28,13 @@ services:
       - DB_NAME=${DB_NAME:-Finpixe_AI_Accounting}
       - DB_USER=root
       - DB_PASSWORD=${DB_PASSWORD:-Ulaganathan123}
-      - REDIS_URL=redis://redis:6379/1
+      - REDIS_URL=
       - DJANGO_SECRET=${DJANGO_SECRET}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
     ports:
       - "8000:8000"
     depends_on:
       db:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     volumes:
       - ./backend:/app

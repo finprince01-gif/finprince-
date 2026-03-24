@@ -1,14 +1,8 @@
 """
-Bulk Invoice Upload API – Chaos-Hardened Final
-================================================
-Guards in order:
-  1. Infrastructure health  → 503 with retry_after
-  2. Kafka upload lag       → 503 with retry_after (backpressure)
-  3. Tenant job limit       → 503 with retry_after
-  4. Batch idempotency      → 200 (already done/processing)
-  5. Distributed Redis lock → 200 (duplicate in-flight)
-  6. Large job split        → files split into sub-batches if page count too high
-  7. Create job + publish   → Kafka only, never direct AI
+Bulk Invoice Upload API – Direct Version
+==========================================
+Uploads are processed directly via synchronous/thread-pool based workers.
+No Redis or Kafka infrastructure required.
 """
 import os
 import hashlib
@@ -49,12 +43,6 @@ class BulkUploadAPIView(APIView):
             logger.critical(f"[UPLOAD] BLOCKED – {reason}")
             return self._busy(reason, 'infrastructure')
 
-        # ── GATE 2: Kafka upload lag backpressure ────────────────────────────
-        lag_ok, lag = SystemHealth.check_upload_lag()
-        if not lag_ok:
-            msg = f"Upload queue is saturated (lag={lag}). Please retry shortly."
-            logger.warning(f"[UPLOAD] BACKPRESSURE – lag={lag}")
-            return self._busy(msg, 'lag')
 
         # ── GATE 3: Tenant active job limit ──────────────────────────────────
         max_jobs = getattr(settings, 'BULK_MAX_ACTIVE_JOBS_PER_TENANT', 5)
@@ -85,6 +73,16 @@ class BulkUploadAPIView(APIView):
         ).first()
         if existing:
             logger.info(f"[IDEMPOTENCY] In-progress → Job {existing.id}")
+            if existing.status == 'pending':
+                # Re-trigger attempt if stuck in pending
+                print(f"DEBUG: Found pending job {existing.id} during idempotency check. Re-triggering thread.")
+                voucher_type = request.data.get('voucher_type', 'Purchase')
+                import threading
+                from .pipeline.direct_processor import process_bulk_job
+                thread = threading.Thread(target=process_bulk_job, args=(existing.id, voucher_type))
+                thread.daemon = True
+                thread.start()
+            
             return Response({'status': 'already_processing', 'job_id': existing.id,
                              'total_files': existing.total_files})
 
@@ -94,13 +92,13 @@ class BulkUploadAPIView(APIView):
                              'message': 'Duplicate request received'})
 
         try:
-            return self._create_and_enqueue(tenant_id, files, batch_fingerprint, lock)
+            return self._create_and_enqueue(request, tenant_id, files, batch_fingerprint, lock)
         except Exception as e:
             lock.release()
             logger.error(f"[UPLOAD] Job creation failed: {e}")
             return Response({'error': 'Internal error. Please retry.'}, status=500)
 
-    def _create_and_enqueue(self, tenant_id, files, fingerprint, lock):
+    def _create_and_enqueue(self, request, tenant_id, files, fingerprint, lock):
         # ── GATE 6: Large job protection ─────────────────────────────────────
         if len(files) > MAX_PAGES_PER_JOB:
             logger.warning(f"[UPLOAD] Large batch ({len(files)} files > {MAX_PAGES_PER_JOB}). "
@@ -131,24 +129,27 @@ class BulkUploadAPIView(APIView):
                 page_count=1,
             )
 
-            # Only trigger: Kafka publish. No direct AI. No Celery. No threads.
-            print(f"📤 [SKIPPING KAFKA - DEPRECATED]: {{'item_id': {master.id}, 'filename': '{uploaded_file.name}'}}")
-            # kafka_client.publish_sync('upload', {
-            #     'job_id':      job.id,
-            #     'tenant_id':   tenant_id,
-            #     'item_id':     master.id,
-            #     'storage_key': key,
-            #     'filename':    uploaded_file.name,
-            #     'file_hash':   file_hash,
-            # }, key=str(tenant_id))
+            # Directly processed via staging API or manual trigger
+            logger.info(f"Registered item {master.id} for Job {job.id}")
 
-        lock.release()
-        logger.info(f"[UPLOAD] Job {job.id} registered (no Kafka pipeline deployed)")
+        # ── PUSH TO PROCESSOR ─────────────────────────────────────
+        # Note: No Kafka. Direct in-process worker thread.
+        import threading
+        from .pipeline.direct_processor import process_bulk_job
+        
+        # Determine voucher type from request
+        voucher_type = request.data.get('voucher_type', 'Purchase')
+        
+        print(f"DEBUG: Starting background thread for Job {job.id} (Voucher: {voucher_type})")
+        thread = threading.Thread(target=process_bulk_job, args=(job.id, voucher_type))
+        thread.daemon = True
+        thread.start()
+        print(f"DEBUG: Thread started for Job {job.id}")
 
         return Response({
-            'status':      'processing_started',
-            'job_id':      job.id,
-            'total_files': job.total_files,
+            'status':   'processing',
+            'job_id':   job.id,
+            'total_files': len(files),
         })
 
     @staticmethod

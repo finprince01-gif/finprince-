@@ -417,6 +417,56 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         return () => clearTimeout(timeout);
     }, [firstInvoiceVendorStr]);
 
+    const getCellValue = (data: any, col: string): string => {
+        if (!data) return '';
+        // 1. Direct match (e.g. "Supplier Invoice No.")
+        if (data[col] !== undefined && data[col] !== null && data[col] !== '') return String(data[col]);
+
+        // 2. Normalize to snake_case for backend matching
+        const snakeCol = col.toLowerCase().replace(/[\s\/\-\.]+/g, '_').replace(/^_|_$/g, '');
+        if (data[snakeCol] !== undefined && data[snakeCol] !== null && data[snakeCol] !== '') return String(data[snakeCol]);
+
+        // 3. Robust aliasing
+        const ALIASES: Record<string, string[]> = {
+            'invoice_date': ['Date', 'Voucher Date', 'Inv Date', 'Bill Date', 'Reference Date'],
+            'invoice_no': ['Supplier Invoice No.', 'Supplier Invoice No', 'Voucher Number', 'Inv No', 'Bill No', 'Reference No.'],
+            'reference_no': ['Reference No.', 'Reference', 'Ref No', 'Supplier Invoice No.'],
+            'vendor_name': ['Vendor Name', 'Supplier Name', 'Party Name', 'Party', 'Customer Name', 'Buyer/Supplier - Mailing Name'],
+            'vendor_gstin': ['GSTIN', 'Supplier GSTIN', 'Party GSTIN', 'Buyer/Supplier - GSTIN/UIN'],
+            'voucher_type': ['Voucher Type Name', 'Transaction Type', 'Voucher Type'],
+            'voucher_series': ['Voucher Number Series Name', 'Voucher Series'],
+            'narration': ['Voucher Narration', 'Narration', 'Remarks', 'Notes'],
+            'pos': ['Place of Supply', 'Bill From - State', 'State', 'POS', 'State Type'],
+            
+            // Items / Ledgers
+            'item_name': ['Item Name', 'Description', 'Particulars', 'Item Description', 'Ledger Name'],
+            'item_code': ['Item Code', 'Part No', 'Code'],
+            'hsn_sac': ['HSN/SAC', 'HSN', 'HSN Code'],
+            'quantity': ['Qty', 'Quantity', 'Billed Quantity', 'Actual Quantity'],
+            'rate': ['Item Rate', 'Rate', 'Unit Price', 'Price'],
+            'taxable_amount': ['Taxable Value', 'Assessable Value', 'Taxable Amount'],
+            'total_amount': ['Invoice Value', 'Item Amount', 'Amount', 'Total Invoice Value', 'Grand Total', 'Ledger Amount'],
+            'cgst_amount': ['CGST', 'Central Tax'],
+            'sgst_amount': ['SGST', 'SGST/UTGST', 'State Tax'],
+            'igst_amount': ['IGST', 'Integrated Tax'],
+        };
+
+        for (const [key, altList] of Object.entries(ALIASES)) {
+            // If the column we are looking for is either the canonical key or in the alias list
+            if (key === snakeCol || altList.includes(col) || altList.some(a => a.toLowerCase().replace(/[\s\/\-\.]+/g, '_').replace(/^_|_$/g, '') === snakeCol)) {
+                if (data[key] !== undefined && data[key] !== null && data[key] !== '') return String(data[key]);
+                for (const alt of altList) {
+                    if (data[alt] !== undefined && data[alt] !== null && data[alt] !== '') return String(data[alt]);
+                    // Also try snake_case version of the alias
+                    const altSnake = alt.toLowerCase().replace(/[\s\/\-\.]+/g, '_').replace(/^_|_$/g, '');
+                    if (data[altSnake] !== undefined && data[altSnake] !== null && data[altSnake] !== '') return String(data[altSnake]);
+                }
+            }
+        }
+
+        return '';
+    };
+
     const { incrementUsage, isLimitReached, subscriptionUsage } = useSubscriptionUsage();
 
     // ── Live countdown timer ──────────────────────────────────────────────────
@@ -793,10 +843,13 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
     const fetchStagingData = async () => {
         try {
             // Fetch the actual extracted data from the staging API
-            const stagedResults = await httpClient.get<any[]>('/api/ocr-staging/');
+            const response: any = await httpClient.get('/api/ocr-staging/');
+
+            // Handle both legacy array and new envelope {status, data: []} formats
+            const stagedResults = Array.isArray(response) ? response : (response?.data || []);
 
             // Map the OCR staging results to the format expected by our UI (InvoiceResult)
-            const mappedResults: InvoiceResult[] = stagedResults.map(item => {
+            const mappedResults: InvoiceResult[] = stagedResults.map((item: any) => {
                 const extracted = item.extracted_data || {};
 
                 return {
@@ -807,7 +860,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                     file_hash: item.file_hash,
                     cacheRecordId: item.id
                 };
-            }).filter(res => res.items.length > 0 || Object.keys(res.invoice).length > 0);
+            }).filter((res: any) => res.items.length > 0 || Object.keys(res.invoice).length > 0);
 
             if (mappedResults.length === 0) return;
 
@@ -1022,9 +1075,10 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
             items.forEach((item) => {
                 const row: Record<string, string> = {};
                 ALL_COLUMNS.forEach((col) => {
-                    row[col] = LINE_ITEM_FIELDS.includes(col)
-                        ? ((item as any)[col] ?? '')
-                        : (res.invoice[col] ?? '');
+                    const isItemField = LINE_ITEM_FIELDS.includes(col);
+                    row[col] = isItemField
+                        ? getCellValue(item, col)
+                        : getCellValue(res.invoice, col);
                 });
                 allRows.push(row);
             });
@@ -1063,8 +1117,8 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                 const row: Record<string, string> = {};
                 ALL_COLUMNS.forEach((col) => {
                     row[col] = LINE_ITEM_FIELDS.includes(col)
-                        ? String((item as any)[col] ?? '')
-                        : String((res.invoice as any)[col] ?? '');
+                        ? getCellValue(item, col)
+                        : getCellValue(res.invoice, col);
                 });
                 allRows.push(row);
             });
@@ -1423,8 +1477,8 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                                                 {visibleColumns.map((col) => {
                                                     const isItemField = LINE_ITEM_FIELDS.includes(col);
                                                     const cellValue = isItemField
-                                                        ? (row.item as any)[col]
-                                                        : (row.header as any)[col];
+                                                        ? getCellValue(row.item, col)
+                                                        : getCellValue(row.header, col);
 
                                                     // Check if field was mapped confidently
                                                     const currentRes = invoiceResults[row.invoiceIdx];

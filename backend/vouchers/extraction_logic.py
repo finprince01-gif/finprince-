@@ -96,133 +96,87 @@ def perform_ocr_extraction(file_bytes, mime_type, api_key=None, pre_extracted_te
     if not api_key:
         raise Exception("No healthy AI keys available")
 
-    # The official 230-line prompt from scan_api.py
-    header_json_fields = ', '.join([f'"{f}": ""' for f in HEADER_FIELDS])
-    
-    prompt_text = f"""
-You are a precision invoice OCR and data-extraction system.
-Extract every figure exactly where it is printed — correct column, correct row — with zero shifting, duplication, or guessing.
+    prompt_text = """
+You are a high-precision enterprise data extraction engine.
+Return ONLY valid JSON. No conversational text.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PHASE 1 — LOCK COLUMN BOUNDARIES (do this first)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Find the table header row (S.No, Description, HSN, Qty, Rate, Amount, etc.).
-2. Record the left/right boundary of each column. LOCK them.
-3. Typical order: S.No | Item Name | Purchase Ledger | HSN/SAC | Qty | UOM | Rate | Disc% | Taxable Amt | GST% | IGST | CGST | SGST | Cess | Amount
+STRICT SCHEMA RULE:
+{
+  "supplier_invoice_no": string,
+  "purchase_voucher_series": string,
+  "purchase_voucher_no": string,
+  "invoice_date": string (YYYY-MM-DD),
+  "due_date": string (YYYY-MM-DD),
+  "vendor_name": string,
+  "gstin": string,
+  "branch": string,
+  "input_type": "Goods" | "Services" | null,
+  "place_of_supply": string,
+  "currency": string,
+  "conversion_rate": number,
+  "purchase_order_no": string,
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SEMANTIC MAPPING GUIDE (Strict Schema Enforcement)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Every extracted field MUST be assigned to its matching header key.
+  "bill_from_address_line_1": string,
+  "bill_from_address_line_2": string,
+  "bill_from_city": string,
+  "bill_from_state": string,
+  "bill_from_pincode": string,
+  "bill_from_country": string,
 
-- Voucher Date                <- The invoice date printed on the document.
-- Supplier Invoice No         <- The main invoice/bill number.
-- Vendor Name                 <- The seller/company providing the invoice.
-- GSTIN                       <- The seller's GST number.
-- PAN                         <- The seller's PAN (if printed).
-- Bill From                   <- The seller's full address.
-- Ship From                   <- The shipping origin address.
-- Total Invoice Value         <- The final grand total payable amount.
-- Total Taxable Value         <- The sum of pre-tax item amounts.
-- Total IGST/CGST/SGST        <- Corresponding invoice-level tax totals.
+  "ship_from_address_line_1": string,
+  "ship_from_address_line_2": string,
+  "ship_from_city": string,
+  "ship_from_state": string,
+  "ship_from_pincode": string,
+  "ship_from_country": string,
 
-- Item Name                   <- The main product name or description. MANDATORY.
-- Description                 <- Extra details ONLY.
-- Quantity                    <- The numeric unit count.
-- UOM                         <- The unit abbreviation (PCS, BOX, KGS, etc.).
-- Rate                        <- The unit price.
-- Taxable Value (Item)        <- Item pre-tax total (Qty x Rate).
-- GST %                       <- The tax percentage for that item row.
+  "total_taxable_value": number,
+  "total_igst": number,
+  "total_cgst": number,
+  "total_sgst": number,
+  "total_invoice_value": number,
 
-For any field not explicitly printed, leave as "".
-Never shift a value into the wrong column key.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PHASE 2 — EXTRACT BY LOCKED COLUMN (for every data row)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-For every row, read the value that sits inside each locked column boundary.
-Rules:
-  • A value belongs to a column ONLY if its center falls INSIDE that zone.
-  • No dynamic key creation. Use provided keys only.
-  • Ambiguous? -> null.
-  • Strict header-based mapping — NO positional shifting.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-FIELD RULES (mandatory for every row)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Item Name
-  → The main product name or description. MANDATORY.
-  → Map "Description", "Particulars", or "Item Name" to this field.
-
-HSN/SAC
-  → Map the 4-8 digit code here.
-Quantity     → numeric part only. "8 NOS" → "8".
-UOM          → unit part only. "8 NOS" → "NOS". Never combine with Quantity.
-Rate         → per-unit price from Rate column only. Not the line total.
-Taxable Value → pre-tax line total for THIS row only (Qty × Rate − disc). Not invoice total.
-Item Amount  → final line total from Amount column for THIS row only.
-
-ABSOLUTE PROHIBITIONS:
-✗ NEVER put Grand Total / Invoice Total into any line_item field.
-✗ NEVER swap Rate and Amount columns.
-✗ NEVER merge two printed rows into one object.
-✗ NEVER concatenate descriptions from different rows.
-✗ NEVER duplicate a row.
-✗ NEVER carry values from previous row into next row.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ROW RULES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Each visually distinct printed data row = ONE object in "line_items".
-2. Description wrapping → attach ALL wrapped text to the "Description" field of the same object.
-3. Summary rows (Sub Total, Grand Total, Tax Summary) → "invoice" fields ONLY, not items.
-4. S.No increments 1, 2, 3 … by actual distinct item rows.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-HEADER RULES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- "Bill From" & "Ship From" → join all address lines with ", ".
-- Dates → dd/mm/yyyy. All values → strings. Missing → "".
-
-Return the data in this EXACT JSON structure:
-
-{{
-  "invoice": {{
-    {header_json_fields}
-  }},
-  "items": [
-    {{
-      "S.No": "1",
-      "Item Name": "",
-      "Purchase Ledger": "",
-      "HSN/SAC": "",
-      "Quantity": "",
-      "UOM": "",
-      "Rate": "",
-      "Disc %": "",
-      "Disc Amount": "",
-      "Taxable Value": "",
-      "GST %": "",
-      "Integrated Tax (IGST)": "",
-      "Central Tax (CGST)": "",
-      "State Tax (SGST)": "",
-      "Cess": "",
-      "Item Amount": "",
-      "Description": ""
-    }}
+  "line_items": [
+    {
+      "item_code": string,
+      "description": string,
+      "hsn_sac": string,
+      "quantity": number,
+      "uom": string,
+      "rate": number,
+      "taxable_value": number,
+      "igst": number,
+      "cgst": number,
+      "sgst": number,
+      "amount": number
+    }
   ]
-}}
-Return ONLY the raw JSON object. No markdown, no code fences, no explanation.
+}
+
+EXTRACTION RULES:
+1. Normalize keys to snake_case.
+2. For dates, use YYYY-MM-DD format if possible.
+3. For addresses, break them down into Line 1, Line 2, City, State, Pincode.
+4. If a field is not found, use null or an empty string.
+5. Extract numeric parts only for currency/rate/quantity. Do not include ₹ or units in numeric fields.
+6. For 'Voucher Series' or 'Voucher Number', if missing, leave blank.
+7. Be extremely accurate with GSTIN (15 chars) and Invoice Number.
+
+8. EVEN IF THE PAGE LOOKS BLANK, BLURRY, OR UNRELATED, YOU MUST RETURN A VALID JSON OBJECT {}.
+9. NEVER include conversational text or markdown blocks (```json) outside the main result.
+10. If an invoice is clearly present but hard to read, provide your BEST GUESS for the most important fields (GSTIN, Invoice No, Vendor, Total) based on any visible text.
 """
 
     hint = ""
-    if pre_extracted_text:
-        hint += f"\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nOCR HINT (FOR REFERENCE):\n{pre_extracted_text}\n"
-    
-    if hint_data:
-        hint += f"\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nRULE-BASED EXTRACTION HINTS (USE THESE TO VALIDATE/FIX):\n{json.dumps(hint_data, indent=2)}\n"
+    if hint_data and 'columns' in hint_data:
+        cols = hint_data['columns']
+        hint += f"\nSTRICT VOUCHER-TYPE HEADER LIST (FOCUS ON THESE):\n{', '.join(cols)}\n"
+        hint += "\nIMPORTANT: The above list is the source of truth for the fields required for this specific voucher type. Ensure you prioritize these headers.\n"
+        hint += "Note: If you find 'Reference No' and it looks like an Order Number, map it to 'Sales Order No' or 'Purchase Order No' respectively.\n"
 
+    if pre_extracted_text:
+        hint += f"\nOCR RAW TEXT (FOR REFERENCE):\n{pre_extracted_text}\n"
+    
     final_prompt = prompt_text + hint
 
     raw_text = execute_with_retry(
@@ -232,8 +186,10 @@ Return ONLY the raw JSON object. No markdown, no code fences, no explanation.
     )
 
     try:
+        # This will now use the standardized parser which enforces snake_case and flattens structure
         processed_data = parse_and_process_ocr(raw_text)
         return processed_data
     except Exception as e:
         logger.error(f"OCR Parsing Error: {str(e)}\nRaw text: {raw_text[:500]}")
         raise
+
