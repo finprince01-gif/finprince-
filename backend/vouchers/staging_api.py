@@ -18,16 +18,17 @@ from core.ocr_cache import ( # pyre-fixme
     remove_processed_invoices,
     mark_invoice_as_processed,
     update_ocr_cache_session,
-    update_staged_invoice_extracted_data
+    update_staged_invoice_extracted_data,
+    update_ocr_cache_validation_status
 )
+from core.ai_proxy import execute_with_retry, api_key_manager # pyre-fixme
 from core.ai_service import create_dynamic_voucher_extraction_request # pyre-fixme
 from core.usage_service import check_and_increment_usage # pyre-fixme
-from vendors.models import VendorMasterBasicDetail, VendorMasterGSTDetails # pyre-fixme
 from vendors.vendor_validation_logic import validate_vendor # pyre-fixme
-from core.processing_engine import run_invoice_processing_pipeline, parse_and_process_ocr # pyre-fixme
+from core.processing_engine import run_invoice_processing_pipeline, parse_and_process_ocr, safe_json_load # pyre-fixme
 from accounting.serializers_voucher_purchase import VoucherPurchaseSupplierDetailsSerializer # pyre-fixme
 
-from vouchers.pipeline.health import SystemHealth
+from .pipeline.health import SystemHealth
 from .models import BulkInvoiceJob, InvoiceProcessingItem
 from .pipeline import storage
 
@@ -86,7 +87,7 @@ class OCRStagingView(views.APIView):
                     raw_extracted = inv.get('extracted_data', {})
                     if isinstance(raw_extracted, str):
                         try:
-                            extracted = json.loads(raw_extracted)
+                            extracted = safe_json_load(raw_extracted)
                         except Exception:
                             extracted = {}
                     else:
@@ -94,23 +95,24 @@ class OCRStagingView(views.APIView):
                     
                     # ENFORCE: Backend MUST use snake_case ONLY
                     # Output the standardized structure directly to frontend
-                    results.append({
+                    # ENFORCE: Backend MUST use snake_case ONLY
+                    # Output the standardized structure directly to frontend
+                    row_data = {
                         'id': inv.get('id', 0),
                         'file_hash': inv.get('file_hash', ''),
                         'file_path': inv.get('file_path', 'unknown'),
-                        'supplier_invoice_no': str(extracted.get('supplier_invoice_no') or ''),
-                        'invoice_date': str(extracted.get('invoice_date') or ''),
-                        'vendor_name': str(extracted.get('vendor_name') or ''),
-                        'gstin': str(extracted.get('gstin') or ''),
-                        'total_invoice_value': extracted.get('total_invoice_value') or 0,
-                        'line_items': extracted.get('line_items', []),
                         'status': inv.get('validation_status', 'PENDING'),
                         'validation_status': inv.get('validation_status', 'PENDING'),
                         'extracted_data': extracted,
                         'created_at': str(inv.get('created_at', '')),
                         'vendor_id': int(inv.get('vendor_id')) if inv.get('vendor_id') else None,
                         'voucher_id': int(inv.get('voucher_id')) if inv.get('voucher_id') else None,
-                    })
+                    }
+                    
+                    # Merge all extracted fields into the root for UI compatibility
+                    row_data.update(extracted)
+                    
+                    results.append(row_data)
                 except Exception as row_err:
                     logger.error(f"Error processing staging row {inv.get('id', 'unknown')}: {row_err}")
                     continue
@@ -226,19 +228,18 @@ class OCRStagingView(views.APIView):
                 return False
 
             from vouchers.extraction_logic import perform_ocr_extraction
-            print(f"🚀 [GEMINI EXTRACT] Extracting {file_path} via Centralized Logic...")
+            logger.info("[AI REQUEST] Extracting %s via Centralized Logic...", file_path)
             raw_extracted_data = perform_ocr_extraction(
                 file_bytes, 
                 mime_type, 
                 hint_data={'columns': all_columns}
             )
 
-            if not raw_extracted_data:
-                # Update DB to failed
-                from core.ocr_cache import update_ocr_cache_validation_status
-                update_ocr_cache_validation_status(file_hash, tenant_id, 'EXTRACTION_FAILED')
+            # Check for PARSE_FAILED from safe_json_load (inside extraction)
+            if isinstance(raw_extracted_data, dict) and raw_extracted_data.get("status") == "PARSE_FAILED":
+                update_ocr_cache_validation_status(file_hash, tenant_id, 'ERROR')
                 if item_id:
-                    InvoiceProcessingItem.objects.filter(id=item_id).update(status='failed')
+                    InvoiceProcessingItem.objects.filter(id=item_id).update(status='failed', error_message="AI RESPONSE NOT VALID JSON")
                 return False
 
             
@@ -270,14 +271,12 @@ class OCRStagingView(views.APIView):
 
         except Exception as exc:
             import traceback
-            print(f"❌ [PIPELINE CRASH] {file_path}: {exc}")
-            print(traceback.format_exc())
-            logger.exception("Error in pipeline for invoice %s", file_path)
-            # IMPORTANT: Always update DB so it doesn't stay PROCESSING forever
+            logger.error("[PIPELINE ERROR] %s: %s", file_path, str(exc))
+            # Safe callback to update status
             try:
                 fh = compute_file_hash(file_bytes)
                 from core.ocr_cache import update_ocr_cache_validation_status
-                update_ocr_cache_validation_status(fh, tenant_id, 'EXTRACTION_FAILED')
+                update_ocr_cache_validation_status(fh, tenant_id, 'ERROR')
             except Exception:
                 pass
             return False
@@ -610,7 +609,7 @@ class OCRStagingFinalizeView(views.APIView):
                 raw_extracted = inv.get('extracted_data', {})
                 if isinstance(raw_extracted, str):
                     try:
-                        extracted = json.loads(raw_extracted)
+                        extracted = safe_json_load(raw_extracted)
                     except:
                         extracted = {}
                 else:
