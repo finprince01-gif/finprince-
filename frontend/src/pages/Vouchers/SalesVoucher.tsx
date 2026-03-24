@@ -464,9 +464,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         setVoucherName(name);
         // Always read from ref so we have the latest list
         const configs = salesVoucherConfigsRef.current;
-        const config = configs.find((c: any) =>
-            c.voucher_name?.toLowerCase() === name?.toLowerCase()
-        );
+        const config = configs.find((c: any) => c.voucher_name === name);
         if (config) {
             setSelectedSeriesId(config.id);
             // Always fetch from backend regardless of enable_auto_numbering

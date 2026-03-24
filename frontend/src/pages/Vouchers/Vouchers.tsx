@@ -565,6 +565,17 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     { id: '1', itemCode: '', itemName: '', hsnSac: '', qty: 1, uom: '', rate: 0, taxableValue: 0, foreignRate: 0, foreignAmount: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, invoiceValue: 0, description: '', poRate: null as number | null, invoiceRate: null as number | null, rateMismatch: false, poQty: null as number | null, invoiceQty: null as number | null, qtyMismatch: false, grnQty: null as number | null, sourcePoNo: null as string | null }
   ]);
 
+  const calculatePurchaseTotals = () => {
+    return purchaseItems.reduce((acc, item) => ({
+      taxableValue: acc.taxableValue + (item.taxableValue || 0),
+      cgst: acc.cgst + (item.cgst || 0),
+      sgst: acc.sgst + (item.sgst || 0),
+      igst: acc.igst + (item.igst || 0),
+      cess: acc.cess + (item.cess || 0),
+      invoiceValue: acc.invoiceValue + (item.invoiceValue || 0)
+    }), { taxableValue: 0, cgst: 0, sgst: 0, igst: 0, cess: 0, invoiceValue: 0 });
+  };
+
   // Purchase Due Details State
   const [purchaseTdsIt, setPurchaseTdsIt] = useState('0.00');
   const [purchaseTaxIsTcs, setPurchaseTaxIsTcs] = useState(false); // true = TCS (add to amount due), false = TDS (subtract)
@@ -612,6 +623,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
   // Document
   const [purchaseTransitDocument, setPurchaseTransitDocument] = useState<File | null>(null);
+
+  // Purchase Print Preview State
+  const [showPurchasePrintPreview, setShowPurchasePrintPreview] = useState(false);
+  const [postedPurchaseVoucherData, setPostedPurchaseVoucherData] = useState<any>(null);
 
   // Combine Stock Items and Services for a unified list
   const allItems = React.useMemo(() => {
@@ -2491,7 +2506,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const handleAddEntryRow = () => setEntries([...entries, { ledger: '', note: '', refNo: '', debit: 0, credit: 0 }]);
   const handleRemoveEntryRow = (index: number) => entries.length > 2 && setEntries(entries.filter((_, i) => i !== index));
 
-  const handleSaveVoucher = async () => {
+  const handleSaveVoucher = async (shouldPrint = false) => {
     let voucher: Voucher | null = null;
 
     if (voucherType === 'Purchase') {
@@ -2593,7 +2608,17 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
         // Optional: Handle file upload separately if needed, or if we switch to FormData later.
 
-        resetForm();
+        if (shouldPrint) {
+          const totals = calculatePurchaseTotals();
+          setPostedPurchaseVoucherData({ 
+            ...purchaseData, 
+            totals, 
+            items: purchaseItems 
+          });
+          setShowPurchasePrintPreview(true);
+        } else {
+          resetForm();
+        }
         refetch(); // Refresh usage statistics
 
       } catch (error: any) {
@@ -7411,8 +7436,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 </button>
               ) : (
                 <div className="flex space-x-3">
-                  <button onClick={handleSaveVoucher} className="erp-button-primary">Post & Close</button>
-                  <button onClick={handleSaveVoucher} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
+                  <button onClick={() => handleSaveVoucher(false)} className="erp-button-primary">Post & Close</button>
+                  <button onClick={() => handleSaveVoucher(true)} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
                   <button onClick={resetForm} className="erp-button-secondary">Cancel</button>
                 </div>
               )
@@ -7420,8 +7445,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
             {!['Sales', 'Payment', 'Receipt', 'Purchase'].includes(voucherType) && (
               <div className="flex space-x-3">
-                <button onClick={handleSaveVoucher} className="erp-button-primary">Post & Close</button>
-                <button onClick={handleSaveVoucher} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
+                <button onClick={() => handleSaveVoucher(false)} className="erp-button-primary">Post & Close</button>
+                <button onClick={() => handleSaveVoucher(true)} className="erp-button-secondary border-indigo-200 text-indigo-700 hover:bg-indigo-50">Post & Print/Email</button>
                 <button onClick={resetForm} className="erp-button-secondary">Cancel</button>
               </div>
             )}
@@ -7999,7 +8024,184 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
             </div>
           )}
 
-          {/* Bulk Invoice Upload Modal */}
+          {/* ===================== PURCHASE PRINT PREVIEW MODAL ===================== */}
+          {showPurchasePrintPreview && postedPurchaseVoucherData && (
+            <div className="fixed inset-0 bg-black/80 z-[200] flex flex-col items-center justify-center p-4 backdrop-blur-sm">
+              <div className="w-full max-w-4xl bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden" style={{ maxHeight: '95vh' }}>
+                {/* Modal Header */}
+                <div className="flex justify-between items-center px-6 py-4 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white">
+                  <div className="flex items-center gap-3">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                    <div>
+                      <h3 className="text-lg font-bold">Purchase Voucher Preview</h3>
+                      <p className="text-indigo-200 text-xs">Supplier Invoice #{postedPurchaseVoucherData.supplier_invoice_no}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => {
+                        const printContent = document.getElementById('purchase-invoice-print-area');
+                        if (!printContent) return;
+                        const win = window.open('', '_blank');
+                        if (!win) return;
+                        win.document.write(`<html><head><title>Purchase Voucher ${postedPurchaseVoucherData.supplier_invoice_no}</title><style>body{font-family:Arial,sans-serif;margin:0;padding:20px;color:#111}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px;font-size:13px}th{background:#f5f5f5;font-weight:600}@media print{body{padding:0}}</style></head><body>${printContent.innerHTML}</body></html>`);
+                        win.document.close();
+                        win.focus();
+                        win.print();
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                      Print
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowPurchasePrintPreview(false);
+                        resetForm();
+                      }}
+                      className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Purchase Content */}
+                <div className="flex-1 overflow-auto bg-gray-100 p-6">
+                  <div id="purchase-invoice-print-area" className="bg-white rounded-lg shadow-sm max-w-3xl mx-auto p-8">
+                    {/* Company Header */}
+                    <div className="flex justify-between items-start mb-6 pb-6 border-b-2 border-indigo-600">
+                      <div>
+                        {companyDetails?.name && (
+                          <h2 className="text-xl font-bold text-gray-900">{companyDetails.name}</h2>
+                        )}
+                        <p className="text-sm text-gray-500">{companyDetails?.address || ''}</p>
+                        {companyDetails?.gstin && <p className="text-xs text-gray-500 mt-1">GSTIN: {companyDetails.gstin}</p>}
+                      </div>
+                      <div className="text-right">
+                        <div className="inline-block bg-indigo-600 text-white text-xs font-bold px-4 py-1 rounded-full mb-3">PURCHASE VOUCHER</div>
+                        <table className="text-sm text-right">
+                          <tbody>
+                            <tr><td className="pr-4 text-gray-500 font-medium">Voucher No.</td><td className="font-bold text-gray-900">{postedPurchaseVoucherData.purchase_voucher_no}</td></tr>
+                            <tr><td className="pr-4 text-gray-500 font-medium">Date</td><td className="font-bold text-gray-900">{postedPurchaseVoucherData.date}</td></tr>
+                            {postedPurchaseVoucherData.supplier_invoice_no && <tr><td className="pr-4 text-gray-500 font-medium">Supplier Inv.</td><td className="text-gray-700">{postedPurchaseVoucherData.supplier_invoice_no}</td></tr>}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Vendor / Bill From */}
+                    <div className="grid grid-cols-2 gap-6 mb-6">
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Vendor</p>
+                        <p className="font-semibold text-gray-900">{postedPurchaseVoucherData.vendor_name}</p>
+                        {postedPurchaseVoucherData.gstin && <p className="text-xs text-gray-500">GSTIN: {postedPurchaseVoucherData.gstin}</p>}
+                        {postedPurchaseVoucherData.bill_from && (
+                          <p className="text-xs text-gray-600 mt-1">{postedPurchaseVoucherData.bill_from}</p>
+                        )}
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Ship From</p>
+                        <p className="text-xs text-gray-600">
+                          {postedPurchaseVoucherData.ship_from || 'Same as Billing Address'}
+                        </p>
+                        {postedPurchaseVoucherData.input_type && <p className="text-xs text-gray-500 mt-1">Supply Type: {postedPurchaseVoucherData.input_type}</p>}
+                      </div>
+                    </div>
+
+                    {/* Item Details */}
+                    <div className="mb-6">
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="h-px flex-1 bg-gray-200" />
+                        <span className="text-xs font-bold text-indigo-600 uppercase tracking-widest px-2">Item Details</span>
+                        <div className="h-px flex-1 bg-gray-200" />
+                      </div>
+                      <table className="w-full text-sm mb-3">
+                        <thead>
+                          <tr className="bg-indigo-600 text-white">
+                            <th className="px-3 py-2 text-left">#</th>
+                            <th className="px-3 py-2 text-left">Item / Description</th>
+                            <th className="px-3 py-2 text-center">HSN</th>
+                            <th className="px-3 py-2 text-center">Qty</th>
+                            <th className="px-3 py-2 text-right">Rate</th>
+                            <th className="px-3 py-2 text-right">Taxable</th>
+                            <th className="px-3 py-2 text-right">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(postedPurchaseVoucherData.items || []).map((item: any, i: number) => (
+                            <tr key={i} className={i % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                              <td className="px-3 py-2 text-gray-500">{i + 1}</td>
+                              <td className="px-3 py-2 font-medium text-gray-900">
+                                {item.itemName || item.itemCode}
+                                {item.description && <div className="text-xs text-gray-500 font-normal">{item.description}</div>}
+                              </td>
+                              <td className="px-3 py-2 text-center text-gray-500">{item.hsnSac || '-'}</td>
+                              <td className="px-3 py-2 text-center">{item.qty} {item.uom}</td>
+                              <td className="px-3 py-2 text-right font-mono">₹{Number(item.rate).toFixed(2)}</td>
+                              <td className="px-3 py-2 text-right font-mono">₹{Number(item.taxableValue).toFixed(2)}</td>
+                              <td className="px-3 py-2 text-right font-mono font-bold">₹{Number(item.invoiceValue).toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <div className="flex justify-end">
+                        <div className="w-72 bg-indigo-50 rounded-lg p-4 border border-indigo-100">
+                          <div className="space-y-1.5 text-sm">
+                            <div className="flex justify-between"><span className="text-gray-500">Taxable Amount</span><span className="font-mono">₹{Number(postedPurchaseVoucherData.totals?.taxableValue || 0).toFixed(2)}</span></div>
+                            {Number(postedPurchaseVoucherData.totals?.cgst || 0) > 0 && <div className="flex justify-between"><span className="text-gray-500">CGST</span><span className="font-mono">₹{Number(postedPurchaseVoucherData.totals.cgst).toFixed(2)}</span></div>}
+                            {Number(postedPurchaseVoucherData.totals?.sgst || 0) > 0 && <div className="flex justify-between"><span className="text-gray-500">SGST</span><span className="font-mono">₹{Number(postedPurchaseVoucherData.totals.sgst).toFixed(2)}</span></div>}
+                            {Number(postedPurchaseVoucherData.totals?.igst || 0) > 0 && <div className="flex justify-between"><span className="text-gray-500">IGST</span><span className="font-mono">₹{Number(postedPurchaseVoucherData.totals.igst).toFixed(2)}</span></div>}
+                            {Number(postedPurchaseVoucherData.totals?.cess || 0) > 0 && <div className="flex justify-between"><span className="text-gray-500">Cess</span><span className="font-mono">₹{Number(postedPurchaseVoucherData.totals.cess).toFixed(2)}</span></div>}
+                            <div className="flex justify-between pt-2 border-t-2 border-indigo-600">
+                              <span className="font-bold text-gray-900 text-base">Grand Total</span>
+                              <span className="font-bold text-indigo-700 text-base font-mono">₹{Number(postedPurchaseVoucherData.totals?.invoiceValue || 0).toFixed(2)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Footer / Signature */}
+                    <div className="border-t-2 border-gray-200 pt-8 mt-4 flex justify-end">
+                      <div className="text-right">
+                        <div className="border-t border-gray-400 pt-2 w-44 text-xs text-gray-500 text-center">Authorised Signature</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer Buttons */}
+                <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-between items-center">
+                  <button
+                    onClick={() => {
+                        setShowPurchasePrintPreview(false);
+                        resetForm();
+                    }}
+                    className="px-6 py-2.5 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-100 text-sm font-medium transition-colors"
+                  >
+                    Close
+                  </button>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => {
+                        const email = prompt('Enter recipient email address:');
+                        if (email) {
+                          const subject = encodeURIComponent(`Purchase Voucher ${postedPurchaseVoucherData.purchase_voucher_no} from ${companyDetails?.name || 'Our Company'}`);
+                          const body = encodeURIComponent(`Dear Team,\n\nPlease find attached Purchase Voucher No. ${postedPurchaseVoucherData.purchase_voucher_no} dated ${postedPurchaseVoucherData.date}.\n\nTotal Amount: ₹${Number(postedPurchaseVoucherData.totals?.invoiceValue || 0).toFixed(2)}\n\nRegards,\n${companyDetails?.name || ''}`);
+                          window.open(`mailto:${email}?subject=${subject}&body=${body}`);
+                        }
+                      }}
+                      className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                      Email Invoice
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           {isBulkUploadOpen && (
             <BulkInvoiceUploadModal
               voucherType={voucherType}

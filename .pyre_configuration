@@ -4,7 +4,7 @@
     "backend"
   ],
   "search_path": [
-    "backend",
+    "./backend",
     "C:/Python314/Lib/site-packages",
     "C:/Users/Dharun/AppData/Roaming/Python/Python314/site-packages"
   ],
