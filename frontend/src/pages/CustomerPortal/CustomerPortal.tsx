@@ -294,7 +294,8 @@ const CategoryContent: React.FC = () => {
     return (
         <InventoryCategoryWizard
             apiEndpoint="/api/customerportal/categories/"
-            allowCreateGroup={false} // Hide Group/Subgroup creation fields at root level
+            allowCreateGroup={true}
+            showChangeParent={false}
             showSubgroup={false} // Hiding Subgroup for Customer Portal as requested
             defaultGroups={[]} // Empty default groups as requested
             excludeGroups={['Import', 'With in country (Indigenous)']} // Force exclude persistent groups
