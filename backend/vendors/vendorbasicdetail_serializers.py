@@ -97,6 +97,7 @@ class VendorBasicDetailUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = VendorMasterBasicDetail
         fields = [
+            'vendor_code',
             'vendor_name',
             'pan_no',
             'contact_person',

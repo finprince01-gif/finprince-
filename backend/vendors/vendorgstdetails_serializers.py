@@ -102,6 +102,7 @@ class VendorGSTDetailsUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = VendorMasterGSTDetails
         fields = [
+            'gstin',
             'gst_registration_type',
             'legal_name',
             'trade_name',

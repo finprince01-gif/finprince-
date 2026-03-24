@@ -930,7 +930,7 @@ const InventoryPage: React.FC = () => {
       itemCode: item.item_code || item.itemCode,
       itemName: item.item_name || item.itemName,
       description: item.description,
-      category: item.categoryId || item.category, // Ensure ID is used
+      category: item.categoryId !== undefined ? item.categoryId : (typeof item.category === 'number' ? item.category : null), // Ensure ID is used, avoiding string fallback
       categoryPath: item.category_path || item.categoryPath,
       subgroup: item.subgroup || item.subgroup_id,
       uom: item.uom,
