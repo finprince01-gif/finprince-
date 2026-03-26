@@ -12,15 +12,14 @@
     "typeCheckingMode": "basic",
     "useLibraryCodeForTypes": true,
     "extraPaths": [
-        "./backend"
+        "backend"
     ],
     "executionEnvironments": [
         {
             "root": "backend",
             "extraPaths": [
                 ".",
-                "C:/Users/ulaganathan/AppData/Local/Programs/Python/Python312/Lib/site-packages",
-                "C:/Users/ulaganathan/AppData/Roaming/Python/Python312/site-packages"
+                "C:/Python314/Lib/site-packages"
             ]
         }
     ]
