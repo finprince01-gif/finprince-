@@ -2532,7 +2532,11 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         due_details: {
           tds_it: purchaseTdsIt || 0,
           advance_paid: purchaseAdvancePaid || 0,
-          to_pay: purchaseToPay || 0,
+          to_pay: (
+            purchaseItems.reduce((sum, item) => sum + (Number(item.invoiceValue) || 0), 0)
+            + (purchaseTaxIsTcs ? (Number(purchaseTdsIt) || 0) : -(Number(purchaseTdsIt) || 0))
+            - (Number(purchaseAdvancePaid) || 0)
+          ).toFixed(2),
           posting_note: purchasePostingNote,
           terms: purchaseTerms,
           advance_references: purchaseAdvanceRefs
