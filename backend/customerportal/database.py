@@ -329,11 +329,11 @@ class CustomerMasterCustomerTDS(models.Model):
     eou_status = models.CharField(max_length=100, null=True, blank=True, help_text='Export Oriented Unit Status')
     
     # TCS Details
-    tcs_section = models.CharField(max_length=50, null=True, blank=True, help_text='TCS Section')
+    tcs_section = models.CharField(max_length=255, null=True, blank=True, help_text='TCS Section')
     tcs_enabled = models.BooleanField(default=False, help_text='Is TCS Enabled')
     
     # TDS Details
-    tds_section = models.CharField(max_length=50, null=True, blank=True, help_text='TDS Section')
+    tds_section = models.CharField(max_length=255, null=True, blank=True, help_text='TDS Section')
     tds_enabled = models.BooleanField(default=False, help_text='Is TDS Enabled')
     
     # Metadata

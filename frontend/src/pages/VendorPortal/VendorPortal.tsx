@@ -1,6 +1,6 @@
 // Vendor Portal - Master Configuration
-import React, { useState, useEffect } from 'react';
-import { ChevronDown, Eye, Pencil, Trash2, Plus, Search, Filter } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { ChevronDown, Eye, Pencil, Trash2, Plus, Search, Filter, ChevronLeft, X } from 'lucide-react';
 import { usePermissions } from '../../hooks/usePermissions';
 import { httpClient } from '../../services/httpClient';
 import CategoryHierarchicalDropdown from '../../components/CategoryHierarchicalDropdown';
@@ -9,6 +9,7 @@ import SearchableDropdown from '../../components/SearchableDropdown';
 import { showError, showSuccess, showInfo, showWarning, confirm } from '../../utils/toast';
 import { handleApiError } from '../../utils/errorHandler';
 import { BILLING_CURRENCIES } from '../../constants/customerPortalConstants';
+import { formatDate } from '../../utils/formatting';
 import VendorViewModal from '../../components/VendorViewModal';
 
 
@@ -181,7 +182,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const [activePaymentSubTab, setActivePaymentSubTab] = useState<ProcurementSubTab>('Dashboard');
 
     // Procurement View State (New)
-    const [procurementViewMode, setProcurementViewMode] = useState<'list' | 'ledger' | 'month'>('list');
+    const [procurementViewMode, setProcurementViewMode] = useState<'list' | 'ledger' | 'month' | 'journal'>('list');
     const [selectedProcurementVendor, setSelectedProcurementVendor] = useState<any>(null);
 
     // Month Filter State
@@ -190,6 +191,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
     const [ledgerFilters, setLedgerFilters] = useState({
         date: '',
+        dateFrom: '',
+        dateTo: '',
         transferFrom: '',
         referenceNo: '',
         ledger: '',
@@ -199,13 +202,105 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         runningBalance: ''
     });
 
-    // Mock Data for Procurement (Reference from images)
-    const vendorAgingList = [
-        { id: 1, code: 'VEN-001', name: 'Alpha Raw Materials', aging0_45: '45,000', aging45_90: '-', aging6M: '-', aging1Y: '-' },
-        { id: 2, code: 'VEN-005', name: 'Beta Supplies', aging0_45: '12,500', aging45_90: '-', aging6M: '-', aging1Y: '-' },
-        { id: 3, code: 'VEN-012', name: 'Gamma Corp', aging0_45: '78,000', aging45_90: '-', aging6M: '-', aging1Y: '-' },
-        { id: 4, code: 'VEN-003', name: 'Delta Industries', aging0_45: '-', aging45_90: '1,20,000', aging6M: '-', aging1Y: '-' },
-    ];
+    const [activeFilter, setActiveFilter] = useState<string | null>(null);
+    const [procurementSearchTerm, setProcurementSearchTerm] = useState('');
+    const [paymentSearchTerm, setPaymentSearchTerm] = useState('');
+
+    const toggleFilter = (filterName: string) => setActiveFilter(prev => prev === filterName ? null : filterName);
+
+    // Filter vendor aging data based on search term
+    const getFilteredVendorAging = (data: any[]) => {
+        if (!procurementSearchTerm) return data;
+        return data.filter(vendor => 
+            vendor.name.toLowerCase().includes(procurementSearchTerm.toLowerCase()) ||
+            vendor.code.toLowerCase().includes(procurementSearchTerm.toLowerCase())
+        );
+    };
+
+    // Live Procurement Aging State (replaces mock data)
+    const [purchaseVouchers, setPurchaseVouchers] = useState<any[]>([]);
+    const [loadingProcurementAging, setLoadingProcurementAging] = useState(false);
+
+    // Fetch purchase vouchers when Procurement tab is active
+    useEffect(() => {
+        if (activeTransactionSubTab === 'Procurement' && activeProcurementSubTab !== 'Dashboard') {
+            const fetchProcurementData = async () => {
+                setLoadingProcurementAging(true);
+                try {
+                    const pvRes = await httpClient.get('/api/vouchers/purchase/');
+                    const pvList: any[] = Array.isArray(pvRes) ? pvRes : ((pvRes as any)?.results || []);
+                    setPurchaseVouchers(pvList);
+                } catch (error) {
+                    handleApiError(error, 'Fetch Purchase Vouchers');
+                } finally {
+                    setLoadingProcurementAging(false);
+                }
+            };
+            fetchProcurementData();
+        }
+    }, [activeTransactionSubTab, activeProcurementSubTab]);
+
+    // Compute aging from real purchase vouchers, filtered by category
+    const getVendorAgingData = (categoryName: string) => {
+        if (!purchaseVouchers.length || !vendorList.length) return [];
+
+        const vendorGroups: Record<string, {
+            id: string; code: string; name: string;
+            days0to45: number; days45to90: number; months6: number; year1: number;
+        }> = {};
+
+        purchaseVouchers.forEach((pv: any) => {
+            const vendorId = pv.vendor_id;
+            if (!vendorId) return;
+
+            // Match vendor from vendorList
+            const vendor = vendorList.find((v: any) => v.id === vendorId);
+            if (!vendor) return;
+
+            // Filter by current procurement category
+            const vendorCat = ((vendor as any).vendor_category_name || (vendor as any).vendor_category || '').toLowerCase();
+            if (!vendorCat.includes(categoryName.toLowerCase())) return;
+
+            // Amount = due_details.to_pay
+            const amount = parseFloat(pv.due_details?.to_pay || 0);
+            if (amount <= 0) return;
+
+            const vendorCode = vendor.vendor_code || `VEN-${vendorId}`;
+            const vendorName = vendor.vendor_name || pv.vendor_name || 'Unknown Vendor';
+
+            if (!vendorGroups[vendorId]) {
+                vendorGroups[vendorId] = {
+                    id: vendorId.toString(),
+                    code: vendorCode,
+                    name: vendorName,
+                    days0to45: 0,
+                    days45to90: 0,
+                    months6: 0,
+                    year1: 0,
+                };
+            }
+
+            // Aging by days from purchase date
+            const invDate = new Date(pv.date);
+            const today = new Date();
+            const diffDays = Math.ceil(Math.abs(today.getTime() - invDate.getTime()) / (1000 * 60 * 60 * 24));
+
+            if (diffDays <= 45) {
+                vendorGroups[vendorId].days0to45 += amount;
+            } else if (diffDays <= 90) {
+                vendorGroups[vendorId].days45to90 += amount;
+            } else if (diffDays <= 180) {
+                vendorGroups[vendorId].months6 += amount;
+            } else {
+                vendorGroups[vendorId].year1 += amount;
+            }
+        });
+
+        return Object.values(vendorGroups);
+    };
+
+    const formatProcurementCurrency = (amount: number): string =>
+        amount > 0 ? `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-';
 
     // Dynamic Ledger Data State
     const [vendorLedgerData, setVendorLedgerData] = useState<any[]>([]);
@@ -226,7 +321,11 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             const receiptRes: any = await httpClient.get(`/api/vouchers/receipt-single/?receive_from=${encodeURIComponent(vendorName)}`);
             const receiptVouchers: any[] = Array.isArray(receiptRes) ? receiptRes : (receiptRes.results || []);
 
-            // Build ledger entries from Payment vouchers
+            // Fetch purchase vouchers for this vendor
+            const purchaseRes: any = await httpClient.get(`/api/vouchers/purchase/?vendor_name=${encodeURIComponent(vendorName)}`);
+            const purchaseVouchers: any[] = Array.isArray(purchaseRes) ? purchaseRes : (purchaseRes.results || []);
+
+            // Build ledger entries from Payment vouchers (Debit Vendor)
             const paymentEntries = paymentVouchers.map((v: any, idx: number) => ({
                 id: `pay-${v.id || idx}`,
                 date: v.date || '',
@@ -234,12 +333,13 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 referenceNo: v.voucher_number || '-',
                 ledger: v.pay_from_name || v.pay_from || '-',
                 status: 'Paid',
-                debit: '-',
-                credit: v.total_payment ? Number(v.total_payment).toLocaleString('en-IN') : '-',
-                runningBalance: '-'
+                debit: v.total_payment ? Number(v.total_payment).toLocaleString('en-IN') : '-',
+                credit: '-',
+                runningBalance: '-',
+                rawVoucher: v
             }));
 
-            // Build ledger entries from Receipt vouchers
+            // Build ledger entries from Receipt vouchers (Credit Vendor)
             const receiptEntries = receiptVouchers.map((v: any, idx: number) => ({
                 id: `rec-${v.id || idx}`,
                 date: v.date || '',
@@ -249,36 +349,43 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 status: 'Paid',
                 debit: '-',
                 credit: v.total_receipt ? Number(v.total_receipt).toLocaleString('en-IN') : '-',
-                runningBalance: '-'
+                runningBalance: '-',
+                rawVoucher: v
             }));
 
-            // Combine and sort by date descending
-            const allEntries = [...paymentEntries, ...receiptEntries].sort((a, b) =>
-                new Date(b.date).getTime() - new Date(a.date).getTime()
+            // Build ledger entries from Purchase vouchers (Credit Vendor)
+            const purchaseEntries = purchaseVouchers.map((v: any, idx: number) => ({
+                id: `pur-${v.id || idx}`,
+                date: v.date || '',
+                transferFrom: 'Purchase',
+                referenceNo: v.purchase_voucher_no || v.supplier_invoice_no || '-',
+                ledger: 'Purchase A/c',
+                status: (v.due_details?.to_pay <= 0) ? 'Paid' : 'Unpaid',
+                debit: '-',
+                credit: v.due_details?.to_pay ? Number(v.due_details.to_pay).toLocaleString('en-IN') : '-',
+                runningBalance: '-',
+                rawVoucher: v
+            }));
+
+            // Combine and sort by date ascending (Oldest to Newest as requested)
+            const allEntries = [...paymentEntries, ...receiptEntries, ...purchaseEntries].sort((a, b) =>
+                new Date(a.date).getTime() - new Date(b.date).getTime()
             );
 
-            // If no real data, fall back to mock data so the UI is not empty
-            if (allEntries.length === 0) {
-                setVendorLedgerData([
-                    { id: 1, date: '2023-10-28', transferFrom: 'Purchase', referenceNo: 'INV-2023-001', ledger: 'Purchase A/c', status: 'Unpaid', debit: '45,000', credit: '-', runningBalance: '45,000 Dr' },
-                    { id: 2, date: '2023-10-25', transferFrom: 'Payment', referenceNo: 'V-002', ledger: 'HDFC Bank', status: 'Paid', debit: '-', credit: '15,000', runningBalance: '30,000 Dr' },
-                    { id: 3, date: '2023-10-20', transferFrom: 'Purchase', referenceNo: 'INV-2023-002', ledger: 'Purchase A/c', status: 'Partially Paid', debit: '12,000', credit: '-', runningBalance: '42,000 Dr' },
-                    { id: 4, date: '2023-10-15', transferFrom: 'Receipt', referenceNo: 'V-005', ledger: 'Cash', status: 'Paid', debit: '-', credit: '5,000', runningBalance: '37,000 Dr' },
-                    { id: 5, date: '2023-10-10', transferFrom: 'Sales', referenceNo: 'INV-2023-003', ledger: 'Sales A/c', status: 'Paid', debit: '-', credit: '2,000', runningBalance: '35,000 Dr' },
-                ]);
-            } else {
-                setVendorLedgerData(allEntries);
-            }
+            // Calculate running balance
+            let balance = 0;
+            const updatedEntries = allEntries.map(entry => {
+                const pCredit = entry.credit !== '-' ? parseFloat(entry.credit.replace(/,/g, '')) : 0;
+                const pDebit = entry.debit !== '-' ? parseFloat(entry.debit.replace(/,/g, '')) : 0;
+                balance += pCredit - pDebit;
+                entry.runningBalance = Math.abs(balance).toLocaleString('en-IN') + (balance >= 0 ? ' Cr' : ' Dr');
+                return entry;
+            });
+
+            setVendorLedgerData(updatedEntries);
         } catch (error) {
             console.error('Error fetching vendor ledger:', error);
-            // Fall back to mock data on error
-            setVendorLedgerData([
-                { id: 1, date: '2023-10-28', transferFrom: 'Purchase', referenceNo: 'INV-2023-001', ledger: 'Purchase A/c', status: 'Unpaid', debit: '45,000', credit: '-', runningBalance: '45,000 Dr' },
-                { id: 2, date: '2023-10-25', transferFrom: 'Payment', referenceNo: 'V-002', ledger: 'HDFC Bank', status: 'Paid', debit: '-', credit: '15,000', runningBalance: '30,000 Dr' },
-                { id: 3, date: '2023-10-20', transferFrom: 'Purchase', referenceNo: 'INV-2023-002', ledger: 'Purchase A/c', status: 'Partially Paid', debit: '12,000', credit: '-', runningBalance: '42,000 Dr' },
-                { id: 4, date: '2023-10-15', transferFrom: 'Receipt', referenceNo: 'V-005', ledger: 'Cash', status: 'Paid', debit: '-', credit: '5,000', runningBalance: '37,000 Dr' },
-                { id: 5, date: '2023-10-10', transferFrom: 'Sales', referenceNo: 'INV-2023-003', ledger: 'Sales A/c', status: 'Paid', debit: '-', credit: '2,000', runningBalance: '35,000 Dr' },
-            ]);
+            setVendorLedgerData([]);
         } finally {
             setLoadingLedger(false);
         }
@@ -286,8 +393,15 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
 
     const filteredLedgerData = vendorLedgerData.filter(entry => {
+        let isDateMatch = true;
+        if (ledgerFilters.date) {
+            isDateMatch = entry.date.toLowerCase().includes(ledgerFilters.date.toLowerCase());
+        }
+        if (ledgerFilters.dateFrom && entry.date < ledgerFilters.dateFrom) isDateMatch = false;
+        if (ledgerFilters.dateTo && entry.date > ledgerFilters.dateTo) isDateMatch = false;
+
         return (
-            entry.date.toLowerCase().includes(ledgerFilters.date.toLowerCase()) &&
+            isDateMatch &&
             entry.transferFrom.toLowerCase().includes(ledgerFilters.transferFrom.toLowerCase()) &&
             entry.referenceNo.toLowerCase().includes(ledgerFilters.referenceNo.toLowerCase()) &&
             entry.ledger.toLowerCase().includes(ledgerFilters.ledger.toLowerCase()) &&
@@ -308,27 +422,40 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         return sum + val;
     }, 0);
 
-    const vendorMonthData = [
-        { month: 'January', debit: '-', credit: '-', closingBalance: '-' },
-        { month: 'February', debit: '-', credit: '-', closingBalance: '-' },
-        { month: 'March', debit: '-', credit: '-', closingBalance: '-' },
-        { month: 'April', debit: '-', credit: '-', closingBalance: '-' },
-        { month: 'May', debit: '-', credit: '-', closingBalance: '-' },
-        { month: 'June', debit: '-', credit: '-', closingBalance: '-' },
-        { month: 'July', debit: '-', credit: '-', closingBalance: '-' },
-        { month: 'August', debit: '-', credit: '-', closingBalance: '-' },
-        { month: 'September', debit: '-', credit: '-', closingBalance: '-' },
-        { month: 'October', debit: '57,000', credit: '22,000', closingBalance: '35,000 Cr' },
-        { month: 'November', debit: '-', credit: '-', closingBalance: '35,000 Cr' },
-        { month: 'December', debit: '-', credit: '-', closingBalance: '35,000 Cr' },
-    ];
-
     // Helper: map month name → zero-padded month number string (for date filtering)
     const monthNameToNumber: Record<string, string> = {
         'January': '01', 'February': '02', 'March': '03', 'April': '04',
         'May': '05', 'June': '06', 'July': '07', 'August': '08',
         'September': '09', 'October': '10', 'November': '11', 'December': '12'
     };
+
+    const vendorMonthData = useMemo(() => {
+        const months = [
+            'April', 'May', 'June', 'July', 'August', 'September', 
+            'October', 'November', 'December', 'January', 'February', 'March'
+        ];
+        
+        let cumulativeBalance = 0;
+        
+        return months.map(month => {
+            const monthStr = monthNameToNumber[month];
+            const entriesInMonth = vendorLedgerData.filter(entry => entry.date && entry.date.split('-')[1] === monthStr);
+            
+            const mDebit = entriesInMonth.reduce((sum, entry) => sum + (entry.debit !== '-' ? parseFloat(entry.debit.replace(/,/g, '')) : 0), 0);
+            const mCredit = entriesInMonth.reduce((sum, entry) => sum + (entry.credit !== '-' ? parseFloat(entry.credit.replace(/,/g, '')) : 0), 0);
+            
+            cumulativeBalance += mCredit - mDebit;
+            
+            return {
+                month,
+                debit: mDebit > 0 ? mDebit.toLocaleString('en-IN') : '-',
+                credit: mCredit > 0 ? mCredit.toLocaleString('en-IN') : '-',
+                closingBalance: cumulativeBalance !== 0 
+                  ? Math.abs(cumulativeBalance).toLocaleString('en-IN') + (cumulativeBalance >= 0 ? ' Cr' : ' Dr') 
+                  : '-'
+            };
+        });
+    }, [vendorLedgerData]);
 
     // Handler: clicking a month row → switch to bill-wise ledger view filtered by that month
     const handleMonthRowClick = (monthName: string) => {
@@ -4677,207 +4804,437 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         ).length;
 
                                                         return (
-                                                            <button
+                                                            <div
                                                                 key={item.name}
                                                                 onClick={() => {
                                                                     setActiveProcurementSubTab(item.name as ProcurementSubTab);
                                                                     setProcurementViewMode('list');
                                                                     setSelectedProcurementVendor(null);
                                                                 }}
-                                                                className="p-6 border-2 border-gray-200 rounded-[4px] hover:border-indigo-500 hover:shadow-none border border-slate-200 transition-all duration-200 text-left group bg-white relative"
+                                                                className="bg-white p-6 rounded-[4px] border border-gray-200 hover:border-indigo-500 hover:shadow-md cursor-pointer transition-all group"
                                                             >
                                                                 <div className="flex items-center justify-between mb-4">
-                                                                    <div className="w-12 h-12 bg-indigo-50/50 rounded-[4px] flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                                                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                                                                        </svg>
+                                                                    <div className="p-3 rounded-[4px] bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                                                        <Filter className="w-6 h-6" />
                                                                     </div>
-                                                                    <svg className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                                                    </svg>
-                                                                </div>
-                                                                <div className="flex justify-between items-end">
-                                                                    <div>
-                                                                        <h3 className="text-lg font-bold text-gray-800 group-hover:text-indigo-600 transition-colors">{item.name}</h3>
-                                                                        <p className="text-sm text-gray-500 mt-1">{item.desc}</p>
-                                                                    </div>
-                                                                    <div className="text-right">
-                                                                        <p className="text-lg font-bold text-gray-800">{activeOrders}</p>
-                                                                        <p className="text-xs text-indigo-600 font-semibold mt-1">Active Orders</p>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className="text-right mr-2">
+                                                                            <p className="text-lg font-bold text-gray-800">{activeOrders}</p>
+                                                                            <p className="text-[10px] text-indigo-600 font-semibold uppercase tracking-wider">Orders</p>
+                                                                        </div>
+                                                                        <ChevronLeft className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transform rotate-180 transition-all opacity-0 group-hover:opacity-100" />
                                                                     </div>
                                                                 </div>
-                                                            </button>
+                                                                <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{item.name}</h3>
+                                                                <p className="text-sm text-gray-500 mt-2">{item.desc}</p>
+                                                            </div>
                                                         );
                                                     })}
                                             </div>
                                         </div>
                                     ) : (
                                         <div>
-                                            <div className="flex items-center justify-between mb-6">
-                                                <div>
-                                                    <div className="flex items-center space-x-2 text-sm text-gray-500 mb-1">
-                                                        <button onClick={() => { setActiveProcurementSubTab('Dashboard'); setProcurementViewMode('list'); }} className="hover:text-indigo-600 hover:underline">
-                                                            Procurement
-                                                        </button>
-                                                        <span>/</span>
-                                                        <button onClick={() => { setProcurementViewMode('list'); setSelectedProcurementVendor(null); }} className={`hover:text-indigo-600 hover:underline ${procurementViewMode === 'list' ? 'text-indigo-600 font-medium' : ''}`}>
-                                                            {activeProcurementSubTab}
-                                                        </button>
-                                                        {selectedProcurementVendor && (
-                                                            <>
-                                                                <span>/</span>
-                                                                <span className="text-indigo-600 font-medium">{selectedProcurementVendor.name}</span>
-                                                            </>
-                                                        )}
+                                            <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+                                                <div className="flex items-center gap-4">
+                                                    <button
+                                                        onClick={() => { setActiveProcurementSubTab('Dashboard'); setProcurementViewMode('list'); }}
+                                                        className="p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
+                                                        title="Back to Dashboard"
+                                                    >
+                                                        <ChevronLeft className="w-5 h-5 text-gray-600" />
+                                                    </button>
+                                                    <div>
+                                                        <div className="flex items-center space-x-2 text-xs text-gray-400 mb-1 uppercase tracking-widest font-semibold">
+                                                            <span>Procurement</span>
+                                                            <span className="text-gray-300">/</span>
+                                                            <span className="text-indigo-500 font-bold">{activeProcurementSubTab}</span>
+                                                            {selectedProcurementVendor && (
+                                                                <>
+                                                                    <span className="text-gray-300">/</span>
+                                                                    <span className="text-indigo-600 font-bold">{selectedProcurementVendor.name}</span>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                        <h3 className="text-xl font-bold text-gray-900">{activeProcurementSubTab}</h3>
                                                     </div>
-                                                    <h2 className="section-title">{activeProcurementSubTab}</h2>
-                                                    <p className="helper-text">Manage {activeProcurementSubTab.toLowerCase()} details here.</p>
                                                 </div>
-                                                <div className="flex space-x-2">
+
+                                                <div className="flex items-center gap-3">
+                                                    {procurementViewMode === 'list' && (
+                                                        <div className="relative">
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Search Vendor..."
+                                                                value={procurementSearchTerm}
+                                                                onChange={(e) => setProcurementSearchTerm(e.target.value)}
+                                                                className="pl-10 pr-4 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64 bg-white"
+                                                            />
+                                                            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
+                                                        </div>
+                                                    )}
                                                     <button
                                                         onClick={() => setActiveProcurementSubTab('Dashboard')}
-                                                        className="px-4 py-2 border border-slate-200 rounded-[4px] text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                                        className="px-4 py-2 border border-slate-200 rounded-[4px] text-sm font-semibold text-gray-600 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 uppercase tracking-wider"
                                                     >
-                                                        Back to Dashboard
+                                                        Dashboard
                                                     </button>
                                                 </div>
                                             </div>
 
-                                            {procurementViewMode === 'list' && (
-                                                <div className="erp-card border border-slate-200 overflow-hidden">
-                                                    <table className="erp-table min-w-full">
-                                                        <thead className="bg-gray-50">
-                                                            <tr>
-                                                                <th className="table-header">Vendor Code</th>
-                                                                <th className="table-header">Vendor Name</th>
-                                                                <th className="table-header">0-45 Days</th>
-                                                                <th className="table-header">45-90 Days</th>
-                                                                <th className="table-header">{">"}6M</th>
-                                                                <th className="table-header">{">"}1YR</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="bg-white divide-y divide-gray-200">
-                                                            {vendorAgingList.map((vendor) => (
-                                                                <tr key={vendor.id} className="hover:bg-gray-50 transition-colors">
-                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{vendor.code}</td>
-                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-indigo-600 cursor-pointer hover:underline" onClick={() => {
-                                                                        setSelectedProcurementVendor(vendor);
-                                                                        setProcurementViewMode('ledger');
-                                                                        fetchVendorLedger(vendor.name);
-                                                                    }}>
-                                                                        {vendor.name}
-                                                                    </td>
-                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">₹{vendor.aging0_45}</td>
-                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{vendor.aging45_90 !== '-' ? `₹${vendor.aging45_90}` : '-'}</td>
-                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{vendor.aging6M !== '-' ? `₹${vendor.aging6M}` : '-'}</td>
-                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{vendor.aging1Y !== '-' ? `₹${vendor.aging1Y}` : '-'}</td>
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            )}
+                                            {procurementViewMode === 'list' && (() => {
+                                                const agingData = getVendorAgingData(activeProcurementSubTab);
+                                                return (
+                                                    <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden mt-4">
+                                                        <div className="overflow-x-auto">
+                                                            <table className="min-w-full border-collapse">
+                                                                <thead>
+                                                                    <tr className="bg-[#F8F9FA] border-b border-gray-200">
+                                                                        <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-bold text-gray-500 uppercase tracking-widest border-r border-gray-100 max-w-[150px]">Vendor Code</th>
+                                                                        <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-bold text-gray-500 uppercase tracking-widest border-r border-gray-100 min-w-[200px]">Vendor Name</th>
+                                                                        <th rowSpan={2} className="px-6 py-4 text-left text-[11px] font-bold text-gray-500 uppercase tracking-widest border-r border-gray-100 min-w-[180px]">Sub Category</th>
+                                                                        <th colSpan={5} className="px-6 py-3 text-center text-[11px] font-bold text-gray-500 uppercase tracking-widest border-b border-gray-100 bg-[#F8F9FA]/80 shadow-sm">Amount - Due For</th>
+                                                                        <th rowSpan={2} className="px-6 py-4 text-center text-[11px] font-bold text-gray-500 uppercase tracking-widest border-l border-gray-100 w-[100px]">Actions</th>
+                                                                    </tr>
+                                                                    <tr className="bg-[#F8F9FA]/80">
+                                                                        <th className="px-3 py-3 text-center text-[10px] font-bold text-gray-500 uppercase tracking-widest border-r border-gray-100 w-[100px]">Not Due</th>
+                                                                        <th className="px-3 py-3 text-center text-[10px] font-bold text-gray-500 uppercase tracking-widest border-r border-gray-100 w-[100px]">0-45 Days</th>
+                                                                        <th className="px-3 py-3 text-center text-[10px] font-bold text-gray-500 uppercase tracking-widest border-r border-gray-100 w-[100px]">45-90 Days</th>
+                                                                        <th className="px-3 py-3 text-center text-[10px] font-bold text-gray-500 uppercase tracking-widest border-r border-gray-100 w-[100px]">{">"} 6 Months</th>
+                                                                        <th className="px-3 py-3 text-center text-[10px] font-bold text-gray-500 uppercase tracking-widest w-[100px]">{">"} 1 Year</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody className="bg-white divide-y divide-gray-100">
+                                                                    {loadingProcurementAging ? (
+                                                                        <tr>
+                                                                            <td colSpan={9} className="px-6 py-10 text-center text-sm text-gray-500">
+                                                                                <div className="flex items-center justify-center space-x-2">
+                                                                                    <svg className="animate-spin h-5 w-5 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                                                                    </svg>
+                                                                                    <span>Loading procurement data...</span>
+                                                                                </div>
+                                                                            </td>
+                                                                        </tr>
+                                                                    ) : getFilteredVendorAging(agingData).length === 0 ? (
+                                                                        <tr>
+                                                                            <td colSpan={9} className="px-6 py-10 text-center text-sm text-gray-500">
+                                                                                {agingData.length === 0
+                                                                                    ? "No outstanding purchase invoices for this category."
+                                                                                    : "No vendors found matching your search term."}
+                                                                            </td>
+                                                                        </tr>
+                                                                    ) : (
+                                                                        getFilteredVendorAging(agingData).map((vendor) => (
+                                                                            <tr key={vendor.id} className="hover:bg-indigo-50/40 transition-colors group">
+                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-slate-800 border-r border-gray-50">{vendor.code}</td>
+                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 border-r border-gray-50">{vendor.name}</td>
+                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 border-r border-gray-50">
+                                                                                    <span className="text-gray-600">{activeProcurementSubTab}</span>
+                                                                                </td>
+                                                                                
+                                                                                {/* Amount columns */}
+                                                                                <td className="px-4 py-4 whitespace-nowrap text-sm text-center text-slate-400 border-r border-gray-50 bg-slate-50/30 group-hover:bg-transparent">-</td>
+                                                                                <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-medium text-slate-700 border-r border-gray-50 bg-slate-50/30 group-hover:bg-transparent">{formatProcurementCurrency(vendor.days0to45)}</td>
+                                                                                <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-medium text-slate-700 border-r border-gray-50 bg-slate-50/30 group-hover:bg-transparent">{formatProcurementCurrency(vendor.days45to90)}</td>
+                                                                                <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-medium text-slate-700 border-r border-gray-50 bg-slate-50/30 group-hover:bg-transparent">{formatProcurementCurrency(vendor.months6)}</td>
+                                                                                <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-medium text-slate-700 bg-slate-50/30 group-hover:bg-transparent">{formatProcurementCurrency(vendor.year1)}</td>
+                                                                                
+                                                                                <td className="px-6 py-4 whitespace-nowrap text-center border-l border-gray-50">
+                                                                                    <div className="flex items-center justify-center space-x-2">
+                                                                                        <button 
+                                                                                            onClick={() => {
+                                                                                                setSelectedProcurementVendor(vendor);
+                                                                                                setProcurementViewMode('ledger');
+                                                                                                fetchVendorLedger(vendor.name);
+                                                                                            }}
+                                                                                            className="text-indigo-600 hover:text-indigo-900 transition-colors p-1.5 rounded-full hover:bg-indigo-100"
+                                                                                            title="View Ledger"
+                                                                                        >
+                                                                                            <Eye className="w-4 h-4" />
+                                                                                        </button>
+                                                                                    </div>
+                                                                                </td>
+                                                                            </tr>
+                                                                        ))
+                                                                    )}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()}
+
 
                                             {procurementViewMode === 'ledger' && selectedProcurementVendor && (
                                                 <div className="erp-card border border-slate-200 overflow-hidden p-0">
                                                     <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 bg-gray-50">
                                                         <h3 className="section-title">{selectedProcurementVendor.name}</h3>
-                                                        <button
-                                                            onClick={() => setProcurementViewMode('month')}
-                                                            className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
-                                                        >
-                                                            Month View
-                                                        </button>
+                                                        <div className="flex gap-2">
+                                                            <button
+                                                                onClick={() => setProcurementViewMode('journal')}
+                                                                className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
+                                                            >
+                                                                Journal View
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setProcurementViewMode('month')}
+                                                                className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
+                                                            >
+                                                                Month View
+                                                            </button>
+                                                        </div>
                                                     </div>
 
                                                     <div className="overflow-x-auto">
                                                         <table className="erp-table min-w-full">
-                                                            <thead className="bg-gray-50">
-                                                                <tr>
-                                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">Date</th>
-                                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">Transfer From</th>
-                                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">Reference No</th>
-                                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">Ledger</th>
-                                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">Status</th>
-                                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">Debit</th>
-                                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">Credit</th>
-                                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">Running Balance</th>
-                                                                </tr>
-                                                                <tr>
-                                                                    <th className="px-6 pb-3 pt-0">
-                                                                        <input
-                                                                            type="text"
-                                                                            placeholder="Filter Date"
-                                                                            value={ledgerFilters.date}
-                                                                            onChange={(e) => setLedgerFilters({ ...ledgerFilters, date: e.target.value })}
-                                                                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                                        />
-                                                                    </th>
-                                                                    <th className="px-6 pb-3 pt-0">
-                                                                        <input
-                                                                            type="text"
-                                                                            placeholder="Filter Transfer"
-                                                                            value={ledgerFilters.transferFrom}
-                                                                            onChange={(e) => setLedgerFilters({ ...ledgerFilters, transferFrom: e.target.value })}
-                                                                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                                        />
-                                                                    </th>
-                                                                    <th className="px-6 pb-3 pt-0">
-                                                                        <input
-                                                                            type="text"
-                                                                            placeholder="Filter Reference"
-                                                                            value={ledgerFilters.referenceNo}
-                                                                            onChange={(e) => setLedgerFilters({ ...ledgerFilters, referenceNo: e.target.value })}
-                                                                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                                        />
-                                                                    </th>
-                                                                    <th className="px-6 pb-3 pt-0">
-                                                                        <input
-                                                                            type="text"
-                                                                            placeholder="Filter Ledger"
-                                                                            value={ledgerFilters.ledger}
-                                                                            onChange={(e) => setLedgerFilters({ ...ledgerFilters, ledger: e.target.value })}
-                                                                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                                        />
-                                                                    </th>
-                                                                    <th className="px-6 pb-3 pt-0">
-                                                                        <input
-                                                                            type="text"
-                                                                            placeholder="Filter Status"
-                                                                            value={ledgerFilters.status}
-                                                                            onChange={(e) => setLedgerFilters({ ...ledgerFilters, status: e.target.value })}
-                                                                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                                        />
-                                                                    </th>
-                                                                    <th className="px-6 pb-3 pt-0">
-                                                                        <input
-                                                                            type="text"
-                                                                            placeholder="Filter Debit"
-                                                                            value={ledgerFilters.debit}
-                                                                            onChange={(e) => setLedgerFilters({ ...ledgerFilters, debit: e.target.value })}
-                                                                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                                        />
-                                                                    </th>
-                                                                    <th className="px-6 pb-3 pt-0">
-                                                                        <input
-                                                                            type="text"
-                                                                            placeholder="Filter Credit"
-                                                                            value={ledgerFilters.credit}
-                                                                            onChange={(e) => setLedgerFilters({ ...ledgerFilters, credit: e.target.value })}
-                                                                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                                        />
-                                                                    </th>
-                                                                    <th className="px-6 pb-3 pt-0">
-                                                                        <input
-                                                                            type="text"
-                                                                            placeholder="Filter Runn"
-                                                                            value={ledgerFilters.runningBalance}
-                                                                            onChange={(e) => setLedgerFilters({ ...ledgerFilters, runningBalance: e.target.value })}
-                                                                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                                        />
-                                                                    </th>
-                                                                </tr>
-                                                            </thead>
+                                                                <thead className="bg-[#F8F9FA] border-b border-slate-200">
+                                                                    <tr>
+                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">
+                                                                            <div className="flex items-center justify-between relative">
+                                                                                <span>Date</span>
+                                                                                <div className="ml-2">
+                                                                                    <Filter
+                                                                                        className={`w-4 h-4 cursor-pointer ${activeFilter === 'date' ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-600'}`}
+                                                                                        onClick={() => toggleFilter('date')}
+                                                                                    />
+                                                                                    {activeFilter === 'date' && (
+                                                                                        <div className="absolute z-50 top-8 left-0 bg-white rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-100 p-4 w-[280px]">
+                                                                                            <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-100">
+                                                                                                <span className="text-sm font-black text-slate-800 tracking-tight">Filter by Date Range</span>
+                                                                                                <X className="w-4 h-4 cursor-pointer text-slate-400 hover:text-slate-700 transition-colors" onClick={() => setActiveFilter(null)} />
+                                                                                            </div>
+                                                                                            <div className="space-y-4">
+                                                                                                <div>
+                                                                                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">From Date</label>
+                                                                                                    <input
+                                                                                                        type="date"
+                                                                                                        value={ledgerFilters.dateFrom}
+                                                                                                        onChange={(e) => setLedgerFilters({ ...ledgerFilters, dateFrom: e.target.value })}
+                                                                                                        className="w-full px-3 py-2 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all shadow-sm"
+                                                                                                    />
+                                                                                                </div>
+                                                                                                <div>
+                                                                                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">To Date</label>
+                                                                                                    <input
+                                                                                                        type="date"
+                                                                                                        value={ledgerFilters.dateTo}
+                                                                                                        onChange={(e) => setLedgerFilters({ ...ledgerFilters, dateTo: e.target.value })}
+                                                                                                        className="w-full px-3 py-2 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all shadow-sm"
+                                                                                                    />
+                                                                                                </div>
+                                                                                            </div>
+                                                                                            <div className="mt-5 pt-3 flex items-center justify-between">
+                                                                                                <button 
+                                                                                                    onClick={() => setLedgerFilters({ ...ledgerFilters, dateFrom: '', dateTo: '', date: '' })}
+                                                                                                    className={`text-[11px] font-bold uppercase tracking-wider transition-colors ${ledgerFilters.dateFrom || ledgerFilters.dateTo || ledgerFilters.date ? 'text-slate-400 hover:text-red-500' : 'text-slate-300 cursor-not-allowed'}`}
+                                                                                                    disabled={!ledgerFilters.dateFrom && !ledgerFilters.dateTo && !ledgerFilters.date}
+                                                                                                >
+                                                                                                    Clear
+                                                                                                </button>
+                                                                                                <button 
+                                                                                                    onClick={() => setActiveFilter(null)}
+                                                                                                    className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 uppercase tracking-wider transition-colors bg-indigo-50 px-3 py-1.5 rounded"
+                                                                                                >
+                                                                                                    Apply Filter
+                                                                                                </button>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        </th>
+                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">
+                                                                            <div className="flex items-center justify-between relative">
+                                                                                <span className="truncate">Created From</span>
+                                                                                <div className="ml-2">
+                                                                                    <Filter
+                                                                                        className={`w-4 h-4 cursor-pointer ${activeFilter === 'transferFrom' ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-600'}`}
+                                                                                        onClick={() => toggleFilter('transferFrom')}
+                                                                                    />
+                                                                                    {activeFilter === 'transferFrom' && (
+                                                                                        <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-48">
+                                                                                            <div className="flex justify-between items-center mb-2">
+                                                                                                <span className="text-xs font-bold text-gray-700">Filter Type</span>
+                                                                                                <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
+                                                                                            </div>
+                                                                                            <input
+                                                                                                type="text"
+                                                                                                placeholder="Type to filter..."
+                                                                                                value={ledgerFilters.transferFrom}
+                                                                                                onChange={(e) => setLedgerFilters({ ...ledgerFilters, transferFrom: e.target.value })}
+                                                                                                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none"
+                                                                                                autoFocus
+                                                                                            />
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        </th>
+                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">
+                                                                            <div className="flex items-center justify-between relative">
+                                                                                <span>Reference No</span>
+                                                                                <div className="ml-2">
+                                                                                    <Filter
+                                                                                        className={`w-4 h-4 cursor-pointer ${activeFilter === 'referenceNo' ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-600'}`}
+                                                                                        onClick={() => toggleFilter('referenceNo')}
+                                                                                    />
+                                                                                    {activeFilter === 'referenceNo' && (
+                                                                                        <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-52">
+                                                                                            <div className="flex justify-between items-center mb-2">
+                                                                                                <span className="text-xs font-bold text-gray-700">Search Reference</span>
+                                                                                                <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
+                                                                                            </div>
+                                                                                            <input
+                                                                                                type="text"
+                                                                                                placeholder="Search..."
+                                                                                                value={ledgerFilters.referenceNo}
+                                                                                                onChange={(e) => setLedgerFilters({ ...ledgerFilters, referenceNo: e.target.value })}
+                                                                                                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none"
+                                                                                                autoFocus
+                                                                                            />
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        </th>
+                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">
+                                                                            <div className="flex items-center justify-between relative">
+                                                                                <span>Ledger</span>
+                                                                                <div className="ml-2">
+                                                                                    <Filter
+                                                                                        className={`w-4 h-4 cursor-pointer ${activeFilter === 'ledger' ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-600'}`}
+                                                                                        onClick={() => toggleFilter('ledger')}
+                                                                                    />
+                                                                                    {activeFilter === 'ledger' && (
+                                                                                        <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-52">
+                                                                                            <div className="flex justify-between items-center mb-2">
+                                                                                                <span className="text-xs font-bold text-gray-700">Search Ledger</span>
+                                                                                                <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
+                                                                                            </div>
+                                                                                            <input
+                                                                                                type="text"
+                                                                                                placeholder="Search..."
+                                                                                                value={ledgerFilters.ledger}
+                                                                                                onChange={(e) => setLedgerFilters({ ...ledgerFilters, ledger: e.target.value })}
+                                                                                                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none"
+                                                                                                autoFocus
+                                                                                            />
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        </th>
+                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">
+                                                                            <div className="flex items-center justify-between relative">
+                                                                                <span>Status</span>
+                                                                                <div className="ml-2">
+                                                                                    <Filter
+                                                                                        className={`w-4 h-4 cursor-pointer ${activeFilter === 'status' ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-600'}`}
+                                                                                        onClick={() => toggleFilter('status')}
+                                                                                    />
+                                                                                    {activeFilter === 'status' && (
+                                                                                        <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-48">
+                                                                                            <div className="flex justify-between items-center mb-2">
+                                                                                                <span className="text-xs font-bold text-gray-700">Filter Status</span>
+                                                                                                <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
+                                                                                            </div>
+                                                                                            <input
+                                                                                                type="text"
+                                                                                                placeholder="Type status..."
+                                                                                                value={ledgerFilters.status}
+                                                                                                onChange={(e) => setLedgerFilters({ ...ledgerFilters, status: e.target.value })}
+                                                                                                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none"
+                                                                                                autoFocus
+                                                                                            />
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        </th>
+                                                                        <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">
+                                                                            <div className="flex items-center justify-end relative">
+                                                                                <span>Debit</span>
+                                                                                <div className="ml-2">
+                                                                                    <Filter
+                                                                                        className={`w-4 h-4 cursor-pointer ${activeFilter === 'debit' ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-600'}`}
+                                                                                        onClick={() => toggleFilter('debit')}
+                                                                                    />
+                                                                                    {activeFilter === 'debit' && (
+                                                                                        <div className="absolute z-50 top-8 right-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-40">
+                                                                                            <div className="flex justify-between items-center mb-2">
+                                                                                                <span className="text-xs font-bold text-gray-700">Debit Mask</span>
+                                                                                                <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
+                                                                                            </div>
+                                                                                            <input
+                                                                                                type="text"
+                                                                                                placeholder="0.00"
+                                                                                                value={ledgerFilters.debit}
+                                                                                                onChange={(e) => setLedgerFilters({ ...ledgerFilters, debit: e.target.value })}
+                                                                                                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none text-right"
+                                                                                                autoFocus
+                                                                                            />
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        </th>
+                                                                        <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">
+                                                                            <div className="flex items-center justify-end relative">
+                                                                                <span>Credit</span>
+                                                                                <div className="ml-2">
+                                                                                    <Filter
+                                                                                        className={`w-4 h-4 cursor-pointer ${activeFilter === 'credit' ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-600'}`}
+                                                                                        onClick={() => toggleFilter('credit')}
+                                                                                    />
+                                                                                    {activeFilter === 'credit' && (
+                                                                                        <div className="absolute z-50 top-8 right-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-40">
+                                                                                            <div className="flex justify-between items-center mb-2">
+                                                                                                <span className="text-xs font-bold text-gray-700">Credit Mask</span>
+                                                                                                <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
+                                                                                            </div>
+                                                                                            <input
+                                                                                                type="text"
+                                                                                                placeholder="0.00"
+                                                                                                value={ledgerFilters.credit}
+                                                                                                onChange={(e) => setLedgerFilters({ ...ledgerFilters, credit: e.target.value })}
+                                                                                                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none text-right"
+                                                                                                autoFocus
+                                                                                            />
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        </th>
+                                                                        <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                                                            <div className="flex items-center justify-end relative">
+                                                                                <span className="truncate">Running Bal</span>
+                                                                                <div className="ml-2">
+                                                                                    <Filter
+                                                                                        className={`w-4 h-4 cursor-pointer ${activeFilter === 'runningBalance' ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-600'}`}
+                                                                                        onClick={() => toggleFilter('runningBalance')}
+                                                                                    />
+                                                                                    {activeFilter === 'runningBalance' && (
+                                                                                        <div className="absolute z-50 top-8 right-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-44">
+                                                                                            <div className="flex justify-between items-center mb-2">
+                                                                                                <span className="text-xs font-bold text-gray-700">Balance Mask</span>
+                                                                                                <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
+                                                                                            </div>
+                                                                                            <input
+                                                                                                type="text"
+                                                                                                placeholder="0.00"
+                                                                                                value={ledgerFilters.runningBalance}
+                                                                                                onChange={(e) => setLedgerFilters({ ...ledgerFilters, runningBalance: e.target.value })}
+                                                                                                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none text-right"
+                                                                                                autoFocus
+                                                                                            />
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        </th>
+                                                                    </tr>
+                                                                </thead>
                                                             <tbody className="bg-white divide-y divide-gray-200">
                                                                 {loadingLedger ? (
                                                                     <tr>
@@ -4893,7 +5250,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                     </tr>
                                                                 ) : filteredLedgerData.map((entry) => (
                                                                     <tr key={entry.id} className="hover:bg-gray-50 transition-colors">
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.date}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(entry.date)}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{entry.transferFrom}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-medium cursor-pointer hover:underline">{entry.referenceNo}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.ledger}</td>
@@ -4918,6 +5275,220 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                     <td className="px-6 py-3"></td>
                                                                 </tr>
                                                             </tfoot>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {procurementViewMode === 'journal' && selectedProcurementVendor && (
+                                                <div className="erp-card border border-slate-200 p-0">
+                                                    <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 bg-gray-50">
+                                                        <h3 className="section-title">{selectedProcurementVendor.name} - Journal View</h3>
+                                                        <div className="flex gap-2">
+                                                            <button
+                                                                onClick={() => setProcurementViewMode('month')}
+                                                                className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
+                                                            >
+                                                                Month View
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setProcurementViewMode('ledger')}
+                                                                className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
+                                                            >
+                                                                Bill-wise View
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="overflow-x-auto">
+                                                        <table className="min-w-full">
+                                                            <thead className="border-y border-gray-100 bg-white">
+                                                                <tr>
+                                                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-[120px]">Date</th>
+                                                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Transaction Particulars</th>
+                                                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-[120px]">Type</th>
+                                                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-[120px]">VCH No.</th>
+                                                                    <th className="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-wider w-[140px]">Debit (₹)</th>
+                                                                    <th className="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-wider w-[140px]">Credit (₹)</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="bg-white">
+                                                                {filteredLedgerData.map((entry) => (
+                                                                    <React.Fragment key={entry.id}>
+                                                                        {/* Header Row */}
+                                                                        <tr className="border-b border-gray-50 hover:bg-gray-50/50">
+                                                                            <td className="px-6 py-4 text-sm font-medium text-gray-600 align-top">
+                                                                                {formatDate(entry.date)}
+                                                                            </td>
+                                                                            <td className="px-6 py-4 text-sm font-bold text-gray-800">
+                                                                                {entry.transferFrom === 'Purchase' ? '(as per details)' : entry.ledger}
+                                                                            </td>
+                                                                            <td className="px-6 py-4 text-sm text-gray-500 uppercase">
+                                                                                {entry.transferFrom === 'Purchase' ? 'Purchase' : entry.transferFrom}
+                                                                            </td>
+                                                                            <td className="px-6 py-4 text-sm text-gray-500">
+                                                                                {entry.referenceNo}
+                                                                            </td>
+                                                                            <td className="px-6 py-4 text-sm font-bold text-indigo-600 text-right">
+                                                                                {entry.debit !== '-' ? `₹${entry.debit}` : '-'}
+                                                                            </td>
+                                                                            <td className="px-6 py-4 text-sm font-medium text-gray-400 text-right">
+                                                                                {entry.credit !== '-' ? <span className="text-gray-900">₹{entry.credit}</span> : '-'}
+                                                                            </td>
+                                                                        </tr>
+
+                                                                        {/* Purchase Details */}
+                                                                        {entry.transferFrom === 'Purchase' && (() => {
+                                                                            let supplyInrDetails = entry.rawVoucher?.supply_inr_details;
+                                                                            if (typeof supplyInrDetails === 'string') {
+                                                                                try { supplyInrDetails = JSON.parse(supplyInrDetails); } catch { supplyInrDetails = {}; }
+                                                                            }
+                                                                            const items = supplyInrDetails?.items || [];
+                                                                            
+                                                                            return items.map((item: any, idx: number) => {
+                                                                                const taxable = parseFloat(item.taxableValue) || 0;
+                                                                                const cgst = parseFloat(item.cgst) || 0;
+                                                                                const sgst = parseFloat(item.sgst) || 0;
+                                                                                const igst = parseFloat(item.igst) || 0;
+                                                                                
+                                                                                const totalGstVal = cgst + sgst + igst;
+                                                                                let gstPct = item.gstPercentage;
+                                                                                if (!gstPct && taxable > 0 && totalGstVal > 0) {
+                                                                                    gstPct = Math.round((totalGstVal / taxable) * 100);
+                                                                                }
+                                                                                
+                                                                                return (
+                                                                                    <React.Fragment key={idx}>
+                                                                                        {taxable > 0 && (
+                                                                                            <tr className="border-b border-gray-50/50">
+                                                                                                <td></td>
+                                                                                                <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-400 italic">
+                                                                                                    {item.itemName || 'Item'} @ GST {gstPct ? `${gstPct}%` : '%'}
+                                                                                                </td>
+                                                                                                <td colSpan={2}></td>
+                                                                                                <td className="px-6 py-3 text-right text-gray-400">-</td>
+                                                                                                <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-600 font-medium">₹{taxable.toLocaleString('en-IN', {minimumFractionDigits: 2})} CR</td>
+                                                                                            </tr>
+                                                                                        )}
+                                                                                        {cgst > 0 && (
+                                                                                            <tr className="border-b border-gray-50/50">
+                                                                                                <td></td>
+                                                                                                <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-400 italic">Output CGST Account</td>
+                                                                                                <td colSpan={2}></td>
+                                                                                                <td className="px-6 py-3 text-right text-gray-400">-</td>
+                                                                                                <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-600 font-medium">₹{cgst.toLocaleString('en-IN', {minimumFractionDigits: 2})} CR</td>
+                                                                                            </tr>
+                                                                                        )}
+                                                                                        {sgst > 0 && (
+                                                                                            <tr className="border-b border-gray-50/50">
+                                                                                                <td></td>
+                                                                                                <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-400 italic">Output SGST Account</td>
+                                                                                                <td colSpan={2}></td>
+                                                                                                <td className="px-6 py-3 text-right text-gray-400">-</td>
+                                                                                                <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-600 font-medium">₹{sgst.toLocaleString('en-IN', {minimumFractionDigits: 2})} CR</td>
+                                                                                            </tr>
+                                                                                        )}
+                                                                                        {igst > 0 && (
+                                                                                            <tr className="border-b border-gray-50/50">
+                                                                                                <td></td>
+                                                                                                <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-400 italic">Output IGST Account</td>
+                                                                                                <td colSpan={2}></td>
+                                                                                                <td className="px-6 py-3 text-right text-gray-400">-</td>
+                                                                                                <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-600 font-medium">₹{igst.toLocaleString('en-IN', {minimumFractionDigits: 2})} CR</td>
+                                                                                            </tr>
+                                                                                        )}
+                                                                                    </React.Fragment>
+                                                                                );
+                                                                            });
+                                                                        })()}
+                                                                        
+                                                                        {entry.transferFrom === 'Purchase' && entry.rawVoucher && (
+                                                                            <React.Fragment>
+                                                                                <tr className="border-b border-gray-50/50">
+                                                                                    <td></td>
+                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-400 italic">
+                                                                                        Net Payable Amount
+                                                                                    </td>
+                                                                                    <td colSpan={2}></td>
+                                                                                    <td className="px-6 py-3 text-right text-gray-400">-</td>
+                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm text-right font-medium text-gray-600">₹{entry.credit} CR</td>
+                                                                                </tr>
+                                                                                <tr className="border-b border-gray-100">
+                                                                                    <td></td>
+                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-indigo-600 font-bold">
+                                                                                        To {entry.rawVoucher.vendor_name || selectedProcurementVendor.name} (Ref: {entry.referenceNo})
+                                                                                    </td>
+                                                                                    <td colSpan={2}></td>
+                                                                                    <td className="px-6 py-3 text-right text-gray-400">-</td>
+                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm text-right font-bold text-indigo-600">₹{entry.credit} CR</td>
+                                                                                </tr>
+                                                                            </React.Fragment>
+                                                                        )}
+
+                                                                        {/* Payment Details */}
+                                                                        {entry.transferFrom === 'Payment' && entry.rawVoucher && (
+                                                                            <React.Fragment>
+                                                                                <tr className="border-b border-gray-50/50">
+                                                                                    <td></td>
+                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-400 italic">
+                                                                                        {entry.rawVoucher.payment_mode === 'Cheque' ? `Cheque` : entry.rawVoucher.payment_mode || 'Cash/Bank'}
+                                                                                    </td>
+                                                                                    <td colSpan={2}></td>
+                                                                                    <td className="px-6 py-3 text-right text-gray-400">-</td>
+                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-600 font-medium">
+                                                                                        ₹{entry.debit} CR
+                                                                                    </td>
+                                                                                </tr>
+                                                                                <tr className="border-b border-gray-100">
+                                                                                    <td></td>
+                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-indigo-600 font-bold">
+                                                                                        To {entry.rawVoucher.vendor_name || selectedProcurementVendor.name} (Agst Ref: {entry.rawVoucher.against_reference || entry.rawVoucher.reference_number || '-'})
+                                                                                    </td>
+                                                                                    <td colSpan={2}></td>
+                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm text-right font-bold text-indigo-600">
+                                                                                        ₹{entry.debit} DR
+                                                                                    </td>
+                                                                                    <td className="px-6 py-3 text-right text-gray-400">-</td>
+                                                                                </tr>
+                                                                            </React.Fragment>
+                                                                        )}
+
+                                                                        {/* Receipt Details */}
+                                                                        {entry.transferFrom === 'Receipt' && entry.rawVoucher && (
+                                                                            <React.Fragment>
+                                                                                <tr className="border-b border-gray-50/50">
+                                                                                    <td></td>
+                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-400 italic">
+                                                                                        {entry.rawVoucher.receipt_mode || 'Cash/Bank'}
+                                                                                    </td>
+                                                                                    <td colSpan={2}></td>
+                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-600 font-medium">
+                                                                                        ₹{entry.credit} DR
+                                                                                    </td>
+                                                                                    <td className="px-6 py-3 text-right text-gray-400">-</td>
+                                                                                </tr>
+                                                                                <tr className="border-b border-gray-100">
+                                                                                    <td></td>
+                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-indigo-600 font-bold">
+                                                                                        From {entry.rawVoucher.vendor_name || selectedProcurementVendor.name} (Agst Ref: {entry.rawVoucher.against_reference || entry.rawVoucher.reference_number || '-'})
+                                                                                    </td>
+                                                                                    <td colSpan={2}></td>
+                                                                                    <td className="px-6 py-3 text-right text-gray-400">-</td>
+                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm text-right font-bold text-indigo-600">
+                                                                                        ₹{entry.credit} CR
+                                                                                    </td>
+                                                                                </tr>
+                                                                            </React.Fragment>
+                                                                        )}
+                                                                    </React.Fragment>
+                                                                ))}
+                                                                {filteredLedgerData.length === 0 && (
+                                                                    <tr>
+                                                                        <td colSpan={6} className="px-6 py-8 text-center text-sm text-gray-500 border-b border-slate-200">
+                                                                            No journal entries found matching criteria.
+                                                                        </td>
+                                                                    </tr>
+                                                                )}
+                                                            </tbody>
                                                         </table>
                                                     </div>
                                                 </div>
@@ -4982,6 +5553,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                 )}
                                                             </div>
                                                             <button
+                                                                onClick={() => setProcurementViewMode('journal')}
+                                                                className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
+                                                            >
+                                                                Journal View
+                                                            </button>
+                                                            <button
                                                                 onClick={() => setProcurementViewMode('ledger')}
                                                                 className="px-4 py-2 bg-white border border-gray-300 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
                                                             >
@@ -4996,44 +5573,57 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         const totalMonthCredit = filteredMonthData.reduce((sum, entry) => sum + (entry.credit !== '-' ? parseFloat(entry.credit.replace(/,/g, '')) : 0), 0);
 
                                                         return (
-                                                            <table className="erp-table min-w-full">
-                                                                <thead className="bg-gray-50">
-                                                                    <tr>
-                                                                        <th className="px-6 py-3 text-left text-base font-medium text-gray-700">Month</th>
-                                                                        <th className="px-6 py-3 text-left text-base font-medium text-gray-700">Debit</th>
-                                                                        <th className="px-6 py-3 text-left text-base font-medium text-gray-700">Credit</th>
-                                                                        <th className="px-6 py-3 text-left text-base font-medium text-gray-700">Closing Balance</th>
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody className="bg-white divide-y divide-gray-200">
-                                                                    {filteredMonthData.map((entry, idx) => (
-                                                                        <tr
-                                                                            key={idx}
-                                                                            className="hover:bg-indigo-50 transition-colors cursor-pointer group"
-                                                                            onClick={() => handleMonthRowClick(entry.month)}
-                                                                            title={`Click to view ${entry.month} transactions in Bill-wise View`}
-                                                                        >
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-lg font-medium text-indigo-700 group-hover:underline">{entry.month}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-base text-gray-500">{entry.debit !== '-' ? `₹${entry.debit}` : '-'}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-base text-gray-500">{entry.credit !== '-' ? `₹${entry.credit}` : '-'}</td>
-                                                                            <td className="px-6 py-4 whitespace-nowrap text-base font-bold text-gray-900">
-                                                                                <span className="flex items-center gap-2">
-                                                                                    {entry.closingBalance !== '-' ? `₹${entry.closingBalance}` : '-'}
-                                                                                    <svg className="w-4 h-4 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                                                                                </span>
-                                                                            </td>
+                                                            <div className="overflow-x-auto">
+                                                                <table className="min-w-full divide-y divide-gray-200">
+                                                                    <thead className="bg-[#F8F9FA]">
+                                                                        <tr>
+                                                                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider w-1/4">MONTH</th>
+                                                                            <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider w-1/4">DEBIT</th>
+                                                                            <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider w-1/4">CREDIT</th>
+                                                                            <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider w-1/4">CLOSING BALANCE</th>
                                                                         </tr>
-                                                                    ))}
-                                                                </tbody>
-                                                                <tfoot className="bg-gray-50 font-bold border-t-2 border-slate-300">
-                                                                    <tr>
-                                                                        <td className="px-6 py-4 text-left text-lg text-blue-600">Total</td>
-                                                                        <td className="px-6 py-4 text-blue-600">₹{totalMonthDebit.toLocaleString('en-IN')}</td>
-                                                                        <td className="px-6 py-4 text-blue-600">₹{totalMonthCredit.toLocaleString('en-IN')}</td>
-                                                                        <td className="px-6 py-4"></td>
-                                                                    </tr>
-                                                                </tfoot>
-                                                            </table>
+                                                                    </thead>
+                                                                    <tbody className="bg-white divide-y divide-gray-100">
+                                                                        {filteredMonthData.map((entry, index) => {
+                                                                            const rawBalance = entry.closingBalance !== '-' ? parseFloat(entry.closingBalance.replace(/,/g, '')) : 0;
+                                                                            return (
+                                                                                <tr
+                                                                                    key={index}
+                                                                                    onClick={() => handleMonthRowClick(entry.month)}
+                                                                                    className="hover:bg-indigo-50 transition-colors group cursor-pointer"
+                                                                                >
+                                                                                    <td className="px-6 py-5 whitespace-nowrap text-sm font-bold text-gray-700 group-hover:text-indigo-600">{entry.month}</td>
+                                                                                    <td className="px-6 py-5 whitespace-nowrap text-sm text-right text-gray-600 font-medium">{entry.debit !== '-' ? `₹${entry.debit}` : '-'}</td>
+                                                                                    <td className="px-6 py-5 whitespace-nowrap text-sm text-right text-gray-600 font-medium">{entry.credit !== '-' ? `₹${entry.credit}` : '-'}</td>
+                                                                                    <td className="px-6 py-5 whitespace-nowrap text-sm text-right font-bold text-gray-900">
+                                                                                        {entry.closingBalance !== '-' ? (
+                                                                                            <>
+                                                                                                ₹{Math.abs(rawBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                                                                <span className="ml-1 text-gray-500 text-xs font-normal">
+                                                                                                    {rawBalance >= 0 ? 'Dr' : 'Cr'}
+                                                                                                </span>
+                                                                                            </>
+                                                                                        ) : '-'}
+                                                                                    </td>
+                                                                                </tr>
+                                                                            );
+                                                                        })}
+                                                                        {filteredMonthData.length === 0 && (
+                                                                            <tr>
+                                                                                <td colSpan={4} className="px-6 py-8 text-center text-gray-500 text-sm">No matching months found</td>
+                                                                            </tr>
+                                                                        )}
+                                                                    </tbody>
+                                                                    <tfoot className="bg-[#F8F9FA]">
+                                                                        <tr>
+                                                                            <td className="px-6 py-5 text-sm font-bold text-gray-500 text-center tracking-wide">TOTAL</td>
+                                                                            <td className="px-6 py-5 whitespace-nowrap text-sm text-right font-bold text-gray-900">₹{totalMonthDebit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                                            <td className="px-6 py-5 whitespace-nowrap text-sm text-right font-bold text-gray-900">₹{totalMonthCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                                            <td className="px-6 py-5 whitespace-nowrap text-sm text-right"></td>
+                                                                        </tr>
+                                                                    </tfoot>
+                                                                </table>
+                                                            </div>
                                                         );
                                                     })()}
                                                 </div>
@@ -5052,38 +5642,50 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 <p className="helper-text mt-1">Select a procurement category to manage payments.</p>
                                             </div>
 
-                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                                {(categories.length > 0
-                                                    ? categories.filter(c => c.is_active).map(c => ({ name: c.category, desc: `Manage ${c.category.toLowerCase()} procurement` }))
-                                                    : VENDOR_SYSTEM_CATEGORIES.map(name => ({ name, desc: `Manage ${name.toLowerCase()} procurement` }))
-                                                ).map((item) => {
-                                                    const totalPendingAmount = paymentBills
-                                                        .filter(bill => bill.status !== 'Posted' && bill.category === item.name)
-                                                        .reduce((sum, bill) => {
-                                                            const amount = parseFloat(bill.amount.replace(/[^0-9.-]+/g, ""));
-                                                            return sum + amount;
-                                                        }, 0);
-                                                    const formattedTotal = totalPendingAmount.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
-                                                    return (
-                                                        <button
-                                                            key={item.name}
-                                                            onClick={() => setActivePaymentSubTab(item.name as ProcurementSubTab)}
-                                                            className="p-6 border-2 border-gray-200 rounded-[4px] hover:border-indigo-500 transition-all duration-200 text-left group bg-white"
-                                                        >
-                                                            <div className="flex justify-between items-end">
-                                                                <div>
-                                                                    <h3 className="text-lg font-bold text-gray-800 group-hover:text-indigo-600 transition-colors">{item.name}</h3>
-                                                                    <p className="text-sm text-gray-500 mt-1">{item.desc}</p>
-                                                                </div>
-                                                                <div className="text-right">
-                                                                    <p className="text-lg font-bold text-gray-800">{formattedTotal}</p>
-                                                                    <p className="text-xs text-red-600 font-semibold mt-1">Credit</p>
-                                                                </div>
-                                                            </div>
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
+                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                                 {(categories.length > 0
+                                                     ? categories.filter(c => c.is_active).map(c => ({ name: c.category, desc: `Manage ${c.category.toLowerCase()} payments` }))
+                                                     : VENDOR_SYSTEM_CATEGORIES.map(name => ({ name, desc: `Manage ${name.toLowerCase()} payments` }))
+                                                 ).map((item) => {
+                                                     const pendingBillsList = paymentBills.filter(bill => bill.status !== 'Posted' && bill.category === item.name);
+                                                     const totalPendingAmount = pendingBillsList.reduce((sum, bill) => {
+                                                         const amount = parseFloat(bill.amount.replace(/[^0-9.-]+/g, ""));
+                                                         return sum + amount;
+                                                     }, 0);
+                                                     const formattedTotal = totalPendingAmount.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
+                                                     
+                                                     return (
+                                                         <div
+                                                             key={item.name}
+                                                             onClick={() => setActivePaymentSubTab(item.name as ProcurementSubTab)}
+                                                             className="bg-white p-6 rounded-[4px] border border-gray-200 hover:border-indigo-500 hover:shadow-md cursor-pointer transition-all group"
+                                                         >
+                                                             <div className="flex items-center justify-between mb-4">
+                                                                 <div className="p-3 rounded-[4px] bg-red-50 text-red-600 group-hover:bg-red-600 group-hover:text-white transition-colors">
+                                                                     <Filter className="w-6 h-6" />
+                                                                 </div>
+                                                                 <div className="flex items-center gap-2">
+                                                                     <div className="text-right mr-2">
+                                                                         <p className="text-lg font-bold text-gray-800">{pendingBillsList.length}</p>
+                                                                         <p className="text-[10px] text-red-600 font-semibold uppercase tracking-wider">Unpaid</p>
+                                                                     </div>
+                                                                     <ChevronLeft className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transform rotate-180 transition-all opacity-0 group-hover:opacity-100" />
+                                                                 </div>
+                                                             </div>
+                                                             <div className="flex justify-between items-end">
+                                                                 <div>
+                                                                     <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{item.name}</h3>
+                                                                     <p className="text-sm text-gray-500 mt-2">{item.desc}</p>
+                                                                 </div>
+                                                                 <div className="text-right">
+                                                                     <p className="text-lg font-bold text-gray-900">{formattedTotal}</p>
+                                                                     <p className="text-[10px] text-red-600 font-bold uppercase tracking-wider">Payable</p>
+                                                                 </div>
+                                                             </div>
+                                                         </div>
+                                                     );
+                                                 })}
+                                             </div>
                                         </div>
                                     ) : selectedVoucherForView ? (
                                         /* ───────── INLINE VOUCHER DETAIL VIEW ───────── */
@@ -5287,75 +5889,124 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         </div>
                                     ) : (
                                         /* ───────── TRANSACTION LIST ───────── */
-                                        <div>
-                                            <div className="flex items-center justify-between mb-6">
-                                                <div>
-                                                    <div className="flex items-center space-x-2 text-sm text-gray-500 mb-1">
-                                                        <button onClick={() => setActivePaymentSubTab('Dashboard')} className="hover:text-indigo-600 hover:underline">
-                                                            Payment
-                                                        </button>
-                                                        <span>/</span>
-                                                        <span className="text-indigo-600 font-medium">{activePaymentSubTab}</span>
-                                                    </div>
-                                                    <h2 className="text-2xl font-bold text-gray-800">{activePaymentSubTab}</h2>
-                                                    <p className="helper-text">Manage {activePaymentSubTab.toLowerCase()} payments here.</p>
-                                                </div>
-                                                <button
-                                                    onClick={() => setActivePaymentSubTab('Dashboard')}
-                                                    className="px-4 py-2 border border-slate-200 rounded-[4px] text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                                                >
-                                                    Back to Dashboard
-                                                </button>
-                                            </div>
-
-                                            {/* Sort Controls */}
-                                            <div className="mb-4 flex justify-end">
-                                                <select
-                                                    value={paymentSortOrder}
-                                                    onChange={(e) => setPaymentSortOrder(e.target.value as 'recent' | 'earliest')}
-                                                    className="px-4 py-2 border border-slate-200 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                >
-                                                    <option value="recent">Recent bills on top</option>
-                                                    <option value="earliest">Earliest bills on top</option>
-                                                </select>
-                                            </div>
+                                         <div>
+                                             <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+                                                 <div className="flex items-center gap-4">
+                                                     <button
+                                                         onClick={() => { setActivePaymentSubTab('Dashboard'); setSelectedVoucherForView(null); }}
+                                                         className="p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
+                                                         title="Back to Dashboard"
+                                                     >
+                                                         <ChevronLeft className="w-5 h-5 text-gray-600" />
+                                                     </button>
+                                                     <div>
+                                                         <div className="flex items-center space-x-2 text-xs text-gray-400 mb-1 uppercase tracking-widest font-semibold">
+                                                             <span>Payment</span>
+                                                             <span className="text-gray-300">/</span>
+                                                             <span className="text-indigo-500 font-bold">{activePaymentSubTab}</span>
+                                                         </div>
+                                                         <h3 className="text-xl font-bold text-gray-900">{activePaymentSubTab}</h3>
+                                                     </div>
+                                                 </div>
+                                                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                                                     <div className="relative group min-w-[280px]">
+                                                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+                                                         <input
+                                                             type="text"
+                                                             placeholder={`Search in ${activePaymentSubTab}...`}
+                                                             value={paymentSearchTerm}
+                                                             onChange={(e) => setPaymentSearchTerm(e.target.value)}
+                                                             className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all shadow-sm"
+                                                         />
+                                                         {paymentSearchTerm && (
+                                                             <button
+                                                                 onClick={() => setPaymentSearchTerm('')}
+                                                                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                                             >
+                                                                 <X className="w-3 h-3" />
+                                                             </button>
+                                                         )}
+                                                     </div>
+                                                     <select
+                                                         value={paymentSortOrder}
+                                                         onChange={(e) => setPaymentSortOrder(e.target.value as 'recent' | 'earliest')}
+                                                         className="px-4 py-2 bg-white border border-slate-200 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+                                                     >
+                                                         <option value="recent">Recent First</option>
+                                                         <option value="earliest">Earliest First</option>
+                                                     </select>
+                                                 </div>
+                                             </div>
 
                                             {/* Payment Bills Table */}
                                             <div className="erp-card border border-slate-200 overflow-hidden">
                                                 <div className="overflow-x-auto">
                                                     <table className="erp-table min-w-full">
-                                                        <thead className="bg-gray-50">
+                                                        <thead className="bg-[#F8F9FA]">
                                                             <tr>
                                                                 {[
-                                                                    { label: 'Date', key: 'date' },
-                                                                    { label: 'Vendor Reference Name', key: 'vendorReferenceName' },
-                                                                    { label: 'Voucher No', key: 'voucherNo' },
-                                                                    { label: 'Supplier Invoice No.', key: 'supplierInvoiceNo' },
-                                                                    { label: 'Amount', key: 'amount' },
-                                                                    { label: 'Approve', key: 'approve' },
-                                                                    { label: 'Action', key: 'action' },
-                                                                    { label: 'Status', key: 'status' },
-                                                                    { label: 'View', key: 'view' }
+                                                                    { label: 'DATE', key: 'date', width: '120px' },
+                                                                    { label: 'VENDOR REFERENCE NAME', key: 'vendorReferenceName' },
+                                                                    { label: 'VOUCHER NO', key: 'voucherNo', width: '140px' },
+                                                                    { label: 'SUPPLIER INVOICE NO.', key: 'supplierInvoiceNo', width: '150px' },
+                                                                    { label: 'AMOUNT', key: 'amount', width: '130px' },
+                                                                    { label: 'APPROVE', key: 'approve', width: '100px' },
+                                                                    { label: 'ACTION', key: 'action', width: '140px' },
+                                                                    { label: 'STATUS', key: 'status', width: '120px' },
+                                                                    { label: 'VIEW', key: 'view', width: '60px' }
                                                                 ].map((header) => (
-                                                                    <th key={header.key} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider align-top">
-                                                                        <div className="mb-2">{header.label}</div>
-                                                                        {!['approve', 'action', 'view'].includes(header.key) && (
-                                                                            <input
-                                                                                type="text"
-                                                                                placeholder={`Filter ${header.label}`}
-                                                                                value={paymentBillFilters[header.key as keyof typeof paymentBillFilters] || ''}
-                                                                                onChange={(e) => setPaymentBillFilters({ ...paymentBillFilters, [header.key]: e.target.value })}
-                                                                                className="block w-full text-xs border-gray-300 rounded-[4px] shadow-none border border-slate-200 focus:border-indigo-500 focus:ring-indigo-500 py-1 px-2"
-                                                                            />
-                                                                        )}
+                                                                    <th key={header.key} className="px-6 py-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest bg-[#F8F9FA] sticky top-0 z-10" style={{ width: header.width }}>
+                                                                        <div className="flex items-center justify-between group">
+                                                                            <span>{header.label}</span>
+                                                                            {!['approve', 'action', 'view'].includes(header.key) && (
+                                                                                <div className="relative">
+                                                                                    <button
+                                                                                        onClick={() => toggleFilter(`pay-${header.key}`)}
+                                                                                        className={`p-1 rounded hover:bg-gray-200 transition-colors ${paymentBillFilters[header.key as keyof typeof paymentBillFilters] ? 'text-indigo-600 bg-indigo-50' : 'text-gray-300'}`}
+                                                                                    >
+                                                                                        <Filter className="w-3 h-3" />
+                                                                                    </button>
+                                                                                    {activeFilter === `pay-${header.key}` && (
+                                                                                        <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-xl z-50 p-2 normal-case tracking-normal">
+                                                                                            <input
+                                                                                                autoFocus
+                                                                                                type={header.key === 'date' ? 'date' : 'text'}
+                                                                                                className="w-full px-2 py-1 text-xs text-gray-700 border border-gray-200 rounded focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+                                                                                                placeholder={`Filter ${header.label}...`}
+                                                                                                value={paymentBillFilters[header.key as keyof typeof paymentBillFilters] || ''}
+                                                                                                onChange={(e) => setPaymentBillFilters({ ...paymentBillFilters, [header.key]: e.target.value })}
+                                                                                            />
+                                                                                            {header.key === 'date' && paymentBillFilters.date && (
+                                                                                                <button
+                                                                                                    onClick={() => setPaymentBillFilters({ ...paymentBillFilters, date: '' })}
+                                                                                                    className="mt-2 w-full text-[10px] text-gray-500 hover:text-red-500 uppercase tracking-wider font-bold text-center border-t border-gray-100 pt-1"
+                                                                                                >
+                                                                                                    Clear Date
+                                                                                                </button>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
                                                                     </th>
                                                                 ))}
                                                             </tr>
                                                         </thead>
-                                                        <tbody className="bg-white divide-y divide-gray-200">
+                                                        <tbody className="bg-white divide-y divide-gray-100">
                                                             {[...paymentBills]
                                                                 .filter(bill => {
                                                                     if (bill.status === 'Posted' || bill.category !== activePaymentSubTab) return false;
+                                                                    
+                                                                    if (paymentSearchTerm) {
+                                                                        const st = paymentSearchTerm.toLowerCase();
+                                                                        const matchesSearch = 
+                                                                            bill.vendorReferenceName.toLowerCase().includes(st) ||
+                                                                            bill.voucherNo.toLowerCase().includes(st) ||
+                                                                            bill.supplierInvoiceNo.toLowerCase().includes(st);
+                                                                        if (!matchesSearch) return false;
+                                                                    }
+
                                                                     const matchesDate = bill.date.toLowerCase().includes(paymentBillFilters.date.toLowerCase());
                                                                     const matchesVendor = bill.vendorReferenceName.toLowerCase().includes(paymentBillFilters.vendorReferenceName.toLowerCase());
                                                                     const matchesVoucher = bill.voucherNo.toLowerCase().includes(paymentBillFilters.voucherNo.toLowerCase());
@@ -5435,7 +6086,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                 {bill.actionLog && bill.actionLog.length > 0 && (
                                                                                     <button
                                                                                         onClick={() => {
-                                                                                            const logMessages = bill.actionLog?.map(log => `${log.action} by ${log.user} on ${log.date}`).join('\n');
+                                                                                            const logMessages = bill.actionLog?.map(log => `${log.action} by ${log.user} on ${formatDate(log.date)}`).join('\n');
                                                                                             showInfo(`Action History:\n\n${logMessages}`);
                                                                                         }}
                                                                                         className="text-gray-500 hover:text-indigo-600 focus:outline-none transition-colors"
@@ -6047,7 +6698,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                         </div>
                                                         <div>
                                                             <label className="block text-sm font-semibold text-gray-700 mb-1">PO Date</label>
-                                                            <p className="text-gray-900">{selectedPO.poDate}</p>
+                                                            <p className="text-gray-900">{formatDate(selectedPO.poDate)}</p>
                                                         </div>
                                                         <div>
                                                             <label className="block text-sm font-semibold text-gray-700 mb-1">Status</label>
