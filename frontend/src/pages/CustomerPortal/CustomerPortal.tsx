@@ -14,8 +14,9 @@ import SalesQuotationList from './SalesQuotationList';
 import CreateSalesOrder from './CreateSalesOrder';
 import SalesOrderList from './SalesOrderList';
 import SalesOrderViewModal from './SalesOrderViewModal';
-import { Eye, Mail, Filter, ChevronLeft, ChevronDown, X, Calendar, Pencil, Trash2, Search } from 'lucide-react';
+import { Eye, Mail, Filter, ChevronLeft, ChevronDown, X, Calendar, Pencil, Trash2, Search, FileText, ArrowLeft, Receipt } from 'lucide-react';
 import CustomerViewModal from './CustomerViewModal';
+import SalesGSTViewModal from './SalesGSTViewModal';
 
 type MainTab = 'Master' | 'Transaction';
 type MasterSubTab = 'Category' | 'Sales Quotation & Order' | 'Customer' | 'Long-term Contracts';
@@ -51,6 +52,7 @@ interface LedgerEntry {
     credit: number;
     runningBalance: number;
     posting_status?: string;
+    originalInv?: any; // Added to store full invoice details for detailed view
 }
 
 interface Category {
@@ -4260,7 +4262,7 @@ function ReceiptContent() {
             console.log('DEBUG: Fetching due invoices from /api/voucher-sales-new/');
             const data = await httpClient.get<any[]>('/api/voucher-sales-new/');
             console.log('DEBUG: Received invoices:', data);
-            
+
             if (!Array.isArray(data)) {
                 console.error('DEBUG: Expected array from /api/voucher-sales-new/, got:', data);
                 setReceipts([]);
@@ -4367,7 +4369,7 @@ function ReceiptContent() {
                 ...postFormData,
                 amount: selectedReceipt.amount
             });
-            
+
             showSuccess('Receipt posted successfully!');
             handleCloseModal();
             // Refresh the list - the posted invoice should now be excluded by backend get_queryset
@@ -4498,29 +4500,29 @@ function ReceiptContent() {
                                 </tr>
                             ) : (
                                 filteredReceipts.map((receipt) => (
-                                <tr key={receipt.id} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        {receipt.date}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        {receipt.customerRefName}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                        {receipt.voucherNo}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        ₹{receipt.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                        <button
-                                            onClick={() => handlePostClick(receipt)}
-                                            className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-[4px] hover:bg-indigo-700 transition-colors"
-                                        >
-                                            Post
-                                        </button>
-                                    </td>
-                                </tr>
-                            )))}
+                                    <tr key={receipt.id} className="hover:bg-gray-50">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {receipt.date}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {receipt.customerRefName}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                            {receipt.voucherNo}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            ₹{receipt.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                            <button
+                                                onClick={() => handlePostClick(receipt)}
+                                                className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-[4px] hover:bg-indigo-700 transition-colors"
+                                            >
+                                                Post
+                                            </button>
+                                        </td>
+                                    </tr>
+                                )))}
                         </tbody>
                     </table>
                 </div>
@@ -4737,8 +4739,8 @@ const EditNetOffPage: React.FC<EditNetOffPageProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-50 bg-gray-100 flex flex-col overflow-auto">
-            <div className="max-w-6xl mx-auto w-full p-8 space-y-8">
+        <div className="bg-gray-50 flex flex-col overflow-auto rounded-[4px] min-h-[500px] animate-fadeIn">
+            <div className="w-full space-y-8">
                 {/* Top Summary Bar */}
                 <div className="bg-white rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 border border-gray-200 px-8 py-6 flex justify-between items-center">
                     <div className="text-gray-600 font-medium">Add amounts for net-off</div>
@@ -5098,7 +5100,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
     const isNextEnabled = selectedPurchase.length > 0 || selectedSales.length > 0;
 
     return (
-        <div className="fixed inset-0 z-50 bg-white flex flex-col">
+        <div className="bg-white flex flex-col rounded-[4px] min-h-[500px] animate-fadeIn">
             <div className="flex-1 flex flex-col h-full overflow-hidden">
                 {/* Header */}
                 <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
@@ -5537,6 +5539,9 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
     const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [isGSTModalOpen, setIsGSTModalOpen] = useState(false);
+    const [isJournalView, setIsJournalView] = useState(false);
+    const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null);
 
     const toggleFilter = (filterName: string) => setActiveFilter(prev => prev === filterName ? null : filterName);
 
@@ -5548,7 +5553,7 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                 const data = await httpClient.get<any[]>(`/api/voucher-sales-new/`);
                 const customerInvoices = data.filter(inv => inv.customer_id?.toString() === customer.id?.toString());
                 const entries: LedgerEntry[] = customerInvoices.map((inv: any) => ({
-                    id: `inv-${inv.id}`,
+                    id: inv.id.toString(),
                     date: inv.date,
                     postFrom: 'Sales' as TransactionType,
                     ledger: inv.sales_invoice_no,
@@ -5556,7 +5561,8 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                     debit: parseFloat(inv.payment_details?.payment_payable || 0),
                     credit: 0,
                     runningBalance: 0,
-                    posting_status: inv.posting_status
+                    posting_status: inv.posting_status,
+                    originalInv: inv
                 }));
                 setLedgerEntries(entries);
             } catch (err: any) {
@@ -5587,15 +5593,54 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
     }
 
     const monthLedgerData: MonthLedgerEntry[] = useMemo(() => {
-        const months: Record<string, { debit: number; credit: number }> = {};
-        processedEntries.forEach(entry => {
-            const monthName = new Date(entry.date).toLocaleString('default', { month: 'long', year: 'numeric' });
-            if (!months[monthName]) months[monthName] = { debit: 0, credit: 0 };
-            months[monthName].debit += entry.debit;
-            months[monthName].credit += entry.credit;
+        const monthsMap: Record<string, { debit: number; credit: number }> = {};
+        
+        // Determine the relevant financial year
+        // If data exists, use the latest entry as reference, else current year
+        const latestDate = processedEntries.length > 0 
+            ? new Date(processedEntries[processedEntries.length - 1].date) 
+            : new Date();
+        
+        let startYear = latestDate.getFullYear();
+        if (latestDate.getMonth() < 3) { // If Jan-Mar, start year of FY is previous year
+            startYear -= 1;
+        }
+
+        const monthsOrder = [
+            'April', 'May', 'June', 'July', 'August', 'September', 
+            'October', 'November', 'December', 'January', 'February', 'March'
+        ];
+
+        // Pre-populate all 12 months of the Financial Year
+        const monthsToDisplay: string[] = [];
+        monthsOrder.forEach((m, idx) => {
+            const yr = idx < 9 ? startYear : startYear + 1;
+            const key = `${m} ${yr}`;
+            monthsToDisplay.push(key);
+            monthsMap[key] = { debit: 0, credit: 0 };
         });
+
+        // Add actual data
+        processedEntries.forEach(entry => {
+            const mKey = new Date(entry.date).toLocaleString('default', { month: 'long', year: 'numeric' });
+            if (monthsMap[mKey]) {
+                monthsMap[mKey].debit += entry.debit;
+                monthsMap[mKey].credit += entry.credit;
+            } else {
+                // If entry is outside our pre-populated FY, add it anyway
+                monthsMap[mKey] = { debit: entry.debit, credit: entry.credit };
+                monthsToDisplay.push(mKey);
+            }
+        });
+
+        // Sort unique months chronologically
+        const sortedDisplay = Array.from(new Set(monthsToDisplay)).sort((a, b) => {
+            return new Date(a).getTime() - new Date(b).getTime();
+        });
+
         let cumulativeBalance = 0;
-        return Object.entries(months).map(([month, data]) => {
+        return sortedDisplay.map(month => {
+            const data = monthsMap[month];
             cumulativeBalance += data.debit - data.credit;
             return { month, debit: data.debit, credit: data.credit, closingBalance: cumulativeBalance };
         });
@@ -5610,6 +5655,10 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
             setSelectedMonthView(month);
             setViewMode('invoice-wise');
         }
+    };
+
+    const handleRowClick = (transactionId: string) => {
+        setSelectedTransactionId(transactionId);
     };
 
     const formatCurrency = (amount: number): string => amount === 0 ? '-' : `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
@@ -5697,316 +5746,502 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
 
     return (
         <div className="text-left">
-            <div className="flex justify-between items-center mb-6">
-                <button onClick={onBack} className="flex items-center text-gray-600 hover:text-gray-900 transition-colors">
-                    <ChevronLeft className="w-5 h-5 mr-1" />
-                    <span className="text-lg font-medium">{customer.name}</span>
-                </button>
-                <div className="flex gap-3">
-                    {viewMode === 'month-wise' && (
-                        <div className="relative month-dropdown-container">
-                            <button
-                                onClick={() => setShowMonthDropdown(!showMonthDropdown)}
-                                className="pl-3 pr-8 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-48 bg-white cursor-pointer text-left"
-                            >
-                                {monthFilter.length === 0 ? 'Select Month' : `${monthFilter.length} month(s) selected`}
-                            </button>
-                            <ChevronDown className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none" />
-
-                            {showMonthDropdown && (
-                                <div className="absolute z-50 top-full mt-1 w-48 bg-white border border-gray-300 rounded-[4px] shadow-lg max-h-64 overflow-y-auto">
-                                    <div className="p-2">
-                                        <label className="flex items-center px-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={monthFilter.length === monthLedgerData.length}
-                                                onChange={(e) => {
-                                                    if (e.target.checked) {
-                                                        setMonthFilter(monthLedgerData.map(m => m.month));
-                                                    } else {
-                                                        setMonthFilter([]);
-                                                    }
-                                                }}
-                                                className="mr-2 rounded text-indigo-600 focus:ring-indigo-500"
-                                            />
-                                            <span className="text-sm font-medium">Select All</span>
-                                        </label>
-                                        <div className="border-t border-gray-200 my-1"></div>
-                                        {monthLedgerData.map((entry, index) => (
-                                            <label key={index} className="flex items-center px-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={monthFilter.includes(entry.month)}
-                                                    onChange={(e) => {
-                                                        if (e.target.checked) {
-                                                            setMonthFilter([...monthFilter, entry.month]);
-                                                        } else {
-                                                            setMonthFilter(monthFilter.filter(m => m !== entry.month));
-                                                        }
-                                                    }}
-                                                    className="mr-2 rounded text-indigo-600 focus:ring-indigo-500"
-                                                />
-                                                <span className="text-sm">{entry.month}</span>
-                                            </label>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                    {customer.is_also_vendor && (
-                        <button
-                            onClick={() => setShowNetOffModal(true)}
-                            className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-[4px] hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                        >
-                            Net Off
-                        </button>
-                    )}
-                    <button
-                        onClick={() => {
-                            if (selectedMonthView) {
-                                setDateFilter({ start: '', end: '' });
-                                setSelectedMonthView(null);
-                                setViewMode('month-wise');
-                            } else {
-                                setViewMode(viewMode === 'invoice-wise' ? 'month-wise' : 'invoice-wise');
-                            }
-                        }}
-                        className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-[4px] hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 min-w-[140px]"
-                    >
-                        {selectedMonthView ? 'Back' : (viewMode === 'invoice-wise' ? 'Month View' : 'Invoice-wise view')}
-                    </button>
-                </div>
-            </div>
-
-            {viewMode === 'month-wise' ? (
-                <MonthLedgerView />
-            ) : (
-                isLoading ? (
-                    <div className="flex flex-col items-center justify-center py-20 bg-white rounded-xl shadow-sm border border-gray-100">
-                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600 mb-4"></div>
-                        <p className="text-gray-500">Loading ledger entries...</p>
-                    </div>
-                ) : error ? (
-                    <div className="flex flex-col items-center justify-center py-20 bg-white rounded-xl shadow-sm border border-red-100">
-                        <div className="bg-red-50 p-4 rounded-full mb-4">
-                            <X className="w-8 h-8 text-red-500" />
-                        </div>
-                        <h3 className="text-lg font-semibold text-gray-900 mb-2">Failed to Load Ledger</h3>
-                        <p className="text-gray-500 mb-6 max-w-md text-center">{error}</p>
-                        <button
-                            onClick={() => window.location.reload()}
-                            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-                        >
-                            Retry Connection
-                        </button>
-                    </div>
-                ) : (
-                    <div className="bg-white border border-gray-200 rounded-[4px] overflow-hidden">
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-gray-50 sticky top-0">
-                                    <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
-                                            <div className="flex items-center justify-between relative">
-                                                <span>Date</span>
-                                                <div className="ml-2">
-                                                    <Filter
-                                                        className={`w-4 h-4 cursor-pointer ${activeFilter === 'date' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
-                                                        onClick={() => toggleFilter('date')}
-                                                    />
-                                                    {activeFilter === 'date' && (
-                                                        <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-52">
-                                                            <div className="flex justify-between items-center mb-2">
-                                                                <span className="text-xs font-semibold">Filter Date</span>
-                                                                <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
-                                                            </div>
-                                                            <div className="space-y-2">
-                                                                <div>
-                                                                    <label className="text-[10px] text-gray-500 block mb-1">Start Date</label>
-                                                                    <input type="date" value={dateFilter.start} onChange={(e) => setDateFilter({ ...dateFilter, start: e.target.value })} max={new Date().toISOString().split('T')[0]} className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500" />
-                                                                </div>
-                                                                <div>
-                                                                    <label className="text-[10px] text-gray-500 block mb-1">End Date</label>
-                                                                    <input type="date" value={dateFilter.end} onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })} max={new Date().toISOString().split('T')[0]} className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500" />
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
-                                            <div className="flex items-center justify-between relative">
-                                                <span>Post From</span>
-                                                <div className="ml-2">
-                                                    <Filter
-                                                        className={`w-4 h-4 cursor-pointer ${activeFilter === 'postFrom' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
-                                                        onClick={() => toggleFilter('postFrom')}
-                                                    />
-                                                    {activeFilter === 'postFrom' && (
-                                                        <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-48">
-                                                            <div className="flex justify-between items-center mb-2">
-                                                                <span className="text-xs font-semibold">Filter Type</span>
-                                                                <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
-                                                            </div>
-                                                            <select value={postFromFilter} onChange={(e) => setPostFromFilter(e.target.value as TransactionType | '')} className="w-full px-2 py-1.5 text-xs border rounded focus:ring-1 focus:ring-indigo-500">
-                                                                <option value="">All Types</option>
-                                                                {postFromOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                                            </select>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
-                                            <div className="flex items-center justify-between relative">
-                                                <span>Ledger</span>
-                                                <div className="ml-2">
-                                                    <Filter
-                                                        className={`w-4 h-4 cursor-pointer ${activeFilter === 'ledger' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
-                                                        onClick={() => toggleFilter('ledger')}
-                                                    />
-                                                    {activeFilter === 'ledger' && (
-                                                        <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-52">
-                                                            <div className="flex justify-between items-center mb-2">
-                                                                <span className="text-xs font-semibold">Search Ledger</span>
-                                                                <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
-                                                            </div>
-                                                            <div className="relative">
-                                                                <input type="text" value={ledgerFilter} onChange={(e) => setLedgerFilter(e.target.value)} placeholder="Search..." className="w-full pl-7 pr-2 py-1.5 text-xs border rounded focus:ring-1 focus:ring-indigo-500" autoFocus />
-                                                                <Search className="w-3 h-3 text-gray-400 absolute left-2 top-1/2 transform -translate-y-1/2" />
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
-                                            <div className="flex items-center justify-between relative">
-                                                <span>Status</span>
-                                                <div className="ml-2">
-                                                    <Filter
-                                                        className={`w-4 h-4 cursor-pointer ${activeFilter === 'status' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
-                                                        onClick={() => toggleFilter('status')}
-                                                    />
-                                                    {activeFilter === 'status' && (
-                                                        <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-48">
-                                                            <div className="flex justify-between items-center mb-2">
-                                                                <span className="text-xs font-semibold">Filter Status</span>
-                                                                <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
-                                                            </div>
-                                                            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as PurchaseStatus | SalesStatus | '')} className="w-full px-2 py-1.5 text-xs border rounded focus:ring-1 focus:ring-indigo-500">
-                                                                <option value="">All Statuses</option>
-                                                                {statusOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                                            </select>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">Posting Status</th>
-                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
-                                            <div className="flex items-center justify-end relative">
-                                                <span>Debit</span>
-                                                <div className="ml-2">
-                                                    <Filter
-                                                        className={`w-4 h-4 cursor-pointer ${activeFilter === 'debit' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
-                                                        onClick={() => toggleFilter('debit')}
-                                                    />
-                                                    {activeFilter === 'debit' && (
-                                                        <div className="absolute z-50 top-8 right-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-40">
-                                                            <div className="flex justify-between items-center mb-2">
-                                                                <span className="text-xs font-semibold">Filter Debit</span>
-                                                                <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
-                                                            </div>
-                                                            <label className="flex items-center text-xs cursor-pointer p-1 hover:bg-gray-50 rounded">
-                                                                <input type="checkbox" checked={!!debitFilter} onChange={(e) => setDebitFilter(e.target.checked ? 'show' : '')} className="mr-2 rounded text-indigo-600 focus:ring-indigo-500" />
-                                                                Show Debits Only
-                                                            </label>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </th>
-                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
-                                            <div className="flex items-center justify-end relative">
-                                                <span>Credit</span>
-                                                <div className="ml-2">
-                                                    <Filter
-                                                        className={`w-4 h-4 cursor-pointer ${activeFilter === 'credit' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
-                                                        onClick={() => toggleFilter('credit')}
-                                                    />
-                                                    {activeFilter === 'credit' && (
-                                                        <div className="absolute z-50 top-8 right-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-40">
-                                                            <div className="flex justify-between items-center mb-2">
-                                                                <span className="text-xs font-semibold">Filter Credit</span>
-                                                                <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
-                                                            </div>
-                                                            <label className="flex items-center text-xs cursor-pointer p-1 hover:bg-gray-50 rounded">
-                                                                <input type="checkbox" checked={!!creditFilter} onChange={(e) => setCreditFilter(e.target.checked ? 'show' : '')} className="mr-2 rounded text-indigo-600 focus:ring-indigo-500" />
-                                                                Show Credits Only
-                                                            </label>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </th>
-                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Running Balance</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
-                                    {filteredData.map((entry) => (
-                                        <tr key={entry.id} className="hover:bg-gray-50 transition-colors">
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-100">{entry.date}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-100">{entry.postFrom}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 border-r border-gray-100">{entry.ledger}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm border-r border-gray-100">
-                                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${getStatusBadgeColor(entry.status)}`}>{entry.status}</span>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-100">{entry.posting_status || '-'}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100 font-medium">{formatCurrency(entry.debit)}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100 font-medium">{formatCurrency(entry.credit)}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-semibold">
-                                                {entry.runningBalance === 0 ? '-' : (
-                                                    <span>
-                                                        {formatCurrency(Math.abs(entry.runningBalance))}
-                                                        <span className="ml-1 text-gray-500 text-xs font-normal">
-                                                            {entry.runningBalance >= 0 ? 'Dr' : 'Cr'}
-                                                        </span>
-                                                    </span>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {filteredData.length === 0 && (
-                                        <tr>
-                                            <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
-                                                No ledger entries found for this customer.
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                                <tfoot className="bg-gray-50 font-semibold">
-                                    <tr>
-                                        <td colSpan={5} className="px-6 py-4 text-sm text-right text-gray-700 uppercase">TOTALS:</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold border-l border-gray-200">{formatCurrency(totalDebit)}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold border-l border-gray-200">{formatCurrency(totalCredit)}</td>
-                                        <td className="px-6 py-4 text-sm text-right text-gray-400 italic"></td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
-                    </div>
-                )
-            )}
-            {/* Net Off Modal */}
-            {customer.is_also_vendor && (
+            {showNetOffModal ? (
                 <NetOffModal
-                    isOpen={showNetOffModal}
+                    isOpen={true}
                     onClose={() => setShowNetOffModal(false)}
                     customerName={customer.name}
                 />
+            ) : (
+                <>
+                    <div className="flex justify-between items-center mb-6">
+                        <button onClick={onBack} className="flex items-center text-gray-600 hover:text-gray-900 transition-colors">
+                            <ChevronLeft className="w-5 h-5 mr-1" />
+                            <span className="text-lg font-medium">{customer.name}</span>
+                        </button>
+                        <div className="flex gap-3">
+                            {viewMode === 'month-wise' && (
+                                <div className="relative month-dropdown-container">
+                                    <button
+                                        onClick={() => setShowMonthDropdown(!showMonthDropdown)}
+                                        className="pl-3 pr-8 py-2 border border-gray-300 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-48 bg-white cursor-pointer text-left"
+                                    >
+                                        {monthFilter.length === 0 ? 'Select Month' : `${monthFilter.length} month(s) selected`}
+                                    </button>
+                                    <ChevronDown className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none" />
+
+                                    {showMonthDropdown && (
+                                        <div className="absolute z-50 top-full mt-1 w-48 bg-white border border-gray-300 rounded-[4px] shadow-lg max-h-64 overflow-y-auto">
+                                            <div className="p-2">
+                                                <label className="flex items-center px-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={monthFilter.length === monthLedgerData.length}
+                                                        onChange={(e) => {
+                                                            if (e.target.checked) {
+                                                                setMonthFilter(monthLedgerData.map(m => m.month));
+                                                            } else {
+                                                                setMonthFilter([]);
+                                                            }
+                                                        }}
+                                                        className="mr-2 rounded text-indigo-600 focus:ring-indigo-500"
+                                                    />
+                                                    <span className="text-sm font-medium">Select All</span>
+                                                </label>
+                                                <div className="border-t border-gray-200 my-1"></div>
+                                                {monthLedgerData.map((entry, index) => (
+                                                    <label key={index} className="flex items-center px-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={monthFilter.includes(entry.month)}
+                                                            onChange={(e) => {
+                                                                if (e.target.checked) {
+                                                                    setMonthFilter([...monthFilter, entry.month]);
+                                                                } else {
+                                                                    setMonthFilter(monthFilter.filter(m => m !== entry.month));
+                                                                }
+                                                            }}
+                                                            className="mr-2 rounded text-indigo-600 focus:ring-indigo-500"
+                                                        />
+                                                        <span className="text-sm">{entry.month}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={() => setIsJournalView(!isJournalView)}
+                                    className="px-4 py-2 text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm flex items-center gap-2"
+                                >
+                                    {isJournalView ? (
+                                        <>
+                                            <ArrowLeft className="w-4 h-4 text-indigo-500" />
+                                            <span>SHOW SUMMARY</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <FileText className="w-4 h-4 text-indigo-500" />
+                                            <span>JOURNAL VIEW</span>
+                                        </>
+                                    )}
+                                </button>
+                                <button
+                                    onClick={() => setShowNetOffModal(true)}
+                                    className="px-4 py-2 text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm uppercase px-5"
+                                >
+                                    NET-OFF
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        if (selectedMonthView) {
+                                            setDateFilter({ start: '', end: '' });
+                                            setSelectedMonthView(null);
+                                            setViewMode('invoice-wise');
+                                        } else {
+                                            setViewMode(viewMode === 'invoice-wise' ? 'month-wise' : 'invoice-wise');
+                                        }
+                                    }}
+                                    className="px-4 py-2 text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm flex items-center gap-2"
+                                >
+                                    {selectedMonthView ? (
+                                        <>
+                                            <ArrowLeft className="w-4 h-4 text-indigo-500" />
+                                            <span>BACK</span>
+                                        </>
+                                    ) : (
+                                        viewMode === 'invoice-wise' ? (
+                                            <>
+                                                <Calendar className="w-4 h-4 text-indigo-500" />
+                                                <span>MONTH VIEW</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Receipt className="w-4 h-4 text-indigo-500" />
+                                                <span>INVOICE VIEW</span>
+                                            </>
+                                        )
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {viewMode === 'month-wise' ? (
+                        <MonthLedgerView />
+                    ) : (
+                        isLoading ? (
+                            <div className="flex flex-col items-center justify-center py-20 bg-white rounded-xl shadow-sm border border-gray-100">
+                                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600 mb-4"></div>
+                                <p className="text-gray-500">Loading ledger entries...</p>
+                            </div>
+                        ) : error ? (
+                            <div className="flex flex-col items-center justify-center py-20 bg-white rounded-xl shadow-sm border border-red-100">
+                                <div className="bg-red-50 p-4 rounded-full mb-4">
+                                    <X className="w-8 h-8 text-red-500" />
+                                </div>
+                                <h3 className="text-lg font-semibold text-gray-900 mb-2">Failed to Load Ledger</h3>
+                                <p className="text-gray-500 mb-6 max-w-md text-center">{error}</p>
+                                <button
+                                    onClick={() => window.location.reload()}
+                                    className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                                >
+                                    Retry Connection
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="bg-white border border-gray-200 rounded-[4px] overflow-hidden">
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-gray-200">
+                                        {isJournalView ? (
+                                            // APP STYLE JOURNAL HEADERS
+                                            <thead className="bg-[#F8F9FA]">
+                                                <tr>
+                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Date</th>
+                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Transaction Particulars</th>
+                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Type</th>
+                                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Vch No.</th>
+                                                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-100">Debit (₹)</th>
+                                                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">Credit (₹)</th>
+                                                </tr>
+                                            </thead>
+                                        ) : (
+                                            // ORIGINAL HEADERS
+                                            <thead className="bg-[#F8F9FA] sticky top-0">
+                                                <tr>
+                                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">
+                                                        <div className="flex items-center justify-between relative text-gray-400">
+                                                            <span>Date</span>
+                                                            <div className="ml-2">
+                                                                <Filter
+                                                                    className={`w-4 h-4 cursor-pointer ${activeFilter === 'date' ? 'text-indigo-600' : 'text-gray-300 hover:text-gray-600'}`}
+                                                                    onClick={() => toggleFilter('date')}
+                                                                />
+                                                                {activeFilter === 'date' && (
+                                                                    <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-52">
+                                                                        <div className="flex justify-between items-center mb-2">
+                                                                            <span className="text-xs font-semibold text-gray-700">Filter Date</span>
+                                                                            <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
+                                                                        </div>
+                                                                        <div className="space-y-2">
+                                                                            <div>
+                                                                                <label className="text-[10px] text-gray-500 block mb-1">Start Date</label>
+                                                                                <input type="date" value={dateFilter.start} onChange={(e) => setDateFilter({ ...dateFilter, start: e.target.value })} max={new Date().toISOString().split('T')[0]} className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500" />
+                                                                            </div>
+                                                                            <div>
+                                                                                <label className="text-[10px] text-gray-500 block mb-1">End Date</label>
+                                                                                <input type="date" value={dateFilter.end} onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })} max={new Date().toISOString().split('T')[0]} className="w-full px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-indigo-500" />
+                                                                            </div>
+                                                                            <button
+                                                                                onClick={() => setDateFilter({ start: '', end: '' })}
+                                                                                className="w-full mt-2 py-1 text-[10px] text-indigo-600 font-medium hover:bg-indigo-50 border border-indigo-100 rounded transition-colors"
+                                                                            >
+                                                                                Clear Filter
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </th>
+                                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">
+                                                        <div className="flex items-center justify-between relative text-gray-400">
+                                                            <span>Post From</span>
+                                                            <div className="ml-2">
+                                                                <Filter
+                                                                    className={`w-4 h-4 cursor-pointer ${activeFilter === 'postFrom' ? 'text-indigo-600' : 'text-gray-300 hover:text-gray-600'}`}
+                                                                    onClick={() => toggleFilter('postFrom')}
+                                                                />
+                                                                {activeFilter === 'postFrom' && (
+                                                                    <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-48">
+                                                                        <div className="flex justify-between items-center mb-2">
+                                                                            <span className="text-xs font-semibold text-gray-700">Filter Type</span>
+                                                                            <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
+                                                                        </div>
+                                                                        <select value={postFromFilter} onChange={(e) => setPostFromFilter(e.target.value as TransactionType | '')} className="w-full px-2 py-1.5 text-xs border rounded focus:ring-1 focus:ring-indigo-500">
+                                                                            <option value="">All Types</option>
+                                                                            {postFromOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                                                        </select>
+                                                                        <button
+                                                                            onClick={() => setPostFromFilter('')}
+                                                                            className="w-full mt-2 py-1 text-[10px] text-indigo-600 font-medium hover:bg-indigo-50 border border-indigo-100 rounded transition-colors"
+                                                                        >
+                                                                            Clear Filter
+                                                                        </button>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </th>
+                                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">
+                                                        <div className="flex items-center justify-between relative text-gray-400">
+                                                            <span>Ledger</span>
+                                                            <div className="ml-2">
+                                                                <Filter
+                                                                    className={`w-4 h-4 cursor-pointer ${activeFilter === 'ledger' ? 'text-indigo-600' : 'text-gray-300 hover:text-gray-600'}`}
+                                                                    onClick={() => toggleFilter('ledger')}
+                                                                />
+                                                                {activeFilter === 'ledger' && (
+                                                                    <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-52">
+                                                                        <div className="flex justify-between items-center mb-2">
+                                                                            <span className="text-xs font-semibold text-gray-700">Search Ledger</span>
+                                                                            <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
+                                                                        </div>
+                                                                        <div className="relative">
+                                                                            <input type="text" value={ledgerFilter} onChange={(e) => setLedgerFilter(e.target.value)} placeholder="Search..." className="w-full pl-7 pr-2 py-1.5 text-xs border rounded focus:ring-1 focus:ring-indigo-500" autoFocus />
+                                                                            <Search className="w-3 h-3 text-gray-400 absolute left-2 top-1/2 transform -translate-y-1/2" />
+                                                                        </div>
+                                                                        <button
+                                                                            onClick={() => setLedgerFilter('')}
+                                                                            className="w-full mt-2 py-1 text-[10px] text-indigo-600 font-medium hover:bg-indigo-50 border border-indigo-100 rounded transition-colors"
+                                                                        >
+                                                                            Clear Filter
+                                                                        </button>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </th>
+                                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">
+                                                        <div className="flex items-center justify-between relative text-gray-400">
+                                                            <span>Status</span>
+                                                            <div className="ml-2">
+                                                                <Filter
+                                                                    className={`w-4 h-4 cursor-pointer ${activeFilter === 'status' ? 'text-indigo-600' : 'text-gray-300 hover:text-gray-600'}`}
+                                                                    onClick={() => toggleFilter('status')}
+                                                                />
+                                                                {activeFilter === 'status' && (
+                                                                    <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-48">
+                                                                        <div className="flex justify-between items-center mb-2">
+                                                                            <span className="text-xs font-semibold text-gray-700">Filter Status</span>
+                                                                            <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
+                                                                        </div>
+                                                                        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as PurchaseStatus | SalesStatus | '')} className="w-full px-2 py-1.5 text-xs border rounded focus:ring-1 focus:ring-indigo-500">
+                                                                            <option value="">All Statuses</option>
+                                                                            {statusOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                                                        </select>
+                                                                        <button
+                                                                            onClick={() => setStatusFilter('')}
+                                                                            className="w-full mt-2 py-1 text-[10px] text-indigo-600 font-medium hover:bg-indigo-50 border border-indigo-100 rounded transition-colors"
+                                                                        >
+                                                                            Clear Filter
+                                                                        </button>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </th>
+                                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">Posting Status</th>
+                                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">
+                                                        <div className="flex items-center justify-end relative text-gray-400">
+                                                            <span>Debit</span>
+                                                            <div className="ml-2">
+                                                                <Filter
+                                                                    className={`w-4 h-4 cursor-pointer ${activeFilter === 'debit' ? 'text-indigo-600' : 'text-gray-300 hover:text-gray-600'}`}
+                                                                    onClick={() => toggleFilter('debit')}
+                                                                />
+                                                                {activeFilter === 'debit' && (
+                                                                    <div className="absolute z-50 top-8 right-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-40">
+                                                                        <div className="flex justify-between items-center mb-2">
+                                                                            <span className="text-xs font-semibold text-gray-700">Filter Debit</span>
+                                                                            <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
+                                                                        </div>
+                                                                        <label className="flex items-center text-xs cursor-pointer p-1 hover:bg-gray-50 rounded">
+                                                                            <input type="checkbox" checked={!!debitFilter} onChange={(e) => setDebitFilter(e.target.checked ? 'show' : '')} className="mr-2 rounded text-indigo-600 focus:ring-indigo-500" />
+                                                                            Show Debits Only
+                                                                        </label>
+                                                                        <button
+                                                                            onClick={() => setDebitFilter('')}
+                                                                            className="w-full mt-2 py-1 text-[10px] text-indigo-600 font-medium hover:bg-indigo-50 border border-indigo-100 rounded transition-colors"
+                                                                        >
+                                                                            Clear Filter
+                                                                        </button>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </th>
+                                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">
+                                                        <div className="flex items-center justify-end relative text-gray-400">
+                                                            <span>Credit</span>
+                                                            <div className="ml-2">
+                                                                <Filter
+                                                                    className={`w-4 h-4 cursor-pointer ${activeFilter === 'credit' ? 'text-indigo-600' : 'text-gray-300 hover:text-gray-600'}`}
+                                                                    onClick={() => toggleFilter('credit')}
+                                                                />
+                                                                {activeFilter === 'credit' && (
+                                                                    <div className="absolute z-50 top-8 right-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-40">
+                                                                        <div className="flex justify-between items-center mb-2">
+                                                                            <span className="text-xs font-semibold text-gray-700">Filter Credit</span>
+                                                                            <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
+                                                                        </div>
+                                                                        <label className="flex items-center text-xs cursor-pointer p-1 hover:bg-gray-50 rounded">
+                                                                            <input type="checkbox" checked={!!creditFilter} onChange={(e) => setCreditFilter(e.target.checked ? 'show' : '')} className="mr-2 rounded text-indigo-600 focus:ring-indigo-500" />
+                                                                            Show Credits Only
+                                                                        </label>
+                                                                        <button
+                                                                            onClick={() => setCreditFilter('')}
+                                                                            className="w-full mt-2 py-1 text-[10px] text-indigo-600 font-medium hover:bg-indigo-50 border border-indigo-100 rounded transition-colors"
+                                                                        >
+                                                                            Clear Filter
+                                                                        </button>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </th>
+                                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">Running Balance</th>
+                                                </tr>
+                                            </thead>
+                                        )}
+                                        <tbody className="bg-white divide-y divide-gray-200">
+                                            {filteredData.map((entry) => (
+                                                <React.Fragment key={entry.id}>
+                                                    {isJournalView ? (
+                                                        <>
+                                                            {/* APP-THEMED JOURNAL ROW */}
+                                                            <tr 
+                                                                className={`hover:bg-indigo-50/30 transition-colors cursor-pointer border-b border-gray-100 ${selectedTransactionId === entry.id ? 'bg-indigo-50' : ''}`}
+                                                                onClick={() => handleRowClick(entry.id)}
+                                                            >
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 border-r border-gray-50">{entry.date.split('-').reverse().join('-')}</td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 border-r border-gray-50">(as per details)</td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 uppercase border-r border-gray-50">Sales</td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 border-r border-gray-50">{entry.ledger}</td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-indigo-600 border-r border-gray-50">₹{entry.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-400">-</td>
+                                                            </tr>
+                                                            {/* BREAKDOWN ROWS */}
+                                                            {entry.originalInv && (
+                                                                <>
+                                                                    {/* ITEM BREAKDOWN */}
+                                                                    {(entry.originalInv.items || []).map((item: any, idx: number) => (
+                                                                        <tr key={`item-${idx}`} className="bg-white">
+                                                                            <td className="px-6 py-1 border-r border-gray-50"></td>
+                                                                            <td className="px-6 py-1 text-xs text-gray-400 pl-16 border-r border-gray-50 font-medium italic">
+                                                                                {item.item_name} @ GST {Math.round(((parseFloat(item.igst || 0) + parseFloat(item.cgst || 0) + parseFloat(item.sgst || 0)) / (parseFloat(item.taxable_value) || 1)) * 100)}%
+                                                                            </td>
+                                                                            <td className="px-6 py-1 border-r border-gray-50"></td>
+                                                                            <td className="px-6 py-1 border-r border-gray-50"></td>
+                                                                            <td className="px-6 py-1 text-right text-xs text-gray-300 border-r border-gray-50">-</td>
+                                                                            <td className="px-6 py-1 text-right text-xs text-gray-700 font-semibold">
+                                                                                ₹{parseFloat(item.taxable_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} <span className="text-[10px] text-gray-400 uppercase ml-0.5">Cr</span>
+                                                                            </td>
+                                                                        </tr>
+                                                                    ))}
+                                                                    {[
+                                                                        { key: 'payment_cgst', label: 'Output CGST Account', type: 'Cr' },
+                                                                        { key: 'payment_sgst', label: 'Output SGST Account', type: 'Cr' },
+                                                                        { key: 'payment_igst', label: 'Output IGST Account', type: 'Cr' },
+                                                                        { key: 'payment_cess', label: 'Output Cess Account', type: 'Cr' },
+                                                                        { key: 'payment_state_cess', label: 'Output State Cess Account', type: 'Cr' },
+                                                                        { key: 'payment_tds_income_tax', label: 'TDS Receivable (Income Tax)', type: 'Dr' },
+                                                                        { key: 'payment_tds_gst', label: 'TDS Receivable (GST)', type: 'Dr' },
+                                                                        { key: 'payment_advance', label: 'Advance From Customer', type: 'Cr' },
+                                                                        { key: 'payment_payable', label: 'Net Payable Amount', type: 'Cr' }
+                                                                    ].map((payment) => {
+                                                                        const amt = entry.originalInv.payment_details?.[payment.key];
+                                                                        if (!amt || parseFloat(amt) === 0) return null;
+                                                                        
+                                                                        return (
+                                                                            <tr key={payment.key} className="bg-white">
+                                                                                <td className="px-6 py-1 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1 text-xs text-gray-400 pl-16 border-r border-gray-50 font-medium italic">
+                                                                                    {payment.label}
+                                                                                </td>
+                                                                                <td className="px-6 py-1 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1 text-right text-xs text-gray-700 font-semibold border-r border-gray-50">
+                                                                                    {payment.type === 'Dr' ? `₹${parseFloat(amt).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                                </td>
+                                                                                <td className="px-6 py-1 text-right text-xs text-gray-700 font-semibold">
+                                                                                    {payment.type === 'Cr' ? (
+                                                                                        <>
+                                                                                            ₹{parseFloat(amt).toLocaleString('en-IN', { minimumFractionDigits: 2 })} <span className="text-[10px] text-gray-400 uppercase ml-0.5">Cr</span>
+                                                                                        </>
+                                                                                    ) : (
+                                                                                        <span className="text-[10px] text-indigo-400 uppercase font-bold tracking-tighter">Debit</span>
+                                                                                    )}
+                                                                                </td>
+                                                                            </tr>
+                                                                        );
+                                                                    })}
+                                                                    <tr className="bg-white">
+                                                                        <td className="px-6 py-3 border-r border-gray-50"></td>
+                                                                        <td className="px-6 py-3 text-[11px] text-indigo-600 pl-16 border-r border-gray-50 font-bold tracking-tight">
+                                                                            To {customer.name} (Ref: {entry.ledger})
+                                                                        </td>
+                                                                        <td className="px-6 py-3 border-r border-gray-50"></td>
+                                                                        <td className="px-6 py-3 border-r border-gray-50"></td>
+                                                                        <td className="px-6 py-3 text-right text-xs text-gray-300 border-r border-gray-50">-</td>
+                                                                        <td className="px-6 py-3 text-right text-xs text-indigo-600 font-bold">
+                                                                            ₹{entry.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })} <span className="text-[10px] uppercase ml-0.5">Cr</span>
+                                                                        </td>
+                                                                    </tr>
+                                                                </>
+                                                            )}
+                                                        </>
+                                                    ) : (
+                                                        // ORIGINAL STYLE ROW
+                                                        <tr
+                                                            className={`hover:bg-indigo-50/50 transition-colors cursor-pointer ${selectedTransactionId === entry.id ? 'bg-indigo-50' : ''}`}
+                                                            onClick={() => handleRowClick(entry.id)}
+                                                        >
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 border-r border-gray-100">{entry.date.split('-').reverse().join('-')}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 border-r border-gray-100">{entry.postFrom}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 border-r border-gray-100">{entry.ledger}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm border-r border-gray-100">
+                                                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${getStatusBadgeColor(entry.status)}`}>{entry.status}</span>
+                                                            </td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 border-r border-gray-100">{entry.posting_status || '-'}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100 font-medium">{formatCurrency(entry.debit)}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border-r border-gray-100 font-medium">{formatCurrency(entry.credit)}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-semibold">
+                                                                {entry.runningBalance === 0 ? '-' : (
+                                                                    <span>
+                                                                        {formatCurrency(Math.abs(entry.runningBalance))}
+                                                                        <span className="ml-1 text-gray-500 text-xs font-normal">
+                                                                            {entry.runningBalance >= 0 ? 'Dr' : 'Cr'}
+                                                                        </span>
+                                                                    </span>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                </React.Fragment>
+                                            ))}
+                                            {filteredData.length === 0 && (
+                                                <tr>
+                                                    <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
+                                                        No ledger entries found for this customer.
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                        <tfoot className="bg-gray-50 font-semibold">
+                                            <tr>
+                                                <td colSpan={5} className="px-6 py-4 text-sm text-right text-gray-700 uppercase">TOTALS:</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold border-l border-gray-200">{formatCurrency(totalDebit)}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold border-l border-gray-200">{formatCurrency(totalCredit)}</td>
+                                                <td className="px-6 py-4 text-sm text-right text-gray-400 italic"></td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            </div>
+                        )
+                    )}
+
+                    {/* GST Details Modal */}
+                    <SalesGSTViewModal
+                        isOpen={isGSTModalOpen}
+                        onClose={() => setIsGSTModalOpen(false)}
+                        transactionId={selectedTransactionId}
+                    />
+                </>
             )}
         </div>
     );

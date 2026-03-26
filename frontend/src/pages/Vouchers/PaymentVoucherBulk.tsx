@@ -68,12 +68,19 @@ const PaymentVoucherBulk: React.FC = () => {
   useEffect(() => {
     if (selectedPaymentConfig && paymentVoucherConfigs.length > 0) {
       const config = paymentVoucherConfigs.find(c => c.voucher_name === selectedPaymentConfig);
-      if (config && config.enable_auto_numbering) {
-        const paddedNum = String(config.current_number).padStart(config.required_digits, '0');
-        const generatedNumber = `${config.prefix || ''}${paddedNum}${config.suffix || ''}`;
-        setVoucherNumber(generatedNumber);
-      } else {
-        setVoucherNumber('Manual Input');
+      if (config) {
+        if (config.enable_auto_numbering) {
+          // Fetch the correctly formatted next number from the backend
+          httpClient.get<any>(`/api/masters/master-voucher-payments/${config.id}/next-number/`)
+            .then((res) => {
+              setVoucherNumber(res.invoice_number || '');
+            })
+            .catch(() => {
+              setVoucherNumber('');
+            });
+        } else {
+          setVoucherNumber('Manual Input');
+        }
       }
     } else {
       setVoucherNumber('');

@@ -2065,7 +2065,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             // Back to first tab and close wizard
             setActiveMasterSubTab('Vendor Creation'); // Go back to the hub/list tab
             setIsCreatingVendor(false); // Close the wizard and return to management list
-            
+
             // Cleanup on full success
             setCreatedVendorId(null);
             sessionStorage.removeItem('currentVendorId');
@@ -2821,8 +2821,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 {createdVendorId ? 'Edit Vendor Details' : 'Create New Vendor'}
                                             </h3>
                                             <p className="text-sm text-gray-500 mt-1">
-                                                {createdVendorId 
-                                                    ? `Editing active vendor: ${vendorName}` 
+                                                {createdVendorId
+                                                    ? `Editing active vendor: ${vendorName}`
                                                     : 'Select a tab below to configure vendor details:'
                                                 }
                                             </p>
@@ -4577,8 +4577,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                         <td className="px-6 py-4 text-sm text-gray-500">{po.amount ? `₹${po.amount}` : '-'}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-center">
                                                                             <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] border ${po.status === 'Draft' ? 'bg-slate-100 text-slate-700 border-slate-200' :
-                                                                                    po.status === 'Pending Approval' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                                                                                        'bg-green-50 text-green-700 border-green-200'
+                                                                                po.status === 'Pending Approval' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                                                                    'bg-green-50 text-green-700 border-green-200'
                                                                                 }`}>
                                                                                 {po.status}
                                                                             </span>
@@ -5137,9 +5137,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                 </div>
                                                             </div>
                                                             <span className={`inline-flex px-3 py-1 text-xs font-bold rounded-full uppercase tracking-wider ${selectedVoucherForView.status === 'Posted' ? 'bg-emerald-100 text-emerald-800' :
-                                                                    selectedVoucherForView.status === 'Approved' ? 'bg-blue-100 text-blue-800' :
-                                                                        selectedVoucherForView.status === 'Initiated' ? 'bg-purple-100 text-purple-800' :
-                                                                            'bg-amber-100 text-amber-800'
+                                                                selectedVoucherForView.status === 'Approved' ? 'bg-blue-100 text-blue-800' :
+                                                                    selectedVoucherForView.status === 'Initiated' ? 'bg-purple-100 text-purple-800' :
+                                                                        'bg-amber-100 text-amber-800'
                                                                 }`}>
                                                                 {selectedVoucherForView.status}
                                                             </span>
@@ -5426,9 +5426,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                         <td className="px-6 py-4 whitespace-nowrap">
                                                                             <div className="flex items-center space-x-2">
                                                                                 <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${bill.status === 'Posted' ? 'bg-slate-100 text-slate-700' :
-                                                                                        bill.status === 'Approved' ? 'bg-blue-100 text-slate-700' :
-                                                                                            bill.status === 'Initiated' ? 'bg-purple-100 text-purple-800' :
-                                                                                                'bg-yellow-100 text-yellow-800'
+                                                                                    bill.status === 'Approved' ? 'bg-blue-100 text-slate-700' :
+                                                                                        bill.status === 'Initiated' ? 'bg-purple-100 text-purple-800' :
+                                                                                            'bg-yellow-100 text-yellow-800'
                                                                                     }`}>
                                                                                     {bill.status}
                                                                                 </span>

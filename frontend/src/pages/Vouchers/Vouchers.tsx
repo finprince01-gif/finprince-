@@ -4518,8 +4518,14 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         </button>
                         <button
                           type="button"
+                          disabled={!party}
                           onClick={openTermsModal}
-                          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[4px] transition-colors text-sm font-medium shadow-none border border-slate-200"
+                          className={`px-4 py-2 rounded-[4px] transition-colors text-sm font-medium shadow-none border border-slate-200 ${
+                            !party 
+                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200' 
+                              : 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600'
+                          }`}
+                          title={!party ? "Please select a vendor first" : ""}
                         >
                           Edit Masters
                         </button>
