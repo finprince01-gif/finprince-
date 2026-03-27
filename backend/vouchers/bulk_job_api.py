@@ -54,16 +54,36 @@ class BulkUploadAPIView(APIView):
             logger.warning(f"[UPLOAD] TENANT LIMIT for {tenant_id}: {active} active")
             return self._busy(msg, 'tenant_limit')
 
-        # ── GATE 4: Batch idempotency ─────────────────────────────────────────
-        batch_fingerprint = hashlib.sha256(
-            "".join(f"{f.name}-{f.size}" for f in files).encode()
-        ).hexdigest()
+        # ── GATE 4: Batch idempotency (Content-based SHA256) ──────────────────
+        all_file_hashes = []
+        for f in files:
+            content = f.read()
+            f.seek(0)
+            fh = hashlib.sha256(content).hexdigest()
+            print(f"DEBUG: FILE SIZE: {len(content)}, FILE HASH: {fh}")
+            all_file_hashes.append(fh)
+        
+        # Sort hashes to ensure order-independence for the batch fingerprint
+        all_file_hashes.sort()
+        batch_fingerprint = hashlib.sha256("".join(all_file_hashes).encode()).hexdigest()
+        print(f"DEBUG: BATCH FINGERPRINT: {batch_fingerprint}")
 
         lock = IdempotencyLock(batch_fingerprint, ttl=300)
 
         done_job_id = lock.is_done()
+        new_session = request.data.get('upload_session_id')
+
         if done_job_id:
             logger.info(f"[IDEMPOTENCY] Batch done → Job {done_job_id}")
+            if new_session:
+                from .models import InvoiceProcessingItem
+                from ocr_pipeline.repository import InvoiceTempOCR
+                job = BulkInvoiceJob.objects.filter(id=done_job_id).first()
+                if job:
+                   job.upload_session_id = new_session
+                   job.save()
+                   for hc in job.items.values_list('file_hash', flat=True):
+                       InvoiceTempOCR.objects.filter(file_hash=hc, tenant_id=tenant_id).update(upload_session_id=new_session)
             return Response({'status': 'already_completed', 'job_id': done_job_id})
 
         existing = BulkInvoiceJob.objects.filter(
@@ -71,8 +91,16 @@ class BulkUploadAPIView(APIView):
             status__in=['pending', 'processing'],
             tenant_id=tenant_id
         ).first()
+        
         if existing:
             logger.info(f"[IDEMPOTENCY] In-progress → Job {existing.id}")
+            if new_session:
+                existing.upload_session_id = new_session
+                existing.save()
+                from ocr_pipeline.repository import InvoiceTempOCR
+                for hc in existing.items.values_list('file_hash', flat=True):
+                   InvoiceTempOCR.objects.filter(file_hash=hc, tenant_id=tenant_id).update(upload_session_id=new_session)
+                   
             if existing.status == 'pending':
                 # Re-trigger attempt if stuck in pending
                 print(f"DEBUG: Found pending job {existing.id} during idempotency check. Re-triggering thread.")
@@ -107,6 +135,7 @@ class BulkUploadAPIView(APIView):
 
         job = BulkInvoiceJob.objects.create(
             tenant_id=tenant_id,
+            upload_session_id=request.data.get('upload_session_id'),
             file_hash=fingerprint,
             total_files=len(files),
             status='pending',
@@ -114,10 +143,12 @@ class BulkUploadAPIView(APIView):
         )
         logger.info(f"[UPLOAD] Created Job {job.id} | tenant={tenant_id} | files={len(files)}")
 
+        paths = []
         for uploaded_file in files:
             file_bytes = uploaded_file.read()
             file_hash  = storage.hash_bytes(file_bytes)
             key        = storage.make_key(job.id, uploaded_file.name)
+            paths.append(key)
 
             storage.upload_bytes(file_bytes, key)
 
@@ -150,6 +181,8 @@ class BulkUploadAPIView(APIView):
             'status':   'processing',
             'job_id':   job.id,
             'total_files': len(files),
+            'file_path': paths[0] if paths else None,
+            'file_paths': paths
         })
 
     @staticmethod

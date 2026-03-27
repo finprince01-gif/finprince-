@@ -14,14 +14,15 @@ import { apiService } from '../services/api';
 import { getXLSX } from '../utils/xlsx';
 import { showError, showSuccess, showInfo } from '../utils/toast';
 import CreateVendorModal from './CreateVendorModal';
-import { VOUCHER_COLUMN_SCHEMAS } from '../services/mappingEngine';
+import { getVoucherSchema, VOUCHER_SCHEMAS, getVoucherFlatHeaders, type VoucherSchema } from '../configs/schemaConfig';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-type VendorStatus = 'FOUND' | 'MISSING' | 'RESOLVED' | 'ERROR';
-type ValidationStatus = 'READY' | 'VENDOR_MISSING' | 'VALIDATION_FAILED' | 'EXTRACTION_FAILED' | 'PENDING' | 'RESOLVED' | 'FOUND' | 'NOT_FOUND' | 'GSTIN_CONFLICT' | 'ERROR' | 'VOUCHER_CREATED' | 'NEEDS_ATTENTION' | 'LOW_CONFIDENCE' | 'processing' | 'DUPLICATE';
+// VendorStatus: Frontend display states + backend canonical values (EXISTS/NEW)
+type VendorStatus = 'FOUND' | 'MISSING' | 'RESOLVED' | 'ERROR' | 'EXISTS' | 'NEW' | 'MATCHED' | 'CREATE_VENDOR';
+type ValidationStatus = 'READY' | 'VENDOR_MISSING' | 'VALIDATION_FAILED' | 'EXTRACTION_FAILED' | 'PENDING' | 'RESOLVED' | 'FOUND' | 'NOT_FOUND' | 'GSTIN_CONFLICT' | 'ERROR' | 'VOUCHER_CREATED' | 'NEEDS_ATTENTION' | 'LOW_CONFIDENCE' | 'processing' | 'DUPLICATE' | 'DUPLICATE_IN_BATCH' | 'SUCCESS' | 'FAILED' | 'NEED_VENDOR' | 'INCOMPLETE';
 
 interface ScanResult {
     id: number;
@@ -65,34 +66,8 @@ interface FinalizeResult {
 // (InlineVendorCreatePanel removed to use shared CreateVendorModal)
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Status Badge — mirrors PurchaseVendorValidateView result states
+// UI Helpers
 // ─────────────────────────────────────────────────────────────────────────────
-
-const StatusBadge: React.FC<{ status: ValidationStatus, title?: string }> = ({ status, title }) => {
-    const cfg: Record<string, { label: string; cls: string; icon: string }> = {
-        READY: { label: 'Ready', cls: 'bg-emerald-100 text-emerald-800 border border-emerald-300', icon: '✅' },
-        FOUND: { label: 'Ready', cls: 'bg-emerald-100 text-emerald-800 border border-emerald-300', icon: '✅' },
-        RESOLVED: { label: 'Resolved', cls: 'bg-blue-100 text-blue-800 border border-blue-300', icon: '🔗' },
-        VENDOR_MISSING: { label: 'Vendor Missing', cls: 'bg-amber-100 text-amber-800 border border-amber-300', icon: '⚠️' },
-        NOT_FOUND: { label: 'Vendor Missing', cls: 'bg-amber-100 text-amber-800 border border-amber-300', icon: '⚠️' },
-        GSTIN_CONFLICT: { label: 'Conflict', cls: 'bg-red-100 text-red-800 border border-red-300', icon: '⚠️' },
-        PENDING: { label: 'Validating...', cls: 'bg-blue-50 text-blue-700 border border-blue-200', icon: '⏳' },
-        PROCESSING: { label: 'Processing...', cls: 'bg-blue-50 text-blue-700 border border-blue-200', icon: '⏳' },
-        NEEDS_ATTENTION: { label: 'Needs Attention', cls: 'bg-orange-100 text-orange-800 border border-orange-300', icon: '⚠️' },
-        LOW_CONFIDENCE: { label: 'Low Confidence', cls: 'bg-amber-100 text-amber-800 border border-amber-300', icon: '🤏' },
-        EXTRACTION_FAILED: { label: 'Extraction Failed', cls: 'bg-red-50 text-red-700 border border-red-200', icon: '❌' },
-        VALIDATION_FAILED: { label: 'Validation Failed', cls: 'bg-red-50 text-red-700 border border-red-200', icon: '❌' },
-        VOUCHER_CREATED: { label: 'Voucher Created', cls: 'bg-indigo-100 text-indigo-800 border border-indigo-300', icon: '🧾' },
-        ERROR: { label: 'Error', cls: 'bg-red-100 text-red-800 border border-red-300', icon: '❌' },
-    };
-    const s = (status as string || 'ERROR').toUpperCase();
-    const { label, cls, icon } = cfg[s] || cfg.ERROR;
-    return (
-        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold tracking-tight cursor-help ${cls}`} title={title || label}>
-            {icon} {label}
-        </span>
-    );
-};
 
 // Standardize snake_case keys used by backend vs PascalCase used in UI/Excel
 const LINE_ITEM_FIELDS = ['Item Name', 'Item Code', 'HSN/SAC', 'Quantity', 'Unit', 'Rate', 'Amount', 'Taxable Value', 'discount_amount', 'cgst_rate', 'cgst_amount', 'sgst_rate', 'sgst_amount', 'igst_rate', 'igst_amount', 'total_amount'];
@@ -260,7 +235,7 @@ const normalizeVoucherField = (k: string, voucherType: string) => {
         .replace(/[\s\/\-\.]+/g, '_')
         .replace(/_+/g, '_')
         .replace(/^_|_$/g, '');
-        
+
     // ── Synonyms/Aliases — Context Sensitive ──
     if (voucherType === 'Sales') {
         if (nk === 'invoice_no' || nk === 'invoice_number' || nk === 'sales_invoice_no') {
@@ -305,96 +280,141 @@ const EditInvoiceModal: React.FC<{
     row: ScanResult;
     voucherType: string;
     onClose: () => void;
-    onSave: (updatedData: any, revalidation?: { status: string; vendor_id: number | null; vendor_name: string }) => void;
+    onSave: (updatedData: any, revalidation?: { status: string; vendor_id: number | null; vendor_name: string; vendor_status?: string }) => void;
     onResolve?: (resolution: 'use_existing' | 'update_name') => void;
 }> = ({ row, voucherType, onClose, onSave, onResolve }) => {
 
-    // Filter out fields that belong to line items or system metadata from the header grid
-    const EXCLUDED_KEYS = [
-        "ITEM CODE", "ITEM NAME", "HSN/SAC", "QTY", "QUANTITY", "UOM", "UQC", "RATE",
-        "ITEM RATE", "TAXABLE VALUE", "IGST", "CGST", "SGST/UTGST", "CESS", "INVOICE VALUE", "DESCRIPTION",
-        "ITEMS", "LINEITEMS", "LINE_ITEMS", "SUMMARYTOTALS", "SUMMARY_TOTALS", "HEADER", "INVOICE", "DATA", "SNO", "S.NO"
-    ];
-
-    const [data, setData] = useState(() => {
-        const raw = JSON.parse(JSON.stringify(row.extracted_data || {}));
-        const inv = raw.invoice || raw.header || raw || {};
-        const normalizedInvoice: any = {};
-        
-        // Populate normalized fields (deduplicates mixed keys like 'Supplier Invoice No.' vs 'supplier_invoice_no')
-        Object.entries(inv).forEach(([k, v]) => {
-            const nk = normalizeVoucherField(k, voucherType);
-            if (nk) normalizedInvoice[nk] = v;
-        });
-
-        return { ...raw, invoice: normalizedInvoice };
-    });
+    const [dynamicSchema, setDynamicSchema] = useState<VoucherSchema | null>(null);
+    const [data, setData] = useState<any>(null); // HARD RESET FRONTEND STATE
+    const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
-    const invoice = data.invoice || data.header || data;
-    const items = data.items || data.line_items || [];
+    useEffect(() => {
+        const fetchFreshData = async () => {
+            setLoading(true);
+            try {
+                // STEP 1: Fetch FULL Dynamic Schema + Data from DB
+                const [schemaRes, rowRes]: any = await Promise.all([
+                    httpClient.get(`/api/voucher-schema/?type=${voucherType}`),
+                    httpClient.get(`/api/ocr-staging/${row.id}/`)
+                ]);
+                
+                const fetchedSchema = schemaRes as VoucherSchema;
+                const dbRow = (rowRes?.data && rowRes.data[0]) || null;
+                
+                if (!dbRow) throw new Error("Record not found in DB.");
 
-    const schemaFields = VOUCHER_COLUMN_SCHEMAS[voucherType] || [];
-    const extractedKeys = Object.keys(invoice);
+                console.log("SCHEMA:", fetchedSchema);
+                console.log("FORM SOURCE (DB):", dbRow.extracted_data);
 
-    // Map of normalized_key -> original_display_label
-    const fieldsMap: Record<string, string> = {};
-    
-    // First pass: Add schema fields (preferred labels)
-    schemaFields.forEach(f => {
-        const nk = normalizeVoucherField(f, voucherType);
-        if (nk) fieldsMap[nk] = f;
-    });
-    
-    // Second pass: Add any extra extracted keys not already mapped
-    extractedKeys.forEach(k => {
-        const nk = normalizeVoucherField(k, voucherType);
-        if (nk && !fieldsMap[nk]) {
-            // Convert snake_case to Title Case for better UI if it's a new key
-            fieldsMap[nk] = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-        }
-    });
+                setDynamicSchema(fetchedSchema);
 
-    const allNormalizedKeys = Object.keys(fieldsMap).filter(nk => {
-        const upperNK = nk.toUpperCase().replace(/_/g, '').trim();
-        return !EXCLUDED_KEYS.includes(upperNK);
-    });
+                const raw = JSON.parse(JSON.stringify(dbRow.extracted_data || {}));
+                
+                // ── INITIALIZATION (Strictly Schema Driven + Section Based) ──
+                const normalizedSections: any = {};
+                Object.entries(fetchedSchema.sections || {}).forEach(([sectionName, fields]: any) => {
+                    if (sectionName === 'items') {
+                         const itmsRaw = raw.sections?.items || raw.items || raw.line_items || [];
+                         normalizedSections['items'] = (itmsRaw.length > 0 ? itmsRaw : [{}]).map((item: any) => {
+                             const normalizedItem: any = {};
+                             fields.forEach((f: any) => {
+                                 const val = item[f.name] || item[f.label] || getCellValue(item, f.label);
+                                 normalizedItem[f.name] = (val === '—') ? "" : val;
+                             });
+                             return normalizedItem;
+                         });
+                    } else {
+                         // Find raw data for this section
+                         const secRaw = raw.sections?.[sectionName] || raw[sectionName] || raw.invoice || raw.header || raw || {};
+                         const normalizedSection: any = {};
+                         fields.forEach((f: any) => {
+                             const val = secRaw[f.name] || secRaw[f.label] || getCellValue(secRaw, f.label);
+                             normalizedSection[f.name] = (val === '—') ? "" : val;
+                         });
+                         normalizedSections[sectionName] = normalizedSection;
+                    }
+                });
 
-    const handleHeaderChange = (key: string, val: string) => {
-        const newData = { ...data };
-        const target = newData.invoice || newData.header || newData;
-        target[key] = val;
-        setData(newData);
+                setData({ 
+                    ...raw, 
+                    sections: normalizedSections
+                });
+            } catch (err) {
+                console.error("Edit modal load error:", err);
+                showError("Failed to load schema-driven voucher data.");
+                onClose();
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchFreshData();
+    }, [row.id, voucherType]);
+
+    if (loading || !data || !dynamicSchema) {
+        return (
+            <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                <div className="bg-white p-8 rounded-2xl flex flex-col items-center gap-4 shadow-2xl">
+                    <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent animate-spin rounded-full" />
+                    <p className="font-bold text-gray-700">Fetching Schema Source of Truth...</p>
+                </div>
+            </div>
+        );
+    }
+
+    const sections = data.sections || {};
+    const items = sections.items || [];
+
+    const handleFieldChange = (sectionName: string, key: string, val: string) => {
+        setData(prev => ({
+            ...prev,
+            sections: {
+                ...prev.sections,
+                [sectionName]: {
+                    ...prev.sections[sectionName],
+                    [key]: val
+                }
+            }
+        }));
     };
 
     const handleItemChange = (idx: number, key: string, val: string) => {
-        const newData = { ...data };
-        const targetItems = newData.items || newData.line_items;
-        if (targetItems) targetItems[idx][key] = val;
-        setData(newData);
+        setData(prev => {
+            const newItems = [...(prev.sections.items || [])];
+            newItems[idx] = { ...newItems[idx], [key]: val };
+            return {
+                ...prev,
+                sections: {
+                    ...prev.sections,
+                    items: newItems
+                }
+            };
+        });
     };
 
     const handleSave = async () => {
         setSaving(true);
         try {
-            // Use PATCH /api/ocr-staging/<file_hash>/ which saves AND auto-revalidates
+            // STEP 2: Enforce Schema-Driven Flow (Save full sections)
             const result: any = await httpClient.patch(
                 `/api/ocr-staging/${row.file_hash}/`,
-                { extracted_data: data }
+                { 
+                    extracted_data: data,
+                    voucher_type: voucherType.toUpperCase()
+                }
             );
-            // Pass validation result back to parent so it can update the row inline
+            
             onSave(result.extracted_data || data, {
                 status: result.status || 'missing',
                 vendor_id: result.vendor_id ?? null,
                 vendor_name: result.vendor_name || '',
+                vendor_status: result.vendor_status || null,
             });
-            const isFound = result.status === 'READY' || result.status === 'found' || result.status === 'FOUND';
-            const isConflict = result.status === 'GSTIN_CONFLICT';
-            const statusMsg = isFound ? '✅ Found' : (isConflict ? '⚠️ GSTIN Conflict' : '⚠ Missing');
-            showSuccess(`✅ Saved. Vendor status: ${statusMsg}`);
+            const isMatched = result.vendor_status === 'EXISTS';
+            showSuccess(isMatched ? '✅ MATCHED: Vendor synchronized with DB.' : '⚠️ ACTION REQUIRED: Update sync failed.');
             onClose();
         } catch (err) {
-            showError('Failed to update staging record.');
+            showError('Failed to save schema-aligned record.');
         } finally {
             setSaving(false);
         }
@@ -411,7 +431,7 @@ const EditInvoiceModal: React.FC<{
                 // Determine the new name based on resolution
                 let finalName = row.vendor_name;
                 if (resolution === 'update_name') {
-                    finalName = invoice['Vendor Name'] || invoice['vendor_name'] || row.vendor_name;
+                    finalName = sections.supplier_details?.vendor_name || row.vendor_name;
                 }
 
                 onSave(data, {
@@ -441,48 +461,33 @@ const EditInvoiceModal: React.FC<{
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors">✕</button>
                 </div>
-
-                {/* Conflict Resolution Header */}
-                {row.validationStatus === 'GSTIN_CONFLICT' && (
-                    <div className="px-6 py-4 bg-red-50 border-b border-red-100 flex items-center justify-between">
+                {/* Vendor Status Headers */}
+                {row.vendor_status === 'EXISTS' ? (
+                    <div className="px-6 py-4 bg-emerald-50 border-b border-emerald-100 flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center text-xl">⚠️</div>
+                            <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center text-xl">✅</div>
                             <div>
-                                <h4 className="font-bold text-red-900 text-sm">GSTIN Conflict Detected</h4>
-                                <p className="text-[10px] text-red-700 italic max-w-md">{row.conflictMessage || 'This GSTIN belongs to a different vendor in your master list.'}</p>
+                                <h4 className="font-bold text-emerald-900 text-sm uppercase tracking-wider">Matched</h4>
+                                <p className="text-[10px] text-emerald-700 italic">This vendor exists in your master list: {row.vendor_name || sections.supplier_details?.vendor_name}</p>
                             </div>
                         </div>
-                        <div className="flex gap-2">
-                            <button
-                                onClick={() => handleResolveConflict('use_existing')}
-                                disabled={saving}
-                                className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-200 transition-colors shadow-sm"
-                            >
-                                Use Existing Master Info
-                            </button>
-                            <button
-                                onClick={() => handleResolveConflict('update_name')}
-                                disabled={saving}
-                                className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg text-xs font-bold hover:bg-emerald-200 transition-colors shadow-sm"
-                            >
-                                Update Master with this Name
-                            </button>
-                        </div>
                     </div>
-                )}
-                {/* Vendor Missing Header */}
-                {(row.validationStatus === 'VENDOR_MISSING' || row.validationStatus === 'NOT_FOUND') && (
+                ) : row.vendor_status === 'NEW' || row.vendor_status === 'MISSING' ? (
                     <div className="px-6 py-4 bg-amber-50 border-b border-amber-100 flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center text-xl">⚠️</div>
                             <div>
-                                <h4 className="font-bold text-amber-900 text-sm">Vendor Not Found</h4>
-                                <p className="text-[10px] text-amber-700 italic">This vendor is not in your master list. Match or create it to continue.</p>
+                                <h4 className="font-bold text-amber-900 text-sm uppercase tracking-wider">Create Vendor</h4>
+                                <p className="text-[10px] text-amber-700 italic">This vendor was not found. Please create it to continue.</p>
                             </div>
                         </div>
                         <button
                             onClick={() => {
-                                onSave(data, { status: 'VENDOR_MISSING', vendor_id: null, vendor_name: invoice['Vendor Name'] || invoice['vendor_name'] || row.vendor_name });
+                                onSave(data, { 
+                                    status: 'VENDOR_MISSING', 
+                                    vendor_id: null, 
+                                    vendor_name: sections.supplier_details?.vendor_name || row.vendor_name 
+                                });
                                 onClose();
                                 setTimeout(() => window.dispatchEvent(new CustomEvent('re-open-create-vendor', { detail: row.file_hash })), 100);
                             }}
@@ -491,68 +496,102 @@ const EditInvoiceModal: React.FC<{
                             Create New Vendor
                         </button>
                     </div>
+                ) : (
+                    <div className="px-6 py-4 bg-blue-50 border-b border-blue-100 flex items-center gap-3">
+                        <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent animate-spin rounded-full" />
+                        <span className="text-sm font-bold text-blue-700 uppercase">Processing...</span>
+                    </div>
                 )}
 
-                <div className="flex-1 overflow-y-auto p-6 space-y-8">
-                    <div>
-                        <h4 className="text-xs font-black text-indigo-500 uppercase tracking-widest mb-4">Header Fields</h4>
-                        <div className="grid grid-cols-3 gap-4">
-                            {allNormalizedKeys.map(nk => {
-                                const kLabel = fieldsMap[nk] || nk;
-                                let v = invoice[nk] || invoice[kLabel];
-                                
-                                // Handle null/undefined or objects
-                                let displayVal = "";
-                                if (v !== null && v !== undefined) {
-                                    displayVal = typeof v === 'object' ? JSON.stringify(v) : String(v);
-                                }
+                <div className="flex-1 overflow-y-auto p-6 space-y-10">
+                    {/* Dynamic Header Sections */}
+                    {Object.entries(dynamicSchema.sections || {})
+                        .filter(([name]) => name !== 'items')
+                        .map(([sectionName, fields]: any) => {
+                            const sectionTitles: Record<string, string> = {
+                                supplier_details: "Supplier Details",
+                                supply_details: "Supply Details",
+                                due_details: "Due Details",
+                                transit_details: "Transit Details"
+                            };
+                            const title = sectionTitles[sectionName] || sectionName.replace(/_/g, ' ').toUpperCase();
+                            const sectionData = sections[sectionName] || {};
 
-                                return (
-                                    <div key={nk}>
-                                        <label className="text-[10px] uppercase font-bold text-gray-400 block mb-1">{kLabel}</label>
-                                        <input
-                                            type="text"
-                                            value={displayVal}
-                                            onChange={e => handleHeaderChange(nk, e.target.value)}
-                                            placeholder={`Enter ${kLabel}...`}
-                                            className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none hover:border-indigo-300 transition-colors"
-                                        />
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
+                            return (
+                                <div key={sectionName} className="space-y-4">
+                                    <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] mb-4 border-b border-indigo-50 pb-2">{title}</h4>
+                                    <div className="grid grid-cols-3 gap-6">
+                                        {fields.map((field: any) => {
+                                            const nk = field.name;
+                                            const kLabel = field.label;
+                                            const isMandatory = field.mandatory;
+                                            
+                                            let v = sectionData[nk];
+                                            let displayVal = "";
+                                            if (v !== null && v !== undefined) {
+                                                displayVal = typeof v === 'object' ? JSON.stringify(v) : String(v);
+                                            }
 
-                    <div>
-                        <h4 className="text-xs font-black text-indigo-500 uppercase tracking-widest mb-4">Line Items ({items.length})</h4>
-                        <div className="overflow-x-auto border border-gray-100 rounded-xl">
-                            <table className="w-full text-xs">
-                                <thead className="bg-gray-50 border-b border-gray-100">
-                                    <tr>
-                                        {items.length > 0 && Object.keys(items[0]).map(k => (
-                                            <th key={k} className="px-3 py-2 text-left font-bold text-gray-500 whitespace-nowrap">{k}</th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-50">
-                                    {items.map((it: any, i: number) => (
-                                        <tr key={i} className="hover:bg-gray-50">
-                                            {Object.entries(it).map(([k, v]) => (
-                                                <td key={k} className="p-1 min-w-[100px]">
+                                            return (
+                                                <div key={nk} className="space-y-1.5">
+                                                    <label className="text-[10px] uppercase font-bold text-gray-400 flex items-center gap-1">
+                                                        {kLabel}
+                                                        {isMandatory && <span className="text-red-500 font-extrabold">*</span>}
+                                                    </label>
                                                     <input
-                                                        type="text"
-                                                        value={String(v || '')}
-                                                        onChange={e => handleItemChange(i, k, e.target.value)}
-                                                        className="w-full border-none p-1.5 focus:ring-2 focus:ring-indigo-200 outline-none bg-transparent rounded"
+                                                        type={field.type === 'number' ? 'text' : field.type}
+                                                        value={displayVal}
+                                                        onChange={e => handleFieldChange(sectionName, nk, e.target.value)}
+                                                        placeholder={`Enter ${kLabel.toLowerCase()}...`}
+                                                        className={`w-full border rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none hover:border-indigo-300 transition-all shadow-sm ${isMandatory && !displayVal ? 'border-amber-300 bg-amber-50/20' : 'border-gray-200'}`}
                                                     />
-                                                </td>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            );
+                        })}
+
+                    {/* Dynamic Line Items Section */}
+                    {dynamicSchema.sections?.items && (
+                        <div className="space-y-4">
+                            <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] mb-4 border-b border-indigo-50 pb-2">Line Items ({items.length})</h4>
+                            <div className="overflow-x-auto border border-gray-100 rounded-xl shadow-sm">
+                                <table className="w-full text-[11px]">
+                                    <thead className="bg-gray-50 border-b border-gray-100">
+                                        <tr>
+                                            {dynamicSchema.sections.items.map((field: any) => (
+                                                <th key={field.name} className="px-3 py-3 text-left font-bold text-gray-500 whitespace-nowrap uppercase tracking-tighter">
+                                                    {field.label}
+                                                </th>
                                             ))}
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-50">
+                                        {items.map((it: any, i: number) => (
+                                            <tr key={i} className="hover:bg-indigo-50/30 transition-colors">
+                                                {dynamicSchema.sections.items.map((field: any) => {
+                                                    const k = field.name;
+                                                    const v = it[k];
+                                                    return (
+                                                        <td key={k} className="p-1 min-w-[100px]">
+                                                            <input
+                                                                type="text"
+                                                                value={String(v || '')}
+                                                                onChange={e => handleItemChange(i, k, e.target.value)}
+                                                                className="w-full border-none p-1.5 focus:ring-2 focus:ring-indigo-200 outline-none bg-transparent rounded text-gray-700"
+                                                            />
+                                                        </td>
+                                                    );
+                                                })}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
                 <div className="p-4 border-t bg-gray-50 flex justify-end gap-3">
                     <button onClick={onClose} className="px-6 py-2 text-sm font-bold text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-100">Cancel</button>
@@ -645,7 +684,8 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
 
     // ── Resume Workflow State ──
     const [isCheckingUnresolved, setIsCheckingUnresolved] = useState(true);
-    const [unresolvedCount, setUnresolvedCount] = useState(0);
+    const [unresolvedCount, setUnresolvedCount] = useState(0); 
+    const [needsVendorCount, setNeedsVendorCount] = useState(0); 
     const [showResumePrompt, setShowResumePrompt] = useState(false);
     const [useAllUnresolved, setUseAllUnresolved] = useState(false);
 
@@ -669,14 +709,27 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     useEffect(() => {
         const checkExisting = async () => {
             try {
-                const res: any = await httpClient.get('/api/ocr-staging/');
+                // Fetch all unprocessed records for this tenant
+                const res: any = await httpClient.get('/api/ocr-staging/?resume=true');
                 const rows = (res && Array.isArray(res.data)) ? res.data : (Array.isArray(res) ? res : []);
-                
+
                 if (rows.length > 0) {
-                    const needsAttentionCount = rows.filter((r: any) => !['READY', 'FOUND', 'RESOLVED', 'Voucher Created'].includes(r.validation_status)).length;
-                    // If some are pending/broken, show that count. If all are ready, just show the total ready as pending finalization.
-                    setUnresolvedCount(needsAttentionCount > 0 ? needsAttentionCount : rows.length);
-                    setShowResumePrompt(true);
+                    // Count specifically those needing vendor registration  
+                    const vendorNeeded = rows.filter((r: any) => 
+                        !r.processed && (
+                            r.validation_status === 'NEED_VENDOR' ||
+                            r.validation_status === 'VENDOR_MISSING' ||
+                            r.validation_status === 'NOT_FOUND' ||
+                            (r.vendor_status === 'CREATE_VENDOR') ||
+                            (!r.vendor_id && !['READY','FOUND','RESOLVED','SUCCESS','DUPLICATE','VOUCHER_CREATED'].includes(r.validation_status))
+                        )
+                    ).length;
+
+                    // The resume banner should ONLY show count of items needing action (vendor registration)
+                    // Not the total 12 - just the ones actually requiring work
+                    setUnresolvedCount(vendorNeeded);
+                    setNeedsVendorCount(vendorNeeded); 
+                    setShowResumePrompt(vendorNeeded > 0);
                 }
             } catch (err) {
                 console.error("Check unresolved failed", err);
@@ -806,16 +859,23 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
      * Execute a single fetch of staged invoices and update state.
      * Returns true if polling should stop (completed or max retries).
      */
-    const doFetch = useCallback(async (sid: string): Promise<boolean> => {
+    const doFetch = useCallback(async (sid: string, vFilter?: string): Promise<boolean> => {
         try {
-            // ── Normalize the URL to avoid double-slashes when sid is empty ──
-            const url = sid ? `/api/ocr-staging/${sid}/` : `/api/ocr-staging/`;
+            // ── Normalize the URL and append filter if present ──
+            let url = sid ? `/api/ocr-staging/?upload_session_id=${sid}` : `/api/ocr-staging/?resume=true`;
+            if (vFilter) {
+                const base = url.split('?')[0];
+                const params = new URLSearchParams(url.split('?')[1] || '');
+                params.append('filter', vFilter);
+                url = `${base}?${params.toString()}`;
+            }
             console.log("Calling OCR Staging API:", url);
             const res: any = await httpClient.get(url);
-
+            
             if (!isMounted.current) return true;
             setIsLoading(false);
             setFetchError(null);
+            console.log("OCR API response:", res);
 
             // ── Handle both envelope {status, data:[]} and legacy plain array ──
             let rows: any[];
@@ -834,6 +894,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             }
 
             console.log(`OCR staging: status=${pipelineStatus}, rows=${rows.length}`);
+            console.log("Records count:", rows.length);
 
             // ── Diagnostic: log the first row's full structure so mapping issues are visible ──
             if (rows.length > 0) {
@@ -870,26 +931,30 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                     rawExtracted.header_fields ||
                     rawExtracted || {};
 
-                const backendStatus = r.validation_status || r.status || 'PENDING';
+                // HARDENING: UI MUST READ validation_status AS PRIMARY (Step 4 Fix)
+                const backendStatus = r.validation_status || 'PENDING';
                 let vStatus: ValidationStatus = 'PENDING';
 
-                if (backendStatus === 'READY' || backendStatus === 'found' || backendStatus === 'FOUND') vStatus = 'READY';
-                else if (backendStatus === 'RESOLVED' || backendStatus === 'resolved') vStatus = 'RESOLVED';
-                else if (['VENDOR_MISSING', 'NOT_FOUND', 'not_found', 'Vendor Missing'].includes(backendStatus)) vStatus = 'VENDOR_MISSING';
+                if (['DUPLICATE', 'DUPLICATE_IN_BATCH', 'DUPLICATE_INVOICE', 'duplicate'].includes(backendStatus)) vStatus = 'DUPLICATE';
+                else if (['READY', 'success', 'SUCCESS', 'found', 'FOUND', 'MATCHED', 'matched', 'EXISTS', 'exists'].includes(backendStatus)) vStatus = 'READY';
+                else if (backendStatus === 'VOUCHER_CREATED' || backendStatus === 'Voucher Created' || r.processed === true) vStatus = 'VOUCHER_CREATED';
+                else if (backendStatus === 'RESOLVED' || backendStatus === 'resolved' || backendStatus === 'MATCHED_VENDOR') vStatus = 'RESOLVED';
+                else if (['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND', 'not_found', 'Vendor Missing', 'CREATE_VENDOR'].includes(backendStatus)) vStatus = 'NEED_VENDOR';
                 else if (backendStatus === 'GSTIN_CONFLICT' || backendStatus === 'gstin_conflict') vStatus = 'GSTIN_CONFLICT';
-                else if (backendStatus === 'NEEDS_ATTENTION' || backendStatus === 'needs_attention') vStatus = 'NEEDS_ATTENTION';
-                else if (backendStatus === 'VOUCHER_CREATED' || backendStatus === 'Voucher Created') vStatus = 'VOUCHER_CREATED';
-                else if (['EXTRACTION_FAILED', 'extraction_failed', 'ERROR'].includes(backendStatus)) vStatus = 'EXTRACTION_FAILED';
-                else if (backendStatus === 'VALIDATION_FAILED' || backendStatus === 'validation_failed') vStatus = 'VALIDATION_FAILED';
-                else if (backendStatus === 'processing') vStatus = 'processing';
-                else if (backendStatus === 'DUPLICATE' || backendStatus === 'duplicate') vStatus = 'DUPLICATE';
+                else if (backendStatus === 'NEEDS_ATTENTION' || backendStatus === 'needs_attention' || backendStatus === 'INCOMPLETE' || backendStatus === 'incomplete') vStatus = 'NEEDS_ATTENTION';
+                else if (['EXTRACTION_FAILED', 'extraction_failed', 'ERROR', 'error'].includes(backendStatus)) vStatus = 'EXTRACTION_FAILED';
+                else if (['VALIDATION_FAILED', 'validation_failed', 'FAILED', 'failed'].includes(backendStatus)) vStatus = 'VALIDATION_FAILED';
+                else if (backendStatus === 'processing' || backendStatus === 'PROCESSING' || backendStatus === 'EXTRACTING' || backendStatus === 'UPLOADED') vStatus = 'processing';
 
                 if (rawExtracted._fallback || r.conflict_message?.toLowerCase().includes('low-confidence')) {
                     vStatus = 'LOW_CONFIDENCE';
                 }
 
-                // A row can NEVER be "Ready" if vendor_id is absent
-                if (vStatus === 'READY' && !r.vendor_id) vStatus = 'VENDOR_MISSING';
+                // If backend says READY but we have no vendor, it's not actually ready for finalization
+                if (['READY', 'RESOLVED'].includes(vStatus) && !r.vendor_id) vStatus = 'NEED_VENDOR';
+                
+                // Fallback for non-transient status that hit no case
+                if (vStatus === 'PENDING' && r.status === 'SUCCESS') vStatus = 'NEEDS_ATTENTION';
 
                 // ── Resolve display fields using variadic clean() ──
                 // Prioritize standardized snake_case keys over legacy ERP headers
@@ -919,7 +984,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                     inv['total_invoice_value'],
                     inv['Total Invoice Value'], inv['Grand Total'], inv['total_amount'], inv['total_invoice_amount']
                 );
-                
+
                 // Add totals to row object so ReviewDetailsPanel can use them consistently
                 const totalTaxable = clean(inv['total_taxable_value'], inv['Taxable Value'], inv['Summary Totals']?.['Taxable Value']) || '0.00';
                 const totalCgst = clean(inv['total_cgst'], inv['CGST'], inv['Summary Totals']?.['Total CGST']) || '0.00';
@@ -952,8 +1017,12 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                     total_igst: totalIgst,
                     validationStatus: vStatus,
                     vendor_id: r.vendor_id || null,
-                    vendor_status: (vStatus === 'READY' || vStatus === 'RESOLVED') ? 'FOUND' : 'MISSING' as VendorStatus,
-                    matchedBy: r.matched_by || '',
+                    // Use backend vendor_status as source of truth (set by strict GSTIN validation)
+                    vendor_status: (r.vendor_status === 'MATCHED' || r.vendor_status === 'CREATE_VENDOR' || r.vendor_status === 'EXISTS' || r.vendor_status === 'NEW') 
+                        ? r.vendor_status 
+                        : (r.vendor_id ? 'MATCHED' : 'CREATE_VENDOR') as VendorStatus,
+                    // Only show human-readable matched_by labels; suppress 'AI_PIPELINE' and 'NONE'
+                    matchedBy: (r.matched_by === 'VALIDATION' || r.matched_by === 'Newly Created') ? r.matched_by : '',
                     conflictMessage: r.conflict_message || '',
                     extracted_data: rawExtracted,
                     status: r.status || backendStatus,
@@ -962,6 +1031,8 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             });
 
             setScanResults(seeded);
+            console.log("API count:", rows.length);
+            console.log("UI count:", seeded.length);
 
             // ── Stop polling if backend says completed or all rows settled ──
             if (pipelineStatus === 'completed') {
@@ -1006,13 +1077,11 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
         }
     }, [uploadSessionId]);
 
-    /**
-     * Fetch staged invoices once and start a polling interval if the
-     * pipeline is still processing.  The interval stops automatically
-     * when the backend reports status=completed or MAX_RETRIES is hit.
-     */
-    const fetchStagedInvoices = useCallback(async (forcedSid?: any, _isAutoRetry = false) => {
+    const vFilterRef = useRef<string | undefined>(undefined);
+
+    const fetchStagedInvoices = useCallback(async (forcedSid?: any, _isAutoRetry = false, vFilter?: string) => {
         if (!isMounted.current) return;
+        vFilterRef.current = vFilter;
 
         // ── Resolve session ID ──
         let sid = '';
@@ -1037,7 +1106,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
         setIsLoading(true);
 
         // ── Initial fetch ──
-        const shouldStop = await doFetch(sid);
+        const shouldStop = await doFetch(sid, vFilter);
         if (shouldStop || !isMounted.current) return;
 
         // ── Start polling interval ──
@@ -1064,7 +1133,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 return;
             }
 
-            const done = await doFetch(sid);
+            const done = await doFetch(sid, vFilterRef.current);
             if (done) {
                 console.log('Polling complete — clearing interval.');
                 clearInterval(pollingIntervalRef2.current!);
@@ -1077,7 +1146,9 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     useEffect(() => {
         if (!uploadSessionId) return;
         if (step === 'review' && scanResults.length === 0) {
-            fetchStagedInvoices(uploadSessionId);
+            // Do NOT pass uploadSessionId here. fetchStagedInvoices knows how to 
+            // choose between sid='' (resume all) and sid=uploadSessionId based on the ref.
+            fetchStagedInvoices();
         }
     }, [step, uploadSessionId]); // Removed dependencies that cause re-triggering
 
@@ -1137,15 +1208,18 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
 
             setScanProgress(100);
 
-            if (res?.duplicate_count > 0) {
-                const multi = res.duplicate_count > 1;
-                showInfo(`✨ ${res.duplicate_count} invoice${multi ? 's' : ''} already scanned — results loaded instantly.`);
+            // Show info about recovered results (excluding those hidden by filter, e.g. hard duplicates)
+            const actionableFound = (res.results || []).filter((r: any) => 
+                r.is_duplicate && !['DUPLICATE', 'VOUCHER_CREATED'].includes(r.status)
+            ).length;
+
+            if (actionableFound > 0) {
+                showInfo(`✨ ${actionableFound} results loaded instantly from previous scans.`);
             }
 
-            // Use the returned staged list directly to avoid redundant GET & race conditions
-            if (res?.staged) {
-                fetchStagedInvoices(uploadSessionId);
-            }
+            // MANDATORY: Always fetch from DB after upload. No shortcut.
+            // This ensures invoice_ocr_temp is the SINGLE SOURCE OF TRUTH.
+            fetchStagedInvoices(uploadSessionId);
             setStep('review');
         } catch (err: any) {
             const msg = err?.response?.data?.error || err?.message || 'Scan failed. Please try again.';
@@ -1202,20 +1276,32 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 );
 
                 if (patchRes.success) {
+                    // Map backend status to a valid UI ValidationStatus
+                    const resolvedStatus: ValidationStatus = (() => {
+                        const s = patchRes.status || '';
+                        if (s === 'VOUCHER_CREATED') return 'VOUCHER_CREATED';
+                        if (['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'found', 'MATCHED_VENDOR'].includes(s)) return 'READY';
+                        if (['DUPLICATE', 'DUPLICATE_INVOICE', 'DUPLICATE_IN_BATCH'].includes(s)) return 'DUPLICATE';
+                        if (['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND'].includes(s)) return 'NEED_VENDOR';
+                        return 'PENDING';
+                    })();
+
+                    // Update ONLY the specific row that was just resolved (strict per-row update)
                     setScanResults(prev => prev.map(r =>
                         r.file_hash === resolvingRow.file_hash
                             ? {
                                 ...r,
                                 extracted_data: updatedExtracted,
-                                validationStatus: patchRes.status as ValidationStatus,
+                                validationStatus: resolvedStatus,
                                 vendor_id: patchRes.vendor_id || res.vendor_id,
                                 vendor_name: patchRes.vendor_name || vendorData.vendor_name,
                                 vendor_gstin: vendorData.gstin,
+                                vendor_status: 'EXISTS' as VendorStatus,
                             }
                             : r
                     ));
-                    // Refresh all staged invoices to catch other rows with the same now-resolved vendor
-                    fetchStagedInvoices();
+                    // Refresh all staged invoices to sync any other rows with same vendor from backend
+                    fetchStagedInvoices(undefined, false, vFilterRef.current);
                 }
                 setResolvingRow(null);
             } else {
@@ -1256,7 +1342,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             showSuccess(`Bulk deleted ${hashes.length} invoices`);
         } catch (err) {
             showError('Bulk delete failed partially');
-            fetchStagedInvoices();
+            fetchStagedInvoices(undefined, false, vFilterRef.current);
         }
     }
 
@@ -1289,7 +1375,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
 
     // ── STEP 3 — FINALIZE ────────────────────────────────────────────────────
 
-    const canFinalize = scanResults.some(r => ['READY', 'FOUND', 'RESOLVED'].includes(r.validationStatus) && r.validationStatus !== 'VOUCHER_CREATED');
+    const canFinalize = scanResults.some(r => ['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'NEEDS_ATTENTION', 'LOW_CONFIDENCE', 'DUPLICATE'].includes(r.validationStatus) && r.validationStatus !== 'VOUCHER_CREATED');
 
     const handleFinalize = async () => {
         if (!canFinalize) {
@@ -1297,12 +1383,25 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             return;
         }
 
-        const readyRows = scanResults.filter(r => ['READY', 'FOUND', 'RESOLVED'].includes(r.validationStatus) && r.validationStatus !== 'VOUCHER_CREATED');
-        const validCount = readyRows.length;
-        const total = scanResults.filter(r => r.validationStatus !== 'VOUCHER_CREATED').length;
+        // Count READY rows from ALL scan results (not just the visible filtered table).
+        // This fixes the bug where being on 'Pending' tab hid READY rows, causing a false "0 ready" error.
+        const allReadyRows = scanResults.filter(r => 
+            ['READY', 'FOUND', 'RESOLVED', 'SUCCESS'].includes(r.validationStatus) &&
+            r.validationStatus !== 'VOUCHER_CREATED'
+        );
+        const allPendingRows = scanResults.filter(r => 
+            !['READY', 'FOUND', 'RESOLVED', 'SUCCESS', 'VOUCHER_CREATED', 'DUPLICATE', 'DUPLICATE_IN_BATCH'].includes(r.validationStatus)
+        );
+        const validCount = allReadyRows.length;
+        const pendingCount = allPendingRows.length;
 
-        if (validCount < total) {
-            if (!window.confirm(`Only ${validCount} of ${total} invoices are ready.\n\nReady invoices will be uploaded.\nProblematic invoices will safely remain here so you can fix and retry them without stopping the batch.\n\nContinue?`)) {
+        if (validCount === 0) {
+            showError(`No matched invoices are ready to save. Please complete vendor registration for all items first.`);
+            return;
+        }
+
+        if (pendingCount > 0 && validCount > 0) {
+            if (!window.confirm(`${validCount} invoice(s) are ready to save as vouchers.\n${pendingCount} invoice(s) still need attention and will remain here.\n\nSave the ${validCount} ready invoice(s) now?`)) {
                 return;
             }
         }
@@ -1326,7 +1425,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
             }
 
             // Refresh staged invoices so the unresolved ones remain visible when user comes back
-            fetchStagedInvoices();
+            fetchStagedInvoices(undefined, false, vFilterRef.current);
             onFinalized?.(res);
         } catch (err: any) {
             const msg = err?.response?.data?.error || err?.message || 'Finalize failed.';
@@ -1349,7 +1448,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                 return;
             }
 
-            const schemaFields = VOUCHER_COLUMN_SCHEMAS[voucherType] || [];
+            const schemaFields = getVoucherFlatHeaders(voucherType);
             const allExportRows: any[] = [];
 
             scanResults.forEach((row) => {
@@ -1381,18 +1480,18 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                     // Map all schema fields
                     schemaFields.forEach(colName => {
                         const nk = normalizeVoucherField(colName, voucherType);
-                        
+
                         // Priority search: 
                         // 1. Normalized Header (most reliable for core fields)
                         // 2. Normalized Item
                         // 3. Raw Header (fallback)
                         // 4. Raw Item (fallback)
                         // 5. Parent row properties (invoice_number, etc.)
-                        
+
                         let val = normalizedInv[nk] ?? normalizedItem[nk];
-                        
+
                         if (val === undefined || val === null || val === '') {
-                             val = rawInv[colName] ?? rawItem[colName];
+                            val = rawInv[colName] ?? rawItem[colName];
                         }
 
                         // Special fallbacks for core fields if still empty
@@ -1439,19 +1538,27 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
     const missingCount = scanResults.filter(r => r.validationStatus === 'VENDOR_MISSING' || r.validationStatus === 'NOT_FOUND').length;
     const conflictCount = scanResults.filter(r => r.validationStatus === 'GSTIN_CONFLICT').length;
     const resolvedCount = scanResults.filter(r => r.validationStatus === 'RESOLVED').length;
-    const readyCount = scanResults.filter(r => ['READY', 'FOUND', 'RESOLVED'].includes(r.validationStatus)).length;
+    const readyCount = scanResults.filter(r => ['READY', 'FOUND', 'RESOLVED', 'SUCCESS'].includes(r.validationStatus)).length;
+    const duplicatesCount = scanResults.filter(r => ['DUPLICATE', 'DUPLICATE_IN_BATCH'].includes(r.validationStatus)).length;
     const errorCount = scanResults.filter(r => r.validationStatus === 'VALIDATION_FAILED' || r.validationStatus === 'EXTRACTION_FAILED' || r.validationStatus === 'ERROR').length;
     const pendingCount = scanResults.filter(r => ['PENDING', 'PROCESSING', 'processing', 'scanning'].includes(r.validationStatus)).length;
     const vouchersCreatedCount = scanResults.filter(r => r.validationStatus === 'VOUCHER_CREATED').length;
 
-    const attentionNeededCount = scanResults.filter(r => !['READY', 'FOUND', 'RESOLVED', 'Voucher Created', 'VOUCHER_CREATED'].includes(r.validationStatus)).length;
+    // Attention Needed includes everything that isn't successfully matched OR already successfully filed.
+    // We now INCLUDE duplicates here so they are accounted for in the total batch count (e.g. 5 files scanned = 1 Matched + 4 Attention/Duplicates)
+    const attentionNeededCount = scanResults.filter(r => !['READY', 'FOUND', 'RESOLVED', 'VOUCHER_CREATED', 'SUCCESS'].includes(r.validationStatus)).length;
 
     // Default filter on first load of review step
     useEffect(() => {
-        if (step === 'review' && filterStatus === 'ready' && attentionNeededCount > 0) {
-            setFilterStatus('pending');
+        if (step === 'review') {
+            if (filterStatus === 'ready' && attentionNeededCount > 0) {
+                setFilterStatus('pending');
+            } else if (filterStatus === 'pending' && attentionNeededCount === 0 && readyCount > 0) {
+                // If nothing needs attention but we have ready items (e.g. after resume), show ready items
+                setFilterStatus('ready');
+            }
         }
-    }, [step]);
+    }, [step, attentionNeededCount, readyCount]);
 
 
     return (
@@ -1463,30 +1570,26 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                     return null;
                 }
 
-                // Support {invoice:{...}}, {header:{...}}, or flat structure
-                const inv = resolvingRow.extracted_data?.invoice
-                    || resolvingRow.extracted_data?.header
-                    || resolvingRow.extracted_data
-                    || {};
-
+                // Support hierarchical structure or flat structure
+                const sections = resolvingRow.extracted_data?.sections || {};
+                const supplier = sections.supplier_details || resolvingRow.extracted_data || {};
+                
                 // Extract items for Supplier Items pre-filling
-                const rawItems = resolvingRow.extracted_data?.items
-                    || resolvingRow.extracted_data?.line_items
-                    || [];
+                const rawItems = sections.items || resolvingRow.extracted_data?.items || resolvingRow.extracted_data?.line_items || [];
                 const supplier_items = rawItems.map((it: any) => ({
                     supplierItemCode: it['Item Code'] || it['item_code'] || it['Part No'] || '',
                     supplierItemName: it['Item Name'] || it['item_name'] || it['Description'] || it['description'] || '',
-                    hsnSac: it['HSN/SAC'] || it['hsn_sac'] || it['HSN Code'] || it['hsnSac'] || ''
+                    hsnSac: it['HSN/SAC'] || it['hsn_sac'] || it['HSN Code'] || it['hsnSac'] || it['hsn_code'] || ''
                 }));
 
                 return (
                     <CreateVendorModal
                         initialData={{
-                            vendor_name: resolvingRow.vendor_name || inv['Vendor Name'] || inv['vendor_name'] || '',
-                            gstin: resolvingRow.vendor_gstin || inv['GSTIN'] || inv['vendor_gstin'] || '',
-                            address: inv['Bill From - Address Line 1'] || inv['Address'] || inv['address'] || '',
-                            state: inv['Bill From - State'] || inv['State'] || '',
-                            branch: inv['Branch'] || '',
+                            vendor_name: resolvingRow.vendor_name || supplier['vendor_name'] || supplier['Vendor Name'] || '',
+                            gstin: resolvingRow.vendor_gstin || supplier['gstin'] || supplier['GSTIN'] || '',
+                            address: supplier['vendor_address'] || supplier['Address'] || supplier['address'] || '',
+                            state: supplier['vendor_city'] || supplier['State'] || supplier['state'] || '',
+                            branch: supplier['branch'] || resolvingRow.branch || '',
                             supplier_items: supplier_items
                         }}
                         onClose={() => setResolvingRow(null)}
@@ -1509,6 +1612,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                             let newValidationStatus: ValidationStatus = r.validationStatus;
                             if (revalidation) {
                                 if (revalidation.status === 'READY' || revalidation.status === 'FOUND' || revalidation.status === 'found') newValidationStatus = 'READY';
+                                else if (revalidation.status === 'DUPLICATE' || revalidation.status === 'duplicate') newValidationStatus = 'DUPLICATE';
                                 else if (revalidation.status === 'VENDOR_MISSING' || revalidation.status === 'NOT_FOUND' || revalidation.status === 'not_found') newValidationStatus = 'VENDOR_MISSING';
                                 else if (revalidation.status === 'GSTIN_CONFLICT' || revalidation.status === 'gstin_conflict') newValidationStatus = 'GSTIN_CONFLICT';
                                 else if (revalidation.status === 'VALIDATION_FAILED' || revalidation.status === 'validation_failed') newValidationStatus = 'VALIDATION_FAILED';
@@ -1533,7 +1637,14 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                 total_amount: newAmount,
                                 vendor_id: revalidation?.vendor_id ?? r.vendor_id,
                                 vendor_name: revalidation?.vendor_name || r.vendor_name,
-                                vendor_status: (revalidation?.status === 'READY' || revalidation?.status === 'found' || revalidation?.status === 'FOUND') ? 'FOUND' : r.vendor_status,
+                                // Use backend's authoritative vendor_status (EXISTS→FOUND, NEW→MISSING)
+                                // falling back to status-based inference for legacy compatibility
+                                vendor_status: (
+                                    revalidation?.vendor_status === 'EXISTS' ||
+                                    revalidation?.status === 'READY' ||
+                                    revalidation?.status === 'FOUND' ||
+                                    revalidation?.status === 'found'
+                                ) ? 'FOUND' as VendorStatus : r.vendor_status,
                             };
                             if (newValidationStatus === 'VENDOR_MISSING') updatedRow = updated;
                             return updated;
@@ -1580,10 +1691,16 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                     {step === 'scanning' && 'AI extracting invoice data…'}
                                     {step === 'review' && (
                                         <span className="flex items-center gap-2">
-                                            <span className="bg-emerald-400/30 text-emerald-50 px-2 py-0.5 rounded-full text-[10px] font-bold border border-emerald-400/20">
-                                                {readyCount + resolvedCount} Ready
+                                            <span
+                                                onClick={() => setFilterStatus('ready')}
+                                                className={`cursor-pointer px-2 py-0.5 rounded-full text-[10px] font-bold border transition-all ${filterStatus === 'ready' ? 'bg-emerald-400 text-white border-white/40 shadow-sm' : 'bg-emerald-400/30 text-emerald-50 border-emerald-400/20 hover:bg-emerald-400/50'}`}
+                                            >
+                                                {readyCount} Matched
                                             </span>
-                                            <span className={`${attentionNeededCount > 0 ? 'bg-amber-400/30 text-amber-50' : 'text-indigo-200'} px-2 py-0.5 rounded-full text-[10px] font-bold border border-white/10`}>
+                                            <span
+                                                onClick={() => setFilterStatus('pending')}
+                                                className={`cursor-pointer px-2 py-0.5 rounded-full text-[10px] font-bold border transition-all ${filterStatus === 'pending' ? 'bg-amber-400 text-white border-white/40 shadow-sm' : `${attentionNeededCount > 0 ? 'bg-amber-400/30 text-amber-50 border-white/10' : 'bg-white/10 text-white/50 border-white/5'} hover:bg-white/20`}`}
+                                            >
                                                 {attentionNeededCount} Need Attention
                                             </span>
                                         </span>
@@ -1597,7 +1714,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                         {/* Step Indicator */}
                         <div className="flex items-center gap-1 mr-4">
                             {(['upload', 'review', 'done'] as const).map((s, idx) => {
-                                const labels = ['1. Select', '2. Pending', '3. Save'];
+                                const labels = ['1. Upload', '2. Review', '3. Save'];
                                 const active = step === s || (s === 'upload' && step === 'scanning') || (s === 'review' && step === 'finalizing');
                                 const done = (s === 'upload' && ['review', 'finalizing', 'done'].includes(step)) ||
                                     (s === 'review' && step === 'done');
@@ -1639,31 +1756,55 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                         <div className="flex-shrink-0 w-12 h-12 bg-indigo-100 rounded-2xl flex items-center justify-center text-indigo-600 text-xl shadow-inner">📄</div>
                                         <div className="flex-1 min-w-0">
                                             <p className="text-sm font-black text-indigo-900 leading-tight">
-                                                Resume Previous Batch?
+                                                Resume Previous Work?
                                             </p>
-                                            <p className="text-xs text-indigo-700 mt-1 font-medium italic">
-                                                You have {unresolvedCount} invoice{unresolvedCount !== 1 ? 's' : ''} already scanned and waiting for your review.
-                                            </p>
+                                            <div className="text-xs text-indigo-700 mt-1 font-medium italic space-y-1">
+                                                <p>You have <span className="font-bold text-indigo-900">{unresolvedCount}</span> invoice{unresolvedCount !== 1 ? 's' : ''} already scanned and waiting.</p>
+                                                {needsVendorCount > 0 && (
+                                                    <p className="text-orange-700 font-black flex items-center gap-1">
+                                                        ⚠️ {needsVendorCount} require{needsVendorCount !== 1 ? 's' : ''} vendor registration.
+                                                    </p>
+                                                )}
+                                            </div>
                                             <div className="flex items-center gap-3 mt-4">
+                                                {needsVendorCount > 0 ? (
+                                                    <button
+                                                        onClick={() => {
+                                                            useAllUnresolvedRef.current = true;
+                                                            setUseAllUnresolved(true);
+                                                            setFilterStatus('pending'); 
+                                                            fetchStagedInvoices(null, false, 'create_vendor');
+                                                            setStep('review');
+                                                        }}
+                                                        className="px-5 py-2 bg-orange-500 text-white rounded-xl text-xs font-bold hover:bg-orange-600 transition-all active:scale-95 shadow-lg flex items-center gap-2"
+                                                    >
+                                                        🔍 View Unresolved Vendors
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => {
+                                                            useAllUnresolvedRef.current = true;
+                                                            setUseAllUnresolved(true);
+                                                            fetchStagedInvoices();
+                                                            setStep('review');
+                                                        }}
+                                                        className="px-5 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all active:scale-95 shadow-lg flex items-center gap-2"
+                                                    >
+                                                        🚀 Review Pending Files
+                                                    </button>
+                                                )}
                                                 <button
                                                     onClick={() => {
                                                         useAllUnresolvedRef.current = true;
                                                         setUseAllUnresolved(true);
-                                                        fetchStagedInvoices();
+                                                        setFilterStatus('ready');
+                                                        fetchStagedInvoices(); // Fetch all unresolved (unfiltered)
                                                         setStep('review');
                                                     }}
-                                                    className="px-5 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all active:scale-95 shadow-lg flex items-center gap-2"
+                                                    className="px-5 py-2 bg-white text-indigo-600 border border-indigo-200 rounded-xl text-xs font-bold hover:bg-indigo-50 transition-all shadow-sm"
                                                 >
-                                                    🚀 Continue Scanning
+                                                    Review All Staged
                                                 </button>
-                                                {scanResults.length > 0 && (
-                                                   <button
-                                                        onClick={() => setStep('review')}
-                                                        className="px-5 py-2 bg-white text-indigo-600 border border-indigo-200 rounded-xl text-xs font-bold hover:bg-indigo-50 transition-all shadow-sm"
-                                                    >
-                                                        Review Uploaded
-                                                    </button>
-                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -1749,7 +1890,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                     <span className="flex-shrink-0 animate-pulse text-sm">⏳</span>
                                                     <span>You have <strong>{unresolvedCount}</strong> other invoice{unresolvedCount !== 1 ? 's' : ''} already in the scanner pipeline.</span>
                                                 </div>
-                                                <button 
+                                                <button
                                                     onClick={() => {
                                                         useAllUnresolvedRef.current = true;
                                                         setUseAllUnresolved(true);
@@ -1801,10 +1942,10 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                         {/* ────── STEP: REVIEW ────── */}
                         {step === 'review' && (
                             <div className="p-4 space-y-4">
-                                <div className="grid grid-cols-3 gap-3">
+                                <div className="flex justify-center">
                                     <div
                                         onClick={() => setFilterStatus('pending')}
-                                        className={`p-3 rounded-2xl border-2 text-center font-bold cursor-pointer transition-all shadow-lg ${filterStatus === 'pending'
+                                        className={`p-3 rounded-2xl border-2 text-center font-bold cursor-pointer transition-all shadow-lg w-full max-w-[280px] ${filterStatus === 'pending'
                                             ? 'border-amber-500 bg-amber-50 text-amber-700 ring-4 ring-amber-100'
                                             : 'border-amber-100 bg-amber-50/50 text-amber-600 hover:border-amber-300'
                                             }`}
@@ -1812,30 +1953,6 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                         <div className="text-xl mb-1">⚠️</div>
                                         <div className="text-2xl">{attentionNeededCount}</div>
                                         <div className="text-[10px] uppercase opacity-70 tracking-wider">Need Attention</div>
-                                    </div>
-
-                                    <div
-                                        onClick={() => setFilterStatus('scanning')}
-                                        className={`p-3 rounded-2xl border-2 text-center font-bold cursor-pointer transition-all shadow-lg ${filterStatus === 'scanning'
-                                            ? 'border-blue-500 bg-blue-50 text-blue-700 ring-4 ring-blue-100'
-                                            : 'border-blue-100 bg-blue-50/50 text-blue-600 hover:border-blue-300'
-                                            }`}
-                                    >
-                                        <div className="text-xl mb-1">⏳</div>
-                                        <div className="text-2xl">{pendingCount}</div>
-                                        <div className="text-[10px] uppercase opacity-70 tracking-wider">In Progress</div>
-                                    </div>
-
-                                    <div
-                                        onClick={() => setFilterStatus('ready')}
-                                        className={`p-3 rounded-2xl border-2 text-center font-bold cursor-pointer transition-all shadow-lg ${filterStatus === 'ready'
-                                            ? 'border-emerald-500 bg-emerald-50 text-emerald-700 ring-4 ring-emerald-100'
-                                            : 'border-emerald-100 bg-emerald-50/50 text-emerald-600 hover:border-emerald-300'
-                                            }`}
-                                    >
-                                        <div className="text-xl mb-1">✅</div>
-                                        <div className="text-2xl">{readyCount + resolvedCount}</div>
-                                        <div className="text-[10px] uppercase opacity-70 tracking-wider">Ready</div>
                                     </div>
                                 </div>
 
@@ -1861,7 +1978,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                             <span className="flex-shrink-0 text-base">⏳</span>
                                             <span>Validating <strong>{pendingCount}</strong> vendor(s) via AI pipeline…</span>
                                         </div>
-                                        <div className="text-[10px] bg-blue-100 px-2 py-0.5 rounded-full">Attempt {retryCount}/3</div>
+                                        <div className="text-[10px] bg-blue-100 px-2 py-0.5 rounded-full">Attempt {retryCount}/{MAX_RETRIES}</div>
                                     </div>
                                 )}
 
@@ -1901,7 +2018,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                 <input
                                                     type="checkbox"
                                                     className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                                    checked={selectedHashes.size > 0 && selectedHashes.size === scanResults.filter(row => !['READY', 'FOUND', 'RESOLVED'].includes(row.validationStatus)).length}
+                                                    checked={selectedHashes.size > 0 && selectedHashes.size === scanResults.filter(row => row.vendor_status !== 'EXISTS').length}
                                                     onChange={toggleSelectAll}
                                                 />
                                             </th>
@@ -1911,6 +2028,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                             <th className="px-3 py-3 text-left">Date</th>
                                             <th className="px-3 py-3 text-left">Vendor</th>
                                             <th className="px-3 py-3 text-left">GSTIN</th>
+                                            <th className="px-3 py-3 text-left">Branch</th>
                                             <th className="px-3 py-3 text-right">Amount</th>
                                             <th className="px-3 py-3 text-center">Status</th>
                                             <th className="px-3 py-3 text-center">Action</th>
@@ -1918,19 +2036,22 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
                                         {scanResults
-                                            .filter(row => {
-                                                const isVal = ['READY', 'FOUND', 'RESOLVED'].includes(row.validationStatus);
-                                                const isPen = ['PENDING', 'scanning', 'processing', 'PROCESSING'].includes(row.validationStatus);
-                                                const isAttention = row.validationStatus === 'DUPLICATE' || row.validationStatus === 'GSTIN_CONFLICT' || row.validationStatus === 'VENDOR_MISSING' || row.validationStatus === 'EXTRACTION_FAILED';
+                                            .filter(r => {
+                                                // If we are on the 'Ready' tab, only show Ready/Found/Success
+                                                if (filterStatus === 'ready') return ['READY', 'FOUND', 'RESOLVED', 'SUCCESS'].includes(r.validationStatus);
                                                 
+                                                // If we are on the 'Pending' tab:
                                                 if (filterStatus === 'pending') {
-                                                    // Show everything that is NOT ready or IS attention/pending
-                                                    return !isVal || isPen || isAttention;
+                                                    // CRITICAL: If the user chose the 'View Unresolved Vendors' shortcut, we stay strict.
+                                                    if (vFilterRef.current === 'create_vendor') {
+                                                        // Strict: ONLY show rows that need vendor registration
+                                                        return ['NEED_VENDOR', 'VENDOR_MISSING', 'NOT_FOUND'].includes(r.validationStatus);
+                                                    }
+                                                    // Otherwise (Fresh Upload or Full Review), show everything EXCEPT already saved vouchers
+                                                    // This ensures "Show the uploaded" is satisfied — user sees all 5 files they just scanned.
+                                                    return r.validationStatus !== 'VOUCHER_CREATED';
                                                 }
-                                                if (filterStatus === 'scanning') {
-                                                    return isPen;
-                                                }
-                                                return isVal;
+                                                return true;
                                             })
                                             .map((row, idx) => {
                                                 // Extract invoice data for display, prioritizing row-level fields
@@ -1938,8 +2059,8 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                 const invoice = row.extracted_data?.invoice || row.extracted_data?.header || row.extracted_data || {};
 
                                                 return (
-                                                    <tr key={idx} className={`group hover:bg-indigo-50/40 transition-colors ${selectedHashes.has(row.file_hash) ? 'bg-indigo-50' : row.validationStatus === 'GSTIN_CONFLICT' ? 'bg-red-50/40' :
-                                                        row.validationStatus === 'NOT_FOUND' ? 'bg-amber-50/30' : ''
+                                                    <tr key={idx} className={`group hover:bg-indigo-50/40 transition-colors ${selectedHashes.has(row.file_hash) ? 'bg-indigo-50' :
+                                                        row.vendor_status === 'NEW' ? 'bg-amber-50/30' : ''
                                                         }`}>
                                                         <td className="px-3 py-3">
                                                             <input
@@ -1964,43 +2085,42 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                         <td className="px-4 py-3">
                                                             <div className="flex flex-col">
                                                                 <span className="font-bold text-gray-900 text-[11px] leading-tight truncate max-w-[120px]" title={row.vendor_name}>{getCellValue(row, 'vendor_name')}</span>
-                                                                {row.validationStatus === 'GSTIN_CONFLICT' && row.conflictMessage ? (
-                                                                    <span className="text-[9px] text-red-600 font-bold uppercase tracking-tighter mt-0.5 leading-tight">{row.conflictMessage}</span>
-                                                                ) : row.matchedBy && (
-                                                                    <span className="text-[9px] text-emerald-600 font-bold uppercase tracking-tighter mt-0.5">Matched by {row.matchedBy}</span>
-                                                                )}
                                                             </div>
                                                         </td>
                                                         <td className="px-3 py-3 font-mono text-[10px] text-gray-500">{getCellValue(row, 'vendor_gstin')}</td>
+                                                        <td className="px-3 py-3 text-[11px] text-gray-600 font-medium">{row.extracted_data?.sections?.supplier_details?.branch || '—'}</td>
                                                         <td className="px-3 py-3 text-right font-black text-gray-900 text-[11px]">₹{getCellValue(row, 'total_amount')}</td>
-                                                        <td className="px-2 py-3 text-center"><StatusBadge status={row.validationStatus} title={row.conflictMessage} /></td>
+                                                        <td className="px-2 py-3 text-center">
+                                                             {row.validationStatus === "VOUCHER_CREATED" ? (
+                                                                 <span className="px-2 py-1 bg-emerald-600 text-white rounded text-[10px] font-bold uppercase whitespace-nowrap shadow-sm">✅ Saved</span>
+                                                             ) : row.validationStatus === "DUPLICATE" ? (
+                                                                 <span className="px-2 py-1 bg-red-100 text-red-800 border border-red-300 rounded text-[10px] font-bold uppercase whitespace-nowrap" title="Already in ERP">ALREADY EXIST</span>
+                                                             ) : row.validationStatus === "INCOMPLETE" ? (
+                                                                 <span className="px-2 py-1 bg-amber-100 text-amber-800 border border-amber-300 rounded text-[10px] font-bold uppercase whitespace-nowrap" title="Missing Invoice Number">Incomplete</span>
+                                                             ) : (["READY", "SUCCESS", "RESOLVED", "FOUND"].includes(row.validationStatus)) ? (
+                                                                 <span className="px-2 py-1 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded text-[10px] font-bold uppercase whitespace-nowrap" title="Ready to Finalize & Save">ALREADY EXIST</span>
+                                                             ) : row.vendor_id ? (
+                                                                 <span className="px-2 py-1 bg-indigo-100 text-indigo-800 border border-indigo-300 rounded text-[10px] font-bold uppercase whitespace-nowrap" title="Vendor Matched">ALREADY EXIST</span>
+                                                             ) : row.validationStatus === "NEED_VENDOR" ? (
+                                                                 <span className="px-2 py-1 bg-orange-100 text-orange-800 border border-orange-300 rounded text-[10px] font-bold uppercase whitespace-nowrap">Create Vendor</span>
+                                                             ) : row.validationStatus === "GSTIN_CONFLICT" ? (
+                                                                 <span className="px-2 py-1 bg-red-600 text-white rounded text-[10px] font-bold uppercase whitespace-nowrap" title="GSTIN Conflict">Conflict</span>
+                                                             ) : (row.validationStatus === "NEEDS_ATTENTION" || row.validationStatus === "LOW_CONFIDENCE" || row.validationStatus === "VALIDATION_FAILED") ? (
+                                                                 <span className="px-2 py-1 bg-amber-500 text-white rounded text-[10px] font-bold uppercase whitespace-nowrap" title="Review Required">Review</span>
+                                                             ) : row.validationStatus === "EXTRACTION_FAILED" ? (
+                                                                 <span className="px-2 py-1 bg-red-500 text-white rounded text-[10px] font-bold uppercase whitespace-nowrap" title="AI Extraction Failed">Error</span>
+                                                             ) : (
+                                                                 <span className="px-2 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded text-[10px] font-bold uppercase inline-flex items-center gap-1 whitespace-nowrap">
+                                                                     <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent animate-spin rounded-full" /> PROCESSING
+                                                                 </span>
+                                                             )}
+                                                         </td>
                                                         <td className="px-2 py-3 text-center">
                                                             <div className="flex items-center justify-center gap-1">
-                                                                {['VENDOR_MISSING', 'NOT_FOUND'].includes(row.validationStatus) ? (
-                                                                    <button onClick={() => setResolvingRow(row)} className="px-2 py-1 bg-amber-500 text-white rounded text-[10px] font-bold hover:bg-amber-600 uppercase">Create Vendor</button>
-                                                                ) : row.validationStatus === 'GSTIN_CONFLICT' ? (
-                                                                    <button onClick={() => setEditingRow(row)} className="px-2 py-1 bg-red-500 text-white rounded text-[10px] font-bold hover:bg-red-600 uppercase">Resolve</button>
-                                                                ) : row.validationStatus === 'LOW_CONFIDENCE' ? (
-                                                                    <button onClick={() => setEditingRow(row)} className="px-2 py-1 bg-amber-600 text-white rounded text-[10px] font-bold hover:bg-amber-700 uppercase" title={row.conflictMessage || "Low confidence OCR – manual review needed"}>Review</button>
-                                                                ) : row.validationStatus === 'NEEDS_ATTENTION' ? (
-                                                                    <button onClick={() => setEditingRow(row)} className="px-2 py-1 bg-orange-500 text-white rounded text-[10px] font-bold hover:bg-orange-600 uppercase" title={row.conflictMessage || "Manual review required"}>Review</button>
-                                                                ) : row.validationStatus === 'VALIDATION_FAILED' ? (
-                                                                    <span className="text-red-500 text-[10px] uppercase font-bold text-center px-1" title={row.conflictMessage || "Invalid data"}>Fix Data</span>
-                                                                ) : ['EXTRACTION_FAILED', 'ERROR'].includes(row.validationStatus) ? (
-                                                                    <span className="text-red-500 text-[10px] uppercase font-bold text-center px-1" title={row.conflictMessage || "Extraction failed"}>Retry</span>
-                                                                ) : row.validationStatus === 'PENDING' || row.validationStatus === 'processing' ? (
-                                                                    <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent animate-spin rounded-full" />
-                                                                ) : row.validationStatus === 'VOUCHER_CREATED' ? (
-                                                                    <div className="flex flex-col items-center">
-                                                                        <div className="w-5 h-5 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center">
-                                                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                                                                        </div>
-                                                                        <span className="text-[8px] font-black text-indigo-600 uppercase mt-0.5 whitespace-nowrap">Voucher Created</span>
-                                                                    </div>
-                                                                ) : (
-                                                                    <div className="flex items-center gap-1 px-1 py-1 bg-emerald-100 rounded text-emerald-700" title="All checks passed">
-                                                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                                                                    </div>
+                                                                {row.validationStatus === 'NEED_VENDOR' && (
+                                                                    <button onClick={() => setResolvingRow(row)} className="px-2 py-1 bg-orange-500 text-white rounded text-[10px] font-bold hover:bg-orange-600 uppercase">
+                                                                        CREATE VENDOR
+                                                                    </button>
                                                                 )}
                                                                 {/* Revalidate button — triggers a fresh vendor check without opening edit modal */}
                                                                 {!['PENDING', 'VOUCHER_CREATED'].includes(row.validationStatus) && (
@@ -2014,9 +2134,21 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                                                     let newStatus: ValidationStatus = 'VENDOR_MISSING';
                                                                                     const s = result.status || '';
                                                                                     if (s === 'READY' || s === 'found' || s === 'FOUND') newStatus = 'READY';
-                                                                                    else if (s === 'VENDOR_MISSING' || s === 'NOT_FOUND' || s === 'not_found') newStatus = 'VENDOR_MISSING';
+                                                                                    else if (s === 'DUPLICATE' || s === 'duplicate') newStatus = 'DUPLICATE';
+                                                                                    else if (s === 'VENDOR_MISSING' || s === 'NOT_FOUND' || s === 'not_found' || s === 'CREATE_VENDOR') newStatus = 'VENDOR_MISSING';
                                                                                     else if (s === 'GSTIN_CONFLICT' || s === 'gstin_conflict') newStatus = 'GSTIN_CONFLICT';
-                                                                                    const updated = { ...r, validationStatus: newStatus, vendor_id: result.vendor_id ?? r.vendor_id, vendor_name: result.vendor_name || r.vendor_name };
+                                                                             const updated = {
+                                                                                    ...r,
+                                                                                    validationStatus: newStatus,
+                                                                                    vendor_id: result.vendor_id ?? r.vendor_id,
+                                                                                    vendor_name: result.vendor_name || r.vendor_name,
+                                                                                    // Sync vendor_status from PATCH response (Handle both legacy and modern codes)
+                                                                                    vendor_status: (result.vendor_status === 'EXISTS' || result.vendor_status === 'MATCHED')
+                                                                                        ? 'MATCHED' as VendorStatus
+                                                                                        : (result.vendor_status === 'NEW' || result.vendor_status === 'CREATE_VENDOR')
+                                                                                            ? 'CREATE_VENDOR' as VendorStatus
+                                                                                            : r.vendor_status,
+                                                                                };
                                                                                     if (newStatus === 'VENDOR_MISSING') setTimeout(() => setResolvingRow(updated), 150);
                                                                                     return updated;
                                                                                 }));
@@ -2096,7 +2228,7 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                     {step === 'upload' && (
                                         <div className="flex items-center gap-3">
                                             {unresolvedCount > 0 && (
-                                                <button 
+                                                <button
                                                     onClick={() => {
                                                         useAllUnresolvedRef.current = true;
                                                         setUseAllUnresolved(true);
@@ -2109,9 +2241,9 @@ const BulkInvoiceUploadModal: React.FC<BulkInvoiceUploadModalProps> = ({
                                                 </button>
                                             )}
 
-                                            <button 
-                                                onClick={handleScan} 
-                                                disabled={selectedFiles.length === 0} 
+                                            <button
+                                                onClick={handleScan}
+                                                disabled={selectedFiles.length === 0}
                                                 className="px-8 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl text-sm font-bold shadow-lg disabled:opacity-40 flex items-center gap-2 whitespace-nowrap active:scale-95"
                                             >
                                                 Scan {selectedFiles.length > 0 ? `${selectedFiles.length} File(s)` : 'Files'}

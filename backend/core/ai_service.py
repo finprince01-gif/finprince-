@@ -37,7 +37,7 @@ def create_dynamic_voucher_extraction_request(
     user_id: str = '',
     tenant_id: str = '',
     upload_session_id: Optional[str] = None,
-    extraction_mode: str = 'finpixe'
+    extraction_mode: str = 'ai_native'
 ) -> dict:
 
     """
@@ -62,9 +62,9 @@ def create_dynamic_voucher_extraction_request(
         file_hash = compute_file_hash(image_content)
 
         # ── DUPLICATE CHECK ──────────────────────────────────────────────────
-        # Skip cache if not in standard finpixe mode (e.g. tally, zoho, sap)
+        # Skip cache if not in standard AI mode (e.g. tally, zoho, sap)
         existing = None
-        if extraction_mode == 'finpixe':
+        if extraction_mode == 'ai_native':
             existing = get_cached_ocr(file_hash, tenant_id)
             if existing:
                 logger.info(f"Duplicate detect: Reusing cached OCR for hash={file_hash[:12]} tenant={tenant_id}")

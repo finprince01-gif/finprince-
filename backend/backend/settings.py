@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'reports',
     'drf_spectacular',
     'vouchers',
+    'ocr_pipeline',
 ]
 
 MIDDLEWARE = [
@@ -405,6 +406,7 @@ MIGRATION_MODULES = {
     'login': None,
     'dashboard': None,
     'settings': None,
+    'ocr_pipeline': None,
 }
 # BANK RECONCILIATION SETTINGS
 # ============================================================================
