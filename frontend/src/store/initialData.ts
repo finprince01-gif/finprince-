@@ -1,4 +1,4 @@
-import type { Ledger, LedgerGroupMaster, Unit, StockItem, StockGroup } from './types';
+import type { Ledger, LedgerGroupMaster, Unit, StockItem, StockGroup } from '../types';
 
 export const initialLedgers: Ledger[] = [];
 
@@ -17,7 +17,7 @@ export const initialUnits: Unit[] = [
   { name: 'Gram' },
   { name: 'Liter' },
   { name: 'Meter' },
-];
+] as any;
 
 export const initialStockGroups: StockGroup[] = [
   { name: 'Primary' },
@@ -27,7 +27,7 @@ export const initialStockGroups: StockGroup[] = [
   { name: 'Consumables' },
   { name: 'Packing Materials' },
   { name: 'Spare Parts' },
-];
+] as any;
 
 export const initialStockItems: StockItem[] = [
   // Finished Goods
@@ -43,4 +43,4 @@ export const initialStockItems: StockItem[] = [
   // Consumables
   { name: 'Stationery', group: 'Consumables', unit: 'Pack', hsn: '789012', gstRate: 18 },
   { name: 'Cleaning Supplies', group: 'Consumables', unit: 'Bottle', hsn: '890123', gstRate: 12 },
-];
+] as any;

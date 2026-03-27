@@ -20,6 +20,7 @@ import {
     OFFICIAL_TALLY_VOUCHER_HEADERS,
     OFFICIAL_TALLY_VOUCHER_SET,
 } from './tallyVoucherSchema';
+import { getVoucherFlatHeaders } from '../configs/schemaConfig';
 
 export { OFFICIAL_TALLY_VOUCHER_HEADERS, OFFICIAL_TALLY_VOUCHER_SET };
 export type { TallyVoucherValidationResult } from './tallyVoucherSchema';
@@ -47,86 +48,15 @@ export const TALLY_WHITELIST: ReadonlySet<string> = OFFICIAL_TALLY_VOUCHER_SET;
 // ────────────────────────────────────────────────────────────────────────────────
 
 export const VOUCHER_COLUMN_SCHEMAS: Record<string, string[]> = {
-    'Sales': [
-        // ── INVOICE DETAILS ──────────────────────────────────────────────────────
-        "Date", "Sales Invoice No.", "Sales Voucher Series", "Sales Voucher No.",
-        "Customer Name", "GSTIN", "Upload Supporting Document",
-        "Sales Order No.", "Outward Slip No.", "Place of Supply", "Reverse Charge",
-        "Invoice Type", "State Type", "Currency", "Conversion Rate",
-        // Bill To / Ship To address (deduplicated — one set)
-        "Bill To - Address Line 1", "Bill To - Address Line 2", "Bill To - City", "Bill To - State", "Bill To - Pincode", "Bill To - Country",
-        "Ship To - Address Line 1", "Ship To - Address Line 2", "Ship To - City", "Ship To - State", "Ship To - Pincode", "Ship To - Country",
-
-        // ── ITEM & TAX DETAILS (FOREIGN CURRENCY) ─────────────────────────────────
-        "Item Code", "Item Name", "HSN/SAC", "Quantity", "UQC", "Rate (FC)", "Amount (FC)",
-
-        // ── ITEM & TAX DETAILS (INR) ───────────────────────────────────────────────
-        // Note: Item Code / Item Name / HSN/SAC already listed above (deduplicated)
-        "Qty", "UOM", "Alternate Unit", "Item Rate",
-        "Taxable Value", "CGST", "SGST/UTGST", "IGST", "Cess",
-        "Invoice Value", "Sales Ledger", "Description",
-
-        // ── PAYMENT DETAILS (summary fields — not duplicated from item section) ─────
-        "State Cess", "Round Off",
-        "TDS/TCS under Income Tax", "TDS/TCS under GST", "Advance", "Payable", "Posting Note:",
-        "Advance Ref. No.", "Applied Now",
-
-        // ── DISPATCH DETAILS ──────────────────────────────────────────────────────
-        "Dispatch From", "Mode of Transport", "Dispatch Date", "Dispatch Time",
-        "Delivery Type", "Transporter ID/GSTIN", "Transporter Name", "Vehicle No.", "LR/GR/Consignment",
-        "Shipping Bill No.", "Shipping Bill Date", "Ship/Port Code", "Origin",
-        "Vessel/Flight No.", "Port of Loading", "Port of Discharge", "Final Destination",
-        "Railway Receipt No.", "Railway Receipt Date", "FNR No.", "Station of Loading", "Station of Discharge",
-
-        // ── E-INVOICE & E-WAY BILL DETAILS ───────────────────────────────────────
-        "Eway Bill - Available", "Eway Bill No.", "Eway Bill Date", "Validity Period", "Distance (KM)",
-        "Extension Date", "Extended EWB No.", "Extension Reason", "From Place",
-        "Remaining Distance", "New Validity", "Updated Vehicle No.",
-        "IRN", "Ack. No."
-    ],
-    'Purchase': [
-        // ── SUPPLIER DETAILS ──────────────────────────────────────────────────────
-        "Date", "Supplier Invoice No.", "Purchase Voucher Series", "Purchase Voucher No.",
-        "Vendor Name", "GSTIN", "Upload Supporting Document",
-        "Bill From - Address Line 1", "Bill From - Address Line 2", "Bill From - City", "Bill From - State", "Bill From - Pincode", "Bill From - Country",
-        "Branch",
-        "Ship From - Address Line 1", "Ship From - Address Line 2", "Ship From - City", "Ship From - State", "Ship From - Pincode", "Ship From - Country",
-        "Bill To - Name", "Bill To - GSTIN", "Bill To - Address Line 1", "Bill To - Address Line 2", "Bill To - City", "Bill To - State", "Bill To - Pincode", "Bill To - Country",
-        "Ship To - Name", "Ship To - GSTIN", "Ship To - Address Line 1", "Ship To - Address Line 2", "Ship To - City", "Ship To - State", "Ship To - Pincode", "Ship To - Country",
-        "Input Type", "Foreign Currency", "Currency", "Conversion Rate", "Place of Supply",
-
-        // ── SUPPLY DETAILS (FOREIGN CURRENCY) ────────────────────────────────────
-        "Purchase Order No.", "Quantity", "UQC", "Rate (FC)", "Amount (FC)",
-
-        // ── SUPPLY DETAILS (INR) — per-line-item extractable fields ────────────────
-        // Note: Purchase Order No. / Quantity / UQC already above (deduplicated)
-        "Item Code", "Item Name", "HSN/SAC", "Qty", "UOM",
-        "Item Rate", "Taxable Value", "IGST", "CGST", "SGST/UTGST", "Cess",
-        "Invoice Value",
-
-        // ── DUE DETAILS (summary / header-level only — no duplicates of item cols) ──
-        "TDS/TCS under GST", "TDS/TCS under Income Tax", "Advance Paid", "Round Off", "Amount Due", "Posting Note",
-
-        // ── TRANSIT DETAILS ───────────────────────────────────────────────────────
-        "Received In", "Mode of Transport", "Received Date", "Received Time", "Received Quantity",
-        "Delivery Type", "Transporter ID/GSTIN", "Transporter Name", "Vehicle No.", "LR/GR/Consignment No",
-        "Bill of Lading No.", "Shipping Bill No.", "Shipping Bill Date", "Ship/Port Code", "Origin",
-        "Bill of Lading Date", "Vessel/Flight No.", "Port of Loading", "Port of Discharge", "Final Destination",
-        "Railway Receipt No.", "Railway Receipt Date", "FNR No.", "Station of Loading", "Station of Discharge"
-    ],
-    'Payment': ["Voucher Date", "Account", "Party", "Amount", "Narration"],
-    'Receipt': ["Voucher Date", "Account", "Party", "Amount", "Narration"],
-    'Contra': ["Voucher Date", "From Account", "To Account", "Amount", "Narration"],
-    'Journal': ["Voucher Date", "Ledger (Debit)", "Ledger (Credit)", "Amount", "Narration"],
-    'Expenses': ["Voucher Date", "Expense Ledger", "Paid From", "Amount", "Narration"],
-    'Credit Note': [
-        "Voucher Date", "Original Sales Invoice Value for Credit Note", "Buyer/Supplier - Mailing Name",
-        "Buyer/Supplier - GSTIN/UIN", "Total Taxable Value", "Total Cess", "Total State Cess", "Total Invoice Value", "Item Name"
-    ],
-    'Debit Note': [
-        "Voucher Date", "Supplier Invoice No", "Buyer/Supplier - Mailing Name",
-        "Buyer/Supplier - GSTIN/UIN", "Total Taxable Value", "Total Cess", "Total State Cess", "Total Invoice Value", "Item Name"
-    ]
+    'Sales': getVoucherFlatHeaders('SALES'),
+    'Purchase': getVoucherFlatHeaders('PURCHASE'),
+    'Payment': getVoucherFlatHeaders('PAYMENT'),
+    'Receipt': getVoucherFlatHeaders('RECEIPT'),
+    'Contra': getVoucherFlatHeaders('CONTRA'),
+    'Journal': getVoucherFlatHeaders('JOURNAL'),
+    'Expenses': getVoucherFlatHeaders('PURCHASE'), // Legacy mapping
+    'Credit Note': getVoucherFlatHeaders('SALES'),
+    'Debit Note': getVoucherFlatHeaders('PURCHASE'),
 };
 
 // ────────────────────────────────────────────────────────────────────────────────
@@ -684,8 +614,8 @@ const FINANCIAL_TOLERANCE = 0.02;
 export const SEMANTIC_GROUPS: Record<string, string[]> = {
     // ── Contract-Mandated Whitelist (Flat Mapping for Strict Mode) ──────────────────
     tally_contract: [...EXACT_TALLY_COLUMNS],
-    // ── Finpixe Standard Schemas (Common fields across Sales/Purchase) ──────────────
-    finpixe_standard: Array.from(new Set([
+    // ── AI Native Standard Schemas (Common fields across Sales/Purchase) ──────────────
+    ai_native_standard: Array.from(new Set([
         ...VOUCHER_COLUMN_SCHEMAS['Sales'],
         ...VOUCHER_COLUMN_SCHEMAS['Purchase']
     ]))
@@ -835,7 +765,7 @@ const validateDate = (val: string): boolean => {
 
 // ─── Vendor Template Store ───────────────────────────────────────────────────────
 
-const TEMPLATE_STORE_KEY = 'finpixe_vendor_templates_v3';
+const TEMPLATE_STORE_KEY = 'ai_vendor_templates_v3';
 
 const loadTemplateStore = (): Record<string, VendorTemplate> => {
     try { return JSON.parse(localStorage.getItem(TEMPLATE_STORE_KEY) || '{}'); } catch { return {}; }

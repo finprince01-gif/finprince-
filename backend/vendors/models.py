@@ -2,6 +2,7 @@
 
 from django.db import models  # type: ignore
 from django.core.validators import EmailValidator, RegexValidator  # type: ignore
+from django.utils import timezone # type: ignore
 from inventory.models import InventoryMasterCategory  # type: ignore
 
 
@@ -683,6 +684,10 @@ class VendorTransactionPO(models.Model):
         null=True,
         blank=True,
         help_text="Link to vendor basic details"
+    )
+    po_date = models.DateField(
+        default=timezone.now,
+        help_text="Purchase Order Date"
     )
     
     # Vendor Information (denormalized for performance)

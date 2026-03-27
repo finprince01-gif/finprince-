@@ -10,9 +10,6 @@ import traceback
 from django.db import connection
 from vouchers.models import BulkInvoiceJob, InvoiceProcessingItem
 from vouchers.pipeline.health import SystemHealth
-from vouchers.extraction_logic import perform_ocr_extraction
-from core.ocr_cache import save_ocr_cache, update_ocr_cache_validation_status, compute_file_hash, get_cached_ocr, update_ocr_cache_session
-from core.processing_engine import run_invoice_processing_pipeline
 from core.usage_service import check_and_increment_usage
 from . import storage
 
@@ -41,55 +38,28 @@ def process_bulk_job(job_id: int, voucher_type: str = 'Purchase'):
 
                 # Get file from storage
                 file_bytes = storage.download_bytes(item.file_path)
-                file_hash = item.file_hash or compute_file_hash(file_bytes)
                 
-                # Check cache first (Idempotency)
-                existing = get_cached_ocr(file_hash, job.tenant_id)
-                if existing:
-                    # Reuse if already READY
-                    if existing.get('validation_status') in ['READY', 'DUPLICATE', 'GSTIN_CONFLICT', 'Voucher Created', 'VENDOR_MISSING']:
-                        update_ocr_cache_session(existing['id'], job.upload_session_id)
-                        item.status = 'success'
-                        item.save()
-                        return True
+                # Extract and Process using the unified new pipeline
+                from ocr_pipeline.service import process_invoice_upload
+                import os
                 
-                # Perform Extraction
-                # Hint: extractor will guess columns if none passed
-                raw_extracted_data = perform_ocr_extraction(
-                    file_bytes, 
-                    'application/pdf' if item.file_path.lower().endswith('.pdf') else 'image/jpeg'
+                # Fetch filename or fallback
+                file_name = os.path.basename(item.file_path) if item.file_path else "tally_import.pdf"
+                
+                res = process_invoice_upload(
+                    file_bytes=file_bytes,
+                    voucher_type=voucher_type,
+                    file_name=file_name,
+                    upload_session_id=getattr(job, 'upload_session_id', None) or str(job.id),
+                    tenant_id=str(job.tenant_id)
                 )
 
-                if not raw_extracted_data:
-                    item.status = 'failed'
-                    item.error_message = "AI Extraction Failed"
-                    item.save()
-                    update_ocr_cache_validation_status(file_hash, job.tenant_id, 'EXTRACTION_FAILED')
-                    return False
-
-                # Save to staging/cache
-                save_ocr_cache(
-                    file_hash=file_hash,
-                    tenant_id=job.tenant_id,
-                    upload_session_id=job.upload_session_id,
-                    file_path=item.file_path,
-                    ocr_raw_text="",
-                    extracted_data=raw_extracted_data,
-                    validation_status='PROCESSING',
-                )
-
-                # Run Pipeline (Validation, Mapping, Vendor Match)
-                pipeline_res = run_invoice_processing_pipeline(
-                    file_hash=file_hash,
-                    tenant_id=job.tenant_id,
-                    voucher_type=voucher_type
-                )
+                final_status = res.get('validation_status', 'VALIDATION_FAILED')
                 
-                final_status = pipeline_res.get('status', 'VALIDATION_FAILED')
-                
-                # Update item status to 'success' (important for BulkStatusAPIView)
-                item.status = 'success' if final_status in ['READY', 'DUPLICATE', 'GSTIN_CONFLICT', 'VENDOR_MISSING'] else 'failed'
-                item.result_json = raw_extracted_data
+                # Treat as success unless the pipeline explicitly returned FAILED or ERROR
+                is_failed = res.get('status') == 'FAILED' or final_status in ['ERROR', 'VALIDATION_FAILED']
+                item.status = 'failed' if is_failed else 'success'
+                item.result_json = res.get('data') or {}
                 item.save()
                 
                 logger.info(f"Item {item_id} processed: {final_status}")

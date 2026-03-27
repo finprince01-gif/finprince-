@@ -318,6 +318,9 @@ class AdminPaymentsView(views.APIView):
 class AIProxyView(views.APIView):
     """Unified AI proxy endpoint for all AI operations"""
 
+    def dispatch(self, *args, **kwargs):
+        raise Exception("OLD AI PROXY SHOULD NOT BE USED. Use ocr_pipeline instead.")
+
     def post(self, request, action):
         import time
         start_time = time.time()
@@ -342,7 +345,7 @@ class AIProxyView(views.APIView):
             file_obj = request.FILES['file']
             voucher_type = request.data.get('voucher_type', 'Purchase')
             table_name = request.data.get('table_name', voucher_type)
-            extraction_mode = request.data.get('extraction_mode', 'finpixe')
+            extraction_mode = request.data.get('extraction_mode', 'ai_native')
             
             import json as _json
             columns_data = request.data.get('columns', '[]')
@@ -557,21 +560,10 @@ class OCRCacheUpdateView(views.APIView):
 
     Update the extracted_data JSON in invoice_ocr_temp when the user edits
     invoice fields after scanning.  OCR is *never* re-run.
-
-    Request body (JSON):
-        {
-            "extracted_data": {
-                "invoice": { ... },
-                "items":   [ ... ]
-            }
-        }
-
-    Response:
-        200  { "success": true }
-        400  missing / invalid body
-        404  record not found or expired
-        403  record belongs to a different tenant
     """
+
+    def dispatch(self, *args, **kwargs):
+        raise Exception("OLD OCR CACHE UPDATE SHOULD NOT BE USED. Use ocr_pipeline instead.")
 
     permission_classes = [IsAuthenticated]
 
