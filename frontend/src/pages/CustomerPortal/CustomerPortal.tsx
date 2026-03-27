@@ -373,17 +373,34 @@ const CustomerContent: React.FC = () => {
 
     const fetchStockItems = async () => {
         try {
-            const response = await httpClient.get<any[]>('/api/inventory/items/');
+            // Fetch both Inventory Items and Services
+            const [inventoryResponse, servicesResponse] = await Promise.all([
+                httpClient.get<any[]>('/api/inventory/items/'),
+                httpClient.get<any[]>('/api/services/')
+            ]);
 
-            const mappedItems = response.map(item => ({
-                code: item.item_code,
-                name: item.item_name,
-                uom: item.uom || ''
+            // Map Inventory Items
+            const inventoryItems = (inventoryResponse || []).map(item => ({
+                id: item.id,
+                code: item.item_code || item.code || '',
+                name: item.item_name || item.name || '',
+                uom: item.uom || item.unit || '',
+                hsnCode: item.hsn_code || item.hsn_sac || item.hsn || ''
             }));
 
-            setStockItems(mappedItems);
+            // Map Services
+            const serviceItems = (servicesResponse || []).map(item => ({
+                id: item.id,
+                code: item.serviceCode || '',
+                name: item.serviceName || '',
+                uom: item.uom || '',
+                hsnCode: item.sacCode || ''
+            }));
+
+            // Merge everything
+            setStockItems([...inventoryItems, ...serviceItems]);
         } catch (error) {
-            handleApiError(error, 'Fetch Stock Items');
+            handleApiError(error, 'Fetch Stock Items & Services');
         }
     };
 
@@ -453,7 +470,7 @@ const CustomerContent: React.FC = () => {
     const [registeredBranches, setRegisteredBranches] = useState<any[]>([]); // Track registered branch inputs
 
     const [productRows, setProductRows] = useState([
-        { id: 1, itemCode: '', itemName: 'Auto-fetched', uom: '', custItemCode: '', custItemName: '', custUom: '', packingNotes: '' }
+        { id: 1, itemCode: '', itemName: '', hsnCode: '', uom: '', custItemCode: '', custItemName: '', custUom: '', packingNotes: '' }
     ]);
 
     // ... (rest of state)
@@ -492,6 +509,7 @@ const CustomerContent: React.FC = () => {
         fssaiNo: '',
         iecCode: '',
         eouStatus: 'Export Oriented Unit (EOU)', // Default
+        taxType: 'NONE' as 'TCS' | 'TDS' | 'NONE', // NEW: mutual-exclusive selector
         tcsSection: '',
         tcsEnabled: false,
         tdsSection: '',
@@ -765,32 +783,29 @@ const CustomerContent: React.FC = () => {
 
         setProductRows(prev => prev.map(row => {
             if (row.id === id) {
-                const updatedRow = { ...row, [field]: value };
+                const updatedRow: any = { ...row, [field]: value };
                 // Bidirectional auto-population
                 if (field === 'itemCode') {
-                    // When Item Code is selected, fetch and populate Item Name and UOM
                     const item = stockItems.find(i => i.code === value);
-
                     if (item) {
                         updatedRow.itemName = item.name;
                         updatedRow.uom = item.uom;
-
+                        updatedRow.hsnCode = item.hsnCode;
                     } else {
                         updatedRow.itemName = '';
+                        updatedRow.hsnCode = '';
                     }
                 } else if (field === 'itemName') {
-                    // When Item Name is selected, fetch and populate Item Code and UOM
                     const item = stockItems.find(i => i.name === value);
-
                     if (item) {
                         updatedRow.itemCode = item.code;
                         updatedRow.uom = item.uom;
-
+                        updatedRow.hsnCode = item.hsnCode;
                     } else {
                         updatedRow.itemCode = '';
+                        updatedRow.hsnCode = '';
                     }
                 }
-
                 return updatedRow;
             }
             return row;
@@ -800,7 +815,7 @@ const CustomerContent: React.FC = () => {
     const handleAddProductRow = () => {
         setProductRows(prev => [
             ...prev,
-            { id: prev.length + 1, itemCode: '', itemName: '', uom: '', custItemCode: '', custItemName: '', custUom: '', packingNotes: '' }
+            { id: prev.length + 1, itemCode: '', itemName: '', hsnCode: '', uom: '', custItemCode: '', custItemName: '', custUom: '', packingNotes: '' }
         ]);
     };
 
@@ -1041,6 +1056,7 @@ const CustomerContent: React.FC = () => {
                 id: index + 1,
                 itemCode: item.itemCode || '',
                 itemName: item.itemName || '',
+                hsnCode: item.hsnCode || '',
                 uom: item.uom || '',
                 custItemCode: item.custItemCode || '',
                 custItemName: item.custItemName || '',
@@ -1048,7 +1064,7 @@ const CustomerContent: React.FC = () => {
                 packingNotes: item.packingNotes || ''
             })));
         } else {
-            setProductRows([{ id: 1, itemCode: '', itemName: 'Auto-fetched', uom: '', custItemCode: '', custItemName: '', custUom: '', packingNotes: '' }]);
+            setProductRows([{ id: 1, itemCode: '', itemName: '', hsnCode: '', uom: '', custItemCode: '', custItemName: '', custUom: '', packingNotes: '' }]);
         }
 
         // 5. Statutory (TDS)
@@ -1057,6 +1073,7 @@ const CustomerContent: React.FC = () => {
             fssaiNo: customer.fssai_no || '',
             iecCode: customer.iec_code || '',
             eouStatus: customer.eou_status || 'Export Oriented Unit (EOU)',
+            taxType: customer.tcs_section ? 'TCS' : customer.tds_section ? 'TDS' : 'NONE',
             tcsSection: customer.tcs_section || '',
             tcsEnabled: customer.tcs_enabled || false,
             tdsSection: customer.tds_section || '',
@@ -2103,94 +2120,99 @@ const CustomerContent: React.FC = () => {
                         <div className="max-w-6xl mx-auto">
                             <div className="bg-white border border-gray-200 rounded-[4px] shadow-none border border-slate-200-none border border-slate-200 overflow-hidden mb-6">
                                 {/* Table Header */}
-                                <div className="grid grid-cols-11 gap-4 px-6 py-3 bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                                    <div className="col-span-1">No</div>
-                                    <div className="col-span-2">Item Code <span className="text-red-500">*</span></div>
-                                    <div className="col-span-2">Item Name</div>
-                                    <div className="col-span-1">UOM</div>
-                                    <div className="col-span-2">Customer Item Code</div>
-                                    <div className="col-span-2">Customer Item Name</div>
-                                    <div className="col-span-1 text-center">Action</div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr 1fr 80px 1fr 1fr', gap: '12px' }} className="px-6 py-3 bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                    <div>No</div>
+                                    <div>Item Code <span className="text-red-500">*</span></div>
+                                    <div>Item Name</div>
+                                    <div>HSN/SAC Code</div>
+                                    <div>UOM</div>
+                                    <div>Customer Item Code</div>
+                                    <div>Customer Item Name</div>
                                 </div>
 
                                 {/* Table Body */}
                                 <div className="divide-y divide-gray-100">
                                     {productRows.map((row, index) => (
-                                        <div key={row.id} className="grid grid-cols-11 gap-4 px-6 py-4 items-center hover:bg-gray-50/50 transition-colors">
-                                            <div className="col-span-1 text-sm text-gray-500 font-medium">{index + 1}</div>
-                                            <div className="col-span-2">
-                                                <select
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
-                                                    value={row.itemCode}
-                                                    onChange={(e) => handleProductRowChange(row.id, 'itemCode', e.target.value)}
-                                                >
-                                                    <option value="">Select Item</option>
-                                                    {stockItems
-                                                        .filter(item => !row.uom || item.uom === row.uom)
-                                                        .map(item => (
+                                        <div key={row.id} className="px-6 py-4 hover:bg-gray-50/50 transition-colors border-b border-gray-100">
+                                            {/* Main grid row */}
+                                            <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr 1fr 80px 1fr 1fr', gap: '12px', alignItems: 'center' }}>
+                                                <div className="text-sm text-gray-500 font-medium">{index + 1}</div>
+                                                <div>
+                                                    <select
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
+                                                        value={row.itemCode}
+                                                        onChange={(e) => handleProductRowChange(row.id, 'itemCode', e.target.value)}
+                                                    >
+                                                        <option value="">Select Item</option>
+                                                        {stockItems.map(item => (
                                                             <option key={item.code} value={item.code}>{item.code} - {item.name}</option>
                                                         ))}
-                                                </select>
-                                            </div>
-                                            <div className="col-span-2">
-                                                <select
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
-                                                    value={row.itemName}
-                                                    onChange={(e) => handleProductRowChange(row.id, 'itemName', e.target.value)}
-                                                >
-                                                    <option value="">Select Item Name</option>
-                                                    {stockItems
-                                                        .filter(item => !row.uom || item.uom === row.uom)
-                                                        .map(item => (
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <select
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
+                                                        value={row.itemName}
+                                                        onChange={(e) => handleProductRowChange(row.id, 'itemName', e.target.value)}
+                                                    >
+                                                        <option value="">Select Item Name</option>
+                                                        {stockItems.map(item => (
                                                             <option key={item.name} value={item.name}>{item.name}</option>
                                                         ))}
-                                                </select>
+                                                    </select>
+                                                </div>
+                                                {/* HSN/SAC Code */}
+                                                <div>
+                                                    <input
+                                                        type="text"
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                        placeholder="HSN/SAC"
+                                                        value={(row as any).hsnCode || ''}
+                                                        onChange={(e) => handleProductRowChange(row.id, 'hsnCode', e.target.value)}
+                                                    />
+                                                </div>
+                                                {/* UOM */}
+                                                <div>
+                                                    {(row as any).uom ? (
+                                                        <span className="w-full px-3 py-2 border border-gray-200 rounded-[4px] text-sm bg-gray-50 text-gray-700 font-medium block">
+                                                            {(row as any).uom}
+                                                        </span>
+                                                    ) : (
+                                                        <select
+                                                            className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
+                                                            value={(row as any).uom || ''}
+                                                            onChange={(e) => handleProductRowChange(row.id, 'uom', e.target.value)}
+                                                        >
+                                                            <option value="">Select</option>
+                                                            {units.map(unit => (
+                                                                <option key={unit.id} value={unit.symbol}>{unit.name} ({unit.symbol})</option>
+                                                            ))}
+                                                        </select>
+                                                    )}
+                                                </div>
+                                                {/* Customer Item Code */}
+                                                <div>
+                                                    <input
+                                                        type="text"
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                        placeholder="Optional"
+                                                        value={row.custItemCode}
+                                                        onChange={(e) => handleProductRowChange(row.id, 'custItemCode', e.target.value)}
+                                                    />
+                                                </div>
+                                                {/* Customer Item Name */}
+                                                <div>
+                                                    <input
+                                                        type="text"
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                                        placeholder="Optional"
+                                                        value={row.custItemName}
+                                                        onChange={(e) => handleProductRowChange(row.id, 'custItemName', e.target.value)}
+                                                    />
+                                                </div>
                                             </div>
-                                            <div className="col-span-1">
-                                                <select
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
-                                                    value={(row as any).uom || ''}
-                                                    onChange={(e) => handleProductRowChange(row.id, 'uom', e.target.value)}
-                                                >
-                                                    <option value="">Select UOM</option>
-                                                    {units.map(unit => (
-                                                        <option key={unit.id} value={unit.symbol}>{unit.name} ({unit.symbol})</option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                            <div className="col-span-2">
-                                                <input
-                                                    type="text"
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                                    placeholder="Optional"
-                                                    value={row.custItemCode}
-                                                    onChange={(e) => handleProductRowChange(row.id, 'custItemCode', e.target.value)}
-                                                />
-                                            </div>
-                                            <div className="col-span-2">
-                                                <input
-                                                    type="text"
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                                    placeholder="Optional"
-                                                    value={row.custItemName}
-                                                    onChange={(e) => handleProductRowChange(row.id, 'custItemName', e.target.value)}
-                                                />
-                                            </div>
-                                            <div className="col-span-1 flex justify-center">
-                                                <button
-                                                    onClick={() => handleRemoveProductRow(row.id)}
-                                                    disabled={productRows.length === 1}
-                                                    className={`p-2 rounded-[4px] hover:bg-red-50 transition-colors ${productRows.length === 1 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-red-500 cursor-pointer'}`}
-                                                >
-                                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                        <polyline points="3 6 5 6 21 6"></polyline>
-                                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                                    </svg>
-                                                </button>
-                                            </div>
-                                            {/* Packing Notes Field */}
-                                            <div className="col-span-1"></div>
-                                            <div className="col-span-10 mt-2">
+                                            {/* Packing Notes — full width below the grid row */}
+                                            <div className="mt-2 pl-[52px]">
                                                 <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Packing Notes</label>
                                                 <input
                                                     type="text"
@@ -2338,12 +2360,42 @@ const CustomerContent: React.FC = () => {
                                 </div>
                             </div>
 
+
                             {/* SECTION 3: TAX CONFIGURATION */}
                             <div>
-                                <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wide mb-6">Tax Configuration</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                    {/* TCS Card */}
-                                    <div className="border border-gray-200 rounded-[4px] p-6 bg-gray-50/30">
+                                <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wide mb-4">Tax Configuration</h4>
+
+                                {/* Toggle: TDS / TCS / NONE */}
+                                <div className="mb-6">
+                                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Tax Deducted / Collected at Source</p>
+                                    <div className="inline-flex rounded-[4px] border border-gray-300 overflow-hidden">
+                                        {(['TDS', 'TCS', 'NONE'] as const).map((type) => (
+                                            <button
+                                                key={type}
+                                                type="button"
+                                                onClick={() => setStatutoryDetails({
+                                                    ...statutoryDetails,
+                                                    taxType: type,
+                                                    // reset fields when switching
+                                                    tcsSection: type !== 'TCS' ? '' : statutoryDetails.tcsSection,
+                                                    tcsEnabled: type !== 'TCS' ? false : statutoryDetails.tcsEnabled,
+                                                    tdsSection: type !== 'TDS' ? '' : statutoryDetails.tdsSection,
+                                                    tdsEnabled: type !== 'TDS' ? false : statutoryDetails.tdsEnabled,
+                                                })}
+                                                className={`px-6 py-2 text-sm font-semibold transition-colors border-r border-gray-300 last:border-r-0 ${statutoryDetails.taxType === type
+                                                        ? 'bg-gray-700 text-white'
+                                                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                                                    }`}
+                                            >
+                                                {type}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* TCS Card */}
+                                {statutoryDetails.taxType === 'TCS' && (
+                                    <div className="border border-gray-200 rounded-[4px] p-6 bg-gray-50/30 max-w-xl">
                                         <div className="flex justify-between items-start mb-4">
                                             <h5 className="font-semibold text-gray-800">TCS Configuration</h5>
                                             <span className="text-gray-400" title="Information">
@@ -2359,18 +2411,11 @@ const CustomerContent: React.FC = () => {
                                                         value={statutoryDetails.tcsSection}
                                                         onChange={(e) => {
                                                             setStatutoryDetails({ ...statutoryDetails, tcsSection: e.target.value });
-                                                            // Auto-show description when a section is selected
                                                             if (e.target.value) {
                                                                 const [section, name] = e.target.value.split('|');
                                                                 const tcsInfo = tcsSections.find(t => t.section === section && t.name === name);
-                                                                if (tcsInfo) {
-                                                                    setSelectedTcsInfo(tcsInfo);
-                                                                    setShowTcsInfo(true);
-                                                                }
-                                                            } else {
-                                                                setShowTcsInfo(false);
-                                                                setSelectedTcsInfo(null);
-                                                            }
+                                                                if (tcsInfo) { setSelectedTcsInfo(tcsInfo); setShowTcsInfo(true); }
+                                                            } else { setShowTcsInfo(false); setSelectedTcsInfo(null); }
                                                         }}
                                                     >
                                                         <option value="">Select TCS Section</option>
@@ -2395,15 +2440,11 @@ const CustomerContent: React.FC = () => {
                                                         </button>
                                                     )}
                                                 </div>
-
-                                                {/* Description Display */}
                                                 {showTcsInfo && selectedTcsInfo && (
                                                     <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-[4px]">
                                                         <div className="flex items-start gap-2">
                                                             <svg className="w-5 h-5 text-indigo-600 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                <circle cx="12" cy="12" r="10"></circle>
-                                                                <line x1="12" y1="16" x2="12" y2="12"></line>
-                                                                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                                                                <circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line>
                                                             </svg>
                                                             <div className="flex-1">
                                                                 <div className="flex items-center justify-between mb-1">
@@ -2431,9 +2472,11 @@ const CustomerContent: React.FC = () => {
                                             </label>
                                         </div>
                                     </div>
+                                )}
 
-                                    {/* TDS Card */}
-                                    <div className="border border-gray-200 rounded-[4px] p-6 bg-gray-50/30">
+                                {/* TDS Card */}
+                                {statutoryDetails.taxType === 'TDS' && (
+                                    <div className="border border-gray-200 rounded-[4px] p-6 bg-gray-50/30 max-w-xl">
                                         <div className="flex justify-between items-start mb-4">
                                             <h5 className="font-semibold text-gray-800">TDS Configuration</h5>
                                             <span className="text-gray-400" title="Information">
@@ -2449,18 +2492,11 @@ const CustomerContent: React.FC = () => {
                                                         value={statutoryDetails.tdsSection}
                                                         onChange={(e) => {
                                                             setStatutoryDetails({ ...statutoryDetails, tdsSection: e.target.value });
-                                                            // Auto-show description when a section is selected
                                                             if (e.target.value) {
                                                                 const [section, name] = e.target.value.split('|');
                                                                 const tdsInfo = tdsSections.find(t => t.section === section && t.name === name);
-                                                                if (tdsInfo) {
-                                                                    setSelectedTdsInfo(tdsInfo);
-                                                                    setShowTdsInfo(true);
-                                                                }
-                                                            } else {
-                                                                setShowTdsInfo(false);
-                                                                setSelectedTdsInfo(null);
-                                                            }
+                                                                if (tdsInfo) { setSelectedTdsInfo(tdsInfo); setShowTdsInfo(true); }
+                                                            } else { setShowTdsInfo(false); setSelectedTdsInfo(null); }
                                                         }}
                                                     >
                                                         <option value="">Select TDS Section</option>
@@ -2485,15 +2521,11 @@ const CustomerContent: React.FC = () => {
                                                         </button>
                                                     )}
                                                 </div>
-
-                                                {/* Description Display */}
                                                 {showTdsInfo && selectedTdsInfo && (
                                                     <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-[4px]">
                                                         <div className="flex items-start gap-2">
                                                             <svg className="w-5 h-5 text-indigo-600 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                <circle cx="12" cy="12" r="10"></circle>
-                                                                <line x1="12" y1="16" x2="12" y2="12"></line>
-                                                                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                                                                <circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line>
                                                             </svg>
                                                             <div className="flex-1">
                                                                 <div className="flex items-center justify-between mb-2">
@@ -2519,7 +2551,12 @@ const CustomerContent: React.FC = () => {
                                             </label>
                                         </div>
                                     </div>
-                                </div>
+                                )}
+
+                                {/* NONE state */}
+                                {statutoryDetails.taxType === 'NONE' && (
+                                    <p className="text-sm text-gray-400 italic">No TDS / TCS applicable for this customer.</p>
+                                )}
                             </div>
 
                             {/* Footer Buttons */}
@@ -3399,6 +3436,7 @@ const LongTermContractsContent: React.FC = () => {
     const [activeTab, setActiveTab] = useState('Basic Details');
     const [automateBilling, setAutomateBilling] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [contractStockItems, setContractStockItems] = useState<any[]>([]);
     const [contracts, setContracts] = useState<any[]>([]);
     const [customers, setCustomers] = useState<any[]>([]);
     const [filteredBranches, setFilteredBranches] = useState<any[]>([]);
@@ -3422,14 +3460,13 @@ const LongTermContractsContent: React.FC = () => {
     const [billingConfig, setBillingConfig] = useState({
         billStartDate: '',
         billingFrequency: '',
-        voucherName: '',
         billPeriodFrom: '',
         billPeriodTo: ''
     });
 
     // Products State
     const [contractProducts, setContractProducts] = useState([
-        { id: 1, itemCode: '', itemName: 'Product Name', customerItemName: '', qtyMin: '', qtyMax: '', priceMin: '', priceMax: '', deviation: '' }
+        { id: 1, itemCode: '', itemName: 'Product Name', uom: '', customerItemName: '', qtyMin: '', qtyMax: '', priceMin: '', priceMax: '', deviation: '' }
     ]);
 
     const handleAddProduct = () => {
@@ -3437,6 +3474,7 @@ const LongTermContractsContent: React.FC = () => {
             id: contractProducts.length + 1,
             itemCode: '',
             itemName: 'Product Name',
+            uom: '',
             customerItemName: '',
             qtyMin: '',
             qtyMax: '',
@@ -3451,9 +3489,27 @@ const LongTermContractsContent: React.FC = () => {
     };
 
     const handleProductChange = (id: number, field: string, value: string) => {
-        setContractProducts(contractProducts.map(p =>
-            p.id === id ? { ...p, [field]: value } : p
-        ));
+        setContractProducts(contractProducts.map(p => {
+            if (p.id === id) {
+                const updatedProduct: any = { ...p, [field]: value };
+                // Handle bidirectional auto-population
+                if (field === 'itemCode') {
+                    const item = contractStockItems.find(i => i.code === value);
+                    if (item) {
+                        updatedProduct.itemName = item.name;
+                        updatedProduct.uom = item.uom;
+                    }
+                } else if (field === 'itemName') {
+                    const item = contractStockItems.find(i => i.name === value);
+                    if (item) {
+                        updatedProduct.itemCode = item.code;
+                        updatedProduct.uom = item.uom;
+                    }
+                }
+                return updatedProduct;
+            }
+            return p;
+        }));
     };
 
     // Terms State
@@ -3472,6 +3528,7 @@ const LongTermContractsContent: React.FC = () => {
             fetchContracts();
         }
         fetchCustomers();
+        fetchStockItems();
     }, [view]);
 
     const fetchCustomers = async () => {
@@ -3494,6 +3551,42 @@ const LongTermContractsContent: React.FC = () => {
         }
     };
 
+    const fetchStockItems = async () => {
+        try {
+            // Fetch both Inventory Items and Services
+            const [inventoryResponse, servicesResponse] = await Promise.all([
+                httpClient.get<any[]>('/api/inventory/items/'),
+                httpClient.get<any[]>('/api/services/')
+            ]);
+
+            // Map Inventory Items
+            const inventoryItems = (inventoryResponse || []).map(item => ({
+                id: item.id,
+                code: item.item_code || item.code || '',
+                name: item.item_name || item.name || '',
+                uom: item.uom || item.unit || '',
+                alternateUom: item.alternate_uom || '',
+                hsnCode: item.hsn_code || item.hsn_sac || item.hsn || ''
+            }));
+
+            // Map Services
+            const serviceItems = (servicesResponse || []).map(item => ({
+                id: item.id,
+                code: item.serviceCode || '',
+                name: item.serviceName || '',
+                uom: item.uom || '',
+                alternateUom: '',
+                hsnCode: item.sacCode || ''
+            }));
+
+            // Merge everything
+            setContractStockItems([...inventoryItems, ...serviceItems]);
+        } catch (error) {
+            console.error('Error fetching items and services:', error);
+            setContractStockItems([]);
+        }
+    };
+
     const handleEditClick = (contract: any) => {
         setIsEditing(true);
         setEditingId(contract.id);
@@ -3513,7 +3606,6 @@ const LongTermContractsContent: React.FC = () => {
         setBillingConfig({
             billStartDate: contract.bill_start_date || '',
             billingFrequency: contract.billing_frequency || '',
-            voucherName: contract.voucher_name || '',
             billPeriodFrom: contract.bill_period_from || '',
             billPeriodTo: contract.bill_period_to || ''
         });
@@ -3523,6 +3615,7 @@ const LongTermContractsContent: React.FC = () => {
                 id: index + 1,
                 itemCode: p.item_code || '',
                 itemName: p.item_name || '',
+                uom: p.uom || '',
                 customerItemName: p.customer_item_name || '',
                 qtyMin: p.qty_min?.toString() || '',
                 qtyMax: p.qty_max?.toString() || '',
@@ -3555,6 +3648,22 @@ const LongTermContractsContent: React.FC = () => {
             return;
         }
 
+        if (automateBilling && billingConfig.billPeriodFrom && basicDetails.validityFrom) {
+            if (billingConfig.billPeriodFrom < basicDetails.validityFrom) {
+                showError('Bill Period From cannot be earlier than Contract Validity From.');
+                setActiveTab('Basic Details');
+                return;
+            }
+        }
+
+        if (automateBilling && billingConfig.billPeriodTo && basicDetails.validityTo) {
+            if (billingConfig.billPeriodTo > basicDetails.validityTo) {
+                showError('Bill Period To cannot be later than Contract Validity To.');
+                setActiveTab('Basic Details');
+                return;
+            }
+        }
+
         setLoading(true);
 
         try {
@@ -3571,12 +3680,12 @@ const LongTermContractsContent: React.FC = () => {
                 automate_billing: automateBilling,
                 bill_start_date: automateBilling ? billingConfig.billStartDate : null,
                 billing_frequency: automateBilling ? billingConfig.billingFrequency : null,
-                voucher_name: automateBilling ? billingConfig.voucherName : null,
                 bill_period_from: automateBilling ? billingConfig.billPeriodFrom : null,
                 bill_period_to: automateBilling ? billingConfig.billPeriodTo : null,
                 products_services: contractProducts.map(p => ({
                     item_code: p.itemCode,
                     item_name: p.itemName,
+                    uom: p.uom,
                     customer_item_name: p.customerItemName,
                     qty_min: p.qtyMin ? parseFloat(p.qtyMin) : null,
                     qty_max: p.qtyMax ? parseFloat(p.qtyMax) : null,
@@ -3634,7 +3743,7 @@ const LongTermContractsContent: React.FC = () => {
         setEditingId(null);
         setAutomateBilling(false);
         setContractProducts([
-            { id: 1, itemCode: '', itemName: 'Product Name', customerItemName: '', qtyMin: '', qtyMax: '', priceMin: '', priceMax: '', deviation: '' }
+            { id: 1, itemCode: '', itemName: 'Product Name', uom: '', customerItemName: '', qtyMin: '', qtyMax: '', priceMin: '', priceMax: '', deviation: '' }
         ]);
         setTerms({
             paymentTerms: '',
@@ -3647,7 +3756,6 @@ const LongTermContractsContent: React.FC = () => {
         setBillingConfig({
             billStartDate: '',
             billingFrequency: '',
-            voucherName: '',
             billPeriodFrom: '',
             billPeriodTo: ''
         });
@@ -3867,19 +3975,7 @@ const LongTermContractsContent: React.FC = () => {
                                                         <option value="Half-Yearly">Half-Yearly</option>
                                                     </select>
                                                 </div>
-                                                <div>
-                                                    <label className="block text-xs font-semibold text-gray-700 mb-1">Voucher Name <span className="text-red-500">*</span></label>
-                                                    <select
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
-                                                        value={billingConfig.voucherName}
-                                                        onChange={(e) => setBillingConfig({ ...billingConfig, voucherName: e.target.value })}
-                                                    >
-                                                        <option value="">Select Voucher</option>
-                                                        <option value="sales">Sales Invoice</option>
-                                                        <option value="service">Service Invoice</option>
-                                                        <option value="recurring">Recurring Invoice</option>
-                                                    </select>
-                                                </div>
+
                                                 <div className="md:col-span-2">
                                                     <label className="block text-xs font-semibold text-gray-700 mb-1">Bill Period <span className="text-red-500">*</span></label>
                                                     <div className="flex items-center gap-4">
@@ -3887,8 +3983,9 @@ const LongTermContractsContent: React.FC = () => {
                                                             <span className="text-xs text-gray-500 mb-1 block">From</span>
                                                             <input
                                                                 type="date"
-                                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
+                                                                className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white ${basicDetails.validityFrom && billingConfig.billPeriodFrom && billingConfig.billPeriodFrom < basicDetails.validityFrom ? 'border-red-500' : ''}`}
                                                                 value={billingConfig.billPeriodFrom}
+                                                                min={basicDetails.validityFrom}
                                                                 onChange={(e) => setBillingConfig({ ...billingConfig, billPeriodFrom: e.target.value })}
                                                             />
                                                         </div>
@@ -3897,8 +3994,9 @@ const LongTermContractsContent: React.FC = () => {
                                                             <span className="text-xs text-gray-500 mb-1 block">To</span>
                                                             <input
                                                                 type="date"
-                                                                className="w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white"
+                                                                className={`w-full px-4 py-2 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white ${basicDetails.validityTo && billingConfig.billPeriodTo && billingConfig.billPeriodTo > basicDetails.validityTo ? 'border-red-500' : ''}`}
                                                                 value={billingConfig.billPeriodTo}
+                                                                max={basicDetails.validityTo}
                                                                 onChange={(e) => setBillingConfig({ ...billingConfig, billPeriodTo: e.target.value })}
                                                             />
                                                         </div>
@@ -3921,6 +4019,7 @@ const LongTermContractsContent: React.FC = () => {
                                                 <th rowSpan={2} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">NO</th>
                                                 <th rowSpan={2} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">ITEM CODE</th>
                                                 <th rowSpan={2} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">ITEM NAME</th>
+                                                <th rowSpan={2} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">UOM</th>
                                                 <th rowSpan={2} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">CUSTOMER ITEM NAME</th>
                                                 <th colSpan={2} className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">QUANTITY</th>
                                                 <th colSpan={2} className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">PRICE</th>
@@ -3946,18 +4045,44 @@ const LongTermContractsContent: React.FC = () => {
                                                                 onChange={(e) => handleProductChange(product.id, 'itemCode', e.target.value)}
                                                             >
                                                                 <option value="">Select</option>
-                                                                <option value="ITEM-001">ITEM-001</option>
-                                                                <option value="ITEM-002">ITEM-002</option>
+                                                                {contractStockItems.map((item, idx) => (
+                                                                    <option key={`code-${idx}`} value={item.code}>
+                                                                        {item.code}
+                                                                    </option>
+                                                                ))}
                                                             </select>
                                                         </div>
                                                     </td>
                                                     <td className="px-4 py-3 whitespace-nowrap">
-                                                        <input
-                                                            type="text"
-                                                            className="block w-full px-3 py-1.5 text-sm border-gray-300 rounded-[4px] bg-gray-50 text-gray-500 focus:ring-indigo-500 focus:border-indigo-500"
+                                                        <select
+                                                            className="block w-full pl-3 pr-8 py-1.5 text-sm border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-[4px]"
                                                             value={product.itemName}
-                                                            readOnly
-                                                        />
+                                                            onChange={(e) => handleProductChange(product.id, 'itemName', e.target.value)}
+                                                        >
+                                                            <option value="">Select</option>
+                                                            {contractStockItems.map((item, idx) => (
+                                                                <option key={`name-${idx}`} value={item.name}>
+                                                                    {item.name}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap">
+                                                        <select
+                                                            className="block w-full pl-3 pr-8 py-1.5 text-sm border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-[4px]"
+                                                            value={product.uom}
+                                                            onChange={(e) => handleProductChange(product.id, 'uom', e.target.value)}
+                                                        >
+                                                            <option value="">Select</option>
+                                                            {(() => {
+                                                                const item = contractStockItems.find(i => i.code === product.itemCode || i.name === product.itemName);
+                                                                if (!item) return null;
+                                                                const units = [...new Set([item.uom, item.alternateUom].filter(u => u && u.trim() !== ''))];
+                                                                return units.map((u, ui) => (
+                                                                    <option key={ui} value={u as string}>{u as string}</option>
+                                                                ));
+                                                            })()}
+                                                        </select>
                                                     </td>
                                                     <td className="px-4 py-3 whitespace-nowrap">
                                                         <input
@@ -5594,20 +5719,20 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
 
     const monthLedgerData: MonthLedgerEntry[] = useMemo(() => {
         const monthsMap: Record<string, { debit: number; credit: number }> = {};
-        
+
         // Determine the relevant financial year
         // If data exists, use the latest entry as reference, else current year
-        const latestDate = processedEntries.length > 0 
-            ? new Date(processedEntries[processedEntries.length - 1].date) 
+        const latestDate = processedEntries.length > 0
+            ? new Date(processedEntries[processedEntries.length - 1].date)
             : new Date();
-        
+
         let startYear = latestDate.getFullYear();
         if (latestDate.getMonth() < 3) { // If Jan-Mar, start year of FY is previous year
             startYear -= 1;
         }
 
         const monthsOrder = [
-            'April', 'May', 'June', 'July', 'August', 'September', 
+            'April', 'May', 'June', 'July', 'August', 'September',
             'October', 'November', 'December', 'January', 'February', 'March'
         ];
 
@@ -6103,7 +6228,7 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                     {isJournalView ? (
                                                         <>
                                                             {/* APP-THEMED JOURNAL ROW */}
-                                                            <tr 
+                                                            <tr
                                                                 className={`hover:bg-indigo-50/30 transition-colors cursor-pointer border-b border-gray-100 ${selectedTransactionId === entry.id ? 'bg-indigo-50' : ''}`}
                                                                 onClick={() => handleRowClick(entry.id)}
                                                             >
@@ -6117,69 +6242,93 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                             {/* BREAKDOWN ROWS */}
                                                             {entry.originalInv && (
                                                                 <>
-                                                                    {/* ITEM BREAKDOWN */}
-                                                                    {(entry.originalInv.items || []).map((item: any, idx: number) => (
-                                                                        <tr key={`item-${idx}`} className="bg-white">
-                                                                            <td className="px-6 py-1 border-r border-gray-50"></td>
-                                                                            <td className="px-6 py-1 text-xs text-gray-400 pl-16 border-r border-gray-50 font-medium italic">
-                                                                                {item.item_name} @ GST {Math.round(((parseFloat(item.igst || 0) + parseFloat(item.cgst || 0) + parseFloat(item.sgst || 0)) / (parseFloat(item.taxable_value) || 1)) * 100)}%
-                                                                            </td>
-                                                                            <td className="px-6 py-1 border-r border-gray-50"></td>
-                                                                            <td className="px-6 py-1 border-r border-gray-50"></td>
-                                                                            <td className="px-6 py-1 text-right text-xs text-gray-300 border-r border-gray-50">-</td>
-                                                                            <td className="px-6 py-1 text-right text-xs text-gray-700 font-semibold">
-                                                                                ₹{parseFloat(item.taxable_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} <span className="text-[10px] text-gray-400 uppercase ml-0.5">Cr</span>
-                                                                            </td>
-                                                                        </tr>
-                                                                    ))}
+                                                                    {/* DEBITS */}
+                                                                    <tr className="bg-white">
+                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                        <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-8 border-r border-gray-50">
+                                                                            {customer.name}
+                                                                        </td>
+                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                        <td className="px-6 py-1.5 text-right text-xs font-semibold text-gray-700 border-r border-gray-50">
+                                                                            ₹{entry.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                                        </td>
+                                                                        <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
+                                                                    </tr>
+
                                                                     {[
-                                                                        { key: 'payment_cgst', label: 'Output CGST Account', type: 'Cr' },
-                                                                        { key: 'payment_sgst', label: 'Output SGST Account', type: 'Cr' },
-                                                                        { key: 'payment_igst', label: 'Output IGST Account', type: 'Cr' },
-                                                                        { key: 'payment_cess', label: 'Output Cess Account', type: 'Cr' },
-                                                                        { key: 'payment_state_cess', label: 'Output State Cess Account', type: 'Cr' },
-                                                                        { key: 'payment_tds_income_tax', label: 'TDS Receivable (Income Tax)', type: 'Dr' },
-                                                                        { key: 'payment_tds_gst', label: 'TDS Receivable (GST)', type: 'Dr' },
-                                                                        { key: 'payment_advance', label: 'Advance From Customer', type: 'Cr' },
-                                                                        { key: 'payment_payable', label: 'Net Payable Amount', type: 'Cr' }
-                                                                    ].map((payment) => {
-                                                                        const amt = entry.originalInv.payment_details?.[payment.key];
+                                                                        { key: 'payment_tds_income_tax', label: 'TDS Receivable (IT)' },
+                                                                        { key: 'payment_tds_gst', label: 'TDS Receivable (GST)' }
+                                                                    ].map((tds) => {
+                                                                        const amt = entry.originalInv.payment_details?.[tds.key];
                                                                         if (!amt || parseFloat(amt) === 0) return null;
-                                                                        
+
+                                                                        // Calculate the total taxable value
+                                                                        const totalTaxable = (entry.originalInv.items || []).reduce((sum: number, item: any) => sum + parseFloat(item.taxable_value || 0), 0);
+                                                                        const taxPerc = totalTaxable > 0 ? parseFloat((parseFloat(amt) / totalTaxable * 100).toFixed(2)) : 0;
+                                                                        const labelWithPerc = taxPerc > 0 ? `${tds.label} @ ${taxPerc}%` : tds.label;
+
                                                                         return (
-                                                                            <tr key={payment.key} className="bg-white">
-                                                                                <td className="px-6 py-1 border-r border-gray-50"></td>
-                                                                                <td className="px-6 py-1 text-xs text-gray-400 pl-16 border-r border-gray-50 font-medium italic">
-                                                                                    {payment.label}
+                                                                            <tr key={tds.key} className="bg-white">
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-8 border-r border-gray-50">
+                                                                                    {labelWithPerc}
                                                                                 </td>
-                                                                                <td className="px-6 py-1 border-r border-gray-50"></td>
-                                                                                <td className="px-6 py-1 border-r border-gray-50"></td>
-                                                                                <td className="px-6 py-1 text-right text-xs text-gray-700 font-semibold border-r border-gray-50">
-                                                                                    {payment.type === 'Dr' ? `₹${parseFloat(amt).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 text-right text-xs font-semibold text-gray-700 border-r border-gray-50">
+                                                                                    ₹{parseFloat(amt).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                                                 </td>
-                                                                                <td className="px-6 py-1 text-right text-xs text-gray-700 font-semibold">
-                                                                                    {payment.type === 'Cr' ? (
-                                                                                        <>
-                                                                                            ₹{parseFloat(amt).toLocaleString('en-IN', { minimumFractionDigits: 2 })} <span className="text-[10px] text-gray-400 uppercase ml-0.5">Cr</span>
-                                                                                        </>
-                                                                                    ) : (
-                                                                                        <span className="text-[10px] text-indigo-400 uppercase font-bold tracking-tighter">Debit</span>
-                                                                                    )}
+                                                                                <td className="px-6 py-1.5 text-right text-xs text-gray-400"></td>
+                                                                            </tr>
+                                                                        );
+                                                                    })}
+
+                                                                    {/* CREDITS */}
+                                                                    <tr className="bg-white">
+                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                        <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-14 border-r border-gray-50">
+                                                                            Sales Ledger
+                                                                        </td>
+                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                        <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                        <td className="px-6 py-1.5 text-right text-xs text-gray-400 border-r border-gray-50"></td>
+                                                                        <td className="px-6 py-1.5 text-right text-xs font-semibold text-gray-700">
+                                                                            ₹{((entry.originalInv.items || []).reduce((sum: number, item: any) => sum + parseFloat(item.taxable_value || 0), 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                                        </td>
+                                                                    </tr>
+
+                                                                    {[
+                                                                        { key: 'payment_cgst', label: 'Output CGST Ledger' },
+                                                                        { key: 'payment_sgst', label: 'Output SGST Ledger' },
+                                                                        { key: 'payment_igst', label: 'Output IGST Ledger' },
+                                                                        { key: 'payment_cess', label: 'Output Cess Ledger' },
+                                                                        { key: 'payment_state_cess', label: 'Output State Cess Ledger' }
+                                                                    ].map((tax) => {
+                                                                        const amt = entry.originalInv.payment_details?.[tax.key];
+                                                                        if (!amt || parseFloat(amt) === 0) return null;
+
+                                                                        const totalTaxable = (entry.originalInv.items || []).reduce((sum: number, item: any) => sum + parseFloat(item.taxable_value || 0), 0);
+                                                                        const taxPerc = totalTaxable > 0 ? parseFloat((parseFloat(amt) / totalTaxable * 100).toFixed(2)) : 0;
+                                                                        const labelWithPerc = taxPerc > 0 ? `${tax.label} @ ${taxPerc}%` : tax.label;
+
+                                                                        return (
+                                                                            <tr key={tax.key} className="bg-white">
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 text-xs text-gray-700 font-medium pl-14 border-r border-gray-50">
+                                                                                    {labelWithPerc}
+                                                                                </td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 text-right text-xs text-gray-400 border-r border-gray-50"></td>
+                                                                                <td className="px-6 py-1.5 text-right text-xs font-semibold text-gray-700">
+                                                                                    ₹{parseFloat(amt).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                                                 </td>
                                                                             </tr>
                                                                         );
                                                                     })}
                                                                     <tr className="bg-white">
-                                                                        <td className="px-6 py-3 border-r border-gray-50"></td>
-                                                                        <td className="px-6 py-3 text-[11px] text-indigo-600 pl-16 border-r border-gray-50 font-bold tracking-tight">
-                                                                            To {customer.name} (Ref: {entry.ledger})
-                                                                        </td>
-                                                                        <td className="px-6 py-3 border-r border-gray-50"></td>
-                                                                        <td className="px-6 py-3 border-r border-gray-50"></td>
-                                                                        <td className="px-6 py-3 text-right text-xs text-gray-300 border-r border-gray-50">-</td>
-                                                                        <td className="px-6 py-3 text-right text-xs text-indigo-600 font-bold">
-                                                                            ₹{entry.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })} <span className="text-[10px] uppercase ml-0.5">Cr</span>
-                                                                        </td>
+                                                                        <td className="py-2" colSpan={6}></td>
                                                                     </tr>
                                                                 </>
                                                             )}
