@@ -544,7 +544,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         receiveBy: '',
         receiveAt: '',
         deliveryTerms: '',
-        supplyType: 'intrastate'  // 'intrastate' => CGST+SGST, 'interstate' => IGST
+        supplyType: 'intrastate',  // 'intrastate' => CGST+SGST, 'interstate' => IGST
+        poDate: new Date().toISOString().split('T')[0]
     });
 
     // PO Items State
@@ -616,8 +617,9 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 const mapped = payload.map((po: any) => ({
                     id: po.id,
                     poNumber: po.po_number,
-                    poDate: po.created_at ? po.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+                    poDate: po.po_date || (po.created_at ? po.created_at.split('T')[0] : new Date().toISOString().split('T')[0]),
                     vendorName: po.vendor_name,
+                    branch: po.branch,
                     address: po.address_line1 || '',
                     status: po.status || 'Pending Approval',
                     receiveBy: po.receive_by,
@@ -1231,6 +1233,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             // Prepare PO payload
             const payload = {
                 po_series_id: createPOForm.poSeriesName ? parseInt(createPOForm.poSeriesName) : null,
+                po_date: createPOForm.poDate,
                 vendor_id: vendorId,
                 vendor_name: vendorName,
                 status: 'Pending Approval',
@@ -1300,7 +1303,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 receiveBy: '',
                 receiveAt: '',
                 deliveryTerms: '',
-                supplyType: 'intrastate'
+                supplyType: 'intrastate',
+                poDate: new Date().toISOString().split('T')[0]
             });
 
             setPOItems([{
@@ -1463,6 +1467,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         id: number;
         date: string;
         vendorReferenceName: string;
+        branch?: string;
         voucherNo: string;
         supplierInvoiceNo: string;
         amount: string;
@@ -1472,18 +1477,18 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     }
 
     const [paymentBills, setPaymentBills] = useState<PaymentBill[]>([
-        { id: 1, date: '2023-11-15', vendorReferenceName: 'Alpha Raw Materials', voucherNo: 'V-001', supplierInvoiceNo: 'INV-2023-001', amount: '? 45,000', status: 'Pending', category: 'Raw Material', actionLog: [] },
-        { id: 2, date: '2023-11-10', vendorReferenceName: 'Beta Supplies', voucherNo: 'V-002', supplierInvoiceNo: 'INV-2023-002', amount: '? 12,500', status: 'Pending', category: 'Raw Material', actionLog: [] },
+        { id: 1, date: '2023-11-15', vendorReferenceName: 'Alpha Raw Materials', branch: 'Chennai (HO)', voucherNo: 'V-001', supplierInvoiceNo: 'INV-2023-001', amount: '? 45,000', status: 'Pending', category: 'Raw Material', actionLog: [] },
+        { id: 2, date: '2023-11-10', vendorReferenceName: 'Beta Supplies', branch: 'Mumbai Branch', voucherNo: 'V-002', supplierInvoiceNo: 'INV-2023-002', amount: '? 12,500', status: 'Pending', category: 'Raw Material', actionLog: [] },
         {
-            id: 3, date: '2023-11-05', vendorReferenceName: 'Gamma Corp', voucherNo: 'V-003', supplierInvoiceNo: 'INV-2023-003', amount: '? 78,000', status: 'Approved', category: 'Services',
+            id: 3, date: '2023-11-05', vendorReferenceName: 'Gamma Corp', branch: 'Delhi Branch', voucherNo: 'V-003', supplierInvoiceNo: 'INV-2023-003', amount: '? 78,000', status: 'Approved', category: 'Services',
             actionLog: [{ action: 'Approved', user: 'John Doe', date: '2023-11-06 10:30 AM' }]
         },
         {
-            id: 4, date: '2023-10-28', vendorReferenceName: 'Delta Industries', voucherNo: 'V-004', supplierInvoiceNo: 'INV-2023-004', amount: '? 1,20,000', status: 'Posted', category: 'Stock-in Trade',
+            id: 4, date: '2023-10-28', vendorReferenceName: 'Delta Industries', branch: 'Chennai (HO)', voucherNo: 'V-004', supplierInvoiceNo: 'INV-2023-004', amount: '? 1,20,000', status: 'Posted', category: 'Stock-in Trade',
             actionLog: [{ action: 'Approved', user: 'Jane Smith', date: '2023-10-29 02:15 PM' }]
         },
         {
-            id: 5, date: '2023-10-20', vendorReferenceName: 'Epsilon Trading', voucherNo: 'V-005', supplierInvoiceNo: 'INV-2023-005', amount: '? 56,700', status: 'Initiated', category: 'Consumables',
+            id: 5, date: '2023-10-20', vendorReferenceName: 'Epsilon Trading', branch: 'Bangalore Branch', voucherNo: 'V-005', supplierInvoiceNo: 'INV-2023-005', amount: '? 56,700', status: 'Initiated', category: 'Consumables',
             actionLog: [{ action: 'Approved', user: 'Mike Johnson', date: '2023-10-21 09:45 AM' }]
         },
     ]);
@@ -1498,6 +1503,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const [paymentBillFilters, setPaymentBillFilters] = useState({
         date: '',
         vendorReferenceName: '',
+        branch: '',
         voucherNo: '',
         supplierInvoiceNo: '',
         amount: '',
@@ -5323,131 +5329,156 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                 {entry.transferFrom === 'Purchase' ? '(as per details)' : entry.ledger}
                                                                             </td>
                                                                             <td className="px-6 py-4 text-sm text-gray-500 uppercase">
-                                                                                {entry.transferFrom === 'Purchase' ? 'Purchase' : entry.transferFrom}
+                                                                                {entry.transferFrom === 'Purchase' ? 'PURCHASE' : entry.transferFrom === 'Payment' ? 'PAYMENT' : entry.transferFrom}
                                                                             </td>
                                                                             <td className="px-6 py-4 text-sm text-gray-500">
                                                                                 {entry.referenceNo}
                                                                             </td>
                                                                             <td className="px-6 py-4 text-sm font-bold text-indigo-600 text-right">
-                                                                                {entry.debit !== '-' ? `₹${entry.debit}` : '-'}
+                                                                                {entry.transferFrom === 'Payment' && entry.debit !== '-' ? `₹${entry.debit}` : '-'}
                                                                             </td>
                                                                             <td className="px-6 py-4 text-sm font-medium text-gray-400 text-right">
-                                                                                {entry.credit !== '-' ? <span className="text-gray-900">₹{entry.credit}</span> : '-'}
+                                                                                {entry.transferFrom === 'Purchase' && entry.credit !== '-' ? <span className="text-gray-900">₹{entry.credit}</span> : '-'}
                                                                             </td>
                                                                         </tr>
 
-                                                                        {/* Purchase Details */}
+                                                                        {/* Purchase Details - Correct Double Entry: Debit side = Purchase A/c + Input GST; Credit side = Vendor A/c + TDS Payable */}
                                                                         {entry.transferFrom === 'Purchase' && (() => {
                                                                             let supplyInrDetails = entry.rawVoucher?.supply_inr_details;
                                                                             if (typeof supplyInrDetails === 'string') {
                                                                                 try { supplyInrDetails = JSON.parse(supplyInrDetails); } catch { supplyInrDetails = {}; }
                                                                             }
                                                                             const items = supplyInrDetails?.items || [];
-                                                                            
-                                                                            return items.map((item: any, idx: number) => {
-                                                                                const taxable = parseFloat(item.taxableValue) || 0;
-                                                                                const cgst = parseFloat(item.cgst) || 0;
-                                                                                const sgst = parseFloat(item.sgst) || 0;
-                                                                                const igst = parseFloat(item.igst) || 0;
-                                                                                
-                                                                                const totalGstVal = cgst + sgst + igst;
-                                                                                let gstPct = item.gstPercentage;
-                                                                                if (!gstPct && taxable > 0 && totalGstVal > 0) {
-                                                                                    gstPct = Math.round((totalGstVal / taxable) * 100);
-                                                                                }
-                                                                                
-                                                                                return (
-                                                                                    <React.Fragment key={idx}>
-                                                                                        {taxable > 0 && (
-                                                                                            <tr className="border-b border-gray-50/50">
-                                                                                                <td></td>
-                                                                                                <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-400 italic">
-                                                                                                    {item.itemName || 'Item'} @ GST {gstPct ? `${gstPct}%` : '%'}
-                                                                                                </td>
-                                                                                                <td colSpan={2}></td>
-                                                                                                <td className="px-6 py-3 text-right text-gray-400">-</td>
-                                                                                                <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-600 font-medium">₹{taxable.toLocaleString('en-IN', {minimumFractionDigits: 2})} CR</td>
-                                                                                            </tr>
-                                                                                        )}
-                                                                                        {cgst > 0 && (
-                                                                                            <tr className="border-b border-gray-50/50">
-                                                                                                <td></td>
-                                                                                                <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-400 italic">Output CGST Account</td>
-                                                                                                <td colSpan={2}></td>
-                                                                                                <td className="px-6 py-3 text-right text-gray-400">-</td>
-                                                                                                <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-600 font-medium">₹{cgst.toLocaleString('en-IN', {minimumFractionDigits: 2})} CR</td>
-                                                                                            </tr>
-                                                                                        )}
-                                                                                        {sgst > 0 && (
-                                                                                            <tr className="border-b border-gray-50/50">
-                                                                                                <td></td>
-                                                                                                <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-400 italic">Output SGST Account</td>
-                                                                                                <td colSpan={2}></td>
-                                                                                                <td className="px-6 py-3 text-right text-gray-400">-</td>
-                                                                                                <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-600 font-medium">₹{sgst.toLocaleString('en-IN', {minimumFractionDigits: 2})} CR</td>
-                                                                                            </tr>
-                                                                                        )}
-                                                                                        {igst > 0 && (
-                                                                                            <tr className="border-b border-gray-50/50">
-                                                                                                <td></td>
-                                                                                                <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-400 italic">Output IGST Account</td>
-                                                                                                <td colSpan={2}></td>
-                                                                                                <td className="px-6 py-3 text-right text-gray-400">-</td>
-                                                                                                <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-600 font-medium">₹{igst.toLocaleString('en-IN', {minimumFractionDigits: 2})} CR</td>
-                                                                                            </tr>
-                                                                                        )}
-                                                                                    </React.Fragment>
-                                                                                );
-                                                                            });
-                                                                        })()}
-                                                                        
-                                                                        {entry.transferFrom === 'Purchase' && entry.rawVoucher && (
-                                                                            <React.Fragment>
-                                                                                <tr className="border-b border-gray-50/50">
-                                                                                    <td></td>
-                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-400 italic">
-                                                                                        Net Payable Amount
-                                                                                    </td>
-                                                                                    <td colSpan={2}></td>
-                                                                                    <td className="px-6 py-3 text-right text-gray-400">-</td>
-                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm text-right font-medium text-gray-600">₹{entry.credit} CR</td>
-                                                                                </tr>
-                                                                                <tr className="border-b border-gray-100">
-                                                                                    <td></td>
-                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-indigo-600 font-bold">
-                                                                                        To {entry.rawVoucher.vendor_name || selectedProcurementVendor.name} (Ref: {entry.referenceNo})
-                                                                                    </td>
-                                                                                    <td colSpan={2}></td>
-                                                                                    <td className="px-6 py-3 text-right text-gray-400">-</td>
-                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm text-right font-bold text-indigo-600">₹{entry.credit} CR</td>
-                                                                                </tr>
-                                                                            </React.Fragment>
-                                                                        )}
+                                                                            const dueDetails = entry.rawVoucher?.due_details;
+                                                                            const tdsIt = dueDetails ? parseFloat(dueDetails.tds_it || 0) : 0;
+                                                                            const tdsGst = dueDetails ? parseFloat(dueDetails.tds_gst || 0) : 0;
+                                                                            const netPayable = dueDetails ? parseFloat(dueDetails.to_pay || 0) : 0;
 
-                                                                        {/* Payment Details */}
+                                                                            return (
+                                                                                <React.Fragment>
+                                                                                    {/* DEBIT rows: Purchase A/c + Input GST accounts */}
+                                                                                    {items.map((item: any, idx: number) => {
+                                                                                        const taxable = parseFloat(item.taxableValue) || 0;
+                                                                                        const cgst = parseFloat(item.cgst) || 0;
+                                                                                        const sgst = parseFloat(item.sgst) || 0;
+                                                                                        const igst = parseFloat(item.igst) || 0;
+                                                                                        const totalGstVal = cgst + sgst + igst;
+                                                                                        let gstPct = item.gstPercentage || item.gst_percentage;
+                                                                                        if (!gstPct && taxable > 0 && totalGstVal > 0) {
+                                                                                            gstPct = Math.round((totalGstVal / taxable) * 100);
+                                                                                        }
+                                                                                        return (
+                                                                                            <React.Fragment key={idx}>
+                                                                                                {taxable > 0 && (
+                                                                                                    <tr className="border-b border-gray-50/50">
+                                                                                                        <td></td>
+                                                                                                        <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-700 font-medium">
+                                                                                                            Purchase A/c {item.itemName ? `(${item.itemName})` : ''} {gstPct ? `@ GST ${gstPct}%` : ''}
+                                                                                                        </td>
+                                                                                                        <td colSpan={2}></td>
+                                                                                                        <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-800 font-medium">₹{taxable.toLocaleString('en-IN', {minimumFractionDigits: 2})} DR</td>
+                                                                                                        <td className="px-6 py-3 text-right text-gray-400">-</td>
+                                                                                                    </tr>
+                                                                                                )}
+                                                                                                {cgst > 0 && (
+                                                                                                    <tr className="border-b border-gray-50/50">
+                                                                                                        <td></td>
+                                                                                                        <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-700 font-medium">Input CGST Account</td>
+                                                                                                        <td colSpan={2}></td>
+                                                                                                        <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-800 font-medium">₹{cgst.toLocaleString('en-IN', {minimumFractionDigits: 2})} DR</td>
+                                                                                                        <td className="px-6 py-3 text-right text-gray-400">-</td>
+                                                                                                    </tr>
+                                                                                                )}
+                                                                                                {sgst > 0 && (
+                                                                                                    <tr className="border-b border-gray-50/50">
+                                                                                                        <td></td>
+                                                                                                        <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-700 font-medium">Input SGST Account</td>
+                                                                                                        <td colSpan={2}></td>
+                                                                                                        <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-800 font-medium">₹{sgst.toLocaleString('en-IN', {minimumFractionDigits: 2})} DR</td>
+                                                                                                        <td className="px-6 py-3 text-right text-gray-400">-</td>
+                                                                                                    </tr>
+                                                                                                )}
+                                                                                                {igst > 0 && (
+                                                                                                    <tr className="border-b border-gray-50/50">
+                                                                                                        <td></td>
+                                                                                                        <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-700 font-medium">Input IGST Account</td>
+                                                                                                        <td colSpan={2}></td>
+                                                                                                        <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-800 font-medium">₹{igst.toLocaleString('en-IN', {minimumFractionDigits: 2})} DR</td>
+                                                                                                        <td className="px-6 py-3 text-right text-gray-400">-</td>
+                                                                                                    </tr>
+                                                                                                )}
+                                                                                            </React.Fragment>
+                                                                                        );
+                                                                                    })}
+
+                                                                                    {/* CREDIT rows: Vendor A/c (net payable) + TDS Payable */}
+                                                                                    {netPayable > 0 && (
+                                                                                        <tr className="border-b border-gray-50/50">
+                                                                                            <td></td>
+                                                                                            <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-indigo-600 font-bold">
+                                                                                                {entry.rawVoucher.vendor_name || selectedProcurementVendor.name} A/c (Ref: {entry.referenceNo})
+                                                                                            </td>
+                                                                                            <td colSpan={2}></td>
+                                                                                            <td className="px-6 py-3 text-right text-gray-400">-</td>
+                                                                                            <td className="px-6 py-3 whitespace-nowrap text-sm text-right font-bold text-indigo-600">₹{netPayable.toLocaleString('en-IN', {minimumFractionDigits: 2})} CR</td>
+                                                                                        </tr>
+                                                                                    )}
+                                                                                    {tdsIt > 0 && (
+                                                                                        <tr className="border-b border-gray-50/50">
+                                                                                            <td></td>
+                                                                                            <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-700 font-medium">TDS Payable (Income Tax)</td>
+                                                                                            <td colSpan={2}></td>
+                                                                                            <td className="px-6 py-3 text-right text-gray-400">-</td>
+                                                                                            <td className="px-6 py-3 whitespace-nowrap text-sm text-right font-medium text-gray-800">₹{tdsIt.toLocaleString('en-IN', {minimumFractionDigits: 2})} CR</td>
+                                                                                        </tr>
+                                                                                    )}
+                                                                                    {tdsGst > 0 && (
+                                                                                        <tr className="border-b border-gray-50/50">
+                                                                                            <td></td>
+                                                                                            <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-700 font-medium">TDS Payable (GST)</td>
+                                                                                            <td colSpan={2}></td>
+                                                                                            <td className="px-6 py-3 text-right text-gray-400">-</td>
+                                                                                            <td className="px-6 py-3 whitespace-nowrap text-sm text-right font-medium text-gray-800">₹{tdsGst.toLocaleString('en-IN', {minimumFractionDigits: 2})} CR</td>
+                                                                                        </tr>
+                                                                                    )}
+                                                                                    {/* Fallback: show net payable from entry.credit if no due_details */}
+                                                                                    {netPayable === 0 && entry.credit !== '-' && (
+                                                                                        <tr className="border-b border-gray-50/50">
+                                                                                            <td></td>
+                                                                                            <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-indigo-600 font-bold">
+                                                                                                {entry.rawVoucher?.vendor_name || selectedProcurementVendor.name} A/c (Ref: {entry.referenceNo})
+                                                                                            </td>
+                                                                                            <td colSpan={2}></td>
+                                                                                            <td className="px-6 py-3 text-right text-gray-400">-</td>
+                                                                                            <td className="px-6 py-3 whitespace-nowrap text-sm text-right font-bold text-indigo-600">₹{entry.credit} CR</td>
+                                                                                        </tr>
+                                                                                    )}
+                                                                                </React.Fragment>
+                                                                            );
+                                                                        })()}
+
+                                                                        {/* Payment Details - Correct Double Entry: Vendor A/c DR, Bank/Cash CR */}
                                                                         {entry.transferFrom === 'Payment' && entry.rawVoucher && (
                                                                             <React.Fragment>
+                                                                                {/* DEBIT: Vendor A/c */}
                                                                                 <tr className="border-b border-gray-50/50">
                                                                                     <td></td>
-                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-400 italic">
-                                                                                        {entry.rawVoucher.payment_mode === 'Cheque' ? `Cheque` : entry.rawVoucher.payment_mode || 'Cash/Bank'}
+                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-700 font-medium">
+                                                                                        {entry.rawVoucher.vendor_name || selectedProcurementVendor.name} A/c
                                                                                     </td>
                                                                                     <td colSpan={2}></td>
+                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-800 font-medium">₹{entry.debit} DR</td>
                                                                                     <td className="px-6 py-3 text-right text-gray-400">-</td>
-                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-600 font-medium">
-                                                                                        ₹{entry.debit} CR
-                                                                                    </td>
                                                                                 </tr>
+                                                                                {/* CREDIT: Bank/Cash A/c */}
                                                                                 <tr className="border-b border-gray-100">
                                                                                     <td></td>
                                                                                     <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-indigo-600 font-bold">
-                                                                                        To {entry.rawVoucher.vendor_name || selectedProcurementVendor.name} (Agst Ref: {entry.rawVoucher.against_reference || entry.rawVoucher.reference_number || '-'})
+                                                                                        {entry.rawVoucher.pay_from_name || entry.rawVoucher.pay_from || entry.rawVoucher.payment_mode || 'Bank/Cash A/c'} (Agst Ref: {entry.rawVoucher.against_reference || entry.rawVoucher.reference_number || '-'})
                                                                                     </td>
                                                                                     <td colSpan={2}></td>
-                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm text-right font-bold text-indigo-600">
-                                                                                        ₹{entry.debit} DR
-                                                                                    </td>
                                                                                     <td className="px-6 py-3 text-right text-gray-400">-</td>
+                                                                                    <td className="px-6 py-3 whitespace-nowrap text-sm text-right font-bold text-indigo-600">₹{entry.debit} CR</td>
                                                                                 </tr>
                                                                             </React.Fragment>
                                                                         )}
@@ -5947,6 +5978,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                 {[
                                                                     { label: 'DATE', key: 'date', width: '120px' },
                                                                     { label: 'VENDOR REFERENCE NAME', key: 'vendorReferenceName' },
+                                                                    { label: 'BRANCH', key: 'branch', width: '130px' },
                                                                     { label: 'VOUCHER NO', key: 'voucherNo', width: '140px' },
                                                                     { label: 'SUPPLIER INVOICE NO.', key: 'supplierInvoiceNo', width: '150px' },
                                                                     { label: 'AMOUNT', key: 'amount', width: '130px' },
@@ -6009,11 +6041,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
                                                                     const matchesDate = bill.date.toLowerCase().includes(paymentBillFilters.date.toLowerCase());
                                                                     const matchesVendor = bill.vendorReferenceName.toLowerCase().includes(paymentBillFilters.vendorReferenceName.toLowerCase());
+                                                                    const matchesBranch = (bill.branch || '').toLowerCase().includes(paymentBillFilters.branch.toLowerCase());
                                                                     const matchesVoucher = bill.voucherNo.toLowerCase().includes(paymentBillFilters.voucherNo.toLowerCase());
                                                                     const matchesInvoice = bill.supplierInvoiceNo.toLowerCase().includes(paymentBillFilters.supplierInvoiceNo.toLowerCase());
                                                                     const matchesAmount = bill.amount.toLowerCase().includes(paymentBillFilters.amount.toLowerCase());
                                                                     const matchesStatus = bill.status.toLowerCase().includes(paymentBillFilters.status.toLowerCase());
-                                                                    return matchesDate && matchesVendor && matchesVoucher && matchesInvoice && matchesAmount && matchesStatus;
+                                                                    return matchesDate && matchesVendor && matchesBranch && matchesVoucher && matchesInvoice && matchesAmount && matchesStatus;
                                                                 })
                                                                 .sort((a, b) => {
                                                                     const dateA = new Date(a.date).getTime();
@@ -6024,6 +6057,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                     <tr key={bill.id} className="hover:bg-gray-50 transition-colors">
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(bill.date)}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{bill.vendorReferenceName}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{bill.branch || '-'}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{bill.voucherNo}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{bill.supplierInvoiceNo}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{bill.amount}</td>
@@ -6168,6 +6202,17 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                             value={createPOForm.poNumber}
                                                             readOnly
                                                             className="w-full px-3 py-2 border border-slate-200 rounded-[4px] bg-gray-50 text-gray-500 cursor-not-allowed focus:outline-none"
+                                                        />
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="label-text">PO Date</label>
+                                                        <input
+                                                            type="date"
+                                                            value={createPOForm.poDate}
+                                                            max={new Date().toISOString().split('T')[0]} // Restrict future date
+                                                            onChange={(e) => handleCreatePOFormChange('poDate', e.target.value)}
+                                                            className="w-full px-3 py-2 border border-slate-200 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                                         />
                                                     </div>
 
