@@ -468,6 +468,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   // Common state
   const [date, setDate] = useState(getTodayDate());
   const [party, setParty] = useState('');
+  const [wasPartyAutoSet, setWasPartyAutoSet] = useState(false);
   const [vendorId, setVendorId] = useState<number | null>(null);
   const [narration, setNarration] = useState('');
   const [isNarrationLoading, setIsNarrationLoading] = useState(false);
@@ -744,7 +745,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         setIsFetchingPOs(true);
         try {
           // If a party (vendor) is selected, filter by it. Status is filtered to 'Pending Approval'.
-          const res = await apiService.getVendorPurchaseOrders(party || undefined, 'Pending Approval');
+          const queryParty = (party && !wasPartyAutoSet) ? party : undefined;
+          const res = await apiService.getVendorPurchaseOrders(queryParty || undefined, 'Pending Approval');
           if (res?.data) {
             setAvailablePOs(res.data);
           } else if (Array.isArray(res)) {
@@ -765,7 +767,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
     // Refetch when voucherType, tab, OR party changes
     fetchPOs();
-  }, [voucherType, purchaseActiveTab, party]);
+  }, [voucherType, purchaseActiveTab, party, wasPartyAutoSet]);
 
   const [currentPOItems, setCurrentPOItems] = useState<any[]>([]);
 
@@ -774,6 +776,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       if (selectedPurchasePOs.length === 0) {
         setPurchaseAdvanceRefs([]);
         setCurrentPOItems([]);
+        setParty(prevParty => {
+          if (wasPartyAutoSet) {
+            setWasPartyAutoSet(false);
+            return '';
+          }
+          return prevParty;
+        });
         return;
       }
 
@@ -853,6 +862,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
           if (!party && vendorNameFound) {
             setParty(vendorNameFound);
+            setWasPartyAutoSet(true);
           }
         }
       } catch (error) {
@@ -860,7 +870,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
       }
     };
     fetchMultiplePODetails();
-  }, [selectedPurchasePOs, availablePOs, isInterState, party, setParty, exchangeRate, allItems]);
+  }, [selectedPurchasePOs, availablePOs, isInterState, party, setParty, exchangeRate, allItems, wasPartyAutoSet]);
 
   // Fetch Pending GRNs based on selected vendor for Purchase Vouchers
   useEffect(() => {
@@ -2219,6 +2229,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
   const handlePartyChange = useCallback((value: string, forcedId?: number | null) => {
     setParty(value);
+    setWasPartyAutoSet(false);
     
     // Clear GRN, PO and items when vendor changes to prevent stale data
     if (voucherType === 'Purchase') {
@@ -3739,6 +3750,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                             ) : (
                               availablePOs.map((po) => {
                                 const isSelected = selectedPurchasePOs.includes(po.po_number);
+
                                 return (
                                   <div
                                     key={po.id}
@@ -3758,7 +3770,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                       readOnly
                                       className="mr-2 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                                     />
-                                    <span>{po.po_number}</span>
+                                    <span>{po.po_number} {po.vendor_name ? `- ${po.vendor_name}` : ''}</span>
                                   </div>
                                 );
                               })
@@ -4050,6 +4062,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           ) : (
                             availablePOs.map((po) => {
                               const isSelected = selectedPurchasePOs.includes(po.po_number);
+
                               return (
                                 <div
                                   key={po.id}
@@ -4069,7 +4082,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                     readOnly
                                     className="mr-2 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                                   />
-                                  <span>{po.po_number}</span>
+                                  <span>{po.po_number} {po.vendor_name ? `- ${po.vendor_name}` : ''}</span>
                                 </div>
                               );
                             })
