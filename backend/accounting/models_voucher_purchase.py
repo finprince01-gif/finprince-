@@ -39,9 +39,9 @@ class VoucherPurchaseSupplierDetails(BaseModel):
     supporting_document = models.FileField(upload_to='purchase_documents/', null=True, blank=True)
 
     class Meta:
-
         db_table = 'voucher_purchase_supplier_details'
         ordering = ['-date', '-created_at']
+        unique_together = ['supplier_invoice_no', 'gstin', 'tenant_id']
 
     def __str__(self):
         return f"{self.purchase_voucher_no} - {self.vendor_name}"

@@ -1,175 +1,157 @@
-import re
+import logging
 from django.db.models import Q
 from .models import VendorMasterBasicDetail, VendorMasterGSTDetails
 
+logger = logging.getLogger(__name__)
+
 def validate_vendor(tenant_id, vendor_name, gstin, branch='', address='', state='', supplier_invoice_no=''):
     """
-    Core vendor validation logic following branch-based rules.
+    Core vendor validation logic following a strict "Branch-Based" Matching Rule.
+    
+    normalization:
+    - Clean vendor_name (strip).
+    - Normalize gstin (strip, uppercase).
+    - Default branch to "Main Branch" if it is empty.
+    
     Rules:
-    1. vendor_name, gstin, branch all match -> DUPLICATE (Stop)
-    2. vendor_name matches, gstin is different -> NEW VENDOR (Allow)
-    3. vendor_name, gstin match, branch is different -> NEW VENDOR (Allow)
-    4. gstin matches, vendor_name is different -> WARNING (Conflict)
+    Rule 1 (Duplicate Check): Match primarily by GSTIN. If a record exists where Name, GSTIN, 
+    AND Branch all match (case-insensitive), return status: "FOUND".
+    
+    Rule 2 (Conflict Check): If the GSTIN exists in the database but the Vendor Name is different, 
+    return status: "GSTIN_CONFLICT" with a warning showing the existing name.
+    
+    Rule 3 (New Branch/New Vendor): 
+    - If Name and GSTIN match but Branch is different, return "NOT_FOUND" to allow new branch creation.
+    - If GSTIN does not exist in DB, return "NOT_FOUND".
+    
+    Rule 4 (Fallback - Name Only): If invoice has no GSTIN, match only by Exact Name.
     """
-    # Aggressive Name Cleaning for Robust Matching
-    def _clean_name(name):
-        if not name: return ""
-        # Remove dots, commas, hyphens and collapse multiple spaces
-        n = re.sub(r'[\.\,\-]', ' ', name.upper())
-        # Strip common trailing artifacts (like OCR ellipses)
-        n = re.sub(r'[\.\s]+$', '', n)
-        return " ".join(n.split())
+    
+    # --- Step 0: Normalization ---
+    v_name = (vendor_name or "").strip()
+    v_gstin = (gstin or "").strip().upper()
+    v_branch = (branch or "").strip() if branch else "Main Branch"
+    s_inv_no = (supplier_invoice_no or "").strip()
 
-    c_vendor_name = _clean_name(vendor_name)
-    # Deep clean GSTIN: remove spaces, hyphens and make uppercase
-    if gstin: gstin = "".join(re.findall(r'[A-Z0-9]', gstin.upper()))
-    if branch: branch = branch.strip()
-    if not branch: branch = "Main Branch" # Default as per creation logic
+    res = {
+        "status": "INCOMPLETE",
+        "vendor_id": None,
+        "vendor_name": v_name,
+        "message": "Mandatory fields missing: GSTIN and Invoice Number are required for voucher creation."
+    }
 
+    # Internal helper to check for duplicate invoice numbers for a matched vendor.
     def _check_duplicate_invoice(res_dict):
-        if supplier_invoice_no:
-            from accounting.models_voucher_purchase import VoucherPurchaseSupplierDetails
+        if not s_inv_no or "vendor_id" not in res_dict:
+            return res_dict
             
-            v_id = res_dict.get("vendor_id")
-            s_inv_no = supplier_invoice_no.strip()
+        from accounting.models_voucher_purchase import VoucherPurchaseSupplierDetails
+        v_id = res_dict.get("vendor_id")
 
-            # 1. Check ERP (Final Vouchers)
-            query = VoucherPurchaseSupplierDetails.objects.filter(
-                tenant_id=tenant_id,
-                vendor_basic_detail_id=v_id,
-                supplier_invoice_no__iexact=s_inv_no
-            )
+        # 1. Check ERP (Final Vouchers)
+        erp_exists = VoucherPurchaseSupplierDetails.objects.filter(
+            tenant_id=tenant_id,
+            vendor_basic_detail_id=v_id,
+            supplier_invoice_no__iexact=s_inv_no
+        ).exists()
+
+        if erp_exists:
+            return {
+                "status": "DUPLICATE_INVOICE",
+                "message": f"DUPLICATE ERROR: Invoice '{s_inv_no}' already exists in your records.",
+                "vendor_id": v_id,
+                "vendor_name": res_dict.get('vendor_name', v_name),
+            }
+
+        # 2. Check Staging (Unprocessed Scans)
+        from django.db import connection
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT file_path FROM invoice_ocr_temp 
+                    WHERE tenant_id = %s AND vendor_id = %s AND supplier_invoice_no = %s AND processed = FALSE
+                    LIMIT 1
+                    """,
+                    [tenant_id, v_id, s_inv_no]
+                )
+                row = cursor.fetchone()
+                if row:
+                    return {
+                        "status": "DUPLICATE_INVOICE",
+                        "message": f"WAIT: This invoice ('{s_inv_no}') is currently staged from file '{row[0]}'.",
+                        "vendor_id": v_id,
+                        "vendor_name": res_dict.get('vendor_name', v_name),
+                    }
+        except Exception:
+            pass
             
-            # Refine with GSTIN if available
-            mapped_gstin = res_dict.get("gstin") or gstin
-            if mapped_gstin:
-                query = query.filter(gstin__iexact=mapped_gstin.strip())
-
-            if query.exists():
-                return {
-                    "status": "DUPLICATE_INVOICE",
-                    "message": f"DUPLICATE ERROR: Invoice number '{s_inv_no}' already exists in your ERP records.",
-                    "vendor_id": v_id,
-                    "vendor_name": res_dict.get('vendor_name', vendor_name),
-                }
-
-            # 2. Check Staging (Unsent Scans)
-            from django.db import connection
-            try:
-                with connection.cursor() as cursor:
-                    cursor.execute(
-                        """
-                        SELECT file_path 
-                        FROM   invoice_ocr_temp 
-                        WHERE  tenant_id = %s 
-                          AND  vendor_id = %s 
-                          AND  supplier_invoice_no = %s
-                          AND  processed = FALSE
-                        LIMIT 1
-                        """,
-                        [tenant_id, v_id, s_inv_no]
-                    )
-                    staged_row = cursor.fetchone()
-                    if staged_row:
-                        return {
-                            "status": "DUPLICATE_INVOICE",
-                            "message": f"DUPLICATE WARNING: This invoice ('{s_inv_no}') is already being processed/staged from file '{staged_row[0]}'.",
-                            "vendor_id": v_id,
-                            "vendor_name": res_dict.get('vendor_name', vendor_name),
-                        }
-            except Exception as e:
-                pass # Fallback to no staging check on DB error
-
         return res_dict
 
-    # Rule 1 & 4 (GSTIN-led Validation)
-    if gstin:
+    # --- Step 1: Matching with GSTIN ---
+    if v_gstin:
         gst_records = VendorMasterGSTDetails.objects.filter(
-            tenant_id=tenant_id, gstin__iexact=gstin
+            tenant_id=tenant_id,
+            gstin__iexact=v_gstin,
+            vendor_basic_detail__isnull=False
         ).select_related('vendor_basic_detail')
 
         if gst_records.exists():
-            for rec in gst_records:
-                master_name_raw = rec.vendor_basic_detail.vendor_name if rec.vendor_basic_detail else ""
-                master_name_clean = _clean_name(master_name_raw)
-                
-                # Lenient Name Comparison: Match if one is a substring of the other or exact
-                name_match = (master_name_clean == c_vendor_name or c_vendor_name in master_name_clean or master_name_clean in c_vendor_name)
-                
-                if name_match:
-                    # 1. Look for Exact Branch Match
-                    db_branch = rec.reference_name or "Main Branch"
-                    if db_branch.lower() == branch.lower():
-                        res = {
-                            "status": "FOUND",
-                            "matched_by": "GSTIN_Branch_Exact",
-                            "vendor_id": rec.vendor_basic_detail.id,
-                            "vendor_name": rec.vendor_basic_detail.vendor_name,
-                            "gstin": gstin,
-                            "branch": db_branch
-                        }
-                        return _check_duplicate_invoice(res)
-                
-            # 2. FALLBACK 1: If we found a GSTIN record and the name is "Close Enough" (substring),
-            # use the first one found instead of failing or conflicting.
-            for rec in gst_records:
-                master_name_raw = rec.vendor_basic_detail.vendor_name if rec.vendor_basic_detail else ""
-                master_name_clean = _clean_name(master_name_raw)
-                if c_vendor_name in master_name_clean or master_name_clean in c_vendor_name:
-                    res = {
-                        "status": "FOUND",
-                        "matched_by": "GSTIN_Name_Lenient",
-                        "vendor_id": rec.vendor_basic_detail.id,
-                        "vendor_name": rec.vendor_basic_detail.vendor_name,
-                        "gstin": gstin,
-                        "branch": rec.reference_name or "Main Branch"
-                    }
-                    return _check_duplicate_invoice(res)
+            # Evaluate for exact Name and Branch match first
+            exact_match = None
+            for record in gst_records:
+                reg_name = record.vendor_basic_detail.vendor_name.strip().lower()
+                reg_branch = (record.reference_name or "Main Branch").strip().lower()
+
+                if reg_name == v_name.lower() and reg_branch == v_branch.lower():
+                    exact_match = record
+                    break
             
-            # Rule 4: GSTIN matches but Name is completely different (Conflict)
-            first_rec = gst_records.first()
-            return {
-                "status": "GSTIN_CONFLICT",
-                "message": f"WARNING: GSTIN '{gstin}' belongs to '{first_rec.vendor_basic_detail.vendor_name}', not '{vendor_name}'.",
-                "vendor_id": first_rec.vendor_basic_detail.id,
-                "vendor_name": first_rec.vendor_basic_detail.vendor_name,
-                "gstin": gstin
-            }
-
-    # Rule 2: Match by Name (Fallback) — use icontains for robustness
-    if c_vendor_name and len(c_vendor_name) > 3:
-        # 1. First try direct match (exact or icontains)
-        existing_vendor = VendorMasterBasicDetail.objects.filter(
-            Q(vendor_name__iexact=c_vendor_name) | Q(vendor_name__icontains=c_vendor_name),
-            tenant_id=tenant_id
-        ).first()
-
-        # 2. Try matching the START of the name only (robust to "Pvt Ltd" omission)
-        if not existing_vendor:
-            existing_vendor = VendorMasterBasicDetail.objects.filter(
-                vendor_name__istartswith=c_vendor_name[:10], # Match first 10 chars
-                tenant_id=tenant_id
-            ).first()
-        
-        if existing_vendor:
-            # Look for ANY branch for this vendor
-            gst_rec = VendorMasterGSTDetails.objects.filter(
-                vendor_basic_detail=existing_vendor, tenant_id=tenant_id
-            ).first()
+            match_found = exact_match or gst_records.first()
             
             res = {
-                "status": "FOUND",
-                "matched_by": "Name_Fuzzy",
-                "vendor_id": existing_vendor.id,
-                "vendor_name": existing_vendor.vendor_name,
-                "gstin": gst_rec.gstin if gst_rec else "",
-                "branch": gst_rec.reference_name if gst_rec else "Main Branch",
-                "message": f"Found vendor by name match: {existing_vendor.vendor_name}"
+                "status": "FOUND" if s_inv_no else "INCOMPLETE",
+                "matched_by": "GSTIN_Branch" if exact_match else "GSTIN_Identity",
+                "vendor_id": match_found.vendor_basic_detail.id,
+                "vendor_name": match_found.vendor_basic_detail.vendor_name,
+                "gstin": v_gstin,
+                "branch": match_found.reference_name or "Main Branch",
+                "message": (
+                    "Vendor exists. " + ("Ready for voucher." if s_inv_no else "Missing Invoice Number.")
+                )
             }
             return _check_duplicate_invoice(res)
 
-    return {
-        "status": "NOT_FOUND",
-        "message": "Vendor not found in master records."
-    }
+        # Record not found by GSTIN
+        return {
+            "status": "NOT_FOUND",
+            "message": f"GSTIN '{v_gstin}' not found in master records."
+        }
+
+    # --- Step 2: Fallback - Name Only (No GSTIN) ---
+    else:
+        if not v_name:
+            return {"status": "NOT_FOUND", "message": "No vendor info provided (Name or GSTIN)."}
+            
+        # Rule 4: Match only by Exact Name
+        vendor = VendorMasterBasicDetail.objects.filter(
+            tenant_id=tenant_id,
+            vendor_name__iexact=v_name
+        ).first()
+
+        if vendor:
+            res = {
+                "status": "FOUND" if s_inv_no else "INCOMPLETE",
+                "matched_by": "Name_Only",
+                "vendor_id": vendor.id,
+                "vendor_name": vendor.vendor_name,
+                "message": "Vendor matched by name only."
+            }
+            return _check_duplicate_invoice(res)
+        else:
+            return {
+                "status": "NOT_FOUND",
+                "message": f"Vendor '{v_name}' not found by name comparison."
+            }
+
 

@@ -18,6 +18,7 @@ import {
     type MappingDecision,
     type AuditEvent,
 } from '../services/mappingEngine';
+import { getVoucherSchema, getVoucherFlatHeaders, type VoucherSchema, type SchemaField } from '../configs/schemaConfig';
 import CreateVendorModal from './CreateVendorModal';
 
 import { getXLSX } from '../utils/xlsx';
@@ -47,7 +48,7 @@ interface InvoiceScannerModalProps {
     onUpload?: (data: any[]) => void;
     initialFiles?: FileList | null;
     voucherType: string;
-    extractionMode?: 'finpixe' | 'tally' | 'zoho' | 'sap';
+    extractionMode?: 'ai_native' | 'tally' | 'zoho' | 'sap';
     scanType?: 'single' | 'bulk';
     onExtractionSuccess?: (extractedData: any) => void;
 }
@@ -299,49 +300,27 @@ const Icon: React.FC<{ name: string; className?: string }> = ({ name, className 
 // Component
 // ────────────────────────────────────────────────────────────────────────────────
 
-const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUpload, initialFiles, voucherType, extractionMode = 'finpixe', scanType = 'single', onExtractionSuccess }) => {
+const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUpload, initialFiles, voucherType, extractionMode = 'ai_native', scanType = 'single', onExtractionSuccess }) => {
     // ── Columns definitions based on extractionMode & voucherType ──
-    // ⚠️  extractionMode === 'tally' ONLY uses OFFICIAL_TALLY_VOUCHER_HEADERS
-    //     These are strictly isolated official Tally Voucher export columns.
-    //     They do NOT include Finpixe fields, DB columns, or calculated totals.
+    const schema = getVoucherSchema(voucherType) as VoucherSchema;
     const ALL_COLUMNS = extractionMode === 'tally'
         ? [...OFFICIAL_TALLY_VOUCHER_HEADERS]          // ✔ Official Tally Voucher headers only
-        // De-duplicate: schema may list same label in multiple sections (e.g. IGST in items + summary)
-        : [...new Set(VOUCHER_COLUMN_SCHEMAS[voucherType] || [...OFFICIAL_TALLY_VOUCHER_HEADERS].slice(0, 27))];
+        : getVoucherFlatHeaders(voucherType);
 
-
-    const LINE_ITEM_FIELDS = [
-        // ── Core item identification ──────────────────────────────────────────
-        "Item Code", "Item Name", "HSN/SAC", "HSN Description", "Description", "Sales Ledger",
-        "Item Description",
-        // ── Quantity / Unit ───────────────────────────────────────────────────
-        "Qty", "Quantity", "UOM", "UQC", "Alternate Unit",
-        "Actual Quantity", "Billed Quantity", "Quantity UOM",
-        // ── Foreign currency ──────────────────────────────────────────────────
-        "Rate (FC)", "Amount (FC)",
-        // ── INR pricing ───────────────────────────────────────────────────────
-        "Item Rate", "Rate", "Taxable Value",
-        "Item Rate per", "Disc%",
-        // ── Tax columns ───────────────────────────────────────────────────────
-        "CGST", "SGST", "SGST/UTGST", "IGST", "CESS", "Cess",
-        "IGST Rate", "CGST Rate", "SGST/UTGST Rate",
-        "Cess Rate", "Cess Rate Per Unit", "State Cess Rate",
-        // ── Row total ─────────────────────────────────────────────────────────
-        "Invoice Value", "Item Amount",
-        // ── Tally-specific per-row fields ────────────────────────────────────
-        "GST Rate Details", "GST Taxability Type",
-        "Item Allocations - Tracking No.", "Item Allocations - Order No.", "Item Allocations - Batch/Lot No."
-    ].filter(f => ALL_COLUMNS.includes(f));
-
-
-    const HEADER_FIELDS = ALL_COLUMNS.filter(col => !LINE_ITEM_FIELDS.includes(col));
+    const LINE_ITEM_FIELDS = (schema.sections.items as SchemaField[] | undefined)?.map(f => f.label) || [];
+    const HEADER_FIELDS = Object.entries(schema.sections)
+        .filter(([name]) => name !== 'items')
+        .flatMap(([, fields]) => (fields as SchemaField[]).map(f => f.label));
     const fileInputRef = useRef<HTMLInputElement>(null);
     const folderInputRef = useRef<HTMLInputElement>(null);
     const processedFilesRef = useRef<FileList | File[] | null>(null);
     const uploadedFilesSetRef = useRef<Set<string>>(new Set());
+    const stagedFilePathsRef = useRef<string[]>([]); // Ref to avoid stale closures in polling
+    const uploadSessionIdRef = useRef<string | null>(null);
     const [invoiceResults, setInvoiceResults] = useState<InvoiceResult[]>([]);
     const [isExtracting, setIsExtracting] = useState(false);
     const [uploadedFileNames, setUploadedFileNames] = useState<string[]>([]);
+    const [stagedFilePaths, setStagedFilePaths] = useState<string[]>([]); // SCOPE: Current batch only
     const [estimatedExtractionTime, setEstimatedExtractionTime] = useState<number | null>(null);
     const [countdownSeconds, setCountdownSeconds] = useState<number | null>(null);
 
@@ -367,7 +346,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         }
 
         const checkVendor = async () => {
-            if (extractionMode !== 'finpixe') return;
+            if (extractionMode !== 'ai_native') return;
             const firstRow = invoiceResults[0].invoice;
 
             const vendorName = firstRow['Vendor Name'] || firstRow['Bill From'] || firstRow['Buyer/Supplier - Mailing Name'] || '';
@@ -457,28 +436,22 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                 if (data[key] !== undefined && data[key] !== null && data[key] !== '') return String(data[key]);
                 for (const alt of altList) {
                     if (data[alt] !== undefined && data[alt] !== null && data[alt] !== '') return String(data[alt]);
-                    // Also try snake_case version of the alias
                     const altSnake = alt.toLowerCase().replace(/[\s\/\-\.]+/g, '_').replace(/^_|_$/g, '');
                     if (data[altSnake] !== undefined && data[altSnake] !== null && data[altSnake] !== '') return String(data[altSnake]);
                 }
             }
         }
-
         return '';
     };
 
     const { incrementUsage, isLimitReached, subscriptionUsage } = useSubscriptionUsage();
 
-    // ── Live countdown timer ──────────────────────────────────────────────────
     useEffect(() => {
         if (isExtracting && estimatedExtractionTime !== null) {
             setCountdownSeconds(Math.round(estimatedExtractionTime));
             const interval = setInterval(() => {
                 setCountdownSeconds(prev => {
-                    if (prev === null || prev <= 1) {
-                        // Don't clear — keep at 0 until extraction finishes
-                        return 0;
-                    }
+                    if (prev === null || prev <= 1) return 0;
                     return prev - 1;
                 });
             }, 1000);
@@ -488,7 +461,6 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
         }
     }, [isExtracting, estimatedExtractionTime]);
 
-    // Auto-process initial files if provided
     useEffect(() => {
         if (initialFiles && initialFiles.length > 0 && processedFilesRef.current !== initialFiles) {
             processedFilesRef.current = initialFiles;
@@ -497,364 +469,92 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
     }, [initialFiles]);
 
     const processFiles = async (files: FileList | File[]) => {
-        if (isExtracting) return; // Point 1B fix
+        if (isExtracting) return;
         setIsExtracting(true);
-
-        if (isLimitReached && extractionMode === 'finpixe') {
-            showError('❌ AI Extraction limit reached for your plan. Please upgrade to continue.');
-            setIsExtracting(false);
-            return;
-        }
 
         const newFiles: File[] = [];
         const newNames: string[] = [];
-        let duplicateFound = false;
-
-        // Enforce single file for Finpixe Single Scan
-        if (scanType === 'single' && files.length > 1 && extractionMode === 'finpixe') {
-            showError('FINPIXE SINGLE SCAN allows only one invoice. Use FINPIXE BULK SCAN for multiple invoices.');
-            return;
-        }
 
         for (let i = 0; i < files.length; i++) {
             const f = files[i];
-            const fileKey = `${f.name}*${f.size}*${f.lastModified}`;
-            if (uploadedFilesSetRef.current.has(fileKey)) {
-                duplicateFound = true;
-            } else {
-                uploadedFilesSetRef.current.add(fileKey);
-                newFiles.push(f);
-                newNames.push(f.name);
-            }
+            newFiles.push(f);
+            newNames.push(f.name);
         }
 
-        if (duplicateFound) {
-            showError('Duplicate invoice detected. This file has already been processed.');
-        }
-
-        if (newFiles.length === 0) return;
+        if (newFiles.length === 0) { setIsExtracting(false); return; }
 
         setUploadedFileNames(prev => [...prev, ...newNames]);
 
-        setIsExtracting(true);
-        const fileCount = newFiles.length;
         try {
-            if (fileCount > 0) {
-                const avgRes = await apiService.getExtractionAverageTime();
-                const avgTime = avgRes?.average_time_per_invoice || 3.85;
-                const batchCount = Math.ceil(fileCount / 5); // 5 files concurrent
-                setEstimatedExtractionTime(avgTime * batchCount);
-            } else {
-                setEstimatedExtractionTime(null);
-            }
-        } catch (error) {
-            console.error("Failed to fetch avg extraction time", error);
-            const batchCount = Math.ceil(fileCount / 5);
-            setEstimatedExtractionTime(fileCount > 0 ? 3.85 * batchCount : null);
-        }
+            const currentSessionId = String(Date.now());
+            uploadSessionIdRef.current = currentSessionId;
+            const formData = new FormData();
+            newFiles.forEach(f => formData.append('files', f));
+            formData.append('upload_session_id', currentSessionId); 
+            formData.append('voucher_type', voucherType);
 
-        try {
-            if (scanType === 'bulk') {
-                const formData = new FormData();
-                newFiles.forEach(f => formData.append('files', f));
-
-                const response = await httpClient.postFormData<any>('/api/bulk-upload/', formData);
-                if (response.job_id) {
-                    setBulkJobId(response.job_id);
-                    setBulkStatus({
-                        total: response.total_files,
-                        processed: 0,
-                        failed: 0,
-                        pending: response.total_files,
-                        status: 'processing'
-                    });
-                    startPolling(response.job_id);
-                }
-                return;
-            }
-
-            const allResults: InvoiceResult[] = [];
-            let batchProcessedCount = 0;
-            const CONCURRENCY_LIMIT = 4;
-
-            for (let i = 0; i < newFiles.length; i += CONCURRENCY_LIMIT) {
-                const batch = newFiles.slice(i, i + CONCURRENCY_LIMIT);
-
-                const batchPromises = batch.map(async (file) => {
-                    // Check subscription limit before initiating request
-                    if (extractionMode === 'finpixe' && subscriptionUsage && subscriptionUsage.limit !== 'Unlimited') {
-                        const limit = typeof subscriptionUsage.limit === 'string'
-                            ? parseFloat(subscriptionUsage.limit)
-                            : subscriptionUsage.limit;
-                        if ((subscriptionUsage.used || 0) + batchProcessedCount >= limit) {
-                            return { file, error: 'LIMIT_REACHED', success: false };
-                        }
-                    }
-
-                    const formData = new FormData();
-                    formData.append('file', file);
-                    formData.append('voucher_type', voucherType);
-                    formData.append('table_name', voucherType);
-                    formData.append('columns', JSON.stringify(ALL_COLUMNS));
-                    formData.append('extraction_mode', extractionMode || 'finpixe');
-
-
-                    try {
-                        const result = await httpClient.postFormData<any>('/api/ai/extract-invoice/', formData);
-                        return { file, result, success: true };
-                    } catch (err) {
-                        return { file, error: err, success: false };
-                    }
+            const response = await httpClient.postFormData<any>('/api/bulk-upload/', formData);
+            if (response.job_id) {
+                // Tracking uploaded file paths to ensure scope parity (Step 3: store currentFile)
+                const newPaths = response.file_paths || [response.file_path].filter(Boolean) || [];
+                setStagedFilePaths(prev => [...prev, ...newPaths]);
+                stagedFilePathsRef.current = [...stagedFilePathsRef.current, ...newPaths];
+                
+                setBulkJobId(response.job_id);
+                setBulkStatus({
+                    total: response.total_files,
+                    processed: 0,
+                    failed: 0,
+                    pending: response.total_files,
+                    status: 'processing'
                 });
-
-                const batchResponses = await Promise.all(batchPromises);
-
-                for (const response of batchResponses) {
-                    if (response.error === 'LIMIT_REACHED') {
-                        showError(`❌ AI Extraction limit reached.`);
-                        continue;
-                    }
-
-                    batchProcessedCount++;
-                    const file = response.file;
-
-                    if (!response.success) {
-                        console.error(`Extraction failed for ${file.name}:`, response.error);
-                        showError(`❌ Extraction Failed for ${file.name}.`);
-                        continue;
-                    }
-
-                    const result = response.result;
-                    if (result.error) {
-                        showError(`❌ Extraction Failed for ${file.name}: ${result.error}`);
-                        continue;
-                    }
-
-                    if (result.duplicate) {
-                        showInfo(`✨ ${file.name} already scanned — results loaded instantly.`);
-                    }
-
-                    // Normalize and Push — using enterprise engine v3
-                    const normalizeResult = (res: any): InvoiceResult => {
-                        // res = result.data = { invoice: { Date, Vendor Name, ... }, items: [...] }
-                        // OR from multi-invoice: res = { Date, Vendor Name, items: [...] }
-                        const resData = res.data || res;
-
-                        // Extract the flat invoice-level fields
-                        const invoicePart: Record<string, any> =
-                            resData.invoice || resData.header || resData.header_fields ||
-                            res.invoice || res.header || {};
-
-                        // Merge summary_totals into the flat header
-                        const summaryTotals: Record<string, any> =
-                            resData.summary_totals || resData.summaryTotals ||
-                            invoicePart.summary_totals || {};
-
-                        // Build a CLEAN flat rawHeader: invoice fields + summary totals only
-                        // Do NOT spread resData (which contains container keys like "invoice", "items")
-                        const rawHeader: Record<string, any> = {
-                            ...invoicePart,
-                            ...summaryTotals,
-                            voucher_type: resData.voucher_type || res.voucher_type || voucherType
-                        };
-
-                        // Strip any nested objects or arrays (keep only scalar values)
-                        Object.keys(rawHeader).forEach(k => {
-                            const v = rawHeader[k];
-                            if (v !== null && typeof v === 'object' && !Array.isArray(v)) {
-                                delete rawHeader[k];
-                            }
-                        });
-
-
-                        // Items come from resData, not from invoicePart
-                        const rawItems: any[] = resData.items || resData.line_items || resData.lineItems ||
-                            res.items || res.line_items || res.lineItems || [];
-
-                        const vendorId = rawHeader['Vendor Name'] || rawHeader['vendor_name'] || rawHeader.sellerName || '';
-                        const audit: AuditEvent[] = [];
-
-                        // ── Header Mapping ── (pass actual field keys, not container keys)
-                        const headerKeys = Object.keys(rawHeader) as string[];
-                        const hResult = runMappingEngine(headerKeys, HEADER_FIELDS, vendorId, audit);
-
-                        // ── Item Mapping ──
-                        const itemKeys = rawItems.length > 0 ? Object.keys(rawItems[0]) : [];
-                        const iResult = runMappingEngine(itemKeys, LINE_ITEM_FIELDS, vendorId, audit);
-
-                        // ── 7️⃣ Structural Integrity Validation ──
-                        const allDecisions = [...hResult.decisions, ...iResult.decisions];
-                        const allSwaps = [...hResult.swapSuspicions, ...iResult.swapSuspicions];
-                        const combinedMapping = { ...hResult.mapping, ...iResult.mapping };
-                        const structuralViolations = validateStructuralIntegrity(
-                            combinedMapping, allDecisions, allSwaps,
-                            [...HEADER_FIELDS, ...LINE_ITEM_FIELDS], audit
-                        );
-
-                        // ── Build normalized header ──
-                        // Use EXACT MATCH first (field name = key in rawHeader), then mapping engine
-                        const normalizedHeader: Record<string, string> = {};
-                        HEADER_FIELDS.forEach(field => {
-                            let val: any;
-                            // 1. Exact match — backend already uses correct column names
-                            if (rawHeader[field] !== undefined && rawHeader[field] !== null) {
-                                val = rawHeader[field];
-                            }
-                            // 2. Mapping engine resolved a source key
-                            else {
-                                const sourceKey = hResult.mapping[field];
-                                if (sourceKey) val = rawHeader[sourceKey];
-                            }
-                            if (typeof val === 'number') val = String(val);
-                            if (field.includes('Total') || field.includes('Value') || field.includes('Amount')) {
-                                val = coerceNumber(val);
-                            }
-                            normalizedHeader[field] = (val !== undefined && val !== null) ? String(val) : '';
-                        });
-
-                        // ── 7.5 Tally-specific field fallbacks (to fill common missing fields) ──
-                        if (extractionMode === 'tally') {
-                            // Mirror Date -> Reference Date if only one exists
-                            if (!normalizedHeader['Reference Date'] && normalizedHeader['Voucher Date']) {
-                                normalizedHeader['Reference Date'] = normalizedHeader['Voucher Date'];
-                            } else if (normalizedHeader['Reference Date'] && !normalizedHeader['Voucher Date']) {
-                                normalizedHeader['Voucher Date'] = normalizedHeader['Reference Date'];
-                            }
-                            // Mirror Number -> Reference No if only one exists (common for supplier invoices)
-                            if (!normalizedHeader['Reference No.'] && normalizedHeader['Voucher Number']) {
-                                normalizedHeader['Reference No.'] = normalizedHeader['Voucher Number'];
-                            } else if (normalizedHeader['Reference No.'] && !normalizedHeader['Voucher Number']) {
-                                normalizedHeader['Voucher Number'] = normalizedHeader['Reference No.'];
-                            }
-                        }
-
-
-                        // ── Build normalized items ──
-                        const normalizedItems = rawItems.map((item: any, idx: number) => {
-                            const normalizedItem: any = {};
-                            LINE_ITEM_FIELDS.forEach(field => {
-                                if (field === 'S.No') { normalizedItem[field] = String(idx + 1); return; }
-                                let val: any;
-                                // 1. Exact match
-                                if (item[field] !== undefined && item[field] !== null) {
-                                    val = item[field];
-                                }
-                                // 2. Mapping engine
-                                else {
-                                    const sourceKey = iResult.mapping[field];
-                                    if (sourceKey) val = item[sourceKey];
-                                }
-                                const numericFields = ['Quantity', 'Rate', 'Item Rate', 'Disc %', 'Disc Amount',
-                                    'Taxable Value', 'Taxable Amount', 'GST %', 'GST Rate', 'Item Amount',
-                                    'IGST', 'CGST', 'SGST/UTGST', 'Invoice Value', 'Cess'];
-                                if (numericFields.some(nf => field.startsWith(nf))) {
-                                    val = coerceNumber(val);
-                                }
-                                normalizedItem[field] = (val !== undefined && val !== null) ? String(val) : '';
-                            });
-                            return normalizedItem;
-                        });
-
-                        console.log('[MappingEngine v3] Audit:', { hResult, iResult, structuralViolations });
-                        if (hResult.ambiguities.length > 0 || iResult.ambiguities.length > 0) {
-                            console.warn('[MappingEngine v3] AMBIGUITIES DETECTED:', [...hResult.ambiguities, ...iResult.ambiguities]);
-                        }
-                        if (allSwaps.length > 0) {
-                            console.warn('[MappingEngine v3] SWAP SUSPICIONS:', allSwaps);
-                        }
-
-                        return {
-                            invoice: normalizedHeader,
-                            items: normalizedItems,
-                            headerMapping: hResult.mapping,
-                            itemMapping: iResult.mapping,
-                        };
-                    };
-
-                    // ── Multi-invoice PDF: backend split the PDF into N invoices ──────
-                    if (result.success && result.multi_invoice && Array.isArray(result.results)) {
-                        console.log(`[InvoiceScanner] Multi-invoice PDF: ${result.invoice_count} invoices detected`);
-                        for (const invResult of result.results) {
-                            if (invResult.error) {
-                                console.warn('[InvoiceScanner] Error in split invoice:', invResult.error);
-                                continue;
-                            }
-                            if (invResult.success && invResult.data) {
-                                batchProcessedCount++;
-                                const normalised = normalizeResult(invResult.data);
-                                normalised.cacheRecordId = invResult.cache_record_id ?? null;
-                                allResults.push(normalised);
-                            }
-                        }
-                    } else if (result.success && result.data) {
-                        batchProcessedCount++;
-                        const normalised = normalizeResult(result.data);
-                        // Persist the cache record id so edits can be synced back
-                        normalised.cacheRecordId = result.cache_record_id ?? null;
-                        allResults.push(normalised);
-                    } else if (result.reply) {
-                        batchProcessedCount++;
-                        let parsedData: any;
-                        try {
-                            const cleanJson = result.reply.replace(/```json\n?|\n?```/g, '').trim();
-                            parsedData = JSON.parse(cleanJson);
-                        } catch {
-                            const jsonMatch = result.reply.match(/\{[\s\S]*\}/);
-                            if (jsonMatch) {
-                                parsedData = JSON.parse(jsonMatch[0]);
-                            } else {
-                                throw new Error('No JSON found in response');
-                            }
-                        }
-                        const normalised = normalizeResult(parsedData);
-                        // cache_record_id may also be present on reply responses
-                        normalised.cacheRecordId = result.cache_record_id ?? null;
-                        allResults.push(normalised);
-                    } else {
-                        showError(`❌ No data received from backend for ${file.name}`);
-                    }
-                }
-            }
-
-
-            setInvoiceResults(prev => [...prev, ...allResults]);
-
-            if (allResults.length > 0 && onExtractionSuccess) {
-                const firstRow = allResults[0].invoice;
-                const extractedData = {
-                    vendor_name: firstRow['Vendor Name'] || firstRow['Bill From'] || firstRow['Buyer/Supplier - Mailing Name'] || '',
-                    gstin: firstRow['GSTIN'] || '',
-                    branch: firstRow['Branch'] || '',
-                    bill_from: firstRow['Bill From'] || firstRow['Buyer/Supplier - Address'] || firstRow['Bill From - Address Line 1'] || '',
-                    state: firstRow['State'] || firstRow['Billing State'] || firstRow['Bill From - State'] || ''
-                };
-                onExtractionSuccess(extractedData);
+                startPolling(response.job_id);
             }
         } catch (error) {
-            showError(`❌ Extraction Failed: ${(error as Error).message}. Please try again.`);
+            showError(`❌ Upload Failed: ${(error as Error).message}`);
+            setIsExtracting(false);
         } finally {
-            if (scanType !== 'bulk') {
-                setIsExtracting(false);
-            }
             if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
 
     const fetchStagingData = async () => {
         try {
-            // Fetch the actual extracted data from the staging API
-            const response: any = await httpClient.get('/api/ocr-staging/');
+            // STEP 3: Fetch using session_id to get ALL relevant processed records safely
+            const params: Record<string, string> = {};
+            if (uploadSessionIdRef.current) {
+                params.upload_session_id = uploadSessionIdRef.current;
+            }
 
-            // Handle both legacy array and new envelope {status, data: []} formats
+            const response: any = await httpClient.get('/api/ocr-staging/', params);
             const stagedResults = Array.isArray(response) ? response : (response?.data || []);
 
-            // Map the OCR staging results to the format expected by our UI (InvoiceResult)
             const mappedResults: InvoiceResult[] = stagedResults.map((item: any) => {
-                const extracted = item.extracted_data || {};
+                console.log("FORM SOURCE (DB Batch):", item.extracted_data);
+                const extData = item.extracted_data || {};
+                // The new structure has a 'sections' key or flattened top-level
+                const resData = extData;
+                
+                // If it's sectioned, we use the flattened top-level or specific sections
+                const rawData = resData.sections ? resData : resData.data || resData;
+                const rawItems = (resData.sections?.items || resData.line_items || resData.items || []);
+
+                const normalizedHeader: Record<string, string> = {};
+                HEADER_FIELDS.forEach(field => {
+                    normalizedHeader[field] = getCellValue(rawData, field);
+                });
+
+                const normalizedItems = rawItems.map((ritem: any) => {
+                    const ni: any = {};
+                    LINE_ITEM_FIELDS.forEach(f => {
+                        ni[f] = getCellValue(ritem, f);
+                    });
+                    return ni;
+                });
 
                 return {
-                    invoice: extracted.invoice || extracted.header || extracted,
-                    items: extracted.items || extracted.line_items || [],
+                    invoice: normalizedHeader,
+                    items: normalizedItems,
                     headerMapping: {},
                     itemMapping: {},
                     file_hash: item.file_hash,
@@ -862,23 +562,17 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                 };
             }).filter((res: any) => res.items.length > 0 || Object.keys(res.invoice).length > 0);
 
-            if (mappedResults.length === 0) return;
+            setInvoiceResults(mappedResults);
 
-            // Update results: Replace existing entries with same hash, add new ones
-            setInvoiceResults(prev => {
-                const map = new Map<string, InvoiceResult>();
-                // Preserve original order as much as possible
-                prev.forEach(r => {
-                    if (r.file_hash) map.set(r.file_hash, r);
+            if (mappedResults.length > 0 && onExtractionSuccess) {
+                const firstRow = mappedResults[0].invoice;
+                onExtractionSuccess({
+                    vendor_name: firstRow['Vendor Name'] || firstRow['vendor_name'] || '',
+                    gstin: firstRow['GSTIN'] || '',
+                    branch: firstRow['Branch'] || '',
+                    state: firstRow['State'] || ''
                 });
-
-                // Overwrite with fresh data from staging
-                mappedResults.forEach(r => {
-                    if (r.file_hash) map.set(r.file_hash, r);
-                });
-
-                return Array.from(map.values());
-            });
+            }
         } catch (err) {
             console.error("Failed to fetch staging data:", err);
         }
@@ -886,46 +580,38 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
 
     const startPolling = (jobId: number) => {
         if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
-
         let currentInterval = 2000;
 
         const poll = async () => {
             try {
                 const status = await httpClient.get<any>(`/api/bulk-status/${jobId}/`);
                 setBulkStatus(status);
+                if (status.processed > 0) await fetchStagingData();
 
-                if (status.processed > 0) {
-                    await fetchStagingData();
-                }
-
-                // Check for completion
                 if (status.status === 'completed' || status.status === 'failed' || status.status === 'success') {
                     if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
                     setIsExtracting(false);
                     await fetchStagingData();
                     if (status.status !== 'failed') {
-                        showSuccess(`✅ Bulk processing completed! ${status.processed} processed, ${status.failed} failed.`);
+                        showSuccess(`✅ Processing completed! ${status.processed} processed, ${status.failed} failed.`);
                     }
                     return;
                 }
 
-                // Adaptive Polling: Slow down after 50% to reduce server load
                 const progress = (status.processed + status.failed) / status.total;
                 const nextInterval = progress >= 0.5 ? 5000 : 2000;
-
                 if (nextInterval !== currentInterval) {
                     currentInterval = nextInterval;
                     if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
                     pollingIntervalRef.current = setInterval(poll, currentInterval);
                 }
-
             } catch (err) {
                 console.error("Polling error:", err);
             }
         };
-
         pollingIntervalRef.current = setInterval(poll, currentInterval);
     };
+
 
     useEffect(() => {
         return () => {
@@ -934,7 +620,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
     }, []);
 
     // ── Upload directly (no risk dashboard) ──────────────────────────────────────
-    const handleUploadToFinpixe = () => {
+    const handleUploadToAI = () => {
         if (!onUpload) return;
         if (invoiceResults.length === 0) { showError('No data extracted.'); return; }
 
@@ -1053,9 +739,9 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                 setIsCreateVendorModalOpen(false);
                 setVendorValidation('FOUND');
 
-                // Once the vendor is created, automatically continue the Upload to Finpixe process.
+                // Once the vendor is created, automatically continue the AI Extraction process.
                 setTimeout(() => {
-                    handleUploadToFinpixe();
+                    handleUploadToAI();
                 }, 200);
             }
         } catch (error: any) {
@@ -1263,7 +949,7 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
     // ────────────────────────────────────────────────────────────────────────────
     const isSingleScan = scanType === 'single';
     const modePrefix = extractionMode === 'tally' ? 'Tally' :
-        (extractionMode === 'finpixe' ? 'Finpixe' :
+        (extractionMode === 'ai_native' ? 'AI Native' :
             (extractionMode.charAt(0).toUpperCase() + extractionMode.slice(1)));
 
     const modalTitle = `${modePrefix} ${isSingleScan ? 'Single' : 'Bulk'} Scan – Invoice Scanner`;
@@ -1394,17 +1080,17 @@ const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({ onClose, onUp
                                         <Icon name="download" className="w-5 h-5 mr-2" />
                                         Download CSV
                                     </button>
-                                    {extractionMode === 'finpixe' && (
+                                    {extractionMode === 'ai_native' && (
 
                                         <div className="flex items-center">
                                             <button
-                                                onClick={handleUploadToFinpixe}
+                                                onClick={handleUploadToAI}
                                                 disabled={displayRows.length === 0 || vendorValidation === 'VALIDATING'}
                                                 className={`inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-[4px] border-slate-200 text-white transition-colors ${displayRows.length === 0 || vendorValidation === 'VALIDATING' ? 'bg-gray-400 cursor-not-allowed opacity-75' : 'bg-emerald-600 hover:bg-emerald-700'
                                                     }`}
                                             >
                                                 {vendorValidation === 'VALIDATING' ? <Icon name="spinner" className="w-5 h-5 mr-2 animate-spin" /> : <Icon name="check-circle" className="w-5 h-5 mr-2" />}
-                                                Upload to Finpixe
+                                                Finalize & Upload
                                             </button>
 
                                             {voucherType === 'Purchase' && vendorValidation === 'NOT_FOUND' && (

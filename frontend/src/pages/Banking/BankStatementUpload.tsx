@@ -29,7 +29,7 @@ const BankStatementUpload: React.FC<BankStatementUploadProps> = ({
                     (l.group || '').toLowerCase().includes('bank') || 
                     (l.group || '').toLowerCase().includes('cash')
                 );
-                setBankLedgers(filtered);
+                setBankLedgers(filtered.length > 0 ? filtered : ledgers);
             } catch (error) {
                 showError('Failed to load bank ledgers');
             }
