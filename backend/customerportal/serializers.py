@@ -237,6 +237,7 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
                         'id': item.id,
                         'itemCode': item.item_code,
                         'itemName': item.item_name,
+                        'hsnCode': item.hsn_code,
                         'uom': item.uom,
                         'custItemCode': item.customer_item_code,
                         'custItemName': item.customer_item_name,
@@ -443,6 +444,7 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
                         tenant_id=basic_details.tenant_id,
                         item_code=item_code,
                         item_name=item.get('itemName'),
+                        hsn_code=item.get('hsnCode'),
                         uom=item.get('uom'),
                         customer_item_code=item.get('custItemCode'),
                         customer_item_name=item.get('custItemName'),
@@ -668,6 +670,7 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
                             tenant_id=instance.tenant_id,
                             item_code=item.get('itemCode'),
                             item_name=item.get('itemName'),
+                            hsn_code=item.get('hsnCode'),
                             uom=item.get('uom'),
                             customer_item_code=item.get('custItemCode'),
                             customer_item_name=item.get('custItemName'),
@@ -778,7 +781,7 @@ class CustomerMasterLongTermContractProductServiceSerializer(serializers.ModelSe
         model = CustomerMasterLongTermContractProductService
         fields = [
             'id', 'tenant_id', 'contract_basic_detail', 'item_code', 'item_name',
-            'customer_item_name', 'qty_min', 'qty_max', 'price_min', 'price_max',
+            'customer_item_name', 'uom', 'qty_min', 'qty_max', 'price_min', 'price_max',
             'acceptable_price_deviation', 'created_at', 'updated_at', 'created_by'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
@@ -808,7 +811,7 @@ class CustomerMasterLongTermContractBasicDetailSerializer(serializers.ModelSeria
             'id', 'tenant_id', 'contract_number', 'customer_id', 'customer_name',
             'branch_id', 'contract_type', 'contract_validity_from', 'contract_validity_to',
             'contract_document', 'automate_billing', 'bill_start_date', 'billing_frequency',
-            'voucher_name', 'bill_period_from', 'bill_period_to',
+            'bill_period_from', 'bill_period_to',
             'is_active', 'is_deleted', 'created_at', 'updated_at', 'created_by',
             'products_services', 'terms_conditions'
         ]

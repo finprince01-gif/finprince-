@@ -416,6 +416,7 @@ class CustomerMasterCustomerProductService(models.Model):
     )
     item_code = models.CharField(max_length=50, null=True, blank=True)
     item_name = models.CharField(max_length=200, null=True, blank=True)
+    hsn_code = models.CharField(max_length=20, null=True, blank=True)
     uom = models.CharField(max_length=50, null=True, blank=True, help_text='Unit of Measure')
     customer_item_code = models.CharField(max_length=50, null=True, blank=True)
     customer_item_name = models.CharField(max_length=200, null=True, blank=True)
@@ -705,6 +706,7 @@ class CustomerMasterLongTermContractProductService(models.Model):
     item_code = models.CharField(max_length=50, help_text='Our item code')
     item_name = models.CharField(max_length=200, help_text='Our item name')
     customer_item_name = models.CharField(max_length=200, null=True, blank=True, help_text='Customer\'s item name')
+    uom = models.CharField(max_length=50, null=True, blank=True, help_text='Unit of Measure')
     
     # Quantity Range
     qty_min = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True, help_text='Minimum quantity')
