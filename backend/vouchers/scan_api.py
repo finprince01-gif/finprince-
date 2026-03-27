@@ -647,22 +647,30 @@ def bulk_finalize_vouchers(request):
                 'supplier_invoice_no': invoice.get('Supplier Invoice No', ''),
                 'vendor_id': res.get('vendor_id'),
                 'gstin': invoice.get('GSTIN', ''),
+                'vendor_name': invoice.get('Vendor Name', ''),
                 'tenant_id': tenant_id,
                 'supply_inr_details': {
                     'items': [
                         {
-                            'item_name': item.get('Item Name', ''),
+                            'itemName': item.get('Item Name', ''),
                             'qty': clean_num(item.get('Quantity', 0)),
                             'uom': item.get('UOM', ''),
                             'rate': clean_num(item.get('Rate', 0)),
-                            'taxable_value': clean_num(item.get('Taxable Value', 0)),
-                            'gst_pct': clean_num(item.get('GST %', 0)),
+                            'taxableValue': clean_num(item.get('Taxable Value', 0)),
+                            'gst_percentage': clean_num(item.get('GST %', 0)),
+                            'igst': clean_num(item.get('Integrated Tax (IGST)', 0)),
+                            'cgst': clean_num(item.get('Central Tax (CGST)', 0)),
+                            'sgst': clean_num(item.get('State Tax (SGST)', 0)),
+                            'cess': clean_num(item.get('Cess', 0)),
+                            'invoiceValue': clean_num(item.get('Item Amount', 0)),
                         } for item in items
                     ]
                 },
                 'due_details': {
-                    'to_pay': clean_num(invoice.get('Total Invoice Value', 0)),
-                    'tds_gst': clean_num(invoice.get('Total IGST', 0)) + clean_num(invoice.get('Total CGST', 0)) + clean_num(invoice.get('Total SGST', 0))
+                    'to_pay': clean_num(invoice.get('To Pay', 0)) or clean_num(invoice.get('Total Invoice Value', 0)),
+                    'tds_it': clean_num(invoice.get('TDS Income Tax', 0)),
+                    'tds_gst': clean_num(invoice.get('TDS GST', 0)),
+                    'advance_paid': clean_num(invoice.get('Advance Paid', 0)),
                 }
             }
             

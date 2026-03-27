@@ -47,6 +47,7 @@ class VendorPOSerializer(serializers.ModelSerializer):
             'tenant_id',
             'po_number',
             'po_series',
+            'po_date',
             'vendor_basic_detail',
             'vendor_name',
             'branch',
@@ -82,6 +83,7 @@ class VendorPOCreateSerializer(serializers.Serializer):
     """
     # PO Header fields
     po_series_id = serializers.IntegerField(required=False, allow_null=True)
+    po_date = serializers.DateField(required=False, allow_null=True)
     vendor_id = serializers.IntegerField(required=False, allow_null=True)
     vendor_name = serializers.CharField(max_length=200, required=False, allow_blank=True)
     branch = serializers.CharField(max_length=200, required=False, allow_blank=True)

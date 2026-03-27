@@ -640,7 +640,7 @@ class OCRStagingFinalizeView(views.APIView):
                     'supply_inr_details': {
                         'items': [
                             {
-                                'item_name': item.get('description', 'Item'),
+                                'itemName': item.get('description', item.get('item_name', 'Item')),
                                 'qty': item.get('quantity', 0),
                                 'rate': item.get('rate', 0),
                                 'taxableValue': item.get('amount', item.get('taxable_value', 0)),
@@ -653,7 +653,10 @@ class OCRStagingFinalizeView(views.APIView):
                         'description': f"Created from AI Smart Upload: {inv['file_path']}"
                     },
                     'due_details': {
-                        'to_pay': invoice_data.get('total_invoice_value', 0)
+                        'to_pay': invoice_data.get('total_invoice_value', 0),
+                        'tds_it': invoice_data.get('tds_income_tax', invoice_data.get('TDS Income Tax', 0)),
+                        'tds_gst': invoice_data.get('tds_gst', invoice_data.get('TDS GST', 0)),
+                        'advance_paid': invoice_data.get('advance_paid', invoice_data.get('Advance Paid', 0)),
                     }
                 }
 
