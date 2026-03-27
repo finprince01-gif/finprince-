@@ -85,6 +85,7 @@ def create_purchase_order(
                 tenant_id,
                 po_number,
                 po_series_id,
+                po_date,
                 vendor_basic_detail_id,
                 vendor_name,
                 branch,
@@ -108,7 +109,7 @@ def create_purchase_order(
                 created_by,
                 created_at,
                 updated_at
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
         """
         
         with connection.cursor() as cursor:
@@ -116,6 +117,7 @@ def create_purchase_order(
                 tenant_id,
                 po_number,
                 po_data.get('po_series_id'),
+                po_data.get('po_date'),
                 po_data.get('vendor_id'),
                 po_data.get('vendor_name'),
                 po_data.get('branch'),
@@ -196,7 +198,7 @@ def get_purchase_order_by_id(po_id: int) -> Optional[Dict[str, Any]]:
     """
     query = """
         SELECT 
-            id, tenant_id, po_number, po_series_id, vendor_basic_detail_id,
+            id, tenant_id, po_number, po_series_id, po_date, vendor_basic_detail_id,
             vendor_name, branch, address_line1, address_line2, address_line3,
             city, state, country, pincode, email_address, contract_no,
             receive_by, receive_at, delivery_terms,
@@ -283,7 +285,7 @@ def get_all_purchase_orders(tenant_id: str, status: Optional[str] = None, vendor
 
     query = """
         SELECT 
-            po.id, po.po_number, po.vendor_name, po.receive_by,
+            po.id, po.po_number, po.po_date, po.vendor_name, po.branch, po.receive_by,
             po.total_value, po.status, po.created_at,
             COUNT(items.id) as item_count
         FROM vendor_transaction_po po

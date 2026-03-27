@@ -69,20 +69,27 @@ class BaseVoucherMasterViewSet(viewsets.ModelViewSet):
 
 
     def _format_invoice_number(self, config) -> str:
-        num = config.current_number or config.start_from or 1
+        # If current_number is not set, use start_from
+        num = config.current_number
+        if num is None:
+            num = config.start_from or 1
+            
         start = config.start_from or 1
         digits = config.required_digits or 4
         prefix = config.prefix or ''
         suffix = config.suffix or ''
 
         if suffix and str(suffix).isdigit():
-            base_str = str(start).zfill(digits) + suffix
+            # Numeric suffix: treat as part of the total sequential number
+            # Use start_from as the baseline
+            base_str = str(start).zfill(digits) + str(suffix)
             base = int(base_str)
             offset = num - start
             full_num = base + offset
-            total_digits = digits + len(suffix)
+            total_digits = digits + len(str(suffix))
             return f"{prefix}{str(full_num).zfill(total_digits)}"
         else:
+            # Non-numeric or missing suffix: pad number then append suffix
             return f"{prefix}{str(num).zfill(digits)}{suffix}"
 
     @action(detail=True, methods=['get'], url_path='next-number')

@@ -644,6 +644,35 @@ const MastersPage: React.FC<MastersPageProps> = ({
     }
   }, [activeTab, selectedVoucher]);
 
+  // Helper to format voucher number (matching backend logic)
+  const formatVoucherNumber = (config: {
+    prefix?: string;
+    suffix?: string;
+    start_from?: number;
+    current_number?: number | null;
+    required_digits?: number;
+  }) => {
+    // If current_number is null, use start_from
+    const num = config.current_number ?? config.start_from ?? 1;
+    const start = config.start_from ?? 1;
+    const digits = config.required_digits ?? 4;
+    const prefix = config.prefix ?? '';
+    const suffix = config.suffix ?? '';
+
+    if (suffix && /^\d+$/.test(String(suffix))) {
+      // Numeric suffix: treat as part of the sequential number
+      const baseStr = String(start).padStart(digits, '0') + suffix;
+      const base = parseInt(baseStr, 10);
+      const offset = (num || 1) - start;
+      const fullNum = base + offset;
+      const totalDigits = digits + String(suffix).length;
+      return `${prefix}${String(fullNum).padStart(totalDigits, '0')}`;
+    } else {
+      // Non-numeric or empty suffix
+      return `${prefix}${String(num).padStart(digits, '0')}${suffix || ''}`;
+    }
+  };
+
   // Reset voucher form
   const resetVoucherForm = () => {
     setVoucherName('');
@@ -1760,9 +1789,13 @@ const MastersPage: React.FC<MastersPageProps> = ({
                       SAMPLE PREVIEW
                     </span>
                     <p className="text-xl font-bold text-gray-800 tracking-wide">
-                      {voucherPrefix || ''}
-                      {String(voucherStartFrom || 1).padStart(voucherRequiredDigits || 4, '0')}
-                      {voucherSuffix || ''}
+                      {formatVoucherNumber({
+                        prefix: voucherPrefix,
+                        suffix: voucherSuffix,
+                        start_from: voucherStartFrom,
+                        current_number: null,
+                        required_digits: voucherRequiredDigits
+                      })}
                     </p>
                   </div>
 
@@ -1815,7 +1848,13 @@ const MastersPage: React.FC<MastersPageProps> = ({
                           .map((voucher) => {
                             const isSelected = selectedVoucherConfig?.id === voucher.id;
                             const seriesPreview = voucher.enable_auto_numbering
-                              ? `${voucher.prefix || ''}${String(voucher.current_number || voucher.start_from || 1).padStart(voucher.required_digits || 4, '0')}${voucher.suffix || ''}`
+                              ? formatVoucherNumber({
+                                prefix: voucher.prefix,
+                                suffix: voucher.suffix,
+                                start_from: voucher.start_from,
+                                current_number: voucher.current_number,
+                                required_digits: voucher.required_digits
+                              })
                               : 'Manual';
 
                             return (
@@ -1989,9 +2028,13 @@ const MastersPage: React.FC<MastersPageProps> = ({
                       SAMPLE PREVIEW
                     </span>
                     <p className="text-xl font-bold text-gray-800 tracking-wide">
-                      {voucherPrefix || ''}
-                      {String(voucherStartFrom || 1).padStart(voucherRequiredDigits || 4, '0')}
-                      {voucherSuffix || ''}
+                      {formatVoucherNumber({
+                        prefix: voucherPrefix,
+                        suffix: voucherSuffix,
+                        start_from: voucherStartFrom,
+                        current_number: null,
+                        required_digits: voucherRequiredDigits
+                      })}
                     </p>
                   </div>
 
@@ -2044,7 +2087,13 @@ const MastersPage: React.FC<MastersPageProps> = ({
                           .map((voucher) => {
                             const isSelected = selectedVoucherConfig?.id === voucher.id;
                             const seriesPreview = voucher.enable_auto_numbering
-                              ? `${voucher.prefix || ''}${String(voucher.current_number || voucher.start_from || 1).padStart(voucher.required_digits || 4, '0')}${voucher.suffix || ''}`
+                              ? formatVoucherNumber({
+                                prefix: voucher.prefix,
+                                suffix: voucher.suffix,
+                                start_from: voucher.start_from,
+                                current_number: voucher.current_number,
+                                required_digits: voucher.required_digits
+                              })
                               : 'Manual';
 
                             return (

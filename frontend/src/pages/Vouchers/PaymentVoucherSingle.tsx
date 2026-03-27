@@ -39,10 +39,10 @@ interface PaymentVoucherSingleProps {
     onLimitReached?: () => void;
 }
 
-const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({ 
-    prefilledData, 
-    clearPrefilledData, 
-    isLimitReached, 
+const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
+    prefilledData,
+    clearPrefilledData,
+    isLimitReached,
     onLimitReached
 }) => {
     // Tab state
@@ -155,7 +155,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
             if (prefilledData.invoiceDate) {
                 setDate(prefilledData.invoiceDate);
             }
-            
+
             // Helper to find exact ledger name from allLedgers (case-insensitive)
             const findLedgerName = (name: string) => {
                 if (!name) return '';
@@ -214,12 +214,19 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
     useEffect(() => {
         if (selectedPaymentConfig && paymentVoucherConfigs.length > 0) {
             const config = paymentVoucherConfigs.find(c => c.voucher_name === selectedPaymentConfig);
-            if (config && config.enable_auto_numbering) {
-                const paddedNum = String(config.current_number).padStart(config.required_digits, '0');
-                const generatedNumber = `${config.prefix || ''}${paddedNum}${config.suffix || ''}`;
-                setVoucherNumber(generatedNumber);
-            } else {
-                setVoucherNumber('Manual Input');
+            if (config) {
+                if (config.enable_auto_numbering) {
+                    // Fetch the correctly formatted next number from the backend
+                    httpClient.get<any>(`/api/masters/master-voucher-payments/${config.id}/next-number/`)
+                        .then((res) => {
+                            setVoucherNumber(res.invoice_number || '');
+                        })
+                        .catch(() => {
+                            setVoucherNumber('');
+                        });
+                } else {
+                    setVoucherNumber('Manual Input');
+                }
             }
         } else {
             setVoucherNumber('');
@@ -417,7 +424,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                     showError('Please select a Pay From account.');
                     return;
                 }
-                
+
                 // Map paymentRows to contain payTo IDs instead of names
                 const mappedPaymentRows = paymentRows.map(row => {
                     const normalized = (row.payTo || '').trim().toLowerCase();
@@ -941,5 +948,6 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
 };
 
 export default PaymentVoucherSingle;
+
 
 
