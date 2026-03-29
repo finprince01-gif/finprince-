@@ -1,0 +1,37 @@
+264: const [issueSlipTab, setIssueSlipTab] = useState<'job-work' | 'inter-unit' | 'location-change' | 'production' | 'consumption' | 'outward' | 'scrap'>('job-work');
+822: if (issueSlipTab === 'job-work' && jobWorkSubTab === 'sent' && jobWorkSentType === 'receipt') {
+828: }, [issueSlipTab, jobWorkSubTab, jobWorkSentType]);
+831: if (['inter-unit', 'location-change', 'consumption', 'scrap', 'production'].includes(issueSlipTab)) {
+834: }, [issueSlipTab]);
+837: if (showIssueSlipForm && issueSlipTab === 'production') {
+844: }, [showIssueSlipForm, issueSlipTab, productionType]);
+1408: if (issueSlipTab === 'outward') {
+1484: } else if (issueSlipTab === 'job-work') {
+1547: await httpClient.post('/api/inventory/operations/job-work/', jobWorkPayload);
+1548: } else if (issueSlipTab === 'production') {
+1598: // Assuming standard issueSlipItems for consumption and maybe another list for output?
+1645: } else if (issueSlipTab === 'inter-unit') {
+1756: 'consumption': '/api/inventory/operations/consumption/',
+1760: const endpoint = endpoints[issueSlipTab];
+2309: if (showIssueSlipForm && issueSlipTab === 'outward') {
+2325: }, [showIssueSlipForm, issueSlipTab, outwardType]);
+3029: {(['job-work', 'inter-unit', 'location-change', 'production', 'consumption', 'outward', 'scrap'] as const).map((tab) => (
+3033: className={`px-6 py-3 font-semibold text-base border-b-3 ${issueSlipTab === tab
+3038: {tab === 'job-work' ? 'Job-work' :
+3048: {issueSlipTab === 'job-work' && (
+3096: {issueSlipTab === 'job-work' && jobWorkSubTab === 'sent' && jobWorkSentType === 'outward' && (
+3618: {issueSlipTab === 'job-work' && jobWorkSubTab === 'sent' && jobWorkSentType === 'receipt' && (
+3985: {issueSlipTab === 'outward' && (
+4013: {issueSlipTab === 'outward' && outwardType === 'sales' && (
+4256: {issueSlipTab === 'outward' && outwardType === 'purchase_return' && (
+4494: {issueSlipTab === 'production' && (
+4537: {issueSlipTab === 'production' && productionType === 'materials_issued' && (
+4846: {issueSlipTab === 'production' && productionType === 'inter_process' && (
+5217: {issueSlipTab === 'production' && productionType === 'finished_goods' && (
+5585: {issueSlipTab !== 'outward' && issueSlipTab !== 'job-work' && issueSlipTab !== 'production' && (
+5637: {(issueSlipTab === 'inter-unit' || issueSlipTab === 'location-change') ? (
+5770: {issueSlipTab === 'inter-unit' && deliveryChallanFieldsJSX}
+5774: {issueSlipTab !== 'location-change' && (
+6290: const consigneeName = issueSlipTab === 'job-work' ? outwardVendorName :
+7673: <option value="job_work">Job-work</option>
+7677: <option value="consumption">Consumption</option>
