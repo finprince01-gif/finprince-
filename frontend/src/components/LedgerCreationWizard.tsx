@@ -128,8 +128,8 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
             try {
                 // Fetch both global hierarchy and tenant ledgers
                 const [hierarchyRes, ledgersRes] = await Promise.all([
-                    fetch('http://localhost:8000/api/hierarchy/'),
-                    fetch('http://localhost:8000/api/masters/ledgers/', {
+                    fetch('/api/hierarchy/'),
+                    fetch('/api/masters/ledgers/', {
                         credentials: 'include' // Include cookies for authentication
                     })
                 ]);
@@ -453,8 +453,8 @@ export const LedgerCreationWizard: React.FC<LedgerCreationWizardProps> = ({ onCr
         setTimeout(async () => {
             try {
                 const [hierarchyRes, ledgersRes] = await Promise.all([
-                    fetch('http://localhost:8000/api/hierarchy/'),
-                    fetch('http://localhost:8000/api/masters/ledgers/', {
+                    fetch('/api/hierarchy/'),
+                    fetch('/api/masters/ledgers/', {
                         credentials: 'include'
                     })
                 ]);

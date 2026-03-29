@@ -323,6 +323,44 @@ const InventoryPage: React.FC = () => {
   const [grnReferenceNoOptions, setGrnReferenceNoOptions] = useState<any[]>([]);
   const [grnSecondaryRefNo, setGrnSecondaryRefNo] = useState(''); // Supplier Invoice or Debit Note
   const [grnSecondaryRefNoOptions, setGrnSecondaryRefNoOptions] = useState<any[]>([]);
+  const [consumptionType, setConsumptionType] = useState<'fixed_assets' | 'daily_operations'>('fixed_assets');
+  const [fixedAssetLedger, setFixedAssetLedger] = useState('');
+  const [expenseLedger, setExpenseLedger] = useState('');
+  const [ledgers, setLedgers] = useState<any[]>([]);
+  const [selectedIssueSlipSeriesName, setSelectedIssueSlipSeriesName] = useState('');
+
+  // --- Scrap Tab State ---
+  const [scrapSubType, setScrapSubType] = useState<'production' | 'other' | 'disposed'>('production');
+  // Production Scrap
+  const [scrapProdSlipSeries, setScrapProdSlipSeries] = useState('');
+  const [scrapProdSlipNo, setScrapProdSlipNo] = useState('');
+  const [scrapProdDate, setScrapProdDate] = useState('');
+  const [scrapProdTime, setScrapProdTime] = useState('');
+  const [scrapProdIssuedTo, setScrapProdIssuedTo] = useState('');
+  const [scrapProdProductionSlipNo, setScrapProdProductionSlipNo] = useState('');
+  const [scrapProdItems, setScrapProdItems] = useState<any[]>([{ itemCode: '', itemName: '', uom: '', quantityGenerated: '' }]);
+  const [scrapProdPostingNote, setScrapProdPostingNote] = useState('');
+  // Other Scrap
+  const [scrapOtherSlipSeries, setScrapOtherSlipSeries] = useState('');
+  const [scrapOtherSlipNo, setScrapOtherSlipNo] = useState('');
+  const [scrapOtherDate, setScrapOtherDate] = useState('');
+  const [scrapOtherTime, setScrapOtherTime] = useState('');
+  const [scrapOtherIssuedFrom, setScrapOtherIssuedFrom] = useState('');
+  const [scrapOtherIssuedTo, setScrapOtherIssuedTo] = useState('');
+  const [scrapOtherItemsScrapped, setScrapOtherItemsScrapped] = useState<any[]>([{ itemCode: '', itemName: '', uom: '', quantity: '' }]);
+  const [scrapOtherResultingItems, setScrapOtherResultingItems] = useState<any[]>([{ itemCode: '', itemName: '', uom: '', quantity: '', rate: '', value: 0 }]);
+  const [scrapOtherPostingNote, setScrapOtherPostingNote] = useState('');
+  // Scrap Disposed
+  const [scrapDispSlipSeries, setScrapDispSlipSeries] = useState('');
+  const [scrapDispSlipNo, setScrapDispSlipNo] = useState('');
+  const [scrapDispDate, setScrapDispDate] = useState('');
+  const [scrapDispTime, setScrapDispTime] = useState('');
+  const [scrapDispIssuedFrom, setScrapDispIssuedFrom] = useState('');
+  const [scrapDispItems, setScrapDispItems] = useState<any[]>([{ itemCode: '', itemName: '', uom: '', quantityDisposed: '', rate: '', value: 0 }]);
+  const [scrapDispReasonForDisposal, setScrapDispReasonForDisposal] = useState('');
+  const [scrapDispMethodOfDisposal, setScrapDispMethodOfDisposal] = useState('');
+  const [scrapDispAgency, setScrapDispAgency] = useState('');
+  const [scrapDispCertificate, setScrapDispCertificate] = useState<File | null>(null);
 
   // Document Upload State
   const [grnDocument, setGrnDocument] = useState<File | null>(null);
@@ -596,6 +634,15 @@ const InventoryPage: React.FC = () => {
     }
   };
 
+  const fetchLedgers = async () => {
+    try {
+      const response = await apiService.getLedgers();
+      setLedgers(Array.isArray(response) ? response : []);
+    } catch (error) {
+      console.error('Error fetching ledgers:', error);
+    }
+  };
+
   // Helper function for Creating Category from Wizard
   const handleCreateCategory = async (data: { category: string; group: string; subgroup: string; sub_subgroup?: string }) => {
     try {
@@ -830,6 +877,8 @@ const InventoryPage: React.FC = () => {
   useEffect(() => {
     if (['inter-unit', 'location-change', 'consumption', 'scrap', 'production'].includes(issueSlipTab)) {
       if (locations.length === 0) fetchLocations();
+      if (issueSlipTab === 'consumption' && ledgers.length === 0) fetchLedgers();
+      if (issueSlipSeriesList.length === 0) fetchIssueSlipSeries();
     }
   }, [issueSlipTab]);
 
@@ -842,6 +891,14 @@ const InventoryPage: React.FC = () => {
       }
     }
   }, [showIssueSlipForm, issueSlipTab, productionType]);
+
+  useEffect(() => {
+    if (showIssueSlipForm && issueSlipTab === 'consumption') {
+      const now = new Date();
+      setIssueSlipDate(now.toISOString().split('T')[0]);
+      setIssueSlipTime(now.toTimeString().slice(0, 5));
+    }
+  }, [showIssueSlipForm, issueSlipTab]);
 
   // Fetch GRN series when GRN form is opened
   useEffect(() => {
@@ -1714,13 +1771,13 @@ const InventoryPage: React.FC = () => {
         await httpClient.post('/api/inventory/operations/inter-unit/', interUnitPayload);
       } else {
         // Common payload for remaining tabs 
-        const commonPayload = {
+        const commonPayload: any = {
           issue_slip_no: issueSlipNumber,
           date: issueSlipDate || null,
           time: issueSlipTime || null,
           status: 'Posted',
           goods_from_location: goodsFromLocation,
-          goods_to_location: goodsToLocation,
+          goods_to_location: issueSlipTab === 'consumption' ? null : goodsToLocation, // NIL for consumption
           posting_note: postingNote,
           items: issueSlipItems.map(item => ({
             item_code: item.itemCode,
@@ -1730,7 +1787,20 @@ const InventoryPage: React.FC = () => {
             rate: item.rate || 0,
             value: item.value || 0
           })),
-          delivery_challan: {
+        };
+
+        // Add Consumption Specific fields
+        if (issueSlipTab === 'consumption') {
+          commonPayload.consumption_type = consumptionType;
+          commonPayload.issue_slip_series = selectedIssueSlipSeriesName;
+          if (consumptionType === 'fixed_assets') {
+            commonPayload.fixed_asset_ledger = fixedAssetLedger;
+          } else {
+            commonPayload.expense_ledger = expenseLedger;
+          }
+        } else {
+          // Add Delivery Challan for others if relevant
+          commonPayload.delivery_challan = {
             dispatch_from: dispatchFrom || deliveryChallanAddress,
             mode_of_transport: modeOfTransport,
             dispatch_date: dispatchDate || deliveryChallanDate,
@@ -1740,14 +1810,14 @@ const InventoryPage: React.FC = () => {
             transporter_name: transporterName,
             vehicle_no: vehicleNo,
             lr_gr_consignment: lrGrConsignment
-          },
-          eway_bill: (ewayValidationEntries.length > 0 && (ewayValidationEntries[0].updatedVehicleNo || ewayValidationEntries[0].date || ewayValidationEntries[0].ewayBillNo)) ? {
+          };
+          commonPayload.eway_bill = (ewayValidationEntries.length > 0 && (ewayValidationEntries[0].updatedVehicleNo || ewayValidationEntries[0].date || ewayValidationEntries[0].ewayBillNo)) ? {
             eway_bill_no: ewayValidationEntries[0].ewayBillNo || null,
             vehicle_number: ewayValidationEntries[0].updatedVehicleNo || null,
             valid_till: ewayValidationEntries[0].date || null
-          } : null,
-          eway_bill_details: ewayValidationEntries
-        };
+          } : null;
+          commonPayload.eway_bill_details = ewayValidationEntries;
+        }
 
         const endpoints: { [key: string]: string } = {
           // 'inter-unit': handled above
@@ -2293,6 +2363,8 @@ const InventoryPage: React.FC = () => {
       if (items.length === 0) fetchItems();
       if (vendors.length === 0) fetchVendors();
       if (customers.length === 0) fetchCustomers();
+      // Default date to today
+      if (!grnDate) setGrnDate(new Date().toISOString().split('T')[0]);
     }
   }, [showGRNForm]);
 
@@ -2302,6 +2374,15 @@ const InventoryPage: React.FC = () => {
       if (items.length === 0) fetchItems();
       if (vendors.length === 0) fetchVendors();
       if (customers.length === 0) fetchCustomers();
+      // Auto-init scrap form dates/times
+      const today = new Date().toISOString().split('T')[0];
+      const now = new Date().toTimeString().slice(0, 5);
+      if (!scrapProdDate) setScrapProdDate(today);
+      if (!scrapProdTime) setScrapProdTime(now);
+      if (!scrapOtherDate) setScrapOtherDate(today);
+      if (!scrapOtherTime) setScrapOtherTime(now);
+      if (!scrapDispDate) setScrapDispDate(today);
+      if (!scrapDispTime) setScrapDispTime(now);
     }
   }, [showIssueSlipForm]);
 
@@ -2323,6 +2404,14 @@ const InventoryPage: React.FC = () => {
       fetchOutwardData();
     }
   }, [showIssueSlipForm, issueSlipTab, outwardType]);
+
+  useEffect(() => {
+    if (showIssueSlipForm && issueSlipTab === 'scrap') {
+      if (materialIssueSlipOptions.length === 0) fetchMaterialIssueSlips();
+      if (processTransferSlipOptions.length === 0) fetchProcessTransferSlips();
+      if (issueSlipSeriesList.length === 0) fetchIssueSlipSeries();
+    }
+  }, [showIssueSlipForm, issueSlipTab]);
 
   const handleGRNSubmit = async () => {
     try {
@@ -2373,7 +2462,7 @@ const InventoryPage: React.FC = () => {
   };
 
   const handleAddIssueSlipItem = () => {
-    setIssueSlipItems([...issueSlipItems, { itemCode: '', itemName: '', uom: '', quantity: '', rate: '', value: 0, noOfBoxes: '' }]);
+    setIssueSlipItems([...issueSlipItems, { itemCode: '', itemName: '', uom: '', quantity: '', rate: 0, value: 0, hsnCode: '', remainingQty: undefined }]);
   };
 
   const handleRemoveIssueSlipItem = (index: number) => {
@@ -2390,9 +2479,8 @@ const InventoryPage: React.FC = () => {
         updatedItems[index].itemName = selectedItem.name || selectedItem.item_name;
         updatedItems[index].uom = selectedItem.uom || selectedItem.unit;
         updatedItems[index].hsnCode = (selectedItem as any).hsn_code || (selectedItem as any).hsn || (selectedItem as any).hsn_sac || (selectedItem as any).hsn_sac_code || '';
-        // Fetch Rate
         updatedItems[index].rate = selectedItem.standard_rate || selectedItem.rate || 0;
-        // Recalculate Value immediately as rate changed
+        updatedItems[index].remainingQty = selectedItem.remaining_qty || 0;
         const qty = parseFloat(updatedItems[index].quantity) || 0;
         updatedItems[index].value = qty * updatedItems[index].rate;
       }
@@ -2402,9 +2490,8 @@ const InventoryPage: React.FC = () => {
         updatedItems[index].itemCode = selectedItem.item_code;
         updatedItems[index].uom = selectedItem.uom || selectedItem.unit;
         updatedItems[index].hsnCode = (selectedItem as any).hsn_code || (selectedItem as any).hsn || (selectedItem as any).hsn_sac || (selectedItem as any).hsn_sac_code || '';
-        // Fetch Rate
         updatedItems[index].rate = selectedItem.standard_rate || selectedItem.rate || 0;
-        // Recalculate Value immediately as rate changed
+        updatedItems[index].remainingQty = selectedItem.remaining_qty || 0;
         const qty = parseFloat(updatedItems[index].quantity) || 0;
         updatedItems[index].value = qty * updatedItems[index].rate;
       }
@@ -5582,7 +5669,284 @@ const InventoryPage: React.FC = () => {
                     </div>
                   )}
 
-                  {issueSlipTab !== 'outward' && issueSlipTab !== 'job-work' && issueSlipTab !== 'production' && (
+                  {issueSlipTab === 'consumption' && (
+                    <div className="space-y-6">
+                      {/* Consumption Type Selectors */}
+                      <div className="bg-slate-50 border border-gray-200 rounded p-4 flex gap-8 items-center">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="consumptionType"
+                            checked={consumptionType === 'fixed_assets'}
+                            onChange={() => {
+                              setConsumptionType('fixed_assets');
+                              setFixedAssetLedger('');
+                            }}
+                            className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                          />
+                          <span className="text-xs font-bold text-gray-700 uppercase">Issued for Fixed Assets</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="consumptionType"
+                            checked={consumptionType === 'daily_operations'}
+                            onChange={() => {
+                              setConsumptionType('daily_operations');
+                              setExpenseLedger('');
+                            }}
+                            className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                          />
+                          <span className="text-xs font-bold text-gray-700 uppercase">Issued for Daily Operations</span>
+                        </label>
+                      </div>
+
+                      {/* Header Fields */}
+                      <div className="grid grid-cols-3 gap-6">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">
+                            ISSUE SLIP SERIES
+                          </label>
+                          <select
+                            value={selectedIssueSlipSeriesName}
+                            onChange={(e) => {
+                              const seriesName = e.target.value;
+                              setSelectedIssueSlipSeriesName(seriesName);
+                              const series = issueSlipSeriesList.find(s => s.name === seriesName);
+                              if (series) {
+                                setIssueSlipNumber(series.preview || '');
+                              } else {
+                                setIssueSlipNumber('');
+                              }
+                            }}
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                          >
+                            <option value="">Select Series</option>
+                            {issueSlipSeriesList.filter(s => (s.issueSlipType || '').toLowerCase() === 'consumption').map(s => (
+                              <option key={s.id} value={s.name}>{s.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">
+                            ISSUE SLIP NO
+                          </label>
+                          <input
+                            type="text"
+                            value={issueSlipNumber}
+                            readOnly
+                            placeholder="Auto/Manual"
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-slate-50 font-bold text-gray-500 cursor-not-allowed"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">
+                              DATE
+                            </label>
+                            <input
+                              type="date"
+                              value={issueSlipDate}
+                              onChange={(e) => setIssueSlipDate(e.target.value)}
+                              max={new Date().toISOString().split('T')[0]}
+                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">
+                              TIME
+                            </label>
+                            <input
+                              type="time"
+                              value={issueSlipTime}
+                              onChange={(e) => setIssueSlipTime(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Ledger and Location Row */}
+                      <div className="grid grid-cols-2 gap-6">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">
+                            {consumptionType === 'fixed_assets' ? 'FIXED ASSET LEDGER' : 'EXPENSE LEDGER'}
+                          </label>
+                          <select
+                            value={consumptionType === 'fixed_assets' ? fixedAssetLedger : expenseLedger}
+                            onChange={(e) => consumptionType === 'fixed_assets' ? setFixedAssetLedger(e.target.value) : setExpenseLedger(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                          >
+                            <option value="">{consumptionType === 'fixed_assets' ? 'Select Asset Account' : 'Select Expense Account'}</option>
+                            {ledgers.filter(l => {
+                              if (consumptionType === 'fixed_assets') {
+                                return (l.ledger_group_name || '').toLowerCase().includes('fixed asset') ||
+                                  (l.ledger_group_name || '').toLowerCase().includes('property, plant & equipment') ||
+                                  (l.category || '').toLowerCase() === 'assets';
+                              } else {
+                                return (l.ledger_group_name || '').toLowerCase().includes('expense') ||
+                                  (l.category || '').toLowerCase() === 'expenses';
+                              }
+                            }).map(l => (
+                              <option key={l.id} value={l.name}>{l.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">
+                            ISSUED FROM (LOCATION)
+                          </label>
+                          <select
+                            value={goodsFromLocation}
+                            onChange={(e) => setGoodsFromLocation(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                          >
+                            <option value="">Select location</option>
+                            {locations.filter(l => l.location_type === 'company_premises').map(loc => (
+                              <option key={loc.id} value={loc.id}>{loc.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Items Grid */}
+                      <div className="space-y-4">
+                      {/* Items Grid */}
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                          <h4 className="text-sm font-bold text-gray-700 uppercase tracking-tight">ITEMS</h4>
+                          <button
+                            onClick={handleAddIssueSlipItem}
+                            className="text-indigo-600 hover:text-indigo-800 text-[11px] font-bold uppercase transition-colors"
+                          >
+                            + ADD ITEM
+                          </button>
+                        </div>
+
+                        <div className="overflow-x-auto border border-gray-200 rounded">
+                          <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Item Code</th>
+                                <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Item Name</th>
+                                <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">UOM</th>
+                                <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Qty</th>
+                                <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Rate</th>
+                                <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Value</th>
+                                <th className="px-3 py-3 text-center text-[11px] font-bold text-gray-500">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                              {issueSlipItems.map((item, index) => (
+                                <tr key={index}>
+                                  <td className="px-3 py-2">
+                                    <select
+                                      value={item.itemCode}
+                                      onChange={(e) => handleIssueSlipItemChange(index, 'itemCode', e.target.value)}
+                                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white"
+                                    >
+                                      <option value="">Select Code</option>
+                                      {items.map(i => <option key={i.id} value={i.item_code}>{i.item_code}</option>)}
+                                    </select>
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <select
+                                      value={item.itemName}
+                                      onChange={(e) => handleIssueSlipItemChange(index, 'itemName', e.target.value)}
+                                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white"
+                                    >
+                                      <option value="">Select Item</option>
+                                      {items.map(i => <option key={i.id} value={i.item_name || i.name}>{i.item_name || i.name}</option>)}
+                                    </select>
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <input
+                                      type="text"
+                                      value={item.uom || ''}
+                                      readOnly
+                                      className="w-full px-2 py-1.5 border border-gray-200 rounded text-[11px] bg-slate-50 text-gray-500"
+                                    />
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <input
+                                      type="number"
+                                      value={item.quantity}
+                                      onChange={(e) => handleIssueSlipItemChange(index, 'quantity', e.target.value)}
+                                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500"
+                                      placeholder="Qty"
+                                    />
+                                    {item.remainingQty !== undefined && parseFloat(item.quantity) > item.remainingQty && (
+                                      <p className="text-[9px] text-red-500 mt-1">Stock: {item.remainingQty}</p>
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <input
+                                      type="number"
+                                      value={item.rate}
+                                      className="w-full px-2 py-1.5 border border-gray-200 rounded text-[11px] bg-slate-50 text-gray-500"
+                                      readOnly
+                                    />
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <input
+                                      type="text"
+                                      value={`₹${(item.value || 0).toFixed(2)}`}
+                                      readOnly
+                                      className="w-full px-2 py-1.5 border border-gray-200 rounded text-[11px] bg-slate-50 text-gray-800 font-bold"
+                                    />
+                                  </td>
+                                  <td className="px-3 py-2 text-center">
+                                    <button
+                                      onClick={() => handleRemoveIssueSlipItem(index)}
+                                      className="text-red-500 hover:text-red-700 text-[11px] font-bold uppercase transition-colors"
+                                    >
+                                      REMOVE
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div className="flex justify-end pt-2">
+                          <div className="text-right">
+                            <span className="text-xs font-bold text-gray-900">Total Value: ₹{getTotalValue().toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                          </div>
+                        </div>
+                      </div>
+                      </div>
+
+                      {/* Narration */}
+                      <div>
+                        <label className="block text-[11px] font-bold text-gray-600 mb-2 uppercase">Narration / Posting Note</label>
+                        <textarea
+                          value={postingNote}
+                          onChange={(e) => setPostingNote(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          rows={2}
+                          placeholder="Internal remarks..."
+                        />
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex gap-3 justify-end pt-4 border-t border-gray-100">
+                        <button
+                          onClick={() => setShowIssueSlipForm(false)}
+                          className="px-6 py-2 border border-gray-300 text-gray-700 rounded text-sm font-semibold hover:bg-gray-50"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleIssueSlipSubmit}
+                          className="px-6 py-2 bg-indigo-600 text-white rounded text-sm font-semibold hover:bg-indigo-700"
+                        >
+                          Post & Close
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {issueSlipTab !== 'outward' && issueSlipTab !== 'job-work' && issueSlipTab !== 'production' && issueSlipTab !== 'consumption' && issueSlipTab !== 'scrap' && (
                     <>
                       {/* Basic Details */}
                       <div className="grid grid-cols-4 gap-5">
@@ -5799,9 +6163,522 @@ const InventoryPage: React.FC = () => {
                         >
                           Cancel
                         </button>
-                      </div>
-                    </>
+                      </div>                    </>
                   )}
+
+                  {/* ===== SCRAP TAB ===== */}
+                  {issueSlipTab === 'scrap' && (
+                    <div className="space-y-5">
+                      {/* Scrap Sub-Type Selector */}
+                      <div className="bg-slate-50 border border-gray-200 rounded p-3 flex gap-8 items-center">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="scrapSubType"
+                            checked={scrapSubType === 'production'}
+                            onChange={() => setScrapSubType('production')}
+                            className="w-4 h-4 text-indigo-600 border-gray-300"
+                          />
+                          <span className="text-xs font-bold text-gray-700 uppercase">Production Scrap</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="scrapSubType"
+                            checked={scrapSubType === 'other'}
+                            onChange={() => setScrapSubType('other')}
+                            className="w-4 h-4 text-indigo-600 border-gray-300"
+                          />
+                          <span className="text-xs font-bold text-gray-700 uppercase">Other Scrap</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="scrapSubType"
+                            checked={scrapSubType === 'disposed'}
+                            onChange={() => setScrapSubType('disposed')}
+                            className="w-4 h-4 text-indigo-600 border-gray-300"
+                          />
+                          <span className="text-xs font-bold text-gray-700 uppercase">Scrap Disposed</span>
+                        </label>
+                      </div>
+
+                      {/* ---- PRODUCTION SCRAP ---- */}
+                      {scrapSubType === 'production' && (
+                        <div className="space-y-5">
+                          {/* Header Row 1: Series + Slip No */}
+                          <div className="grid grid-cols-3 gap-5">
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">Scrap Issue Slip Series</label>
+                              <select
+                                value={scrapProdSlipSeries}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  setScrapProdSlipSeries(v);
+                                  const s = issueSlipSeriesList.find((x: any) => x.name === v);
+                                  setScrapProdSlipNo(s ? (s.preview || '') : '');
+                                }}
+                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                              >
+                                <option value="">Select Series</option>
+                                {issueSlipSeriesList.filter((s: any) => (s.issueSlipType || '').toLowerCase().includes('scrap')).map((s: any) => (
+                                  <option key={s.id} value={s.name}>{s.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">Scrap Issue Slip No.</label>
+                              <input
+                                type="text"
+                                value={scrapProdSlipNo}
+                                readOnly
+                                placeholder="Auto-generated"
+                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-slate-50 text-gray-500 cursor-not-allowed font-bold"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Header Row 2: Date, Time, Issued To */}
+                          <div className="grid grid-cols-4 gap-5">
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">Date</label>
+                              <input
+                                type="date"
+                                value={scrapProdDate}
+                                onChange={(e) => setScrapProdDate(e.target.value)}
+                                max={new Date().toISOString().split('T')[0]}
+                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">Time</label>
+                              <input
+                                type="time"
+                                value={scrapProdTime}
+                                onChange={(e) => setScrapProdTime(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                              />
+                            </div>
+                            <div className="col-span-2">
+                              <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">Issued To</label>
+                              <select
+                                value={scrapProdIssuedTo}
+                                onChange={(e) => setScrapProdIssuedTo(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                              >
+                                <option value="">Select Location</option>
+                                {locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
+                              </select>
+                            </div>
+                          </div>
+
+                          {/* Production Slip No */}
+                          <div className="w-1/2">
+                            <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">Production Slip No.</label>
+                            <select
+                              value={scrapProdProductionSlipNo}
+                              onChange={(e) => setScrapProdProductionSlipNo(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                            >
+                              <option value="">Select Production Slip</option>
+                              {[...materialIssueSlipOptions, ...processTransferSlipOptions].map((s: any, i) => (
+                                <option key={i} value={s.issue_slip_no}>{s.issue_slip_no}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Items Grid */}
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                              <h4 className="text-sm font-bold text-gray-700 uppercase tracking-tight">Items</h4>
+                              <button
+                                onClick={() => setScrapProdItems([...scrapProdItems, { itemCode: '', itemName: '', uom: '', quantityGenerated: '' }])}
+                                className="text-indigo-600 hover:text-indigo-800 text-[11px] font-bold uppercase"
+                              >+ ADD ITEM</button>
+                            </div>
+                            <div className="overflow-x-auto border border-gray-200 rounded">
+                              <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Item Code</th>
+                                    <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Item Name</th>
+                                    <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">UOM</th>
+                                    <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Qty Generated</th>
+                                    <th className="px-3 py-3 text-center text-[11px] font-bold text-gray-500">Action</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                  {scrapProdItems.map((item, idx) => {
+                                    const scrapItems = items.filter(i => (i.category_name || '').toLowerCase().includes('scrap'));
+                                    return (
+                                      <tr key={idx}>
+                                        <td className="px-3 py-2">
+                                          <select value={item.itemCode} onChange={(e) => {
+                                            const v = e.target.value; const ni = [...scrapProdItems]; ni[idx].itemCode = v;
+                                            const si = scrapItems.find(i => i.item_code === v);
+                                            if (si) { ni[idx].itemName = si.name || si.item_name; ni[idx].uom = si.uom || si.unit; }
+                                            setScrapProdItems(ni);
+                                          }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
+                                            <option value="">Select Code</option>
+                                            {scrapItems.map(i => <option key={i.id} value={i.item_code}>{i.item_code}</option>)}
+                                          </select>
+                                        </td>
+                                        <td className="px-3 py-2">
+                                          <select value={item.itemName} onChange={(e) => {
+                                            const v = e.target.value; const ni = [...scrapProdItems]; ni[idx].itemName = v;
+                                            const si = scrapItems.find(i => (i.name || i.item_name) === v);
+                                            if (si) { ni[idx].itemCode = si.item_code; ni[idx].uom = si.uom || si.unit; }
+                                            setScrapProdItems(ni);
+                                          }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
+                                            <option value="">Select Item</option>
+                                            {scrapItems.map(i => <option key={i.id} value={i.name || i.item_name}>{i.name || i.item_name}</option>)}
+                                          </select>
+                                        </td>
+                                        <td className="px-3 py-2">
+                                          <select value={item.uom || ''} onChange={(e) => { const ni = [...scrapProdItems]; ni[idx].uom = e.target.value; setScrapProdItems(ni); }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
+                                            <option value="">Unit</option>
+                                            {(() => { const si = scrapItems.find(i => i.item_code === item.itemCode); const us: string[] = []; if (si) { const u1 = si.uom || si.unit; const u2 = si.alternate_uom || si.alternative_unit; if (u1) us.push(u1); if (u2 && u2 !== u1) us.push(u2); } return us.map(u => <option key={u} value={u}>{u}</option>); })()}
+                                          </select>
+                                        </td>
+                                        <td className="px-3 py-2">
+                                          <input type="number" value={item.quantityGenerated} onChange={(e) => { const ni = [...scrapProdItems]; ni[idx].quantityGenerated = e.target.value; setScrapProdItems(ni); }} placeholder="Qty" className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500" />
+                                        </td>
+                                        <td className="px-3 py-2 text-center">
+                                          <button onClick={() => setScrapProdItems(scrapProdItems.filter((_, i) => i !== idx))} className="text-red-500 hover:text-red-700 text-[11px] font-bold uppercase">REMOVE</button>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+
+                          {/* Posting Note */}
+                          <div>
+                            <label className="block text-[11px] font-bold text-gray-600 mb-2 uppercase">Posting Note</label>
+                            <textarea value={scrapProdPostingNote} onChange={(e) => setScrapProdPostingNote(e.target.value)} rows={2} placeholder="Internal remarks..." className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex gap-3 justify-end pt-4 border-t border-gray-100">
+                            <button onClick={() => setShowIssueSlipForm(false)} className="px-6 py-2 border border-gray-300 text-gray-700 rounded text-sm font-semibold hover:bg-gray-50">Cancel</button>
+                            <button onClick={handleIssueSlipSubmit} className="px-6 py-2 bg-indigo-600 text-white rounded text-sm font-semibold hover:bg-indigo-700">Post & Close</button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ---- OTHER SCRAP ---- */}
+                      {scrapSubType === 'other' && (
+                        <div className="space-y-5">
+                          {/* Series + Slip No */}
+                          <div className="grid grid-cols-3 gap-5">
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">Scrap Issue Slip Series</label>
+                              <select value={scrapOtherSlipSeries} onChange={(e) => { const v = e.target.value; setScrapOtherSlipSeries(v); const s = issueSlipSeriesList.find((x: any) => x.name === v); setScrapOtherSlipNo(s ? (s.preview || '') : ''); }} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
+                                <option value="">Select Series</option>
+                                {issueSlipSeriesList.filter((s: any) => (s.issueSlipType || '').toLowerCase().includes('scrap')).map((s: any) => <option key={s.id} value={s.name}>{s.name}</option>)}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">Scrap Issue Slip No.</label>
+                              <input type="text" value={scrapOtherSlipNo} readOnly placeholder="Auto-generated" className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-slate-50 text-gray-500 cursor-not-allowed font-bold" />
+                            </div>
+                          </div>
+
+                          {/* Date, Time, Issued From, Issued To */}
+                          <div className="grid grid-cols-4 gap-5">
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">Date</label>
+                              <input type="date" value={scrapOtherDate} onChange={(e) => setScrapOtherDate(e.target.value)} max={new Date().toISOString().split('T')[0]} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white" />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">Time</label>
+                              <input type="time" value={scrapOtherTime} onChange={(e) => setScrapOtherTime(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white" />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">Issued From</label>
+                              <select value={scrapOtherIssuedFrom} onChange={(e) => setScrapOtherIssuedFrom(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
+                                <option value="">Select Location</option>
+                                {locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">Issued To</label>
+                              <select value={scrapOtherIssuedTo} onChange={(e) => setScrapOtherIssuedTo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
+                                <option value="">Select Location</option>
+                                {locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
+                              </select>
+                            </div>
+                          </div>
+
+                          {/* Items Scrapped Grid */}
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                              <h4 className="text-sm font-bold text-gray-700 uppercase tracking-tight">Items Scrapped</h4>
+                              <button onClick={() => setScrapOtherItemsScrapped([...scrapOtherItemsScrapped, { itemCode: '', itemName: '', uom: '', quantity: '' }])} className="text-indigo-600 hover:text-indigo-800 text-[11px] font-bold uppercase">+ ADD ITEM</button>
+                            </div>
+                            <div className="overflow-x-auto border border-gray-200 rounded">
+                              <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Item Code</th>
+                                    <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Item Name</th>
+                                    <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">UOM</th>
+                                    <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Quantity</th>
+                                    <th className="px-3 py-3 text-center text-[11px] font-bold text-gray-500">Action</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                  {scrapOtherItemsScrapped.map((item, idx) => (
+                                    <tr key={idx}>
+                                      <td className="px-3 py-2">
+                                        <select value={item.itemCode} onChange={(e) => { const v = e.target.value; const ni = [...scrapOtherItemsScrapped]; ni[idx].itemCode = v; const si = items.find(i => i.item_code === v); if (si) { ni[idx].itemName = si.name || si.item_name; ni[idx].uom = si.uom || si.unit; } setScrapOtherItemsScrapped(ni); }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
+                                          <option value="">Select Code</option>
+                                          {items.map(i => <option key={i.id} value={i.item_code}>{i.item_code}</option>)}
+                                        </select>
+                                      </td>
+                                      <td className="px-3 py-2">
+                                        <select value={item.itemName} onChange={(e) => { const v = e.target.value; const ni = [...scrapOtherItemsScrapped]; ni[idx].itemName = v; const si = items.find(i => (i.name || i.item_name) === v); if (si) { ni[idx].itemCode = si.item_code; ni[idx].uom = si.uom || si.unit; } setScrapOtherItemsScrapped(ni); }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
+                                          <option value="">Select Item</option>
+                                          {items.map(i => <option key={i.id} value={i.name || i.item_name}>{i.name || i.item_name}</option>)}
+                                        </select>
+                                      </td>
+                                      <td className="px-3 py-2">
+                                        <select value={item.uom || ''} onChange={(e) => { const ni = [...scrapOtherItemsScrapped]; ni[idx].uom = e.target.value; setScrapOtherItemsScrapped(ni); }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
+                                          <option value="">Unit</option>
+                                          {(() => { const si = items.find(i => i.item_code === item.itemCode); const us: string[] = []; if (si) { const u1 = si.uom || si.unit; const u2 = si.alternate_uom || si.alternative_unit; if (u1) us.push(u1); if (u2 && u2 !== u1) us.push(u2); } return us.map(u => <option key={u} value={u}>{u}</option>); })()}
+                                        </select>
+                                      </td>
+                                      <td className="px-3 py-2">
+                                        <input type="number" value={item.quantity} onChange={(e) => { const ni = [...scrapOtherItemsScrapped]; ni[idx].quantity = e.target.value; setScrapOtherItemsScrapped(ni); }} placeholder="Qty" className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500" />
+                                      </td>
+                                      <td className="px-3 py-2 text-center">
+                                        <button onClick={() => setScrapOtherItemsScrapped(scrapOtherItemsScrapped.filter((_, i) => i !== idx))} className="text-red-500 hover:text-red-700 text-[11px] font-bold uppercase">REMOVE</button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+
+                          {/* Resulting Scrap Grid */}
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                              <h4 className="text-sm font-bold text-gray-700 uppercase tracking-tight">Resulting Scrap</h4>
+                              <button onClick={() => setScrapOtherResultingItems([...scrapOtherResultingItems, { itemCode: '', itemName: '', uom: '', quantity: '', rate: '', value: 0 }])} className="text-indigo-600 hover:text-indigo-800 text-[11px] font-bold uppercase">+ ADD ITEM</button>
+                            </div>
+                            <div className="overflow-x-auto border border-gray-200 rounded">
+                              <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Item Code</th>
+                                    <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Item Name</th>
+                                    <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">UOM</th>
+                                    <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Quantity</th>
+                                    <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Rate</th>
+                                    <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Value</th>
+                                    <th className="px-3 py-3 text-center text-[11px] font-bold text-gray-500">Action</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                  {scrapOtherResultingItems.map((item, idx) => {
+                                    const scrapItems = items.filter(i => (i.category_name || '').toLowerCase().includes('scrap'));
+                                    return (
+                                      <tr key={idx}>
+                                        <td className="px-3 py-2">
+                                          <select value={item.itemCode} onChange={(e) => { const v = e.target.value; const ni = [...scrapOtherResultingItems]; ni[idx].itemCode = v; const si = scrapItems.find(i => i.item_code === v); if (si) { ni[idx].itemName = si.name || si.item_name; ni[idx].uom = si.uom || si.unit; } setScrapOtherResultingItems(ni); }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
+                                            <option value="">Select Code</option>
+                                            {scrapItems.map(i => <option key={i.id} value={i.item_code}>{i.item_code}</option>)}
+                                          </select>
+                                        </td>
+                                        <td className="px-3 py-2">
+                                          <select value={item.itemName} onChange={(e) => { const v = e.target.value; const ni = [...scrapOtherResultingItems]; ni[idx].itemName = v; const si = scrapItems.find(i => (i.name || i.item_name) === v); if (si) { ni[idx].itemCode = si.item_code; ni[idx].uom = si.uom || si.unit; } setScrapOtherResultingItems(ni); }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
+                                            <option value="">Select Item</option>
+                                            {scrapItems.map(i => <option key={i.id} value={i.name || i.item_name}>{i.name || i.item_name}</option>)}
+                                          </select>
+                                        </td>
+                                        <td className="px-3 py-2">
+                                          <select value={item.uom || ''} onChange={(e) => { const ni = [...scrapOtherResultingItems]; ni[idx].uom = e.target.value; setScrapOtherResultingItems(ni); }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
+                                            <option value="">Unit</option>
+                                            {(() => { const si = scrapItems.find(i => i.item_code === item.itemCode); const us: string[] = []; if (si) { const u1 = si.uom || si.unit; const u2 = si.alternate_uom || si.alternative_unit; if (u1) us.push(u1); if (u2 && u2 !== u1) us.push(u2); } return us.map(u => <option key={u} value={u}>{u}</option>); })()}
+                                          </select>
+                                        </td>
+                                        <td className="px-3 py-2">
+                                          <input type="number" value={item.quantity} onChange={(e) => { const ni = [...scrapOtherResultingItems]; const qty = parseFloat(e.target.value) || 0; const rate = parseFloat(ni[idx].rate) || 0; ni[idx].quantity = e.target.value; ni[idx].value = parseFloat((qty * rate).toFixed(2)); setScrapOtherResultingItems(ni); }} placeholder="Qty" className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500" />
+                                        </td>
+                                        <td className="px-3 py-2">
+                                          <input type="number" value={item.rate} onChange={(e) => { const ni = [...scrapOtherResultingItems]; const rate = parseFloat(e.target.value) || 0; const qty = parseFloat(ni[idx].quantity) || 0; ni[idx].rate = e.target.value; ni[idx].value = parseFloat((qty * rate).toFixed(2)); setScrapOtherResultingItems(ni); }} placeholder="Rate" className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500" />
+                                        </td>
+                                        <td className="px-3 py-2">
+                                          <input type="text" value={`₹${(item.value || 0).toFixed(2)}`} readOnly className="w-full px-2 py-1.5 border border-gray-200 rounded text-[11px] bg-slate-50 text-gray-800 font-bold" />
+                                        </td>
+                                        <td className="px-3 py-2 text-center">
+                                          <button onClick={() => setScrapOtherResultingItems(scrapOtherResultingItems.filter((_, i) => i !== idx))} className="text-red-500 hover:text-red-700 text-[11px] font-bold uppercase">REMOVE</button>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+
+                          {/* Posting Note */}
+                          <div>
+                            <label className="block text-[11px] font-bold text-gray-600 mb-2 uppercase">Posting Note</label>
+                            <textarea value={scrapOtherPostingNote} onChange={(e) => setScrapOtherPostingNote(e.target.value)} rows={2} placeholder="Internal remarks..." className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex gap-3 justify-end pt-4 border-t border-gray-100">
+                            <button onClick={() => setShowIssueSlipForm(false)} className="px-6 py-2 border border-gray-300 text-gray-700 rounded text-sm font-semibold hover:bg-gray-50">Cancel</button>
+                            <button onClick={handleIssueSlipSubmit} className="px-6 py-2 bg-indigo-600 text-white rounded text-sm font-semibold hover:bg-indigo-700">Post & Close</button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ---- SCRAP DISPOSED ---- */}
+                      {scrapSubType === 'disposed' && (
+                        <div className="space-y-5">
+                          {/* Series + Slip No */}
+                          <div className="grid grid-cols-3 gap-5">
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">Scrap Issue Slip Series</label>
+                              <select value={scrapDispSlipSeries} onChange={(e) => { const v = e.target.value; setScrapDispSlipSeries(v); const s = issueSlipSeriesList.find((x: any) => x.name === v); setScrapDispSlipNo(s ? (s.preview || '') : ''); }} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
+                                <option value="">Select Series</option>
+                                {issueSlipSeriesList.filter((s: any) => (s.issueSlipType || '').toLowerCase().includes('scrap')).map((s: any) => <option key={s.id} value={s.name}>{s.name}</option>)}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">Scrap Disposal Slip No.</label>
+                              <input type="text" value={scrapDispSlipNo} readOnly placeholder="Auto-generated" className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-slate-50 text-gray-500 cursor-not-allowed font-bold" />
+                            </div>
+                          </div>
+
+                          {/* Date, Time, Issued From */}
+                          <div className="grid grid-cols-4 gap-5">
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">Date</label>
+                              <input type="date" value={scrapDispDate} onChange={(e) => setScrapDispDate(e.target.value)} max={new Date().toISOString().split('T')[0]} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white" />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">Time</label>
+                              <input type="time" value={scrapDispTime} onChange={(e) => setScrapDispTime(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white" />
+                            </div>
+                            <div className="col-span-2">
+                              <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">Issued From</label>
+                              <select value={scrapDispIssuedFrom} onChange={(e) => setScrapDispIssuedFrom(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
+                                <option value="">Select Location</option>
+                                {locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
+                              </select>
+                            </div>
+                          </div>
+
+                          {/* Items Grid */}
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                              <h4 className="text-sm font-bold text-gray-700 uppercase tracking-tight">Items</h4>
+                              <button onClick={() => setScrapDispItems([...scrapDispItems, { itemCode: '', itemName: '', uom: '', quantityDisposed: '', rate: '', value: 0 }])} className="text-indigo-600 hover:text-indigo-800 text-[11px] font-bold uppercase">+ ADD ITEM</button>
+                            </div>
+                            <div className="overflow-x-auto border border-gray-200 rounded">
+                              <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Item Code</th>
+                                    <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Item Name</th>
+                                    <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">UOM</th>
+                                    <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Qty Disposed</th>
+                                    <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Rate</th>
+                                    <th className="px-3 py-3 text-left text-[11px] font-bold text-gray-500">Value</th>
+                                    <th className="px-3 py-3 text-center text-[11px] font-bold text-gray-500">Action</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                  {scrapDispItems.map((item, idx) => (
+                                    <tr key={idx}>
+                                      <td className="px-3 py-2">
+                                        <select value={item.itemCode} onChange={(e) => { const v = e.target.value; const ni = [...scrapDispItems]; ni[idx].itemCode = v; const si = items.find(i => i.item_code === v); if (si) { ni[idx].itemName = si.name || si.item_name; ni[idx].uom = si.uom || si.unit; } setScrapDispItems(ni); }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
+                                          <option value="">Select Code</option>
+                                          {items.map(i => <option key={i.id} value={i.item_code}>{i.item_code}</option>)}
+                                        </select>
+                                      </td>
+                                      <td className="px-3 py-2">
+                                        <select value={item.itemName} onChange={(e) => { const v = e.target.value; const ni = [...scrapDispItems]; ni[idx].itemName = v; const si = items.find(i => (i.name || i.item_name) === v); if (si) { ni[idx].itemCode = si.item_code; ni[idx].uom = si.uom || si.unit; } setScrapDispItems(ni); }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
+                                          <option value="">Select Item</option>
+                                          {items.map(i => <option key={i.id} value={i.name || i.item_name}>{i.name || i.item_name}</option>)}
+                                        </select>
+                                      </td>
+                                      <td className="px-3 py-2">
+                                        <select value={item.uom || ''} onChange={(e) => { const ni = [...scrapDispItems]; ni[idx].uom = e.target.value; setScrapDispItems(ni); }} className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500 bg-white">
+                                          <option value="">Unit</option>
+                                          {(() => { const si = items.find(i => i.item_code === item.itemCode); const us: string[] = []; if (si) { const u1 = si.uom || si.unit; const u2 = si.alternate_uom || si.alternative_unit; if (u1) us.push(u1); if (u2 && u2 !== u1) us.push(u2); } return us.map(u => <option key={u} value={u}>{u}</option>); })()}
+                                        </select>
+                                      </td>
+                                      <td className="px-3 py-2">
+                                        <input type="number" value={item.quantityDisposed} onChange={(e) => { const ni = [...scrapDispItems]; const qty = parseFloat(e.target.value) || 0; const rate = parseFloat(ni[idx].rate) || 0; ni[idx].quantityDisposed = e.target.value; ni[idx].value = parseFloat((qty * rate).toFixed(2)); setScrapDispItems(ni); }} placeholder="Qty" className="w-full px-2 py-1.5 border border-gray-300 rounded text-[11px] focus:ring-1 focus:ring-indigo-500" />
+                                      </td>
+                                      <td className="px-3 py-2">
+                                        <input type="number" value={item.rate} readOnly placeholder="Auto" className="w-full px-2 py-1.5 border border-gray-200 rounded text-[11px] bg-slate-50 text-gray-500 cursor-not-allowed" />
+                                      </td>
+                                      <td className="px-3 py-2">
+                                        <input type="text" value={`₹${(item.value || 0).toFixed(2)}`} readOnly className="w-full px-2 py-1.5 border border-gray-200 rounded text-[11px] bg-slate-50 text-gray-800 font-bold" />
+                                      </td>
+                                      <td className="px-3 py-2 text-center">
+                                        <button onClick={() => setScrapDispItems(scrapDispItems.filter((_, i) => i !== idx))} className="text-red-500 hover:text-red-700 text-[11px] font-bold uppercase">REMOVE</button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                            <div className="flex justify-end pt-1">
+                              <span className="text-xs font-bold text-gray-900">Total Value: ₹{scrapDispItems.reduce((s, i) => s + (i.value || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                          </div>
+
+                          {/* Disposal Details */}
+                          <div className="grid grid-cols-2 gap-5">
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">Reason for Disposal</label>
+                              <textarea value={scrapDispReasonForDisposal} onChange={(e) => setScrapDispReasonForDisposal(e.target.value)} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">Method of Disposal</label>
+                              <textarea value={scrapDispMethodOfDisposal} onChange={(e) => setScrapDispMethodOfDisposal(e.target.value)} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-5 items-end">
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">Disposal Agency</label>
+                              <select value={scrapDispAgency} onChange={(e) => setScrapDispAgency(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
+                                <option value="">Select Vendor</option>
+                                {vendors.map((v: any) => <option key={v.id} value={v.vendor_name}>{v.vendor_name}</option>)}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-600 mb-2 uppercase">Certificate of Disposal</label>
+                              <label className="cursor-pointer inline-flex items-center gap-2 bg-white border-2 border-dashed border-indigo-200 rounded px-4 py-2 text-xs text-indigo-600 font-semibold hover:bg-indigo-50 transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                                {scrapDispCertificate ? scrapDispCertificate.name : 'Upload Certificate'}
+                                <input type="file" className="hidden" onChange={(e) => setScrapDispCertificate(e.target.files?.[0] || null)} accept="image/*,application/pdf" />
+                              </label>
+                            </div>
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex gap-3 justify-end pt-4 border-t border-gray-100">
+                            <button onClick={() => setShowIssueSlipForm(false)} className="px-6 py-2 border border-gray-300 text-gray-700 rounded text-sm font-semibold hover:bg-gray-50">Cancel</button>
+                            <button onClick={handleIssueSlipSubmit} className="px-6 py-2 bg-indigo-600 text-white rounded text-sm font-semibold hover:bg-indigo-700">Post & Close</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {/* ===== END SCRAP TAB ===== */}
+
                 </div>
               </div>
             </div>
@@ -5849,7 +6726,7 @@ const InventoryPage: React.FC = () => {
                   <div className="grid grid-cols-3 gap-5">
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Date</label>
-                      <input type="date" value={grnDate} onChange={(e) => setGrnDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                      <input type="date" value={grnDate} onChange={(e) => setGrnDate(e.target.value)} max={new Date().toISOString().split('T')[0]} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Time</label>

@@ -40,7 +40,7 @@ export const HierarchicalDropdown: React.FC<HierarchicalDropdownProps> = ({ onSe
         const fetchHierarchy = async () => {
             try {
                 
-                const response = await fetch('http://localhost:8000/api/hierarchy/');
+                const response = await fetch('/api/hierarchy/');
                 
 
                 if (!response.ok) {

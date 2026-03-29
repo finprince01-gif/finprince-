@@ -2829,6 +2829,7 @@ CREATE TABLE `voucher_contra` (
   `updated_at` datetime(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   `date` date NOT NULL,
   `voucher_number` varchar(100) NOT NULL,
+  `voucher_series` varchar(100) DEFAULT NULL,
   `from_account` varchar(255) NOT NULL,
   `to_account` varchar(255) NOT NULL,
   `amount` decimal(15,2) NOT NULL DEFAULT '0.00',

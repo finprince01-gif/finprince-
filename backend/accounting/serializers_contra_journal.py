@@ -39,9 +39,27 @@ class VoucherContraSerializer(serializers.ModelSerializer):
     toAccount = serializers.CharField(source='to_account')
     voucher_number = serializers.CharField(required=False)
 
+    # New mapping for forex and charges fields
+    contraConversionRate = serializers.DecimalField(source='conversion_rate', max_digits=18, decimal_places=6, required=False, allow_null=True)
+    contraPaymentAmtForeign = serializers.DecimalField(source='payment_amt_foreign', max_digits=20, decimal_places=2, required=False, allow_null=True)
+    contraPaymentRate = serializers.DecimalField(source='payment_rate', max_digits=18, decimal_places=6, required=False, allow_null=True)
+    contraPaymentAmtINR = serializers.DecimalField(source='payment_amt_inr', max_digits=20, decimal_places=2, required=False, allow_null=True)
+    contraReceiptAmtForeign = serializers.DecimalField(source='receipt_amt_foreign', max_digits=20, decimal_places=2, required=False, allow_null=True)
+    contraReceiptRate = serializers.DecimalField(source='receipt_rate', max_digits=18, decimal_places=6, required=False, allow_null=True)
+    contraReceiptAmtINR = serializers.DecimalField(source='receipt_amt_inr', max_digits=20, decimal_places=2, required=False, allow_null=True)
+    contraForexGainLoss = serializers.DecimalField(source='forex_gain_loss', max_digits=20, decimal_places=2, required=False, allow_null=True)
+    contraDeductChargesFrom = serializers.CharField(source='deduct_charges_from', required=False, allow_null=True, allow_blank=True)
+    contraConversionCharges = serializers.DecimalField(source='conversion_charges', max_digits=15, decimal_places=2, required=False, allow_null=True)
+    contraFemaPurposeCode = serializers.CharField(source='fema_purpose_code', required=False, allow_null=True, allow_blank=True)
+
     class Meta:
         model = VoucherContra
-        fields = ['id', 'date', 'voucher_number', 'fromAccount', 'toAccount', 'amount', 'narration', 'tenant_id']
+        fields = [
+            'id', 'date', 'voucher_number', 'voucher_series', 'fromAccount', 'toAccount', 'amount', 'narration', 'tenant_id',
+            'contraConversionRate', 'contraPaymentAmtForeign', 'contraPaymentRate', 'contraPaymentAmtINR',
+            'contraReceiptAmtForeign', 'contraReceiptRate', 'contraReceiptAmtINR', 'contraForexGainLoss',
+            'contraDeductChargesFrom', 'contraConversionCharges', 'contraFemaPurposeCode'
+        ]
         read_only_fields = ['id', 'tenant_id', 'created_at', 'updated_at']
     
     def create(self, validated_data):
