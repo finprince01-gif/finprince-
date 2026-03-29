@@ -54,7 +54,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
     // General Customer Quote states
     const [quoteNumber, setQuoteNumber] = useState('');
     const [customerCategory, setCustomerCategory] = useState('');
-    const [customerCategoryId, setCustomerCategoryId] = useState<number | null>(null);
+    const [customerCategoryId, setCustomerCategoryId] = useState<number | string | null>(null);
     const [effectiveFrom, setEffectiveFrom] = useState('');
     const [effectiveTo, setEffectiveTo] = useState('');
     const [items, setItems] = useState<ItemRow[]>([
@@ -429,6 +429,7 @@ const CreateSalesQuotation: React.FC<CreateSalesQuotationProps> = ({ onCancel, e
                                             setCustomerCategoryId(selection.id);
                                             setCustomerCategory(selection.fullPath);
                                         }}
+                                        mergeSystem={true}
                                         placeholder="Select category"
                                         colorTheme="indigo"
                                         systemCategories={CUSTOMER_CATEGORIES.map(c => c.category)}

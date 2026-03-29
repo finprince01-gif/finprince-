@@ -205,7 +205,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [scannerFiles, setScannerFiles] = useState<FileList | null>(null);
   const [scanType, setScanType] = useState<'single' | 'bulk'>('single');
   const scannerInputRef = useRef<HTMLInputElement>(null);
-  const [extractionMode, setExtractionMode] = useState<'finpixe' | 'tally' | 'zoho' | 'sap'>('finpixe');
+  const [extractionMode, setExtractionMode] = useState<'ai_native' | 'tally' | 'zoho' | 'sap'>('ai_native');
 
   // Zoho / SAP Scanner refs
   const zohoScannerInputRef = useRef<HTMLInputElement>(null);
@@ -438,12 +438,12 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     }
   };
 
-  const openScanner = (mode: 'finpixe' | 'tally' = 'finpixe', type: 'single' | 'bulk' = 'single') => {
-    setExtractionMode(mode);
+  const openScanner = (mode: 'ai_native' | 'tally' = 'ai_native', type: 'single' | 'bulk' = 'single') => {
+    setExtractionMode(mode as any);
     setScanType(type);
-    if (isLimitReached && mode === 'finpixe') {
+    if (isLimitReached && mode === 'ai_native') {
       handleLimitReached();
-    } else if (mode === 'finpixe' && type === 'single') {
+    } else if (mode === 'ai_native' && type === 'single') {
       singleScanInputRef.current?.click();
     } else {
       scannerInputRef.current?.click();
@@ -7505,7 +7505,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 refetch(); // Refresh usage after scan
               }}
               onExtractionSuccess={(extractedData) => {
-                if (voucherType !== 'Purchase' || extractionMode !== 'finpixe') return;
+                if (voucherType !== 'Purchase' || extractionMode !== 'ai_native') return;
 
                 validateVendorFromInvoice(
                   extractedData.vendor_name,
