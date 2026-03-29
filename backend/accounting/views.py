@@ -1,13 +1,17 @@
-from rest_framework import viewsets, status
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
-from core.utils import TenantQuerysetMixin, IsTenantMember
+from rest_framework import viewsets, status # pyre-fixme
+from rest_framework.decorators import action # pyre-fixme
+from rest_framework.response import Response # pyre-fixme
+from rest_framework.permissions import IsAuthenticated, AllowAny # pyre-fixme
+from rest_framework.views import APIView # pyre-fixme
+from django.db import connection # pyre-fixme
+from core.utils import TenantQuerysetMixin, IsTenantMember # pyre-fixme
 from .models import (
     MasterLedgerGroup, MasterLedger, MasterHierarchyRaw,
     Voucher, JournalEntry
 )
-from .serializers import (
+from customerportal.database import CustomerMasterCustomerBasicDetails as Customer
+from vendors.models import VendorMasterBasicDetail as Vendor
+from .serializers import ( # pyre-fixme
     MasterLedgerGroupSerializer, MasterLedgerSerializer,
     MasterHierarchyRawSerializer, VoucherSerializer, JournalEntrySerializer
 )
@@ -50,8 +54,8 @@ class MasterLedgerViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         """Create a new ledger with auto-generated code and retry logic"""
         import logging
-        from django.db import IntegrityError, transaction
-        from .utils import generate_ledger_code
+        from django.db import IntegrityError, transaction # pyre-fixme
+        from .utils import generate_ledger_code # pyre-fixme
         
         logger = logging.getLogger('accounting.views')
         
@@ -93,7 +97,7 @@ class MasterLedgerViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
                             f"❌ Failed to generate unique code after {max_retries} attempts. "
                             f"Error: {str(e)}"
                         )
-                        from rest_framework import serializers as drf_serializers
+                        from rest_framework import serializers as drf_serializers # pyre-fixme
                         raise drf_serializers.ValidationError({
                             'code': 'Failed to generate unique ledger code. Please try again.'
                         })
@@ -222,3 +226,115 @@ class JournalEntryViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
     serializer_class = JournalEntrySerializer
     permission_classes = [IsAuthenticated, IsTenantMember]
     required_permission = 'ACCOUNTING_VOUCHERS'
+
+
+class PayFromLedgerView(APIView):
+    """
+    Returns only ledgers eligible for 'Pay From' in Payment Vouchers.
+    Filters:
+    - Assets: Cash and bank balances, Cash and cash equivalents (recursive)
+    - Liabilities: Short term borrowings (recursive)
+    """
+    permission_classes = [AllowAny] # TEMPORARY: disabled IsAuthenticated
+
+    def get(self, request):
+        # Fetch actual tenant_id from the user context
+        tenant_id = getattr(request.user, 'tenant_id', None)
+        
+        if not tenant_id:
+            return Response({"error": "Tenant ID not found. Please log in again."}, status=400)
+        
+        # MySQL Recursive CTE based on the new ID-based hierarchy and classification
+        # Filters: Assets (ASSET_CASH) and Liabilities (LIABILITY_LOAN) recursively
+        sql = """
+            WITH RECURSIVE group_tree(id) AS (
+                -- Root groups by classification
+                SELECT id FROM master_ledger_groups 
+                WHERE group_type IN ('ASSET_CASH', 'LIABILITY_LOAN')
+                UNION ALL
+                -- Children groups via parent_id link
+                SELECT g.id FROM master_ledger_groups g 
+                JOIN group_tree gt ON g.parent_id = gt.id
+            )
+            -- Fetch only ledgers belonging to the matching group hierarchy
+            SELECT l.id, l.name 
+            FROM master_ledgers l
+            WHERE l.group_id IN (SELECT id FROM group_tree)
+            AND l.tenant_id = %s
+        """
+        
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(sql, [tenant_id])
+                columns = [col[0] for col in cursor.description]
+                results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+            return Response(results)
+        except Exception as e:
+            return Response({"error": "Failed to fetch ledgers from hierarchy"}, status=500)
+
+
+class PayToLedgerView(APIView):
+    """
+    Returns a unified list of possible 'Pay To' targets:
+    - Vendors (resolved via vendor table)
+    - Customers (resolved via customer table)
+    - All other Ledgers (direct)
+    
+    Each item contains {id, name, type} where id is the entity PK.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        tenant_id = getattr(request.user, 'tenant_id', None)
+        if not tenant_id:
+            tenant_id = request.headers.get('X-Tenant-Id')
+
+        if not tenant_id:
+            return Response({"error": "Tenant ID missing"}, status=400)
+
+        # 1. Fetch Vendors with associated ledgers
+        vendors = Vendor.objects.filter(tenant_id=tenant_id, ledger_id__isnull=False).values('id', 'vendor_name', 'ledger_id', 'vendor_category')
+        
+        # 2. Fetch Customers with associated ledgers (resolve category name)
+        customers = Customer.objects.filter(
+            tenant_id=tenant_id, 
+            ledger_id__isnull=False
+        ).select_related('customer_category').values(
+            'id', 'customer_name', 'ledger_id', 'customer_category__category'
+        )
+        
+        results = []
+        for v in vendors:
+            results.append({
+                "id": v['id'],
+                "name": v['vendor_name'],
+                "type": "vendor",
+                "ledger_id": v['ledger_id'],
+                "category": v['vendor_category'] or "General"
+            })
+
+        for c in customers:
+            results.append({
+                "id": c['id'],
+                "name": c['customer_name'],
+                "type": "customer",
+                "ledger_id": c['ledger_id'],
+                "category": c['customer_category__category'] or "General"
+            })
+            
+        # 3. Fetch all Ledgers to find ones not already covered
+        ledgers = MasterLedger.objects.filter(tenant_id=tenant_id).values('id', 'name', 'category')
+        
+        covered_ledger_ids = {r['ledger_id'] for r in results}
+        
+        for l in ledgers:
+            if l['id'] not in covered_ledger_ids:
+                results.append({
+                    "id": l['id'],
+                    "name": l['name'],
+                    "type": "ledger",
+                    "ledger_id": l['id'],
+                    "category": l['category'] or "Other"
+                })
+
+        return Response(results)

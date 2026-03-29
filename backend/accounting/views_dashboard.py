@@ -8,10 +8,11 @@ from django.utils import timezone
 from collections import defaultdict
 import datetime
 
-from .models import MasterLedger, SalesVoucher
+from .models import MasterLedger
+from .models_voucher_sales import VoucherSalesInvoiceDetails as SalesVoucher
 from .models_voucher_purchase import VoucherPurchaseSupplierDetails
 from .models_voucher_expense import VoucherExpense
-from .models_voucher_payment import VoucherPaymentSingle, VoucherPaymentBulk
+from .models_voucher_payment import PaymentVoucher
 from .models_voucher_receipt import VoucherReceiptSingle, VoucherReceiptBulk
 
 class DashboardAnalyticsView(APIView):
@@ -26,11 +27,10 @@ class DashboardAnalyticsView(APIView):
         today = timezone.now().date()
         six_months_ago = today - datetime.timedelta(days=180)
 
-        # 1. Revenue Trend (Sales Vouchers)
-        # Join with payment_details to get grand total (payment_invoice_value)
+        # 1. Revenue Trend (Sales Vouchers — VoucherSalesInvoiceDetails)
+        # Uses the related payment_details (VoucherSalesPaymentDetails) for invoice totals
         revenue_qs = SalesVoucher.objects.filter(
             tenant_id=tenant_id,
-            # status__in=['completed'], # Status missing in current model
             date__gte=six_months_ago
         ).annotate(
             month=TruncMonth('date'),
@@ -118,20 +118,18 @@ class DashboardAnalyticsView(APIView):
             m = r['date'].strftime('%b %y')
             cash_in_map[m] += float(r['total_amount'] or 0)
             
-        # Payments
-        payments_qs_single = VoucherPaymentSingle.objects.filter(tenant_id=tenant_id, date__gte=six_months_ago).values('date', 'total_payment')
-        payments_qs_bulk = VoucherPaymentBulk.objects.filter(tenant_id=tenant_id, date__gte=six_months_ago).values('date', 'payment_rows', 'advance_amount')
+        # Payments (Unified PaymentVoucher)
+        payments_qs = PaymentVoucher.objects.filter(
+            tenant_id=tenant_id, 
+            date__gte=six_months_ago
+        ).prefetch_related('items')
         
         cash_out_map = defaultdict(float)
-        for p in payments_qs_single:
-            cash_out_map[p['date'].strftime('%b %y')] += float(p['total_payment'] or 0)
-        for p in payments_qs_bulk:
-            m = p['date'].strftime('%b %y')
-            total = float(p['advance_amount'] or 0)
-            rows = p['payment_rows'] or []
-            for row in rows:
-                total += float(row.get('amount', 0) or 0)
-            cash_out_map[m] += total
+        for p in payments_qs:
+            m = p.date.strftime('%b %y')
+            # In unified model, advances are just items with reference_type='ADVANCE'
+            # but for cash flow, we just want the total amount spent.
+            cash_out_map[m] += float(p.total_amount or 0)
 
         cash_flow = []
         for m in all_months:
@@ -160,8 +158,8 @@ class DashboardAnalyticsView(APIView):
         all_sales = SalesVoucher.objects.filter(
             tenant_id=tenant_id
         ).select_related('payment_details').values(
-            'sales_invoice_no', 
-            'date', 
+            'sales_invoice_no',
+            'date',
             'payment_details__payment_invoice_value',
             'payment_details__advance_references'
         )

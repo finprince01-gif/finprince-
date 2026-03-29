@@ -2,7 +2,8 @@ from django.urls import path, include # pyre-fixme
 from rest_framework import routers # pyre-fixme
 from .views import ( # pyre-fixme
     MasterLedgerGroupViewSet, MasterLedgerViewSet,
-    MasterHierarchyRawViewSet, VoucherViewSet, JournalEntryViewSet
+    MasterHierarchyRawViewSet, VoucherViewSet, JournalEntryViewSet,
+    PayFromLedgerView, PayToLedgerView
 )
 from .views_questions import LedgerQuestionsView, LedgerCreateWithQuestionsView # pyre-fixme
 from .views_question import QuestionViewSet # pyre-fixme
@@ -48,6 +49,11 @@ router.register('vouchers/receipt-types', ReceiptVoucherTypeViewSet, basename='r
 router.register('vouchers/sales', SalesVoucherViewSet, basename='sales-vouchers')
 router.register('vouchers/purchase', VoucherPurchaseViewSet, basename='purchase-vouchers')
 
+# --- Unified endpoint (use this for all new code) ---
+router.register('vouchers/payment', PaymentVoucherViewSet, basename='payment-voucher')
+router.register('vouchers/advances', AdvancePaymentViewSet, basename='advance-payment')
+router.register('advances', AdvancePaymentViewSet, basename='advances')
+# --- Deprecated endpoints (backward compat — will be removed after migration) ---
 router.register('vouchers/payment-single', VoucherPaymentSingleViewSet, basename='payment-voucher-single')
 router.register('vouchers/payment-bulk', VoucherPaymentBulkViewSet, basename='payment-voucher-bulk')
 router.register('vouchers/receipts', ReceiptVoucherViewSet, basename='receipt-voucher-unified')
@@ -87,6 +93,8 @@ urlpatterns = [
     # Questions System endpoints
     path('ledgers/questions/', LedgerQuestionsView.as_view(), name='ledger-questions'),
     path('ledgers/create-with-questions/', LedgerCreateWithQuestionsView.as_view(), name='ledger-create-with-questions'),
+    path('ledgers/pay-from/', PayFromLedgerView.as_view(), name='ledgers-pay-from'),
+    path('ledgers/pay-to/', PayToLedgerView.as_view(), name='ledgers-pay-to'),
     
     # Sales Voucher custom endpoints
     path('vouchers/sales/customer-address/<int:customer_id>/', CustomerAddressAPIView.as_view(), name='customer-address'),

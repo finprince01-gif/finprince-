@@ -214,6 +214,7 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
             'billing_currency': instance.billing_currency,
             'is_also_vendor': instance.is_also_vendor,
             'gst_tds_applicable': instance.gst_tds_applicable,
+            'ledger_id': instance.ledger_id,
             'is_active': instance.is_active,
             'is_deleted': instance.is_deleted,
             'created_at': instance.created_at.isoformat() if instance.created_at else None,

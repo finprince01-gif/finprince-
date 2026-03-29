@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { ChevronDown, Eye, Pencil, Trash2, Plus, Search, Filter, ChevronLeft, X } from 'lucide-react';
 import { usePermissions } from '../../hooks/usePermissions';
 import { httpClient } from '../../services/httpClient';
+import { apiService } from '../../services/api';
 import CategoryHierarchicalDropdown from '../../components/CategoryHierarchicalDropdown';
 import { InventoryCategoryWizard } from '../../components/InventoryCategoryWizard';
 import SearchableDropdown from '../../components/SearchableDropdown';
@@ -219,21 +220,39 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
     // Live Procurement Aging State (replaces mock data)
     const [purchaseVouchers, setPurchaseVouchers] = useState<any[]>([]);
+    const [advancePayments, setAdvancePayments] = useState<any[]>([]);
+    const [allAdvancePayments, setAllAdvancePayments] = useState<any[]>([]); // For dashboard tiles
     const [loadingProcurementAging, setLoadingProcurementAging] = useState(false);
 
-    // Fetch purchase vouchers when Procurement tab is active
+    // Fetch purchase vouchers and advances when Procurement tab is active
     useEffect(() => {
-        if (activeTransactionSubTab === 'Procurement' && activeProcurementSubTab !== 'Dashboard') {
+        if (activeTransactionSubTab === 'Procurement') {
             const fetchProcurementData = async () => {
-                setLoadingProcurementAging(true);
-                try {
-                    const pvRes = await httpClient.get('/api/vouchers/purchase/');
-                    const pvList: any[] = Array.isArray(pvRes) ? pvRes : ((pvRes as any)?.results || []);
-                    setPurchaseVouchers(pvList);
-                } catch (error) {
-                    handleApiError(error, 'Fetch Purchase Vouchers');
-                } finally {
-                    setLoadingProcurementAging(false);
+                if (activeProcurementSubTab === 'Dashboard') {
+                    // Fetch all advances for dashboard tiles using UNIFIED API
+                    try {
+                        const advRes = await apiService.getAdvances();
+                        const advList: any[] = Array.isArray(advRes) ? advRes : ((advRes as any)?.results || []);
+                        setAllAdvancePayments(advList);
+                    } catch (error) {
+                        console.error('Error fetching dashboard advances:', error);
+                    }
+                } else {
+                    setLoadingProcurementAging(true);
+                    try {
+                        const [pvRes, advRes] = await Promise.all([
+                            httpClient.get('/api/vouchers/purchase/'),
+                            apiService.getAdvances(undefined, activeProcurementSubTab)
+                        ]);
+                        const pvList: any[] = Array.isArray(pvRes) ? pvRes : ((pvRes as any)?.results || []);
+                        const advList: any[] = Array.isArray(advRes) ? advRes : ((advRes as any)?.results || []);
+                        setPurchaseVouchers(pvList);
+                        setAdvancePayments(advList);
+                    } catch (error) {
+                        handleApiError(error, 'Fetch Procurement Data');
+                    } finally {
+                        setLoadingProcurementAging(false);
+                    }
                 }
             };
             fetchProcurementData();
@@ -242,11 +261,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
     // Compute aging from real purchase vouchers, filtered by category
     const getVendorAgingData = (categoryName: string) => {
-        if (!purchaseVouchers.length || !vendorList.length) return [];
+        if (!vendorList.length) return [];
 
         const vendorGroups: Record<string, {
-            id: string; code: string; name: string;
+            id: string; code: string; name: string; ledger_id?: string;
             days0to45: number; days45to90: number; months6: number; year1: number;
+            advances: number;
         }> = {};
 
         purchaseVouchers.forEach((pv: any) => {
@@ -273,10 +293,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                     id: vendorId.toString(),
                     code: vendorCode,
                     name: vendorName,
+                    ledger_id: (vendor as any).ledger_id || (vendor as any).ledger,
                     days0to45: 0,
                     days45to90: 0,
                     months6: 0,
                     year1: 0,
+                    advances: 0,
                 };
             }
 
@@ -294,6 +316,43 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             } else {
                 vendorGroups[vendorId].year1 += amount;
             }
+        });
+
+        // Add Advance Payments (negative outstanding or separate bucket)
+        const advancesToUse = advancePayments.length > 0 
+            ? advancePayments 
+            : allAdvancePayments.filter((adv: any) => {
+                const cat = (adv.category || '').toLowerCase();
+                return cat.includes(categoryName.toLowerCase());
+            });
+
+        advancesToUse.forEach((adv: any) => {
+            const ledgerId = adv.pay_to_ledger; // Unified Source of Truth
+            if (!ledgerId) return;
+
+            // Match by ledger_id
+            const vendor = vendorList.find((v: any) => v.ledger_id === ledgerId || v.ledger === ledgerId);
+            if (!vendor) return;
+            
+            const vendorId = vendor.id;
+            const vendorCode = vendor.vendor_code || `VEN-${vendorId}`;
+            const vendorName = vendor.vendor_name || adv.pay_to_name || 'Unknown Vendor';
+
+            if (!vendorGroups[vendorId]) {
+                vendorGroups[vendorId] = {
+                    id: vendorId.toString(),
+                    code: vendorCode,
+                    name: vendorName,
+                    days0to45: 0,
+                    days45to90: 0,
+                    months6: 0,
+                    year1: 0,
+                    advances: 0,
+                };
+            }
+
+            const amount = parseFloat(adv.amount || 0);
+            vendorGroups[vendorId].advances += amount;
         });
 
         return Object.values(vendorGroups);
@@ -493,7 +552,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
     // PO Form Field State
     const [poName, setPoName] = useState('');
-    const [poCategoryId, setPoCategoryId] = useState<number | null>(null);
+    const [poCategoryId, setPoCategoryId] = useState<number | string | null>(null);
     const [poCategoryPath, setPoCategoryPath] = useState('');
     const [poPrefix, setPoPrefix] = useState('');
     const [poSuffix, setPoSuffix] = useState('');
@@ -2655,6 +2714,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             <CategoryHierarchicalDropdown
                                                 apiEndpoint="/api/vendors/categories/"
                                                 systemCategories={VENDOR_SYSTEM_CATEGORIES}
+                                                 mergeSystem={true}
                                                 onSelect={(selection) => {
                                                     setPoCategoryId(selection.id);
                                                     setPoCategoryPath(selection.fullPath);
@@ -3026,6 +3086,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             <CategoryHierarchicalDropdown
                                                 apiEndpoint="/api/vendors/categories/"
                                                 systemCategories={VENDOR_SYSTEM_CATEGORIES}
+                                                 mergeSystem={true}
                                                 value={vendorCategory}
                                                 onSelect={(selection) => setVendorCategory(selection.fullPath)}
                                                 placeholder="Select Category"
@@ -4794,6 +4855,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                             ['Draft', 'Pending Approval', 'Approved', 'Mailed'].includes(po.status)
                                                         ).length;
 
+                                                        const activeAdvances = allAdvancePayments.filter(adv => 
+                                                            (adv.category || '').toLowerCase() === (item.name || '').toLowerCase()
+                                                        ).length;
+
                                                         return (
                                                             <div
                                                                 key={item.name}
@@ -4812,6 +4877,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                         <div className="text-right mr-2">
                                                                             <p className="text-lg font-bold text-gray-800">{activeOrders}</p>
                                                                             <p className="text-[10px] text-indigo-600 font-semibold uppercase tracking-wider">Orders</p>
+                                                                        </div>
+                                                                        <div className="text-right mr-2">
+                                                                            <p className="text-lg font-bold text-gray-800">{activeAdvances}</p>
+                                                                            <p className="text-[10px] text-green-600 font-semibold uppercase tracking-wider">Advances</p>
                                                                         </div>
                                                                         <ChevronLeft className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transform rotate-180 transition-all opacity-0 group-hover:opacity-100" />
                                                                     </div>
@@ -5244,7 +5313,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(entry.date)}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{entry.transferFrom}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-medium cursor-pointer hover:underline">{entry.referenceNo}</td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.ledger}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.referenceNo || entry.ledger}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap">
                                                                                 <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${
                                                                                     ['Paid', 'POSTED'].includes(entry.status) ? 'bg-green-100 text-green-800' :
@@ -5312,7 +5381,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                 {formatDate(entry.date)}
                                                                             </td>
                                                                             <td className="px-6 py-4 text-sm font-bold text-gray-800">
-                                                                                {entry.transferFrom === 'Purchase' ? '(as per details)' : entry.ledger}
+                                                                                {entry.transferFrom === 'Purchase' ? '(as per details)' : (entry.referenceNo || entry.ledger)}
                                                                             </td>
                                                                             <td className="px-6 py-4 text-sm text-gray-500 uppercase">
                                                                                 {entry.transferFrom === 'Purchase' ? 'PURCHASE' : entry.transferFrom === 'Payment' ? 'PAYMENT' : entry.transferFrom}
@@ -7099,3 +7168,4 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 };
 
 export default VendorPortalPage;
+

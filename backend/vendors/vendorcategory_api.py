@@ -96,49 +96,54 @@ class VendorMasterCategoryViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def tree(self, request):
         """
-        Get categories in a tree structure
-        Returns all categories organized by category > group > subgroup
+        Get categories in a tree structure.
+        Always includes standard defaults merged with tenant-specific DB records.
         """
         tenant_id = get_tenant_from_request(request)
         queryset = VendorMasterCategory.objects.filter(tenant_id=tenant_id, is_active=True)
         
-        # Build tree structure
+        # 1. Initialize tree with Standard Defaults (Virtual)
+        defaults = [
+            "Raw Material", "Stores and Spares", "Packing Material", "Stock in Trade",
+            "Fixed Assets", "Capital Goods", "Consumables", "Service"
+        ]
         tree = {}
+        for def_cat in defaults:
+            tree[def_cat] = {
+                'groups': {},
+                'id': f"default_{def_cat.lower().replace(' ', '_')}"
+            }
+
+        # 2. Merge with Database Records
         for item in queryset:
-            category = item.category
-            group = item.group
-            subgroup = item.subgroup
-            sub_subgroup = item.sub_subgroup
+            cat_name = item.category
+            grp_name = item.group
+            sub_name = item.subgroup
             
             # Ensure category node exists
-            if category not in tree:
-                tree[category] = {
-                    'groups': {}, 
-                    'id': item.id if not group and not subgroup and not sub_subgroup else None
-                }
+            if cat_name not in tree:
+                tree[cat_name] = {'groups': {}, 'id': None}
             
-            if group:
-                # Ensure group node exists
-                if group not in tree[category]['groups']:
-                    tree[category]['groups'][group] = {
+            # If this is a DB record for the top-level category itself (no group/subgroup)
+            if not grp_name and not sub_name:
+                tree[cat_name]['id'] = item.id
+            
+            # Process Groups
+            if grp_name:
+                cat_node = tree[cat_name]
+                if grp_name not in cat_node['groups']:
+                    cat_node['groups'][grp_name] = {
                         'subgroups': {}, 
-                        'id': item.id if not subgroup and not sub_subgroup else None
+                        'id': item.id if not sub_name else None
                     }
                 
-                if subgroup:
-                    # Ensure subgroup node exists
-                    if subgroup not in tree[category]['groups'][group]['subgroups']:
-                        tree[category]['groups'][group]['subgroups'][subgroup] = {
-                            'items': [], 
-                            'id': item.id if not sub_subgroup else None
-                        }
-                    
-                    if sub_subgroup:
-                        # Add sub-subgroup (item)
-                        tree[category]['groups'][group]['subgroups'][subgroup]['items'].append({
-                            'name': sub_subgroup,
+                # Process Subgroups
+                if sub_name:
+                    grp_node = cat_node['groups'][grp_name]
+                    if sub_name not in grp_node['subgroups']:
+                        grp_node['subgroups'][sub_name] = {
+                            'items': [], # Placeholder for future expansion
                             'id': item.id
-                        })
-        
+                        }
         
         return Response(tree)

@@ -4,7 +4,7 @@ from core.models import BaseModel # pyre-fixme
 
 # Import TransactionFile model
 from .models_transaction import TransactionFile # pyre-fixme
-from .models_voucher_payment import VoucherPaymentSingle, VoucherPaymentBulk # pyre-fixme
+from .models_voucher_payment import PaymentVoucher, PaymentVoucherItem, VoucherPaymentSingle, VoucherPaymentBulk # pyre-fixme
 from .models_voucher_receipt import VoucherReceiptSingle, VoucherReceiptBulk # pyre-fixme
 from .models_voucher_expense import VoucherExpense # pyre-fixme
 from .models_voucher_contra import VoucherContra # pyre-fixme
@@ -85,6 +85,10 @@ class MasterLedgerGroup(BaseModel):
     name = models.CharField(max_length=255)
     parent = models.CharField(max_length=255, null=True, blank=True, help_text="Parent group name")
     
+    # NEW: Proper hierarchy linking
+    parent_id = models.ForeignKey('self', on_delete=models.RESTRICT, null=True, blank=True, related_name='subgroups', db_column='parent_id')
+    group_type = models.CharField(max_length=50, null=True, blank=True)
+    
     class Meta:
 
         db_table = 'master_ledger_groups'
@@ -101,6 +105,9 @@ class MasterLedger(BaseModel):
     ]
     name = models.CharField(max_length=255)
     group = models.CharField(max_length=255, help_text="Ledger group name")
+    
+    # NEW: Proper group linking
+    group_id = models.ForeignKey(MasterLedgerGroup, on_delete=models.RESTRICT, null=True, blank=True, related_name='ledgers', db_column='group_id')
     
     # Hierarchy fields (Migration 0004+)
     category = models.CharField(max_length=255, null=True, blank=True)

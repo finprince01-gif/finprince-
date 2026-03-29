@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { httpClient } from '../../services/httpClient';
+import { apiService } from '../../services/api';
 import { showSuccess, showError, showInfo, confirm } from '../../utils/toast';
 import { handleApiError } from '../../utils/errorHandler';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -3331,6 +3332,7 @@ const SalesOrderContent: React.FC = () => {
                             systemCategories={['Export', 'Within Country (B2B)', 'Within Country (B2C)']}
                             value={form.category}
                             onSelect={(selection) => handleChange('category', selection.fullPath)}
+                            mergeSystem={true}
                             colorTheme="teal"
                             placeholder="Select Category"
                         />
@@ -5645,7 +5647,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
 
 // Customer Ledger View Component
 interface CustomerLedgerViewProps {
-    customer: { id: string; name: string; is_also_vendor?: boolean };
+    customer: { id: string; name: string; is_also_vendor?: boolean; ledger_id?: string; };
     onBack: () => void;
 }
 
@@ -5662,7 +5664,7 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
     const [selectedMonthView, setSelectedMonthView] = useState<string | null>(null);
     const [showMonthDropdown, setShowMonthDropdown] = useState(false);
     const [activeFilter, setActiveFilter] = useState<string | null>(null);
-    const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
+    const [ledgerEntries, setLedgerEntries] = useState<(LedgerEntry & { referenceNo?: string })[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isGSTModalOpen, setIsGSTModalOpen] = useState(false);
@@ -6267,7 +6269,7 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 border-r border-gray-50">{entry.date.split('-').reverse().join('-')}</td>
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 border-r border-gray-50">(as per details)</td>
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 uppercase border-r border-gray-50">Sales</td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 border-r border-gray-50">{entry.ledger}</td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 border-r border-gray-50">{entry.referenceNo || entry.ledger}</td>
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-indigo-600 border-r border-gray-50">₹{entry.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-400">-</td>
                                                             </tr>
@@ -6430,26 +6432,64 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
 };
 
 // Sales Content Component with Aging Buckets
+interface CategoryCardProps {
+    category: SalesCategory;
+    desc: string;
+    activeOrders: number;
+    activeAdvances: number;
+    onClick: () => void;
+}
+
+const CategoryCard: React.FC<CategoryCardProps> = ({ category, desc, activeOrders, activeAdvances, onClick }) => (
+    <div
+        onClick={onClick}
+        className="bg-white p-6 rounded-[4px] border border-gray-200 hover:border-indigo-500 hover:shadow-md cursor-pointer transition-all group"
+    >
+        <div className="flex items-center justify-between mb-4">
+            <div className="p-3 rounded-[4px] bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                <Filter className="w-6 h-6" />
+            </div>
+            <div className="flex items-center gap-4">
+                <div className="text-right">
+                    <p className="text-lg font-bold text-gray-800">{activeOrders}</p>
+                    <p className="text-[10px] text-indigo-600 font-semibold uppercase tracking-wider">Invoices</p>
+                </div>
+                <div className="text-right">
+                    <p className="text-lg font-bold text-gray-800">{activeAdvances}</p>
+                    <p className="text-[10px] text-green-600 font-semibold uppercase tracking-wider">Advances</p>
+                </div>
+                <ChevronLeft className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transform rotate-180 transition-all opacity-0 group-hover:opacity-100" />
+            </div>
+        </div>
+        <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">{category}</h3>
+        <p className="text-sm text-gray-500 mt-2">{desc}</p>
+    </div>
+);
+
 function SalesContent() {
     const [viewMode, setViewMode] = useState<'dashboard' | 'list'>('dashboard');
     const [activeCategory, setActiveCategory] = useState<SalesCategory>('Export');
     const [showLedgerView, setShowLedgerView] = useState(false);
-    const [selectedCustomer, setSelectedCustomer] = useState<{ id: string, name: string, is_also_vendor?: boolean } | null>(null);
+    const [selectedCustomer, setSelectedCustomer] = useState<{ id: string, name: string, ledger_id?: string, is_also_vendor?: boolean } | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
 
     const [invoices, setInvoices] = useState<any[]>([]);
+    const [advancePayments, setAdvancePayments] = useState<any[]>([]);
+    const [allAdvancePayments, setAllAdvancePayments] = useState<any[]>([]); // For dashboard tiles
     const [customers, setCustomers] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         const fetchSalesData = async () => {
             try {
-                const [invData, custData] = await Promise.all([
+                const [invData, custData, allAdvData] = await Promise.all([
                     httpClient.get('/api/voucher-sales-new/'),
-                    httpClient.get('/api/customerportal/customer-master/')
+                    httpClient.get('/api/customerportal/customer-master/'),
+                    apiService.getAdvances() // Fetch ALL advances for tiles
                 ]);
                 setInvoices((invData as any[]) || []);
                 setCustomers((custData as any[]) || []);
+                setAllAdvancePayments((allAdvData as any[]) || []);
             } catch (error) {
                 handleApiError(error, 'Fetch Sales Data');
             } finally {
@@ -6459,10 +6499,24 @@ function SalesContent() {
         fetchSalesData();
     }, []);
 
-    const getAgingData = (category: SalesCategory): AgingData[] => {
-        if (!invoices.length || !customers.length) return [];
+    // Re-fetch category-specific advances when category changes
+    useEffect(() => {
+        if (!activeCategory) return;
+        const fetchCategoryAdvances = async () => {
+            try {
+                const advData: any = await apiService.getAdvances(undefined, activeCategory);
+                setAdvancePayments(advData || []);
+            } catch (error) {
+                console.error('Error fetching category advances:', error);
+            }
+        };
+        fetchCategoryAdvances();
+    }, [activeCategory]);
 
-        const customerGroups: Record<string, AgingData> = {};
+    const getAgingData = (category: SalesCategory): AgingData[] => {
+        if (!customers.length) return [];
+
+        const customerGroups: Record<string, AgingData & { advances: number }> = {};
 
         invoices.forEach(inv => {
             const custId = inv.customer_id;
@@ -6504,8 +6558,9 @@ function SalesContent() {
                     days45to90: 0,
                     months6: 0,
                     year1: 0,
-                    is_also_vendor: customer?.is_also_vendor
-                };
+                    is_also_vendor: customer?.is_also_vendor,
+                    advances: 0
+                } as any;
             }
 
             // Extract total amount from invoice
@@ -6528,6 +6583,49 @@ function SalesContent() {
             }
         });
 
+        // Add Advance Payments using unified pay_to_ledger Source of Truth
+        // Use category-specific advances; fall back to filtering allAdvancePayments
+        const advancesToUse = advancePayments.length > 0
+            ? advancePayments
+            : allAdvancePayments.filter((adv: any) => {
+                const cat = (adv.category || '').toLowerCase();
+                if (category === 'Export') return cat.includes('export');
+                if (category === 'Within Country (B2B)') return cat.includes('b2b') && !cat.includes('b2c');
+                if (category === 'Within Country (B2C)') return cat.includes('b2c');
+                return false;
+            });
+
+        advancesToUse.forEach((adv: any) => {
+            const ledgerId = adv.pay_to_ledger;
+            if (!ledgerId) return;
+
+            // Match by ledger_id — customers from customer-master API include ledger_id
+            const customer = customers.find((c: any) => 
+                c.ledger_id === ledgerId || c.ledger === ledgerId
+            );
+            if (!customer) return;
+            
+            const custId = customer.id;
+
+            if (!customerGroups[custId]) {
+                customerGroups[custId] = {
+                    customerId: custId.toString(),
+                    customerCode: customer.customer_code || `CUST-${custId}`,
+                    customerName: customer.customer_name || adv.pay_to_name || 'Unknown Customer',
+                    subCategory: customer.customer_category_name || adv.category || 'General',
+                    notDue: 0,
+                    days0to45: 0,
+                    days45to90: 0,
+                    months6: 0,
+                    year1: 0,
+                    is_also_vendor: customer?.is_also_vendor,
+                    advances: 0
+                } as any;
+            }
+
+            customerGroups[custId].advances += parseFloat(adv.amount || 0);
+        });
+
         return Object.values(customerGroups);
     };
 
@@ -6535,9 +6633,9 @@ function SalesContent() {
         return `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     };
 
-    const handleViewCustomer = (customerId: string, customerName: string, isVendor?: boolean) => {
+    const handleViewCustomer = (customerId: string, customerName: string, ledgerId?: string, isVendor?: boolean) => {
         // Navigate to Customer Ledger View
-        setSelectedCustomer({ id: customerId, name: customerName, is_also_vendor: isVendor });
+        setSelectedCustomer({ id: customerId, name: customerName, ledger_id: ledgerId, is_also_vendor: isVendor });
         setShowLedgerView(true);
     };
 
@@ -6593,50 +6691,37 @@ function SalesContent() {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {/* Export Card */}
-                        <div
+                        <CategoryCard 
+                            category="Export" 
+                            desc="View export sales aging." 
+                            activeOrders={invoices.filter(inv => (customers.find(c => c.id === inv.customer_id)?.customer_category_name || '').toLowerCase().includes('export')).length}
+                            activeAdvances={allAdvancePayments.filter(adv => (adv.category || '').toLowerCase().includes('export')).length}
                             onClick={() => handleCardClick('Export')}
-                            className="bg-white p-6 rounded-[4px] border border-gray-200 hover:border-indigo-500 hover:shadow-md cursor-pointer transition-all group"
-                        >
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="p-3 rounded-[4px] bg-indigo-50 text-indigo-600">
-                                    {/* Ideally use a Package icon here if available, fallback to default */}
-                                    <Filter className="w-6 h-6" />
-                                </div>
-                                <ChevronLeft className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transform rotate-180 transition-all opacity-0 group-hover:opacity-100" />
-                            </div>
-                            <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">Export</h3>
-                            <p className="text-sm text-gray-500 mt-2">View export sales aging.</p>
-                        </div>
+                        />
 
                         {/* Within Country (B2B) Card */}
-                        <div
+                        <CategoryCard 
+                            category="Within Country (B2B)" 
+                            desc="View B2B sales aging." 
+                            activeOrders={invoices.filter(inv => {
+                                const cat = (customers.find(c => c.id === inv.customer_id)?.customer_category_name || '').toLowerCase();
+                                return cat.includes('b2b') && !cat.includes('b2c');
+                            }).length}
+                            activeAdvances={allAdvancePayments.filter(adv => {
+                                const cat = (adv.category || '').toLowerCase();
+                                return cat.includes('b2b') && !cat.includes('b2c');
+                            }).length}
                             onClick={() => handleCardClick('Within Country (B2B)')}
-                            className="bg-white p-6 rounded-[4px] border border-gray-200 hover:border-indigo-500 hover:shadow-md cursor-pointer transition-all group"
-                        >
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="p-3 rounded-[4px] bg-indigo-50 text-indigo-600">
-                                    <Filter className="w-6 h-6" />
-                                </div>
-                                <ChevronLeft className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transform rotate-180 transition-all opacity-0 group-hover:opacity-100" />
-                            </div>
-                            <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">Within Country (B2B)</h3>
-                            <p className="text-sm text-gray-500 mt-2">View B2B sales aging.</p>
-                        </div>
+                        />
 
                         {/* Within Country (B2C) Card */}
-                        <div
+                        <CategoryCard 
+                            category="Within Country (B2C)" 
+                            desc="View B2C sales aging." 
+                            activeOrders={invoices.filter(inv => (customers.find(c => c.id === inv.customer_id)?.customer_category_name || '').toLowerCase().includes('b2c')).length}
+                            activeAdvances={allAdvancePayments.filter(adv => (adv.category || '').toLowerCase().includes('b2c')).length}
                             onClick={() => handleCardClick('Within Country (B2C)')}
-                            className="bg-white p-6 rounded-[4px] border border-gray-200 hover:border-indigo-500 hover:shadow-md cursor-pointer transition-all group"
-                        >
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="p-3 rounded-[4px] bg-indigo-50 text-indigo-600">
-                                    <Filter className="w-6 h-6" />
-                                </div>
-                                <ChevronLeft className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transform rotate-180 transition-all opacity-0 group-hover:opacity-100" />
-                            </div>
-                            <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">Within Country (B2C)</h3>
-                            <p className="text-sm text-gray-500 mt-2">View B2C sales aging.</p>
-                        </div>
+                        />
                     </div>
                 </div>
             ) : (
@@ -6744,7 +6829,10 @@ function SalesContent() {
                                             <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium border-l border-gray-100">
                                                 <div className="flex items-center justify-center space-x-3">
                                                     <button
-                                                        onClick={() => handleViewCustomer(customer.customerId, customer.customerName, customer.is_also_vendor)}
+                                                        onClick={() => {
+                                                            const custDef = customers.find(c => c.id?.toString() === customer.customerId);
+                                                            handleViewCustomer(customer.customerId, customer.customerName, custDef?.ledger_id, customer.is_also_vendor);
+                                                        }}
                                                         className="text-indigo-600 hover:text-indigo-900"
                                                         title="View Ledger"
                                                     >
