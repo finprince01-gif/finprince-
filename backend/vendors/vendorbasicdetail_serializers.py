@@ -26,6 +26,7 @@ class VendorBasicDetailSerializer(serializers.ModelSerializer):
             'billing_currency',
             'is_also_customer',
             'tcs_applicable',
+            'ledger_id',
             'is_active',
             'created_at',
             'updated_at',
@@ -170,6 +171,7 @@ class VendorBasicDetailListSerializer(serializers.ModelSerializer):
             'pan_no',
             'billing_currency',
             'is_also_customer',
+            'ledger_id',
             'is_active'
         ]
 

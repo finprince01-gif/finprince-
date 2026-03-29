@@ -36,8 +36,10 @@ from .serializers import (
     CustomerTransactionSalesOrderSerializer,
     CustomerMastersSalesOrderSerializer
 )
-
 import logging
+from accounting.models_voucher_payment import PaymentVoucherItem
+from accounting.serializers import PaymentVoucherItemSerializer
+
 logger = logging.getLogger(__name__)
 
 
@@ -77,6 +79,7 @@ class CustomerMasterViewSet(viewsets.ModelViewSet):
         customer.is_deleted = True
         customer.save()
         return Response({'status': 'customer deactivated'})
+
 
 
 

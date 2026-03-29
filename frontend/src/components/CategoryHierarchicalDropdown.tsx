@@ -2,18 +2,18 @@ import React, { useState, useEffect, useRef } from 'react';
 import { httpClient } from '../services/httpClient';
 
 export interface Category {
-    id: number;
+    id: number | string;
     category: string;
     group: string | null;
     subgroup: string | null;
-    full_path?: string;
+    full_path: string;
     is_active: boolean;
 }
 
 interface DropdownProps {
-    onSelect: (data: { id: number; fullPath: string }) => void;
+    onSelect: (data: { id: number | string; fullPath: string }) => void;
     value?: string;
-    excludeId?: number;
+    excludeId?: number | string;
     placeholder?: string;
     className?: string;
     onlyRoots?: boolean;
@@ -21,6 +21,7 @@ interface DropdownProps {
     colorTheme?: 'teal' | 'indigo';
     apiEndpoint?: string;
     systemCategories?: string[];
+    mergeSystem?: boolean;
 }
 
 const DEFAULT_SYSTEM_CATEGORIES = [
@@ -39,7 +40,8 @@ const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
     staticCategories,
     colorTheme = 'teal',
     apiEndpoint = '/api/inventory/master-categories/',
-    systemCategories = DEFAULT_SYSTEM_CATEGORIES
+    systemCategories = DEFAULT_SYSTEM_CATEGORIES,
+    mergeSystem = false
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [categories, setCategories] = useState<Category[]>([]);
@@ -68,8 +70,6 @@ const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
     }[colorTheme];
 
     // Effect to fetch categories
-    // We only re-fetch if staticCategories, apiEndpoint, or systemCategories change.
-    // NOTE: systemCategories default value is now a constant, so it won't trigger re-renders unless passed a new array.
     useEffect(() => {
         if (staticCategories && staticCategories.length > 0) {
             setCategories(staticCategories);
@@ -87,14 +87,44 @@ const CategoryHierarchicalDropdown: React.FC<DropdownProps> = ({
                     full_path: [c.category, c.group, c.subgroup].filter(Boolean).join(' > ')
                 }));
 
-                // 2. Set categories from API data only to ensure valid database IDs are used
-                console.log("Category dropdown options (from DB):", processed);
+                // 2. Merge with System Categories (Virtual Categories) if requested
+                if (mergeSystem) {
+                    // If a system category is NOT in the database, add it as a virtual root
+                    const dbTopLevelNames = new Set(processed.filter(c => !c.group).map(c => c.category.toLowerCase()));
+
+                    const virtualCategories: Category[] = systemCategories
+                        .filter(name => !dbTopLevelNames.has(name.toLowerCase()))
+                        .map((name, index) => ({
+                            id: `system_${index}`,
+                            category: name,
+                            group: null,
+                            subgroup: null,
+                            full_path: name,
+                            is_active: true
+                        }));
+
+                    processed = [...virtualCategories, ...processed];
+                }
+
+                console.log("Category dropdown options (Merged):", processed);
                 setCategories(processed);
 
             } catch (error) {
                 console.error('Error fetching categories:');
-                // No fallback to mock data as it causes invalid IDs
-                setCategories([]);
+                // Even on error, show the system categories if available and requested
+                if (mergeSystem) {
+                    const virtualCategories: Category[] = systemCategories.map((name, index) => ({
+                        id: `system_${index}`,
+                        category: name,
+                        group: null,
+                        subgroup: null,
+                        full_path: name,
+                        is_active: true
+                    }));
+                    setCategories(virtualCategories);
+                } else {
+                    setCategories([]);
+                }
             } finally {
                 setLoading(false);
             }

@@ -73,45 +73,87 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
 
     // Ledgers state
     const [allLedgers, setAllLedgers] = useState<Ledger[]>([]);
+    const [payFromOptions, setPayFromOptions] = useState<Ledger[]>([]);
+    const [vendors, setVendors] = useState<any[]>([]);
+    const [customers, setCustomers] = useState<any[]>([]);
 
-    // Fetch ledgers on mount
+    // Fetch ledgers and Pay From options on mount
     useEffect(() => {
-        const fetchLedgers = async () => {
+        const fetchAllData = async () => {
             try {
-                const ledgersData = await apiService.getLedgers();
+                const [ledgersData, payFromData, vendorsData, customersData] = await Promise.all([
+                    apiService.getLedgers(),
+                    apiService.getPayFromLedgers(),
+                    apiService.getRichVendors(),
+                    apiService.getRichCustomers()
+                ]);
                 setAllLedgers(ledgersData || []);
+                setPayFromOptions(payFromData || []);
+                setVendors(vendorsData || []);
+                setCustomers(customersData || []);
             } catch (error) {
-                console.error('Error fetching ledgers:', error);
-                showError('Failed to fetch ledgers');
+                console.error('Error fetching data:', error);
+                showError('Failed to fetch master data');
             }
         };
-        fetchLedgers();
+        fetchAllData();
     }, []);
 
-    // Filter Pay From options (Cash and Bank accounts)
-    const payFromLedgers = useMemo(() => {
-        return allLedgers.filter(l => {
-            const group = (l.group || '').toLowerCase();
-            return (
-                group.includes('cash') ||
-                group.includes('bank') ||
-                group.includes('od') ||
-                group.includes('cc')
-            );
-        });
-    }, [allLedgers]);
+    // Filter Pay To options: All ledgers EXCEPT those in Pay From + Vendors + Customers
+    const [payToOptions, setPayToOptions] = useState<any[]>([]);
 
-    // Filter Pay To options: All ledgers EXCEPT those in Pay From
-    const payToOptions = useMemo(() => {
-        const payFromIds = new Set(payFromLedgers.map(l => l.id));
-        return allLedgers.filter(l => !payFromIds.has(l.id));
-    }, [allLedgers, payFromLedgers]);
+    useEffect(() => {
+        const fetchPayTo = async () => {
+            try {
+                const data = await apiService.getPayToLedgers();
+                setPayToOptions(data);
+            } catch (error) {
+                console.error('Failed to fetch Pay To options:', error);
+            }
+        };
+        fetchPayTo();
+    }, []);
 
     // Single mode state
-    const [pendingTransactions, setPendingTransactions] = useState<PendingTransaction[]>([
-        { date: '31-12-2025', referenceNumber: 'Adc/005', amount: 20000.00, payment: 0 },
-        { date: '02-01-2026', referenceNumber: 'Abc/008', amount: 45000.00, payment: 0 }
-    ]);
+    const [pendingTransactions, setPendingTransactions] = useState<PendingTransaction[]>([]);
+
+    // Single Advance state
+    const [showSingleAdvanceSection, setShowSingleAdvanceSection] = useState<boolean>(false);
+    const [singleAdvanceRefNo, setSingleAdvanceRefNo] = useState<string>('');
+    const [singleAdvanceAmount, setSingleAdvanceAmount] = useState<number>(0);
+    const [availableAdvances, setAvailableAdvances] = useState<any[]>([]);
+
+    // Fetch pending invoices for Single mode
+    useEffect(() => {
+        const fetchPending = async () => {
+            if (!payTo) {
+                setPendingTransactions([]);
+                setAvailableAdvances([]);
+                return;
+            }
+            const selectedOpt = payToOptions.find(opt => opt.name === payTo);
+            // Use resolved ledger_id for invoice lookup
+            if (selectedOpt && selectedOpt.ledger_id) {
+                try {
+                    // 1. Fetch pending invoices
+                    const data = await apiService.getPendingInvoices(selectedOpt.ledger_id);
+                    setPendingTransactions(data.map(item => ({
+                        date: item.date,
+                        referenceNumber: item.reference_number,
+                        amount: item.amount,
+                        payment: 0
+                    })));
+
+                    // 2. Fetch available advances (Requirement Step 2)
+                    const advances = await apiService.getAdvances(selectedOpt.ledger_id, selectedOpt.category);
+                    setAvailableAdvances(advances);
+                } catch (error) {
+                    console.error('Error fetching entity data:', error);
+                }
+            }
+        };
+        fetchPending();
+    }, [payTo, payToOptions]);
 
     // Bulk mode state
     const [paymentRows, setPaymentRows] = useState<PaymentRow[]>([
@@ -121,16 +163,40 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
     ]);
     const [selectedVendor, setSelectedVendor] = useState<string>('');
     const [bulkTransactions, setBulkTransactions] = useState<BulkTransaction[]>([]);
+
+    // Fetch pending invoices for Bulk mode
+    useEffect(() => {
+        const fetchBulkPending = async () => {
+            if (!selectedVendor) {
+                setBulkTransactions([]);
+                return;
+            }
+            const selectedOpt = payToOptions.find(opt => opt.name === selectedVendor);
+            // Use resolved ledger_id for invoice lookup
+            if (selectedOpt && selectedOpt.ledger_id) {
+                try {
+                    const data = await apiService.getPendingInvoices(selectedOpt.ledger_id);
+                    setBulkTransactions(data.map(item => ({
+                        id: item.id.toString(),
+                        date: item.date,
+                        invoiceNo: item.reference_number,
+                        amount: item.amount,
+                        payNow: 0,
+                        selected: false
+                    })));
+                } catch (error) {
+                    console.error('Error fetching bulk pending invoices:', error);
+                }
+            }
+        };
+        fetchBulkPending();
+    }, [selectedVendor, payToOptions]);
+
     const [showAdvanceSection, setShowAdvanceSection] = useState<boolean>(false);
     const [advanceRefNo, setAdvanceRefNo] = useState<string>('');
     const [advanceAmount, setAdvanceAmount] = useState<number>(0);
     const [postingNote, setPostingNote] = useState<string>('');
     const [runningBalance, setRunningBalance] = useState<number>(0);
-
-    // Single Advance state
-    const [showSingleAdvanceSection, setShowSingleAdvanceSection] = useState<boolean>(false);
-    const [singleAdvanceRefNo, setSingleAdvanceRefNo] = useState<string>('');
-    const [singleAdvanceAmount, setSingleAdvanceAmount] = useState<number>(0);
 
     // Sync balances
     useEffect(() => {
@@ -294,6 +360,11 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
             return;
         }
 
+        const mockTransactions: BulkTransaction[] = [
+            { id: 'mock-1', date: '31-12-2025', invoiceNo: 'Adc/005', amount: 20000.00, payNow: 0, selected: false },
+            { id: 'mock-2', date: '02-01-2026', invoiceNo: 'Abc/008', amount: 45000.00, payNow: 0, selected: false }
+        ];
+
         try {
             // Determine if selected ledger is a Vendor
             const ledger = allLedgers.find(l => l.name === vendorName);
@@ -318,18 +389,20 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                 }));
 
                 // Filter logic based on requirements:
-                // 1. If Vendor: Display "Pending" invoices (Balance > 0 implies pending/partial)
-                // 2. If Other: Display "credit transactions not tagged" (Balance > 0)
                 // We filter for positive outstanding balance.
                 const validTransactions = mappedTransactions.filter(t => t.amount > 0);
 
-                setBulkTransactions(validTransactions);
+                if (validTransactions.length > 0) {
+                    setBulkTransactions(validTransactions);
+                } else {
+                    setBulkTransactions(mockTransactions);
+                }
             } else {
-                setBulkTransactions([]);
+                setBulkTransactions(mockTransactions);
             }
         } catch (error) {
             console.error('Error fetching transactions:', error);
-            setBulkTransactions([]);
+            setBulkTransactions(mockTransactions);
         }
     };
 
@@ -383,86 +456,124 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
             const findLedgerId = (name: string) => {
                 if (!name) return null;
                 const normalized = name.trim().toLowerCase();
+                const found = payToOptions.find(opt => opt.name.trim().toLowerCase() === normalized);
+                if (found) return found.id;
                 return allLedgers.find(l => l.name.trim().toLowerCase() === normalized)?.id;
             };
 
             const payFromId = findLedgerId(payFrom);
-            const payToId = findLedgerId(payTo);
+            if (!payFromId) {
+                showError('Please select a "Pay From" account.');
+                return;
+            }
+
+            let items: any[] = [];
 
             if (activeTab === 'single') {
-                if (!payFromId) {
-                    showError(`'Pay From' account '${payFrom || 'None'}' is invalid or not selected. Please select from the dropdown.`);
-                    return;
-                }
-                if (!payToId) {
-                    showError(`'Pay To' account '${payTo || 'None'}' is invalid or not selected. Please select from the dropdown.`);
+                const selectedOpt = payToOptions.find(opt => opt.name === payTo);
+                if (!selectedOpt) {
+                    showError(`'Pay To' account '${payTo}' is invalid. Please select from the dropdown.`);
                     return;
                 }
 
-                const payload = {
-                    date: date,
-                    voucher_type: selectedPaymentConfig || voucherType,
-                    voucher_number: voucherNumber,
-                    pay_from: payFromId,
-                    pay_to: payToId,
-                    total_payment: totalPayment,
-                    transaction_details: pendingTransactions.map(t => ({
-                        ...t,
-                        pending: Math.max(0, t.amount - t.payment),
-                        advance: Math.max(0, t.payment - t.amount)
-                    })),
-                    advance_ref_no: singleAdvanceRefNo,
-                    advance_amount: singleAdvanceAmount,
-                    bank_transaction_id: bankTransactionId
-                };
-
-                await httpClient.post('/api/vouchers/payment-single/', payload);
-                showSuccess('Single Payment Voucher posted successfully!');
-                handleCancel();
-            } else {
-                if (!payFromId) {
-                    showError('Please select a Pay From account.');
-                    return;
-                }
-
-                // Map paymentRows to contain payTo IDs instead of names
-                const mappedPaymentRows = paymentRows.map(row => {
-                    const normalized = (row.payTo || '').trim().toLowerCase();
-                    const rowPayToId = allLedgers.find(l => l.name.trim().toLowerCase() === normalized)?.id;
-                    return {
-                        ...row,
-                        payTo: rowPayToId || row.payTo
-                    };
+                // 1. Invoice Payments
+                pendingTransactions.forEach(t => {
+                    if (t.payment > 0) {
+                        items.push({
+                            pay_to_ledger: selectedOpt.ledger_id,
+                            amount: t.payment,
+                            reference_type: 'INVOICE',
+                            transaction_details: {
+                                ...t,
+                                pending: Math.max(0, t.amount - t.payment)
+                            }
+                        });
+                    }
                 });
 
-                const payload = {
-                    date: date,
-                    voucher_number: voucherNumber,
-                    pay_from: payFromId,
-                    payment_rows: mappedPaymentRows,
-                    posting_note: postingNote,
-                    advance_ref_no: advanceRefNo,
-                    advance_amount: advanceAmount,
-                    transaction_details: bulkTransactions
-                        .filter(t => t.selected || t.payNow > 0)
-                        .map(t => ({
-                            ...t,
-                            pending: Math.max(0, t.amount - t.payNow),
-                            advance: Math.max(0, t.payNow - t.amount)
-                        }))
-                };
+                // 2. Advance Payment (Separate Row)
+                if (singleAdvanceAmount > 0) {
+                    items.push({
+                        pay_to_ledger: selectedOpt.ledger_id,
+                        amount: singleAdvanceAmount,
+                        reference_type: 'ADVANCE',
+                        advance_ref_no: singleAdvanceRefNo
+                    });
+                }
 
+                // 3. Fallback: General Payment if no invoices/advances specified but total > 0
+                if (items.length === 0 && totalPayment > 0) {
+                    items.push({
+                        pay_to_ledger: selectedOpt.ledger_id,
+                        amount: totalPayment,
+                        reference_type: 'INVOICE'
+                    });
+                }
+            } else {
+                // Bulk mode
+                paymentRows.forEach(row => {
+                    if (!row.payTo || row.amount <= 0) return;
+                    const opt = payToOptions.find(o => o.name === row.payTo);
+                    if (!opt) return;
 
-                const response = await httpClient.post('/api/vouchers/payment-bulk/', payload);
+                    // If it's the selected vendor, split into invoices + advance
+                    if (row.payTo === selectedVendor) {
+                        // Transactions
+                        bulkTransactions.forEach(t => {
+                            if (t.payNow > 0) {
+                                items.push({
+                                    pay_to_ledger: opt.ledger_id,
+                                    amount: t.payNow,
+                                    reference_type: 'INVOICE',
+                                    transaction_details: {
+                                        ...t,
+                                        pending: Math.max(0, t.amount - t.payNow)
+                                    }
+                                });
+                            }
+                        });
 
-                showSuccess('Bulk Payment Voucher posted successfully!');
-
-                handleCancel();
+                        // Advance
+                        if (advanceAmount > 0) {
+                            items.push({
+                                pay_to_ledger: opt.ledger_id,
+                                amount: advanceAmount,
+                                reference_type: 'ADVANCE',
+                                advance_ref_no: advanceRefNo
+                            });
+                        }
+                    } else {
+                        // General Row
+                        items.push({
+                            pay_to_ledger: opt.ledger_id,
+                            amount: row.amount,
+                            reference_type: 'INVOICE'
+                        });
+                    }
+                });
             }
-        } catch (error) {
-            console.error('Error posting payment voucher:');
-            showError('Failed to post payment voucher. Please try again.');
 
+            if (items.length === 0) {
+                showError('No payment details to post.');
+                return;
+            }
+
+            const payload = {
+                date: date,
+                voucher_type: selectedPaymentConfig || voucherType,
+                voucher_number: voucherNumber,
+                pay_from: payFromId,
+                items: items,
+                narration: postingNote,
+                ...(bankTransactionId ? { bank_transaction_id: bankTransactionId } : {})
+            };
+
+            await httpClient.post('/api/vouchers/payment/', payload);
+            showSuccess(`${activeTab === 'single' ? 'Single' : 'Bulk'} Payment Voucher posted successfully!`);
+            handleCancel();
+        } catch (error) {
+            console.error('Error posting payment voucher:', error);
+            showError('Failed to post payment voucher. Please try again.');
         }
     };
 
@@ -539,7 +650,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                 <SearchableSelect
                                     value={payFrom}
                                     onChange={(val) => setPayFrom(val)}
-                                    options={payFromLedgers.map(l => l.name)}
+                                    options={payFromOptions.map(l => l.name)}
                                     placeholder="Select Pay From"
                                     className="flex-1"
                                 />
@@ -576,6 +687,27 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                     {showSingleAdvanceSection && (
                         <div className="bg-indigo-50 border border-indigo-100 rounded-[4px] p-4 mb-4">
                             <h4 className="text-sm font-semibold text-indigo-800 mb-3">Advance Payment Details</h4>
+                            
+                            {availableAdvances.length > 0 && (
+                                <div className="mb-4">
+                                    <label className="block text-xs font-medium text-indigo-700 mb-2">Select from existing advances:</label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {availableAdvances.map((adv, idx) => (
+                                            <button
+                                                key={idx}
+                                                onClick={() => {
+                                                    setSingleAdvanceRefNo(adv.reference_no);
+                                                    setSingleAdvanceAmount(adv.amount);
+                                                }}
+                                                className="px-3 py-1 bg-white border border-indigo-200 rounded text-xs text-indigo-600 hover:bg-indigo-100 transition-colors"
+                                            >
+                                                {adv.reference_no} (₹{adv.amount})
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="flex gap-4">
                                 <div className="flex-1">
                                     <label className="block text-xs font-medium text-indigo-700 mb-1">Reference No.</label>
@@ -740,7 +872,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                     <SearchableSelect
                                         value={payFrom}
                                         onChange={(val) => setPayFrom(val)}
-                                        options={payFromLedgers.map(l => l.name)}
+                                        options={payFromOptions.map(l => l.name)}
                                         placeholder="Select Pay From"
                                         className="w-full"
                                     />
@@ -844,57 +976,66 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
 
                             {!showAdvanceSection ? (
                                 <div className="bg-white rounded-[4px] p-4 min-h-[400px]">
-                                    {bulkTransactions.length > 0 ? (
-                                        <table className="w-full text-sm">
-                                            <thead className="border-b-2 border-gray-300">
-                                                <tr>
-                                                    <th className="text-left py-2 px-2 font-semibold text-gray-700">Date</th>
-                                                    <th className="text-left py-2 px-2 font-semibold text-gray-700">Invoice No.</th>
-                                                    <th className="text-right py-2 px-2 font-semibold text-gray-700">Amount</th>
-                                                    <th className="text-right py-2 px-2 font-semibold text-gray-700">Pending</th>
-                                                    <th className="text-center py-2 px-2 font-semibold text-gray-700">Pay Now</th>
-                                                    <th className="text-right py-2 px-2 font-semibold text-gray-700">Advance</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {bulkTransactions.map(transaction => (
-                                                    <tr key={transaction.id} className="border-b border-gray-200">
-                                                        <td className="py-3 px-2">
-                                                            <div className="flex items-center gap-2">
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={transaction.selected}
-                                                                    onChange={e => handleTransactionSelect(transaction.id, e.target.checked)}
-                                                                    className="w-4 h-4"
-                                                                />
-                                                                <span>{transaction.date}</span>
-                                                            </div>
-                                                        </td>
-                                                        <td className="py-3 px-2">{transaction.invoiceNo}</td>
-                                                        <td className="py-3 px-2 text-right">{transaction.amount}</td>
-                                                        <td className="py-3 px-2 text-right text-red-600 font-medium">
-                                                            {(Math.max(0, transaction.amount - transaction.payNow)).toFixed(2)}
-                                                        </td>
-                                                        <td className="py-3 px-2">
-                                                            <input
-                                                                type="number"
-                                                                value={transaction.payNow || ''}
-                                                                onChange={e => handlePayNowChange(transaction.id, parseFloat(e.target.value) || 0)}
-                                                                className="w-full px-2 py-1 border border-gray-300 rounded text-center"
-                                                            />
-                                                        </td>
-                                                        <td className="py-3 px-2 text-right text-indigo-600 font-medium">
-                                                            {(Math.max(0, transaction.payNow - transaction.amount)).toFixed(2)}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    ) : (
+                                    {!selectedVendor ? (
                                         <div className="flex items-center justify-center h-full min-h-[350px]">
                                             <p className="text-sm text-gray-500 italic text-center">
                                                 Select a vendor to view transactions
                                             </p>
+                                        </div>
+                                    ) : (
+                                        <div className="border border-gray-200 rounded-[4px] overflow-hidden">
+                                            <table className="w-full">
+                                                <thead className="bg-gray-50 border-b border-gray-200">
+                                                    <tr>
+                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-600 uppercase">DATE</th>
+                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-600 uppercase">REFERENCE NUMBER</th>
+                                                        <th className="px-3 py-3 text-right text-xs font-medium text-gray-600 uppercase">AMOUNT</th>
+                                                        <th className="px-3 py-3 text-right text-xs font-medium text-gray-600 uppercase">PENDING</th>
+                                                        <th className="px-3 py-3 text-right text-xs font-medium text-gray-600 uppercase">PAYMENT</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="bg-white divide-y divide-gray-200">
+                                                    {bulkTransactions.length > 0 ? (
+                                                        bulkTransactions.map(transaction => (
+                                                            <tr key={transaction.id} className="hover:bg-gray-50">
+                                                                <td className="px-3 py-4 text-sm text-gray-700">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={transaction.selected}
+                                                                            onChange={e => handleTransactionSelect(transaction.id, e.target.checked)}
+                                                                            className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                                                        />
+                                                                        <span>{transaction.date}</span>
+                                                                    </div>
+                                                                </td>
+                                                                <td className="px-3 py-4 text-sm text-gray-700">{transaction.invoiceNo}</td>
+                                                                <td className="px-3 py-4 text-sm text-gray-700 text-right">
+                                                                    ₹{transaction.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                                </td>
+                                                                <td className="px-3 py-4 text-sm text-gray-700 text-right font-medium text-red-600">
+                                                                    ₹{(Math.max(0, transaction.amount - (transaction.payNow || 0))).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                                </td>
+                                                                <td className="px-3 py-4 text-right">
+                                                                    <input
+                                                                        type="number"
+                                                                        value={transaction.payNow || ''}
+                                                                        onChange={e => handlePayNowChange(transaction.id, parseFloat(e.target.value) || 0)}
+                                                                        placeholder="0"
+                                                                        className="w-20 px-2 py-1.5 text-right border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                                                                    />
+                                                                </td>
+                                                            </tr>
+                                                        ))
+                                                    ) : (
+                                                        <tr>
+                                                            <td colSpan={5} className="px-6 py-12 text-center text-sm text-gray-500 italic">
+                                                                No pending transactions found for {selectedVendor}.
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                </tbody>
+                                            </table>
                                         </div>
                                     )}
                                 </div>

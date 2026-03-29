@@ -68,6 +68,8 @@ class VendorPOViewSet(viewsets.ModelViewSet):
                 'error': str(e)
             }, status=status.HTTP_403_FORBIDDEN)
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return Response({
                 'success': False,
                 'error': str(e)

@@ -109,6 +109,34 @@ class ApiService {
         return httpClient.get<Ledger[]>('/api/masters/ledgers/?page_size=10000&limit=10000');
     }
 
+    /**
+     * Get only valid 'Pay From' ledgers (Cash, Bank, Loans, Borrowings)
+     * using the hierarchical backend filter.
+     */
+    async getPayFromLedgers() {
+        return httpClient.get<Ledger[]>('/api/ledgers/pay-from/');
+    }
+
+    async getPayToLedgers() {
+        return httpClient.get<any[]>('/api/ledgers/pay-to/');
+    }
+
+    async getPendingInvoices(ledgerId: number | string) {
+        return httpClient.get<any[]>(`/api/vouchers/payment/pending-invoices/?ledger_id=${ledgerId}`);
+    }
+
+    async getAdvances(ledgerId?: number | string, category?: string) {
+        let url = `/api/vouchers/advances/`;
+        const params: string[] = [];
+        if (ledgerId) params.push(`ledger_id=${ledgerId}`);
+        if (category) params.push(`category=${encodeURIComponent(category)}`);
+        
+        if (params.length > 0) {
+            url += `?${params.join('&')}`;
+        }
+        return httpClient.get<any[]>(url);
+    }
+
     async saveLedger(data: Ledger) {
         return httpClient.post<Ledger>('/api/masters/ledgers/', data);
     }
