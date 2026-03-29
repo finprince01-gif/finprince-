@@ -100,7 +100,61 @@ class VoucherPaymentSingleSerializer(serializers.ModelSerializer):
         except Exception as e:
             print(f"Error posting payment to entries: {str(e)}")
 
+        self._mirror_to_vendor_portal(payment)
         return payment
+
+    def _mirror_to_vendor_portal(self, payment, is_bulk=False):
+        """Mirror Payment vouchers to Vendor Portal ledger"""
+        try:
+            from vendors.models import VendorMasterBasicDetail, VendorTransaction
+            tenant_id = payment.tenant_id
+            
+            if is_bulk:
+                rows = payment.payment_rows if isinstance(payment.payment_rows, list) else []
+                for row in rows:
+                    amt = _safe_decimal(row.get('amount'))
+                    pay_to_id = row.get('payTo')
+                    if amt > 0 and pay_to_id:
+                        # Find vendor master
+                        vendor = VendorMasterBasicDetail.objects.filter(tenant_id=tenant_id, ledger_id=pay_to_id).first()
+                        if vendor:
+                            VendorTransaction.objects.update_or_create(
+                                tenant_id=tenant_id,
+                                vendor_id=vendor.id,
+                                transaction_number=payment.voucher_number,
+                                transaction_type='payment',
+                                defaults={
+                                    'transaction_date': payment.date,
+                                    'amount': amt,
+                                    'total_amount': amt,
+                                    'status': 'Paid',
+                                    'reference_number': row.get('reference') or payment.voucher_number,
+                                    'notes': payment.posting_note,
+                                    'ledger_name': vendor.vendor_name
+                                }
+                            )
+            else:
+                if payment.pay_to:
+                    vendor = VendorMasterBasicDetail.objects.filter(tenant_id=tenant_id, ledger_id=payment.pay_to.id).first()
+                    if vendor:
+                        amt = _safe_decimal(payment.total_payment)
+                        VendorTransaction.objects.update_or_create(
+                            tenant_id=tenant_id,
+                            vendor_id=vendor.id,
+                            transaction_number=payment.voucher_number,
+                            transaction_type='payment',
+                            defaults={
+                                'transaction_date': payment.date,
+                                'amount': amt,
+                                'total_amount': amt,
+                                'status': 'Paid',
+                                'reference_number': payment.voucher_number,
+                                'notes': payment.narration,
+                                'ledger_name': vendor.vendor_name
+                            }
+                        )
+        except Exception as e:
+            print(f"!!! Vendor Portal Sync Failure (Payment): {str(e)}")
 
 class VoucherPaymentBulkSerializer(serializers.ModelSerializer):
     pay_from_name = serializers.CharField(source='pay_from.name', read_only=True)
@@ -189,5 +243,7 @@ class VoucherPaymentBulkSerializer(serializers.ModelSerializer):
                         post_transaction(voucher_type="PAYMENT_BULK", voucher_id=voucher.id, tenant_id=payment.tenant_id, entries=entries)
         except Exception as e:
             print(f"Error posting bulk payment to entries: {str(e)}")
+
+        self._mirror_to_vendor_portal(payment, is_bulk=True)
 
         return payment

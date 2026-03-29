@@ -205,7 +205,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [scannerFiles, setScannerFiles] = useState<FileList | null>(null);
   const [scanType, setScanType] = useState<'single' | 'bulk'>('single');
   const scannerInputRef = useRef<HTMLInputElement>(null);
-  const [extractionMode, setExtractionMode] = useState<'finpixe' | 'tally' | 'zoho' | 'sap'>('finpixe');
+  const [extractionMode, setExtractionMode] = useState<'ai_native' | 'tally' | 'zoho' | 'sap'>('ai_native');
 
   // Zoho / SAP Scanner refs
   const zohoScannerInputRef = useRef<HTMLInputElement>(null);
@@ -438,12 +438,12 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     }
   };
 
-  const openScanner = (mode: 'finpixe' | 'tally' = 'finpixe', type: 'single' | 'bulk' = 'single') => {
+  const openScanner = (mode: 'ai_native' | 'tally' = 'ai_native', type: 'single' | 'bulk' = 'single') => {
     setExtractionMode(mode);
     setScanType(type);
-    if (isLimitReached && mode === 'finpixe') {
+    if (isLimitReached && mode === 'ai_native') {
       handleLimitReached();
-    } else if (mode === 'finpixe' && type === 'single') {
+    } else if (mode === 'ai_native' && type === 'single') {
       singleScanInputRef.current?.click();
     } else {
       scannerInputRef.current?.click();
@@ -467,6 +467,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
   // Common state
   const [date, setDate] = useState(getTodayDate());
+  const handleDateChange = (val: string) => {
+    const today = getTodayDate();
+    setDate(val > today ? today : val);
+  };
   const [party, setParty] = useState('');
   const [wasPartyAutoSet, setWasPartyAutoSet] = useState(false);
   const [vendorId, setVendorId] = useState<number | null>(null);
@@ -2230,7 +2234,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const handlePartyChange = useCallback((value: string, forcedId?: number | null) => {
     setParty(value);
     setWasPartyAutoSet(false);
-    
+
     // Clear GRN, PO and items when vendor changes to prevent stale data
     if (voucherType === 'Purchase') {
       setGrnRefNo('');
@@ -2625,10 +2629,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
         if (shouldPrint) {
           const totals = calculatePurchaseTotals();
-          setPostedPurchaseVoucherData({ 
-            ...purchaseData, 
-            totals, 
-            items: purchaseItems 
+          setPostedPurchaseVoucherData({
+            ...purchaseData,
+            totals,
+            items: purchaseItems
           });
           setShowPurchasePrintPreview(true);
         } else {
@@ -3796,13 +3800,13 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       setExchangeRate(exRateVal);
 
                       // Auto-update all INR rates based on the new exchange rate
-                        const exRateNum = parseFloat(exRateVal) || 1; // Fallback to 1 for instant 1:1 sync when cleared
-                        const updatedItems = purchaseItems.map(item => {
-                          const fRate = parseFloat(item.foreignRate?.toString() || '0') || 0;
-                          const qty = parseFloat(item.qty.toString()) || 0;
+                      const exRateNum = parseFloat(exRateVal) || 1; // Fallback to 1 for instant 1:1 sync when cleared
+                      const updatedItems = purchaseItems.map(item => {
+                        const fRate = parseFloat(item.foreignRate?.toString() || '0') || 0;
+                        const qty = parseFloat(item.qty.toString()) || 0;
 
-                          const newRate = fRate * exRateNum;
-                          const newTaxable = qty * newRate;
+                        const newRate = fRate * exRateNum;
+                        const newTaxable = qty * newRate;
 
 
                         const selectedStockItem = allItems.find((si: any) =>
@@ -4332,7 +4336,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                                 })()}
                               </select>
                             </div>
-         {/* Description */}
+                            {/* Description */}
                             <div className="flex items-center gap-2 flex-1">
                               <label className="text-xs font-medium text-gray-700 whitespace-nowrap">Ledger Narration:</label>
                               <input
@@ -4537,11 +4541,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                           type="button"
                           disabled={!party}
                           onClick={openTermsModal}
-                          className={`px-4 py-2 rounded-[4px] transition-colors text-sm font-medium shadow-none border border-slate-200 ${
-                            !party 
-                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200' 
-                              : 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600'
-                          }`}
+                          className={`px-4 py-2 rounded-[4px] transition-colors text-sm font-medium shadow-none border border-slate-200 ${!party
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200'
+                            : 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600'
+                            }`}
                           title={!party ? "Please select a vendor first" : ""}
                         >
                           Edit Masters
@@ -5212,7 +5215,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 <input
                   type="date"
                   value={date}
-                  onChange={e => setDate(e.target.value)}
+                  max={getTodayDate()}
+                  onChange={e => handleDateChange(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
@@ -6345,6 +6349,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               <input
                 type="date"
                 value={date}
+                max={getTodayDate()}
                 onChange={e => setDate(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
@@ -6704,6 +6709,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           <input
             type="date"
             value={date}
+            max={getTodayDate()}
             onChange={e => setDate(e.target.value)}
             className="erp-input"
           />
@@ -7000,6 +7006,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           <input
             type="date"
             value={date}
+            max={getTodayDate()}
             onChange={e => setDate(e.target.value)}
             className="erp-input"
           />
@@ -7493,7 +7500,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           {/* Invoice Scanner Modal */}
           {isInvoiceScannerOpen && (
             <InvoiceScannerModal
-              extractionMode={extractionMode}
+              extractionMode={extractionMode as any}
               scanType={scanType}
               initialFiles={scannerFiles}
               voucherType={voucherType}
@@ -7505,7 +7512,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 refetch(); // Refresh usage after scan
               }}
               onExtractionSuccess={(extractedData) => {
-                if (voucherType !== 'Purchase' || extractionMode !== 'finpixe') return;
+                if (voucherType !== 'Purchase' || extractionMode !== 'ai_native') return;
 
                 validateVendorFromInvoice(
                   extractedData.vendor_name,
@@ -8198,8 +8205,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-between items-center">
                   <button
                     onClick={() => {
-                        setShowPurchasePrintPreview(false);
-                        resetForm();
+                      setShowPurchasePrintPreview(false);
+                      resetForm();
                     }}
                     className="px-6 py-2.5 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-100 text-sm font-medium transition-colors"
                   >

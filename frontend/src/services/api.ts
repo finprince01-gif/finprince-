@@ -178,11 +178,9 @@ class ApiService {
         if (filters?.customer_name) params.append('customer_name', filters.customer_name);
         if (filters?.branch) params.append('branch', filters.branch);
         if (filters?.status) params.append('status', filters.status);
-
-        const queryString = params.toString();
-        const endpoint = queryString ? `/api/customerportal/sales-orders/?${queryString}` : '/api/customerportal/sales-orders/';
-        return httpClient.get<any[]>(endpoint);
+        return httpClient.get<any[]>(`/api/customerportal/sales-orders/?${params.toString()}`);
     }
+
 
     /**
      * Get GST Details (Addresses) for a specific Vendor

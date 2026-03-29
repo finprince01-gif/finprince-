@@ -1,12 +1,9 @@
 import uuid
-from rest_framework import serializers  # type: ignore[import]
-from .models_voucher_receipt import VoucherReceiptSingle, VoucherReceiptBulk  # type: ignore[import]
-from .models import MasterLedger, Voucher, JournalEntry  # type: ignore[import]
-from accounting.services.ledger_service import post_transaction, _resolve_ledger
-from customerportal.database import CustomerMasterCustomerBasicDetails
-from vendors.models import VendorMasterBasicDetail
 from decimal import Decimal, InvalidOperation
-
+from rest_framework import serializers # type: ignore
+from .models_voucher_receipt import ReceiptVoucher, ReceiptVoucherItem # type: ignore
+from .models import MasterLedger, Voucher, JournalEntry # type: ignore
+from accounting.services.ledger_service import post_transaction, _resolve_ledger
 
 def _safe_decimal(value):
     try:
@@ -14,186 +11,367 @@ def _safe_decimal(value):
     except (InvalidOperation, TypeError, ValueError):
         return Decimal("0")
 
+class ReceiptVoucherItemSerializer(serializers.ModelSerializer):
+    customer = serializers.CharField(required=False, allow_null=True)
+    customer_name = serializers.CharField(source='customer.name', read_only=True)
 
-class VoucherReceiptSingleSerializer(serializers.ModelSerializer):
-    # Read-only name fields for GET responses
+    class Meta:
+        model = ReceiptVoucherItem
+        fields = [
+            'id', 'customer', 'customer_name', 'reference_id', 'reference_type', 
+            'pending_transaction', 'amount', 'pending_before', 'received_amount', 
+            'balance_after', 'is_advance', 'advance_ref_no'
+        ]
+
+    def validate_customer(self, value):
+        request = self.context.get('request')
+        tenant_id = request.user.tenant_id if request and hasattr(request.user, 'tenant_id') else None
+        
+        if value and not isinstance(value, MasterLedger):
+            ledger = _resolve_ledger(value, tenant_id)
+            if ledger:
+                return ledger
+            
+            # If not found in MasterLedger, check Portal Customers
+            from customerportal.models import CustomerMasterCustomer
+            portal_cust = CustomerMasterCustomer.objects.filter(
+                tenant_id=tenant_id, 
+                customer_name__iexact=str(value).strip()
+            ).first()
+            
+            if portal_cust:
+                ledger = MasterLedger.objects.filter(
+                    tenant_id=tenant_id, 
+                    name__iexact=portal_cust.customer_name
+                ).first()
+                if not ledger:
+                    try:
+                        ledger = MasterLedger.objects.create(
+                            tenant_id=tenant_id,
+                            name=portal_cust.customer_name,
+                            group='Sundry Debtors',
+                            category='Asset'
+                        )
+                        # Link back
+                        portal_cust.ledger_id = ledger.id
+                        portal_cust.save(update_fields=['ledger_id'])
+                    except Exception:
+                        ledger = MasterLedger.objects.filter(
+                            tenant_id=tenant_id, 
+                            name__iexact=portal_cust.customer_name
+                        ).first()
+                return ledger
+            
+            # If still not found, check Portal Vendors
+            from vendors.models import VendorMasterBasicDetail
+            portal_vend = VendorMasterBasicDetail.objects.filter(
+                tenant_id=tenant_id,
+                vendor_name__iexact=str(value).strip()
+            ).first()
+
+            if portal_vend:
+                ledger = MasterLedger.objects.filter(
+                    tenant_id=tenant_id,
+                    name__iexact=portal_vend.vendor_name
+                ).first()
+                if not ledger:
+                    try:
+                        ledger = MasterLedger.objects.create(
+                            tenant_id=tenant_id,
+                            name=portal_vend.vendor_name,
+                            group='Sundry Creditors',
+                            category='Liability'
+                        )
+                        # Link back
+                        portal_vend.ledger_id = ledger.id
+                        portal_vend.save(update_fields=['ledger_id'])
+                    except Exception:
+                        ledger = MasterLedger.objects.filter(
+                            tenant_id=tenant_id,
+                            name__iexact=portal_vend.vendor_name
+                        ).first()
+                return ledger
+                
+            return None # Fallback
+        return value
+
+class ReceiptVoucherSerializer(serializers.ModelSerializer):
     receive_in_name = serializers.CharField(source='receive_in.name', read_only=True)
-    receive_from_name = serializers.CharField(source='receive_from.name', read_only=True)
-
-    # Allow both ID and Name in POST/PUT
+    items = ReceiptVoucherItemSerializer(many=True, required=False)
+    
+    # Handle both ID and Name in POST
     receive_in = serializers.CharField(required=False, allow_null=True)
-    receive_from = serializers.CharField(required=False, allow_null=True)
+    customer = serializers.CharField(required=False, allow_null=True)
     voucher_number = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
-        model = VoucherReceiptSingle
+        model = ReceiptVoucher
         fields = '__all__'
         read_only_fields = ['tenant_id']
 
     def validate(self, attrs):
         request = self.context.get('request')
-        tenant_id = None
-        if request and hasattr(request.user, 'tenant_id'):
-            tenant_id = request.user.tenant_id
+        tenant_id = request.user.tenant_id if request and hasattr(request.user, 'tenant_id') else None
 
-        # Resolve accounts automatically (can be ID or Name)
-        receive_in_val = attrs.get('receive_in')
-        receive_from_val = attrs.get('receive_from')
-
-        if receive_in_val is not None and not hasattr(receive_in_val, 'pk'):
-            attrs['receive_in'] = _resolve_ledger(receive_in_val, tenant_id)
-
-        if receive_from_val is not None and not hasattr(receive_from_val, 'pk'):
-            attrs['receive_from'] = _resolve_ledger(receive_from_val, tenant_id)
+        if 'receive_in' in attrs and not isinstance(attrs['receive_in'], MasterLedger):
+            attrs['receive_in'] = _resolve_ledger(attrs['receive_in'], tenant_id)
+        
+        if 'customer' in attrs and attrs['customer'] and not isinstance(attrs['customer'], MasterLedger):
+            ledger = _resolve_ledger(attrs['customer'], tenant_id)
+            if not ledger:
+                # Check Portal Customer
+                from customerportal.models import CustomerMasterCustomer
+                portal_cust = CustomerMasterCustomer.objects.filter(tenant_id=tenant_id, customer_name__iexact=str(attrs['customer']).strip()).first()
+                if portal_cust:
+                    ledger = MasterLedger.objects.filter(tenant_id=tenant_id, name__iexact=portal_cust.customer_name).first()
+                    if not ledger:
+                        try:
+                            ledger = MasterLedger.objects.create(tenant_id=tenant_id, name=portal_cust.customer_name, group='Sundry Debtors', category='Asset')
+                            portal_cust.ledger_id = ledger.id
+                            portal_cust.save(update_fields=['ledger_id'])
+                        except Exception:
+                            ledger = MasterLedger.objects.filter(tenant_id=tenant_id, name__iexact=portal_cust.customer_name).first()
+                
+                if not ledger:
+                    # Check Portal Vendor
+                    from vendors.models import VendorMasterBasicDetail
+                    portal_vend = VendorMasterBasicDetail.objects.filter(tenant_id=tenant_id, vendor_name__iexact=str(attrs['customer']).strip()).first()
+                    if portal_vend:
+                        ledger = MasterLedger.objects.filter(tenant_id=tenant_id, name__iexact=portal_vend.vendor_name).first()
+                        if not ledger:
+                            try:
+                                ledger = MasterLedger.objects.create(tenant_id=tenant_id, name=portal_vend.vendor_name, group='Sundry Creditors', category='Liability')
+                                portal_vend.ledger_id = ledger.id
+                                portal_vend.save(update_fields=['ledger_id'])
+                            except Exception:
+                                ledger = MasterLedger.objects.filter(tenant_id=tenant_id, name__iexact=portal_vend.vendor_name).first()
+            
+            attrs['customer'] = ledger
 
         return attrs
 
     def create(self, validated_data):
+        request = self.context.get('request')
+        tenant_id = request.user.tenant_id if request and hasattr(request.user, 'tenant_id') else None
+        
+        # Ensure tenant_id is in validated_data before super().create
+        validated_data['tenant_id'] = tenant_id
+
+        items_data = validated_data.pop('items', [])
+        
+        # If customer is missing from master (common in bulk), pick the first customer from items
+        if not validated_data.get('customer') and items_data:
+            first_item_customer = items_data[0].get('customer')
+            if first_item_customer:
+                # The nested serializer already validated it if it was in items
+                validated_data['customer'] = first_item_customer if isinstance(first_item_customer, MasterLedger) else _resolve_ledger(first_item_customer, tenant_id)
+            
         if not validated_data.get('voucher_number'):
+            # Allow custom prefix from client if needed, or default
             validated_data['voucher_number'] = f"REC-{uuid.uuid4().hex[:6].upper()}"
             
         receipt = super().create(validated_data)
 
-        # Unified voucher - Check existence first to avoid transaction poisoning
-        voucher = Voucher.objects.filter(
-            tenant_id=receipt.tenant_id, 
-            type='receipt', 
-            voucher_number=receipt.voucher_number
-        ).first()
-
-        if not voucher:
-            try:
-                voucher = Voucher.objects.create(
-                    tenant_id=receipt.tenant_id,
-                    type='receipt',
-                    date=receipt.date,
-                    voucher_number=receipt.voucher_number,
-                    party=receipt.receive_from.name if receipt.receive_from else None,
-                    account=receipt.receive_in.name if receipt.receive_in else None,
-                    amount=receipt.total_receipt,
-                    total=receipt.total_receipt,
-                    source=receipt.source or 'manual',
-                    reference_id=receipt.id,
-                )
-            except Exception as e:
-                print(f"!!! VOUCHER CREATION FAILED in receipt serializer: {str(e)}")
-                pass
-
-        if voucher:
-            setattr(receipt, '_accounting_voucher_id', voucher.id)
-            if any(field.name == 'voucher_id' for field in receipt._meta.fields):
-                receipt.voucher_id = voucher.id
-                receipt.save(update_fields=['voucher_id'])
-
-        # --- Double-Entry Posting for Single Receipt (entries table) ---
-        try:
-            total_decimal = _safe_decimal(receipt.total_receipt)
-            if total_decimal > 0 and voucher:
-                entries = []
-                # Debit: destination account (receive_in)
-                if receipt.receive_in:
-                    entries.append({"ledger_id": receipt.receive_in.id, "debit": float(total_decimal), "credit": 0})
-                
-                # Credit: source (receive_from)
-                if receipt.receive_from:
-                    entries.append({"ledger_id": receipt.receive_from.id, "debit": 0, "credit": float(total_decimal)})
-                
-                if len(entries) == 2:
-                    post_transaction(voucher_type="RECEIPT", voucher_id=voucher.id, tenant_id=receipt.tenant_id, entries=entries)
-        except Exception as e:
-            print(f"Error posting single receipt to entries: {str(e)}")
-
-        return receipt
-
-
-class VoucherReceiptBulkSerializer(serializers.ModelSerializer):
-    receive_in_name = serializers.CharField(source='receive_in.name', read_only=True)
-    receive_in = serializers.CharField(required=False, allow_null=True)
-    voucher_number = serializers.CharField(required=False, allow_blank=True)
-
-    class Meta:
-        model = VoucherReceiptBulk
-        fields = '__all__'
-        read_only_fields = ['tenant_id']
-
-    def validate(self, attrs):
-        request = self.context.get('request')
-        tenant_id = None
-        if request and hasattr(request.user, 'tenant_id'):
-            tenant_id = request.user.tenant_id
-
-        # Resolve accounts automatically (can be ID or Name)
-        receive_in_val = attrs.get('receive_in')
-        if receive_in_val is not None and not hasattr(receive_in_val, 'pk'):
-            attrs['receive_in'] = _resolve_ledger(receive_in_val, tenant_id)
-
-        return attrs
-
-    def create(self, validated_data):
-        if not validated_data.get('voucher_number'):
-            validated_data['voucher_number'] = f"RECB-{uuid.uuid4().hex[:6].upper()}"
+        # Create child items (Customers and Allocations)
+        for item_data in items_data:
+            # Resolve item-level customer if it's a string from the nested serializer
+            customer_data = item_data.pop('customer', None)
+            if customer_data:
+                item_data['customer'] = customer_data
             
-        receipt = super().create(validated_data)
+            ReceiptVoucherItem.objects.create(
+                voucher=receipt, 
+                tenant_id=receipt.tenant_id,
+                **item_data
+            )
 
-        # Unified voucher
-        rows = receipt.receipt_rows if isinstance(receipt.receipt_rows, list) else []
-        total_amount = sum(
-            (_safe_decimal(row.get('amount')) for row in rows if isinstance(row, dict)),
-            Decimal("0"),
-        )
-        
-        voucher = Voucher.objects.filter(
-            tenant_id=receipt.tenant_id, 
-            type='receipt', 
-            voucher_number=receipt.voucher_number
-        ).first()
-
-        if not voucher:
-            try:
-                voucher = Voucher.objects.create(
-                    tenant_id=receipt.tenant_id,
-                    type='receipt',
-                    date=receipt.date,
-                    voucher_number=receipt.voucher_number,
-                    account=receipt.receive_in.name if receipt.receive_in else None,
-                    amount=total_amount,
-                    total=total_amount,
-                    narration=receipt.posting_note,
-                    source='manual',
-                    items_data=rows or None,
-                    reference_id=receipt.id,
-                )
-            except Exception as e:
-                print(f"!!! VOUCHER CREATION FAILED in bulk receipt: {str(e)}")
-                pass
-
-        if voucher:
-            setattr(receipt, '_accounting_voucher_id', voucher.id)
-            if any(field.name == 'voucher_id' for field in receipt._meta.fields):
-                receipt.voucher_id = voucher.id
-                receipt.save(update_fields=['voucher_id'])
-
-        # --- Double-Entry Posting for Bulk Receipt (entries table) ---
-        try:
-            if voucher:
-                entries = []
-                total_bulk_decimal = Decimal("0")
-                rows = receipt.receipt_rows if isinstance(receipt.receipt_rows, list) else []
-                
-                for row in rows:
-                    amt_dec = _safe_decimal(row.get('amount', 0))
-                    receive_from_id = row.get('receiveFrom') # Ledger ID or name? UI usually sends ID.
-                    if amt_dec > 0 and receive_from_id:
-                        total_bulk_decimal += amt_dec
-                        entries.append({"ledger_id": receive_from_id, "debit": 0, "credit": float(amt_dec)})
-                
-                if total_bulk_decimal > 0 and receipt.receive_in:
-                    # Debit Destination account
-                    entries.append({"ledger_id": receipt.receive_in.id, "debit": float(total_bulk_decimal), "credit": 0})
-                    
-                    if len(entries) >= 2:
-                        post_transaction(voucher_type="RECEIPT_BULK", voucher_id=voucher.id, tenant_id=receipt.tenant_id, entries=entries)
-        except Exception as e:
-            print(f"Error posting bulk receipt to entries: {str(e)}")
+        self._mirror_to_generic_voucher(receipt)
+        self._mirror_to_customer_portal(receipt)
+        self._mirror_to_vendor_portal(receipt)
+        self._post_journal_entries(receipt)
 
         return receipt
+
+    def _mirror_to_generic_voucher(self, receipt):
+        """Unified voucher for cross-module reports"""
+        try:
+            items_qs = receipt.items.all()
+            items_data = []
+            party_names = set()
+            for item in items_qs:
+                if item.customer:
+                    party_names.add(item.customer.name)
+                items_data.append({
+                    "customer": item.customer.name if item.customer else "Unknown",
+                    "reference_id": item.reference_id,
+                    "reference_type": item.reference_type,
+                    "pending_transaction": item.pending_transaction,
+                    "amount": float(item.amount),
+                    "received_amount": float(item.received_amount),
+                    "is_advance": item.is_advance,
+                    "advance_ref_no": item.advance_ref_no
+                })
+
+            Voucher.objects.create(
+                tenant_id=receipt.tenant_id,
+                voucher_number=receipt.voucher_number,
+                type='receipt',
+                date=receipt.date,
+                party=", ".join(party_names) if party_names else "Bulk",
+                account=receipt.receive_in.name if receipt.receive_in else None,
+                amount=receipt.total_amount,
+                total=receipt.total_amount,
+                source=receipt.source or 'manual',
+                reference_id=receipt.id,
+                items_data=items_data
+            )
+        except Exception as e:
+            print(f"!!! Mirror Failed: {str(e)}")
+    def _mirror_to_vendor_portal(self, receipt):
+        """Mirror Vendor specific receipts to the Vendor Portal ledger"""
+        from vendors.models import VendorMasterBasicDetail, VendorTransaction
+        try:
+            items_qs = receipt.items.all()
+            for item in items_qs:
+                party = item.customer
+                if not party:
+                    # Fallback to main voucher customer
+                    party = receipt.customer
+                
+                if not party:
+                    continue
+
+                try:
+                    vendor = VendorMasterBasicDetail.objects.filter(
+                        tenant_id=receipt.tenant_id, 
+                        ledger_id=party.id
+                    ).first()
+                    
+                    if not vendor:
+                        vendor = VendorMasterBasicDetail.objects.filter(
+                            tenant_id=receipt.tenant_id, 
+                            vendor_name__iexact=party.name
+                        ).first()
+                    
+                    if vendor:
+                        p_status = 'Received'
+                        if item.is_advance or item.reference_type == 'advance':
+                            p_status = 'Advance'
+                        
+                        VendorTransaction.objects.update_or_create(
+                            tenant_id=receipt.tenant_id,
+                            vendor_id=vendor.id,
+                            transaction_number=f"{receipt.voucher_number}-{item.id}",
+                            transaction_type='receipt',
+                            defaults={
+                                'transaction_date': receipt.date,
+                                'amount': item.received_amount,
+                                'total_amount': item.received_amount,
+                                'status': 'POSTED',
+                                'reference_number': item.reference_id or receipt.voucher_number,
+                                'notes': receipt.notes,
+                                'ledger_name': receipt.receive_in.name if receipt.receive_in else 'Direct Receipt'
+                            }
+                        )
+                except Exception as e:
+                    print(f"!!! Vendor Sync Error for item {item.id}: {str(e)}")
+        except Exception as e:
+            print(f"!!! Vendor Mirror Process Failure: {str(e)}")
+
+    def _mirror_to_customer_portal(self, receipt):
+        """Cross-database sync to Customer Portal table (customer_transaction)"""
+        try:
+            from customerportal.models import CustomerTransaction, CustomerMasterCustomer
+            
+            for item in receipt.items.all():
+                # Standardize resolution by metadata if available
+                metadata = item.pending_transaction if isinstance(item.pending_transaction, dict) else {}
+                metadata_name = metadata.get('customer_name')
+                
+                # Use metadata name if it exists, otherwise fallback to ledger name
+                lookup_name = metadata_name if metadata_name else (str(item.customer.name).strip() if item.customer else None)
+                
+                if not lookup_name:
+                    print(f"!!! Mirror Failed: No customer name available for item {item.id}")
+                    continue
+
+                try:
+                    # Resolve portal customer record (CustomerMasterCustomer in database.py)
+                    portal_customer = CustomerMasterCustomer.objects.filter(
+                        tenant_id=receipt.tenant_id, 
+                        customer_name__iexact=lookup_name
+                    ).first()
+                    
+                    if portal_customer:
+                        # Map transaction types to portal-specific statuses
+                        # Use 'Not Utilized' for advances as requested by user
+                        p_status = 'Not Utilized' if (item.is_advance or item.reference_type == 'advance') else 'Received'
+                        
+                        # Use update_or_create to avoid duplicates on retries
+                        # Use a composite key for transaction_number to prevent overwriting different items or different allocations on the same voucher
+                        CustomerTransaction.objects.update_or_create(
+                            tenant_id=receipt.tenant_id,
+                            customer_id=portal_customer.id,
+                            transaction_number=f"{receipt.voucher_number}-{item.id}",
+                            transaction_type='RECEIPT',
+                            defaults={
+                                'transaction_date': receipt.date,
+                                'amount': item.received_amount,
+                                'total_amount': item.received_amount,
+                                'payment_status': p_status,
+                                'reference_number': item.reference_id or receipt.voucher_number,
+                                'notes': receipt.notes or f"Receipt for {item.reference_id}"
+                            }
+                        )
+                        print(f"!!! Portal Mirror OK: {lookup_name} (ID: {portal_customer.id})")
+                    else:
+                        print(f"!!! Portal Mirror Error: Portal customer '{lookup_name}' not found")
+                except Exception as e:
+                    print(f"!!! Customer Portal Sync Item Failure: {str(e)}")
+        except Exception as e:
+            print(f"!!! Customer Portal Mirror Process Failure: {str(e)}")
+
+    def _post_journal_entries(self, receipt):
+        """Post the double-entry transactions"""
+        try:
+            total_decimal = Decimal(str(receipt.total_amount))
+            if total_decimal <= 0: return
+
+            entries = []
+            # Debit: Bank/Cash
+            entries.append({"ledger_id": receipt.receive_in.id, "debit": float(total_decimal), "credit": 0})
+            
+            # Credit: Multiple Customers from Items
+            # We group by customer to avoid multiple lines for the same customer in the JV
+            customer_totals = {}
+            for item in receipt.items.all():
+                if not item.customer:
+                    print(f"!!! Skipping item in Journal Entry because customer is null")
+                    continue
+                cid = item.customer.id
+                amt = Decimal(str(item.received_amount))
+                customer_totals[cid] = customer_totals.get(cid, Decimal("0")) + amt
+
+            for cid, amt in customer_totals.items():
+                if amt > 0:
+                    entries.append({"ledger_id": cid, "debit": 0, "credit": float(amt)})
+            
+            if len(entries) >= 2:
+                post_transaction(
+                    voucher_type="RECEIPT", 
+                    voucher_id=receipt.id, 
+                    tenant_id=receipt.tenant_id, 
+                    entries=entries
+                )
+        except Exception as e:
+            print(f"Error posting journal entry: {str(e)}")
+
+# --- DEPRECATED FOR BACKWARD COMPAT (Keep for migration script refs if needed) ---
+class VoucherReceiptSingleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReceiptVoucher
+        fields = '__all__'
+class VoucherReceiptBulkSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReceiptVoucher
+        fields = '__all__'
