@@ -9,6 +9,7 @@ from .vendortds_api import VendorMasterTDSViewSet
 from .vendorbanking_api import VendorMasterBankingViewSet
 from .vendorterms_api import VendorMasterTermsViewSet
 from .vendorpo_api import VendorPOViewSet
+from .vendortransaction_api import VendorTransactionViewSet
 from .vendorcategory_api import VendorMasterCategoryViewSet
 
 router = DefaultRouter()
@@ -22,6 +23,7 @@ router.register(r'tds-details', VendorMasterTDSViewSet, basename='vendor-tds-det
 router.register(r'banking-details', VendorMasterBankingViewSet, basename='vendor-banking-details')
 router.register(r'terms', VendorMasterTermsViewSet, basename='vendor-terms')
 router.register(r'purchase-orders', VendorPOViewSet, basename='vendor-purchase-orders')
+router.register(r'transactions', VendorTransactionViewSet, basename='vendor-transactions')
 
 urlpatterns = [
     path('', include(router.urls)),

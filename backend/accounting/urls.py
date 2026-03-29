@@ -25,13 +25,8 @@ from .invoice_api import SalesInvoiceViewSet # pyre-fixme
 from .views_voucher_sales import VoucherSalesViewSet # pyre-fixme
 
 
-from .views_payment import (
-    PaymentVoucherViewSet, 
-    VoucherPaymentSingleViewSet, 
-    VoucherPaymentBulkViewSet,
-    AdvancePaymentViewSet
-)
-from .views_receipt import VoucherReceiptSingleViewSet, VoucherReceiptBulkViewSet # pyre-fixme
+from .views_payment import VoucherPaymentSingleViewSet, VoucherPaymentBulkViewSet # pyre-fixme
+from .views_receipt import VoucherReceiptSingleViewSet, VoucherReceiptBulkViewSet, ReceiptVoucherViewSet # pyre-fixme
 from .views_expense import VoucherExpenseViewSet # pyre-fixme
 from .views_contra_journal import VoucherContraViewSet, VoucherJournalViewSet # pyre-fixme
 from .views_voucher_purchase import VoucherPurchaseViewSet # pyre-fixme
@@ -60,9 +55,10 @@ router.register('vouchers/advances', AdvancePaymentViewSet, basename='advance-pa
 router.register('advances', AdvancePaymentViewSet, basename='advances')
 # --- Deprecated endpoints (backward compat — will be removed after migration) ---
 router.register('vouchers/payment-single', VoucherPaymentSingleViewSet, basename='payment-voucher-single')
-router.register('vouchers/payment-bulk',   VoucherPaymentBulkViewSet,   basename='payment-voucher-bulk')
-router.register('vouchers/receipt-single', VoucherReceiptSingleViewSet, basename='receipt-voucher-single')
-router.register('vouchers/receipt-bulk', VoucherReceiptBulkViewSet, basename='receipt-voucher-bulk')
+router.register('vouchers/payment-bulk', VoucherPaymentBulkViewSet, basename='payment-voucher-bulk')
+router.register('vouchers/receipts', ReceiptVoucherViewSet, basename='receipt-voucher-unified')
+router.register('vouchers/receipt-single', ReceiptVoucherViewSet, basename='receipt-voucher-single')
+router.register('vouchers/receipt-bulk', ReceiptVoucherViewSet, basename='receipt-voucher-bulk')
 router.register('vouchers/expenses', VoucherExpenseViewSet, basename='expense-vouchers')
 router.register('vouchers/contra', VoucherContraViewSet, basename='contra-vouchers')
 router.register('vouchers/journal', VoucherJournalViewSet, basename='journal-vouchers')

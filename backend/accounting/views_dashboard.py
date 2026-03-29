@@ -110,19 +110,13 @@ class DashboardAnalyticsView(APIView):
 
         # 3. Cash Flow (Receipts vs Payments)
         # Receipts
-        receipts_qs_single = VoucherReceiptSingle.objects.filter(tenant_id=tenant_id, date__gte=six_months_ago).values('date', 'total_receipt')
-        receipts_qs_bulk = VoucherReceiptBulk.objects.filter(tenant_id=tenant_id, date__gte=six_months_ago).values('date', 'receipt_rows', 'advance_amount')
+        from .models_voucher_receipt import ReceiptVoucher
+        receipts_qs = ReceiptVoucher.objects.filter(tenant_id=tenant_id, date__gte=six_months_ago).values('date', 'total_amount')
         
         cash_in_map = defaultdict(float)
-        for r in receipts_qs_single:
-            cash_in_map[r['date'].strftime('%b %y')] += float(r['total_receipt'] or 0)
-        for r in receipts_qs_bulk:
+        for r in receipts_qs:
             m = r['date'].strftime('%b %y')
-            total = float(r['advance_amount'] or 0)
-            rows = r['receipt_rows'] or []
-            for row in rows:
-                total += float(row.get('amount', 0) or 0)
-            cash_in_map[m] += total
+            cash_in_map[m] += float(r['total_amount'] or 0)
             
         # Payments (Unified PaymentVoucher)
         payments_qs = PaymentVoucher.objects.filter(

@@ -726,18 +726,36 @@ class CustomerMasterCustomerSerializer(serializers.ModelSerializer):
 
 class CustomerTransactionSerializer(serializers.ModelSerializer):
     """Serializer for Customer Transaction"""
+    debit = serializers.SerializerMethodField()
+    credit = serializers.SerializerMethodField()
+    date = serializers.DateField(source='transaction_date')
+    voucher_number = serializers.CharField(source='transaction_number')
+    customer = serializers.IntegerField(source='customer_id')
     
     class Meta:
         model = CustomerTransaction
         fields = [
-            'id', 'tenant_id', 'customer_id', 'transaction_type',
-            'transaction_number', 'transaction_date',
+            'id', 'tenant_id', 'customer', 'customer_id', 'transaction_type',
+            'voucher_number', 'transaction_number', 'date', 'transaction_date',
             'amount', 'tax_amount', 'total_amount',
+            'debit', 'credit',
             'payment_status', 'payment_mode',
             'reference_number', 'notes',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_debit(self, obj):
+        t_type = (obj.transaction_type or '').upper()
+        if t_type in ['INVOICE', 'DEBIT_NOTE']:
+            return obj.total_amount or obj.amount
+        return 0
+
+    def get_credit(self, obj):
+        t_type = (obj.transaction_type or '').upper()
+        if t_type in ['PAYMENT', 'CREDIT_NOTE', 'RECEIPT']:
+            return obj.total_amount or obj.amount
+        return 0
 
 
 # class CustomerSalesQuotationSerializer(serializers.ModelSerializer):

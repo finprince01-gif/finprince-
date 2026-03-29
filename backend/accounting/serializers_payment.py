@@ -83,12 +83,105 @@ class PaymentVoucherItemSerializer(serializers.ModelSerializer):
         return attrs
 
 
-# ---------------------------------------------------------------------------
-# Master serializer
-# ---------------------------------------------------------------------------
+        if not voucher:
+            try:
+                voucher = Voucher.objects.create(
+                    tenant_id=payment.tenant_id,
+                    type='payment',
+                    date=payment.date,
+                    voucher_number=payment.voucher_number,
+                    party=payment.pay_to.name if payment.pay_to else None,
+                    account=payment.pay_from.name if payment.pay_from else None,
+                    amount=payment.total_payment,
+                    total=payment.total_payment,
+                    source=payment.source or 'manual',
+                    reference_id=payment.id,
+                )
+            except Exception as e:
+                print(f"!!! VOUCHER CREATION FAILED in payment serializer: {str(e)}")
+                # Transaction might be poisoned here if this was an IntegrityError 
+                # but the check above should have caught it.
+                pass
 
-class PaymentVoucherSerializer(serializers.ModelSerializer):
-    items = PaymentVoucherItemSerializer(many=True, required=False)  # type: ignore
+        if voucher:
+            # Refresh if it was just created/found
+            setattr(payment, '_accounting_voucher_id', voucher.id)
+            if any(field.name == 'voucher_id' for field in payment._meta.fields):
+                payment.voucher_id = voucher.id
+                payment.save(update_fields=['voucher_id'])
+
+        # --- Double-Entry Posting for Single Payment (entries table) ---
+        try:
+            total_decimal = _safe_decimal(payment.total_payment)
+            if total_decimal > 0 and voucher:
+                entries = []
+                if payment.pay_to:
+                    entries.append({"ledger_id": payment.pay_to.id, "debit": float(total_decimal), "credit": 0})
+                if payment.pay_from:
+                    entries.append({"ledger_id": payment.pay_from.id, "debit": 0, "credit": float(total_decimal)})
+                
+                if len(entries) == 2:
+                    post_transaction(voucher_type="PAYMENT", voucher_id=voucher.id, tenant_id=payment.tenant_id, entries=entries)
+        except Exception as e:
+            print(f"Error posting payment to entries: {str(e)}")
+
+        self._mirror_to_vendor_portal(payment)
+        return payment
+
+    def _mirror_to_vendor_portal(self, payment, is_bulk=False):
+        """Mirror Payment vouchers to Vendor Portal ledger"""
+        try:
+            from vendors.models import VendorMasterBasicDetail, VendorTransaction
+            tenant_id = payment.tenant_id
+            
+            if is_bulk:
+                rows = payment.payment_rows if isinstance(payment.payment_rows, list) else []
+                for row in rows:
+                    amt = _safe_decimal(row.get('amount'))
+                    pay_to_id = row.get('payTo')
+                    if amt > 0 and pay_to_id:
+                        # Find vendor master
+                        vendor = VendorMasterBasicDetail.objects.filter(tenant_id=tenant_id, ledger_id=pay_to_id).first()
+                        if vendor:
+                            VendorTransaction.objects.update_or_create(
+                                tenant_id=tenant_id,
+                                vendor_id=vendor.id,
+                                transaction_number=payment.voucher_number,
+                                transaction_type='payment',
+                                defaults={
+                                    'transaction_date': payment.date,
+                                    'amount': amt,
+                                    'total_amount': amt,
+                                    'status': 'Paid',
+                                    'reference_number': row.get('reference') or payment.voucher_number,
+                                    'notes': payment.posting_note,
+                                    'ledger_name': vendor.vendor_name
+                                }
+                            )
+            else:
+                if payment.pay_to:
+                    vendor = VendorMasterBasicDetail.objects.filter(tenant_id=tenant_id, ledger_id=payment.pay_to.id).first()
+                    if vendor:
+                        amt = _safe_decimal(payment.total_payment)
+                        VendorTransaction.objects.update_or_create(
+                            tenant_id=tenant_id,
+                            vendor_id=vendor.id,
+                            transaction_number=payment.voucher_number,
+                            transaction_type='payment',
+                            defaults={
+                                'transaction_date': payment.date,
+                                'amount': amt,
+                                'total_amount': amt,
+                                'status': 'Paid',
+                                'reference_number': payment.voucher_number,
+                                'notes': payment.narration,
+                                'ledger_name': vendor.vendor_name
+                            }
+                        )
+        except Exception as e:
+            print(f"!!! Vendor Portal Sync Failure (Payment): {str(e)}")
+
+class VoucherPaymentBulkSerializer(serializers.ModelSerializer):
     pay_from_name = serializers.CharField(source='pay_from.name', read_only=True)
     pay_from = serializers.CharField(required=False, allow_null=True)
     voucher_number = serializers.CharField(required=False, allow_blank=True)
@@ -449,14 +542,6 @@ class AdvancePaymentSerializer(serializers.ModelSerializer):
         if c: return c.customer_name
         return obj.pay_to_ledger.ledger_name
 
-    def get_category(self, obj):
-        if not obj.pay_to_ledger: return None
-        v = obj.pay_to_ledger.vendors_basic.first()
-        if v: return v.vendor_category
-        
-        c = obj.pay_to_ledger.customers_basic.first()
-        if c:
-            if hasattr(c.customer_category, 'category'):
-                return c.customer_category.category
-            return str(c.customer_category) if c.customer_category else None
-        return None
+        self._mirror_to_vendor_portal(payment, is_bulk=True)
+
+        return payment

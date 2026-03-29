@@ -791,3 +791,54 @@ class VendorTransactionPOItem(models.Model):
     def __str__(self):
         return f"{self.item_name or 'Item'} - {self.po.po_number}"
 
+
+class VendorTransaction(models.Model):
+    """
+    Vendor Transaction Table
+    Stores all vendor transactions (purchases, payments, receipts, etc.)
+    """
+    TRANSACTION_TYPES = [
+        ('purchase', 'Purchase'),
+        ('payment', 'Payment'),
+        ('receipt', 'Receipt'),
+        ('debit_note', 'Debit Note'),
+        ('credit_note', 'Credit Note'),
+        ('journal', 'Journal'),
+    ]
+    
+    tenant_id = models.CharField(max_length=36, db_index=True)
+    vendor_id = models.IntegerField(db_index=True)  # Linking to VendorMasterBasicDetail id
+    transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPES)
+    transaction_number = models.CharField(max_length=50)
+    transaction_date = models.DateField()
+    
+    # Financial Details
+    amount = models.DecimalField(max_digits=15, decimal_places=2)
+    tax_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    total_amount = models.DecimalField(max_digits=15, decimal_places=2)
+    
+    # Status and Mode
+    status = models.CharField(max_length=20, default='pending')
+    payment_mode = models.CharField(max_length=50, null=True, blank=True)
+    
+    # Reference and Notes
+    reference_number = models.CharField(max_length=100, null=True, blank=True)
+    notes = models.TextField(null=True, blank=True)
+    
+    # Additional Fields from Voucher for display
+    ledger_name = models.CharField(max_length=255, null=True, blank=True)
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'vendor_transaction'
+        indexes = [
+            models.Index(fields=['tenant_id', 'vendor_id']),
+            models.Index(fields=['transaction_date']),
+        ]
+    
+    def __str__(self):
+        return f"{self.transaction_number} - {self.transaction_type}"
+

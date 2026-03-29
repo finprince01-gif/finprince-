@@ -284,7 +284,6 @@ class Voucher(BaseModel):
     class Meta:
 
         db_table = 'vouchers'
-        unique_together = ('voucher_number', 'tenant_id', 'type')
         ordering = ['-date']
         indexes = [
             models.Index(fields=['type', 'tenant_id', 'date']),

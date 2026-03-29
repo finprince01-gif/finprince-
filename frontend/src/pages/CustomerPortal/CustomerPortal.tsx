@@ -47,6 +47,7 @@ interface LedgerEntry {
     id: string;
     date: string;
     postFrom: TransactionType;
+    referenceNo?: string;
     ledger: string;
     status: PurchaseStatus | SalesStatus;
     debit: number;
@@ -2384,8 +2385,8 @@ const CustomerContent: React.FC = () => {
                                                     tdsEnabled: type !== 'TDS' ? false : statutoryDetails.tdsEnabled,
                                                 })}
                                                 className={`px-6 py-2 text-sm font-semibold transition-colors border-r border-gray-300 last:border-r-0 ${statutoryDetails.taxType === type
-                                                        ? 'bg-gray-700 text-white'
-                                                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                                                    ? 'bg-gray-700 text-white'
+                                                    : 'bg-white text-gray-600 hover:bg-gray-50'
                                                     }`}
                                             >
                                                 {type}
@@ -5677,13 +5678,19 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
             setIsLoading(true);
             setError(null);
             try {
-                const data = await httpClient.get<any[]>(`/api/voucher-sales-new/`);
-                const customerInvoices = data.filter(inv => inv.customer_id?.toString() === customer.id?.toString());
-                const entries: LedgerEntry[] = customerInvoices.map((inv: any) => ({
+                const [salesData, transactionsData] = await Promise.all([
+                    httpClient.get<any[]>(`/api/voucher-sales-new/`),
+                    httpClient.get<any[]>(`/api/customerportal/transactions/by_customer/?customer_id=${customer.id}`)
+                ]);
+
+                const customerInvoices = salesData.filter(inv => inv.customer_id?.toString() === customer.id?.toString());
+                
+                const invoiceEntries: LedgerEntry[] = customerInvoices.map((inv: any) => ({
                     id: inv.id.toString(),
                     date: inv.date,
                     postFrom: 'Sales' as TransactionType,
-                    ledger: inv.sales_invoice_no,
+                    referenceNo: inv.sales_invoice_no,
+                    ledger: 'Sales',
                     status: (inv.posting_status === 'POSTED' ? 'Not Due' : 'Not Utilized') as SalesStatus,
                     debit: parseFloat(inv.payment_details?.payment_payable || 0),
                     credit: 0,
@@ -5691,32 +5698,25 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                     posting_status: inv.posting_status,
                     originalInv: inv
                 }));
-                // Fetch Advances for this customer
-                let advances: any[] = [];
-                try {
-                    if (customer.ledger_id) {
-                        const advRes = await apiService.getAdvances(customer.ledger_id);
-                        advances = Array.isArray(advRes) ? advRes : (advRes as any)?.results || [];
-                    }
-                } catch (e) {
-                    console.error('Failed to fetch advances for ledger view:', e);
-                }
 
-                const advanceEntries: LedgerEntry[] = advances.map((adv: any) => ({
-                    id: `adv-${adv.id}`,
-                    date: adv.date,
-                    postFrom: 'Payment' as TransactionType,
-                    ledger: 'Advance Payment',
-                    referenceNo: adv.advance_ref_no || `ADV-${adv.id}`,
-                    status: 'Paid' as SalesStatus,
-                    debit: parseFloat(adv.amount || 0),
-                    credit: 0,
-                    runningBalance: 0,
-                    posting_status: 'POSTED',
-                    originalInv: adv
-                }));
+                const transactionEntries: LedgerEntry[] = (transactionsData || []).map((t: any) => {
+                    const transType = t.transaction_type?.toUpperCase() === 'RECEIPT' ? 'Receipt' : (t.transaction_type?.toLowerCase() === 'payment' ? 'Payment' : 'Sales');
+                    return {
+                        id: `T-${t.id}`,
+                        date: t.date,
+                        postFrom: transType as TransactionType,
+                        referenceNo: t.reference_number || t.transaction_number || t.voucher_number || 'N/A',
+                        ledger: transType,
+                        status: (t.payment_status && t.payment_status !== 'pending' ? t.payment_status : (t.transaction_type?.toUpperCase() === 'RECEIPT' ? 'Not Utilized' : 'Not Due')) as SalesStatus,
+                        debit: parseFloat(t.debit || 0),
+                        credit: parseFloat(t.credit || 0),
+                        runningBalance: 0,
+                        posting_status: 'POSTED',
+                        originalInv: t
+                    };
+                });
 
-                setLedgerEntries([...entries, ...advanceEntries]);
+                setLedgerEntries([...invoiceEntries, ...transactionEntries]);
             } catch (err: any) {
                 console.error('Failed to fetch ledger data:', err);
                 setError(err?.message || 'Unable to connect to the server.');
@@ -5730,11 +5730,17 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
 
     const processedEntries = useMemo(() => {
         let balance = 0;
-        return [...ledgerEntries].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-            .map(entry => {
-                balance += entry.debit - entry.credit;
-                return { ...entry, runningBalance: balance };
-            });
+        return [...ledgerEntries].sort((a, b) => {
+            const dateDiff = new Date(a.date).getTime() - new Date(b.date).getTime();
+            if (dateDiff !== 0) return dateDiff;
+            // Fallback for same date: compare IDs (handling 'T-' prefix)
+            const idA = parseInt(a.id.replace('T-', ''));
+            const idB = parseInt(b.id.replace('T-', ''));
+            return idA - idB;
+        }).map(entry => {
+            balance += entry.debit - entry.credit;
+            return { ...entry, runningBalance: balance };
+        });
     }, [ledgerEntries]);
 
     interface MonthLedgerEntry {
@@ -6128,6 +6134,7 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                             </div>
                                                         </div>
                                                     </th>
+                                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">Reference No</th>
                                                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">
                                                         <div className="flex items-center justify-between relative text-gray-400">
                                                             <span>Ledger</span>
@@ -6368,7 +6375,8 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                         >
                                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 border-r border-gray-100">{entry.date.split('-').reverse().join('-')}</td>
                                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 border-r border-gray-100">{entry.postFrom}</td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 border-r border-gray-100">{entry.referenceNo || entry.ledger}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 border-r border-gray-100 font-medium">{entry.referenceNo || '-'}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 border-r border-gray-100">{entry.ledger}</td>
                                                             <td className="px-6 py-4 whitespace-nowrap text-sm border-r border-gray-100">
                                                                 <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${getStatusBadgeColor(entry.status)}`}>{entry.status}</span>
                                                             </td>
@@ -6391,7 +6399,7 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                             ))}
                                             {filteredData.length === 0 && (
                                                 <tr>
-                                                    <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
+                                                    <td colSpan={9} className="px-6 py-12 text-center text-gray-500">
                                                         No ledger entries found for this customer.
                                                     </td>
                                                 </tr>
@@ -6399,7 +6407,7 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                         </tbody>
                                         <tfoot className="bg-gray-50 font-semibold">
                                             <tr>
-                                                <td colSpan={5} className="px-6 py-4 text-sm text-right text-gray-700 uppercase">TOTALS:</td>
+                                                <td colSpan={6} className="px-6 py-4 text-sm text-right text-gray-700 uppercase">TOTALS:</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold border-l border-gray-200">{formatCurrency(totalDebit)}</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold border-l border-gray-200">{formatCurrency(totalCredit)}</td>
                                                 <td className="px-6 py-4 text-sm text-right text-gray-400 italic"></td>
@@ -6859,4 +6867,3 @@ function SalesContent() {
 };
 
 export default CustomerPortalPage;
-

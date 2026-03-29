@@ -411,4 +411,41 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
                 defaults={**filtered_data, 'tenant_id': tenant_id},
             )
 
+        self._mirror_to_vendor_portal(instance)
         return instance
+
+    def _mirror_to_vendor_portal(self, purchase):
+        """Mirror Purchase vouchers to Vendor Portal ledger"""
+        try:
+            from vendors.models import VendorMasterBasicDetail, VendorTransaction
+            tenant_id = purchase.tenant_id
+            
+            # Find vendor master
+            vendor = VendorMasterBasicDetail.objects.filter(
+                tenant_id=tenant_id, 
+                vendor_name__iexact=purchase.vendor_name
+            ).first()
+            
+            if vendor:
+                # Calculate total amount
+                due_details = getattr(purchase, 'due_details', None)
+                total_amt = due_details.to_pay if due_details else 0
+                
+                VendorTransaction.objects.update_or_create(
+                    tenant_id=tenant_id,
+                    vendor_id=vendor.id,
+                    transaction_number=purchase.purchase_voucher_no or purchase.supplier_invoice_no,
+                    transaction_type='purchase',
+                    defaults={
+                        'transaction_date': purchase.invoice_date,
+                        'amount': total_amt,
+                        'total_amount': total_amt,
+                        'status': 'Unpaid' if total_amt > 0 else 'Paid',
+                        'reference_number': purchase.supplier_invoice_no,
+                        'notes': f"Purchase from {purchase.vendor_name}",
+                        'ledger_name': 'Purchase A/c'
+                    }
+                )
+                print(f"!!! Vendor Sync OK (Purchase): {purchase.vendor_name}")
+        except Exception as e:
+            print(f"!!! Vendor Portal Sync Failure (Purchase): {str(e)}")
