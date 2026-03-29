@@ -25,7 +25,12 @@ from .invoice_api import SalesInvoiceViewSet # pyre-fixme
 from .views_voucher_sales import VoucherSalesViewSet # pyre-fixme
 
 
-from .views_payment import VoucherPaymentSingleViewSet, VoucherPaymentBulkViewSet # pyre-fixme
+from .views_payment import (
+    PaymentVoucherViewSet, 
+    VoucherPaymentSingleViewSet, 
+    VoucherPaymentBulkViewSet,
+    AdvancePaymentViewSet
+) # pyre-fixme
 from .views_receipt import VoucherReceiptSingleViewSet, VoucherReceiptBulkViewSet, ReceiptVoucherViewSet # pyre-fixme
 from .views_expense import VoucherExpenseViewSet # pyre-fixme
 from .views_contra_journal import VoucherContraViewSet, VoucherJournalViewSet # pyre-fixme

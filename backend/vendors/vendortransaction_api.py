@@ -57,7 +57,9 @@ class VendorTransactionViewSet(viewsets.ModelViewSet):
         tenant_id = self.get_tenant_id()
         logger.info(f"Tenant: {tenant_id}, Vendor ID: {vendor_id}")
         
+        total_db_count = VendorTransaction.objects.count()
         transactions = self.get_queryset().filter(vendor_id=vendor_id)
+        logger.info(f"DB Total: {total_db_count}, Found For Vendor {vendor_id}: {transactions.count()}")
         
         # Serialize and return
         serializer = self.get_serializer(transactions, many=True)

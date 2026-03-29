@@ -254,20 +254,19 @@ class ReceiptVoucherSerializer(serializers.ModelSerializer):
                         ).first()
                     
                     if vendor:
-                        p_status = 'Received'
-                        if item.is_advance or item.reference_type == 'advance':
-                            p_status = 'Advance'
+                        p_status = 'Advance' if (item.is_advance or item.reference_type == 'advance') else 'Received'
                         
                         VendorTransaction.objects.update_or_create(
                             tenant_id=receipt.tenant_id,
                             vendor_id=vendor.id,
+                            # Composite key for unique items
                             transaction_number=f"{receipt.voucher_number}-{item.id}",
                             transaction_type='receipt',
                             defaults={
                                 'transaction_date': receipt.date,
                                 'amount': item.received_amount,
                                 'total_amount': item.received_amount,
-                                'status': 'POSTED',
+                                'status': p_status,
                                 'reference_number': item.reference_id or receipt.voucher_number,
                                 'notes': receipt.notes,
                                 'ledger_name': receipt.receive_in.name if receipt.receive_in else 'Direct Receipt'
@@ -304,8 +303,7 @@ class ReceiptVoucherSerializer(serializers.ModelSerializer):
                     
                     if portal_customer:
                         # Map transaction types to portal-specific statuses
-                        # Use 'Not Utilized' for advances as requested by user
-                        p_status = 'Not Utilized' if (item.is_advance or item.reference_type == 'advance') else 'Received'
+                        p_status = 'Advance' if (item.is_advance or item.reference_type == 'advance') else 'Received'
                         
                         # Use update_or_create to avoid duplicates on retries
                         # Use a composite key for transaction_number to prevent overwriting different items or different allocations on the same voucher
