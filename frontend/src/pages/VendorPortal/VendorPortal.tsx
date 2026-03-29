@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { ChevronDown, Eye, Pencil, Trash2, Plus, Search, Filter, ChevronLeft, X } from 'lucide-react';
 import { usePermissions } from '../../hooks/usePermissions';
 import { httpClient } from '../../services/httpClient';
+import { apiService } from '../../services/api';
 import CategoryHierarchicalDropdown from '../../components/CategoryHierarchicalDropdown';
 import { InventoryCategoryWizard } from '../../components/InventoryCategoryWizard';
 import SearchableDropdown from '../../components/SearchableDropdown';
@@ -211,7 +212,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     // Filter vendor aging data based on search term
     const getFilteredVendorAging = (data: any[]) => {
         if (!procurementSearchTerm) return data;
-        return data.filter(vendor => 
+        return data.filter(vendor =>
             vendor.name.toLowerCase().includes(procurementSearchTerm.toLowerCase()) ||
             vendor.code.toLowerCase().includes(procurementSearchTerm.toLowerCase())
         );
@@ -219,21 +220,39 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
     // Live Procurement Aging State (replaces mock data)
     const [purchaseVouchers, setPurchaseVouchers] = useState<any[]>([]);
+    const [advancePayments, setAdvancePayments] = useState<any[]>([]);
+    const [allAdvancePayments, setAllAdvancePayments] = useState<any[]>([]); // For dashboard tiles
     const [loadingProcurementAging, setLoadingProcurementAging] = useState(false);
 
-    // Fetch purchase vouchers when Procurement tab is active
+    // Fetch purchase vouchers and advances when Procurement tab is active
     useEffect(() => {
-        if (activeTransactionSubTab === 'Procurement' && activeProcurementSubTab !== 'Dashboard') {
+        if (activeTransactionSubTab === 'Procurement') {
             const fetchProcurementData = async () => {
-                setLoadingProcurementAging(true);
-                try {
-                    const pvRes = await httpClient.get('/api/vouchers/purchase/');
-                    const pvList: any[] = Array.isArray(pvRes) ? pvRes : ((pvRes as any)?.results || []);
-                    setPurchaseVouchers(pvList);
-                } catch (error) {
-                    handleApiError(error, 'Fetch Purchase Vouchers');
-                } finally {
-                    setLoadingProcurementAging(false);
+                if (activeProcurementSubTab === 'Dashboard') {
+                    // Fetch all advances for dashboard tiles using UNIFIED API
+                    try {
+                        const advRes = await apiService.getAdvances();
+                        const advList: any[] = Array.isArray(advRes) ? advRes : ((advRes as any)?.results || []);
+                        setAllAdvancePayments(advList);
+                    } catch (error) {
+                        console.error('Error fetching dashboard advances:', error);
+                    }
+                } else {
+                    setLoadingProcurementAging(true);
+                    try {
+                        const [pvRes, advRes] = await Promise.all([
+                            httpClient.get('/api/vouchers/purchase/'),
+                            apiService.getAdvances(undefined, activeProcurementSubTab)
+                        ]);
+                        const pvList: any[] = Array.isArray(pvRes) ? pvRes : ((pvRes as any)?.results || []);
+                        const advList: any[] = Array.isArray(advRes) ? advRes : ((advRes as any)?.results || []);
+                        setPurchaseVouchers(pvList);
+                        setAdvancePayments(advList);
+                    } catch (error) {
+                        handleApiError(error, 'Fetch Procurement Data');
+                    } finally {
+                        setLoadingProcurementAging(false);
+                    }
                 }
             };
             fetchProcurementData();
@@ -242,11 +261,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
     // Compute aging from real purchase vouchers, filtered by category
     const getVendorAgingData = (categoryName: string) => {
-        if (!purchaseVouchers.length || !vendorList.length) return [];
+        if (!vendorList.length) return [];
 
         const vendorGroups: Record<string, {
-            id: string; code: string; name: string;
+            id: string; code: string; name: string; ledger_id?: string;
             days0to45: number; days45to90: number; months6: number; year1: number;
+            advances: number;
         }> = {};
 
         purchaseVouchers.forEach((pv: any) => {
@@ -273,10 +293,12 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                     id: vendorId.toString(),
                     code: vendorCode,
                     name: vendorName,
+                    ledger_id: (vendor as any).ledger_id || (vendor as any).ledger,
                     days0to45: 0,
                     days45to90: 0,
                     months6: 0,
                     year1: 0,
+                    advances: 0,
                 };
             }
 
@@ -296,6 +318,43 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             }
         });
 
+        // Add Advance Payments (negative outstanding or separate bucket)
+        const advancesToUse = advancePayments.length > 0 
+            ? advancePayments 
+            : allAdvancePayments.filter((adv: any) => {
+                const cat = (adv.category || '').toLowerCase();
+                return cat.includes(categoryName.toLowerCase());
+            });
+
+        advancesToUse.forEach((adv: any) => {
+            const ledgerId = adv.pay_to_ledger; // Unified Source of Truth
+            if (!ledgerId) return;
+
+            // Match by ledger_id
+            const vendor = vendorList.find((v: any) => v.ledger_id === ledgerId || v.ledger === ledgerId);
+            if (!vendor) return;
+            
+            const vendorId = vendor.id;
+            const vendorCode = vendor.vendor_code || `VEN-${vendorId}`;
+            const vendorName = vendor.vendor_name || adv.pay_to_name || 'Unknown Vendor';
+
+            if (!vendorGroups[vendorId]) {
+                vendorGroups[vendorId] = {
+                    id: vendorId.toString(),
+                    code: vendorCode,
+                    name: vendorName,
+                    days0to45: 0,
+                    days45to90: 0,
+                    months6: 0,
+                    year1: 0,
+                    advances: 0,
+                };
+            }
+
+            const amount = parseFloat(adv.amount || 0);
+            vendorGroups[vendorId].advances += amount;
+        });
+
         return Object.values(vendorGroups);
     };
 
@@ -310,73 +369,58 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const [viewVendorId, setViewVendorId] = useState<number | null>(null);
 
     // Fetch ledger data for a selected vendor, enriching Payment/Receipt entries with voucher numbers
-    const fetchVendorLedger = async (vendorName: string) => {
+    const fetchVendorLedger = async (vendorId: number | string, vendorName: string) => {
         setLoadingLedger(true);
         try {
-            // Fetch payment vouchers for this vendor (pay_to = vendor name)
-            const paymentRes: any = await httpClient.get(`/api/vouchers/payment-single/?pay_to=${encodeURIComponent(vendorName)}`);
-            const paymentVouchers: any[] = Array.isArray(paymentRes) ? paymentRes : (paymentRes.results || []);
+            // Fetch aggregated transactions from the new Vendor Portal endpoint
+            const res: any = await httpClient.get(`/api/vendors/transactions/by_vendor/?vendor_id=${vendorId}`);
+            const transactions = Array.isArray(res) ? res : (res.results || []);
 
-            // Fetch receipt vouchers for this vendor (receive_from = vendor name)
-            const receiptRes: any = await httpClient.get(`/api/vouchers/receipt-single/?receive_from=${encodeURIComponent(vendorName)}`);
-            const receiptVouchers: any[] = Array.isArray(receiptRes) ? receiptRes : (receiptRes.results || []);
+            const allEntries = transactions.map((t: any) => {
+                const transactionType = (t.transaction_type || t.type || '').toLowerCase();
+                const isDebit = ['payment', 'debit_note'].includes(transactionType);
+                const amt = parseFloat(t.total_amount || t.total || t.amount || 0);
+                
+                // Map backend transaction type to frontend-friendly label
+                const typeMap: Record<string, string> = {
+                    'purchase': 'Purchase Voucher',
+                    'payment': 'Payment Voucher',
+                    'receipt': 'Receipt Voucher',
+                    'debit_note': 'Debit Note',
+                    'credit_note': 'Credit Note',
+                    'journal': 'Journal'
+                };
+                const type = typeMap[transactionType] || transactionType;
 
-            // Fetch purchase vouchers for this vendor
-            const purchaseRes: any = await httpClient.get(`/api/vouchers/purchase/?vendor_name=${encodeURIComponent(vendorName)}`);
-            const purchaseVouchers: any[] = Array.isArray(purchaseRes) ? purchaseRes : (purchaseRes.results || []);
+                return {
+                    id: `t-${t.id}`,
+                    date: t.transaction_date || t.date,
+                    transferFrom: type,
+                    referenceNo: t.reference_number || t.transaction_number || t.number || '-',
+                    ledger: transactionType === 'receipt' ? 'Receipt' : (t.ledger_name || (transactionType === 'purchase' ? 'Purchase A/c' : '-')),
+                    status: t.status || 'Paid',
+                    debit: isDebit ? amt.toLocaleString('en-IN') : '-',
+                    credit: !isDebit ? amt.toLocaleString('en-IN') : '-',
+                    runningBalance: '-',
+                    rawVoucher: t
+                };
+            });
 
-            // Build ledger entries from Payment vouchers (Debit Vendor)
-            const paymentEntries = paymentVouchers.map((v: any, idx: number) => ({
-                id: `pay-${v.id || idx}`,
-                date: v.date || '',
-                transferFrom: 'Payment',
-                referenceNo: v.voucher_number || '-',
-                ledger: v.pay_from_name || v.pay_from || '-',
-                status: 'Paid',
-                debit: v.total_payment ? Number(v.total_payment).toLocaleString('en-IN') : '-',
-                credit: '-',
-                runningBalance: '-',
-                rawVoucher: v
-            }));
-
-            // Build ledger entries from Receipt vouchers (Credit Vendor)
-            const receiptEntries = receiptVouchers.map((v: any, idx: number) => ({
-                id: `rec-${v.id || idx}`,
-                date: v.date || '',
-                transferFrom: 'Receipt',
-                referenceNo: v.voucher_number || '-',
-                ledger: v.receive_in_name || v.receive_in || '-',
-                status: 'Paid',
-                debit: '-',
-                credit: v.total_receipt ? Number(v.total_receipt).toLocaleString('en-IN') : '-',
-                runningBalance: '-',
-                rawVoucher: v
-            }));
-
-            // Build ledger entries from Purchase vouchers (Credit Vendor)
-            const purchaseEntries = purchaseVouchers.map((v: any, idx: number) => ({
-                id: `pur-${v.id || idx}`,
-                date: v.date || '',
-                transferFrom: 'Purchase',
-                referenceNo: v.purchase_voucher_no || v.supplier_invoice_no || '-',
-                ledger: 'Purchase A/c',
-                status: (v.due_details?.to_pay <= 0) ? 'Paid' : 'Unpaid',
-                debit: '-',
-                credit: v.due_details?.to_pay ? Number(v.due_details.to_pay).toLocaleString('en-IN') : '-',
-                runningBalance: '-',
-                rawVoucher: v
-            }));
-
-            // Combine and sort by date ascending (Oldest to Newest as requested)
-            const allEntries = [...paymentEntries, ...receiptEntries, ...purchaseEntries].sort((a, b) =>
-                new Date(a.date).getTime() - new Date(b.date).getTime()
-            );
-
-            // Calculate running balance
+            // Calculate running balance (Credit balance = Liability for vendors)
             let balance = 0;
-            const updatedEntries = allEntries.map(entry => {
+            const sortedEntries = allEntries.sort((a, b) => {
+                const dateDiff = new Date(a.date).getTime() - new Date(b.date).getTime();
+                if (dateDiff !== 0) return dateDiff;
+                // Fallback for identical dates: sort by ID (removing 't-' prefix)
+                const idA = parseInt(a.id.replace('t-', ''));
+                const idB = parseInt(b.id.replace('t-', ''));
+                return idA - idB;
+            });
+
+            const updatedEntries = sortedEntries.map(entry => {
                 const pCredit = entry.credit !== '-' ? parseFloat(entry.credit.replace(/,/g, '')) : 0;
                 const pDebit = entry.debit !== '-' ? parseFloat(entry.debit.replace(/,/g, '')) : 0;
+                // For vendors, Credit balance is positive (Liability)
                 balance += pCredit - pDebit;
                 entry.runningBalance = Math.abs(balance).toLocaleString('en-IN') + (balance >= 0 ? ' Cr' : ' Dr');
                 return entry;
@@ -431,28 +475,28 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
     const vendorMonthData = useMemo(() => {
         const months = [
-            'April', 'May', 'June', 'July', 'August', 'September', 
+            'April', 'May', 'June', 'July', 'August', 'September',
             'October', 'November', 'December', 'January', 'February', 'March'
         ];
-        
+
         let cumulativeBalance = 0;
-        
+
         return months.map(month => {
             const monthStr = monthNameToNumber[month];
             const entriesInMonth = vendorLedgerData.filter(entry => entry.date && entry.date.split('-')[1] === monthStr);
-            
+
             const mDebit = entriesInMonth.reduce((sum, entry) => sum + (entry.debit !== '-' ? parseFloat(entry.debit.replace(/,/g, '')) : 0), 0);
             const mCredit = entriesInMonth.reduce((sum, entry) => sum + (entry.credit !== '-' ? parseFloat(entry.credit.replace(/,/g, '')) : 0), 0);
-            
+
             cumulativeBalance += mCredit - mDebit;
-            
+
             return {
                 month,
                 debit: mDebit > 0 ? mDebit.toLocaleString('en-IN') : '-',
                 credit: mCredit > 0 ? mCredit.toLocaleString('en-IN') : '-',
-                closingBalance: cumulativeBalance !== 0 
-                  ? Math.abs(cumulativeBalance).toLocaleString('en-IN') + (cumulativeBalance >= 0 ? ' Cr' : ' Dr') 
-                  : '-'
+                closingBalance: cumulativeBalance !== 0
+                    ? Math.abs(cumulativeBalance).toLocaleString('en-IN') + (cumulativeBalance >= 0 ? ' Cr' : ' Dr')
+                    : '-'
             };
         });
     }, [vendorLedgerData]);
@@ -508,7 +552,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
     // PO Form Field State
     const [poName, setPoName] = useState('');
-    const [poCategoryId, setPoCategoryId] = useState<number | null>(null);
+    const [poCategoryId, setPoCategoryId] = useState<number | string | null>(null);
     const [poCategoryPath, setPoCategoryPath] = useState('');
     const [poPrefix, setPoPrefix] = useState('');
     const [poSuffix, setPoSuffix] = useState('');
@@ -2670,6 +2714,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             <CategoryHierarchicalDropdown
                                                 apiEndpoint="/api/vendors/categories/"
                                                 systemCategories={VENDOR_SYSTEM_CATEGORIES}
+                                                 mergeSystem={true}
                                                 onSelect={(selection) => {
                                                     setPoCategoryId(selection.id);
                                                     setPoCategoryPath(selection.fullPath);
@@ -3041,6 +3086,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                             <CategoryHierarchicalDropdown
                                                 apiEndpoint="/api/vendors/categories/"
                                                 systemCategories={VENDOR_SYSTEM_CATEGORIES}
+                                                 mergeSystem={true}
                                                 value={vendorCategory}
                                                 onSelect={(selection) => setVendorCategory(selection.fullPath)}
                                                 placeholder="Select Category"
@@ -4809,6 +4855,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                             ['Draft', 'Pending Approval', 'Approved', 'Mailed'].includes(po.status)
                                                         ).length;
 
+                                                        const activeAdvances = allAdvancePayments.filter(adv => 
+                                                            (adv.category || '').toLowerCase() === (item.name || '').toLowerCase()
+                                                        ).length;
+
                                                         return (
                                                             <div
                                                                 key={item.name}
@@ -4827,6 +4877,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                         <div className="text-right mr-2">
                                                                             <p className="text-lg font-bold text-gray-800">{activeOrders}</p>
                                                                             <p className="text-[10px] text-indigo-600 font-semibold uppercase tracking-wider">Orders</p>
+                                                                        </div>
+                                                                        <div className="text-right mr-2">
+                                                                            <p className="text-lg font-bold text-gray-800">{activeAdvances}</p>
+                                                                            <p className="text-[10px] text-green-600 font-semibold uppercase tracking-wider">Advances</p>
                                                                         </div>
                                                                         <ChevronLeft className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transform rotate-180 transition-all opacity-0 group-hover:opacity-100" />
                                                                     </div>
@@ -4938,21 +4992,21 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 border-r border-gray-50">
                                                                                     <span className="text-gray-600">{activeProcurementSubTab}</span>
                                                                                 </td>
-                                                                                
+
                                                                                 {/* Amount columns */}
                                                                                 <td className="px-4 py-4 whitespace-nowrap text-sm text-center text-slate-400 border-r border-gray-50 bg-slate-50/30 group-hover:bg-transparent">-</td>
                                                                                 <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-medium text-slate-700 border-r border-gray-50 bg-slate-50/30 group-hover:bg-transparent">{formatProcurementCurrency(vendor.days0to45)}</td>
                                                                                 <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-medium text-slate-700 border-r border-gray-50 bg-slate-50/30 group-hover:bg-transparent">{formatProcurementCurrency(vendor.days45to90)}</td>
                                                                                 <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-medium text-slate-700 border-r border-gray-50 bg-slate-50/30 group-hover:bg-transparent">{formatProcurementCurrency(vendor.months6)}</td>
                                                                                 <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-medium text-slate-700 bg-slate-50/30 group-hover:bg-transparent">{formatProcurementCurrency(vendor.year1)}</td>
-                                                                                
+
                                                                                 <td className="px-6 py-4 whitespace-nowrap text-center border-l border-gray-50">
                                                                                     <div className="flex items-center justify-center space-x-2">
-                                                                                        <button 
+                                                                                        <button
                                                                                             onClick={() => {
                                                                                                 setSelectedProcurementVendor(vendor);
                                                                                                 setProcurementViewMode('ledger');
-                                                                                                fetchVendorLedger(vendor.name);
+                                                                                                fetchVendorLedger(vendor.id, vendor.name);
                                                                                             }}
                                                                                             className="text-indigo-600 hover:text-indigo-900 transition-colors p-1.5 rounded-full hover:bg-indigo-100"
                                                                                             title="View Ledger"
@@ -4994,253 +5048,253 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
                                                     <div className="overflow-x-auto">
                                                         <table className="erp-table min-w-full">
-                                                                <thead className="bg-[#F8F9FA] border-b border-slate-200">
-                                                                    <tr>
-                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">
-                                                                            <div className="flex items-center justify-between relative">
-                                                                                <span>Date</span>
-                                                                                <div className="ml-2">
-                                                                                    <Filter
-                                                                                        className={`w-4 h-4 cursor-pointer ${activeFilter === 'date' ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-600'}`}
-                                                                                        onClick={() => toggleFilter('date')}
-                                                                                    />
-                                                                                    {activeFilter === 'date' && (
-                                                                                        <div className="absolute z-50 top-8 left-0 bg-white rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-100 p-4 w-[280px]">
-                                                                                            <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-100">
-                                                                                                <span className="text-sm font-black text-slate-800 tracking-tight">Filter by Date Range</span>
-                                                                                                <X className="w-4 h-4 cursor-pointer text-slate-400 hover:text-slate-700 transition-colors" onClick={() => setActiveFilter(null)} />
+                                                            <thead className="bg-[#F8F9FA] border-b border-slate-200">
+                                                                <tr>
+                                                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">
+                                                                        <div className="flex items-center justify-between relative">
+                                                                            <span>Date</span>
+                                                                            <div className="ml-2">
+                                                                                <Filter
+                                                                                    className={`w-4 h-4 cursor-pointer ${activeFilter === 'date' ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-600'}`}
+                                                                                    onClick={() => toggleFilter('date')}
+                                                                                />
+                                                                                {activeFilter === 'date' && (
+                                                                                    <div className="absolute z-50 top-8 left-0 bg-white rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-100 p-4 w-[280px]">
+                                                                                        <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-100">
+                                                                                            <span className="text-sm font-black text-slate-800 tracking-tight">Filter by Date Range</span>
+                                                                                            <X className="w-4 h-4 cursor-pointer text-slate-400 hover:text-slate-700 transition-colors" onClick={() => setActiveFilter(null)} />
+                                                                                        </div>
+                                                                                        <div className="space-y-4">
+                                                                                            <div>
+                                                                                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">From Date</label>
+                                                                                                <input
+                                                                                                    type="date"
+                                                                                                    value={ledgerFilters.dateFrom}
+                                                                                                    onChange={(e) => setLedgerFilters({ ...ledgerFilters, dateFrom: e.target.value })}
+                                                                                                    className="w-full px-3 py-2 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all shadow-sm"
+                                                                                                />
                                                                                             </div>
-                                                                                            <div className="space-y-4">
-                                                                                                <div>
-                                                                                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">From Date</label>
-                                                                                                    <input
-                                                                                                        type="date"
-                                                                                                        value={ledgerFilters.dateFrom}
-                                                                                                        onChange={(e) => setLedgerFilters({ ...ledgerFilters, dateFrom: e.target.value })}
-                                                                                                        className="w-full px-3 py-2 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all shadow-sm"
-                                                                                                    />
-                                                                                                </div>
-                                                                                                <div>
-                                                                                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">To Date</label>
-                                                                                                    <input
-                                                                                                        type="date"
-                                                                                                        value={ledgerFilters.dateTo}
-                                                                                                        onChange={(e) => setLedgerFilters({ ...ledgerFilters, dateTo: e.target.value })}
-                                                                                                        className="w-full px-3 py-2 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all shadow-sm"
-                                                                                                    />
-                                                                                                </div>
-                                                                                            </div>
-                                                                                            <div className="mt-5 pt-3 flex items-center justify-between">
-                                                                                                <button 
-                                                                                                    onClick={() => setLedgerFilters({ ...ledgerFilters, dateFrom: '', dateTo: '', date: '' })}
-                                                                                                    className={`text-[11px] font-bold uppercase tracking-wider transition-colors ${ledgerFilters.dateFrom || ledgerFilters.dateTo || ledgerFilters.date ? 'text-slate-400 hover:text-red-500' : 'text-slate-300 cursor-not-allowed'}`}
-                                                                                                    disabled={!ledgerFilters.dateFrom && !ledgerFilters.dateTo && !ledgerFilters.date}
-                                                                                                >
-                                                                                                    Clear
-                                                                                                </button>
-                                                                                                <button 
-                                                                                                    onClick={() => setActiveFilter(null)}
-                                                                                                    className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 uppercase tracking-wider transition-colors bg-indigo-50 px-3 py-1.5 rounded"
-                                                                                                >
-                                                                                                    Apply Filter
-                                                                                                </button>
+                                                                                            <div>
+                                                                                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">To Date</label>
+                                                                                                <input
+                                                                                                    type="date"
+                                                                                                    value={ledgerFilters.dateTo}
+                                                                                                    onChange={(e) => setLedgerFilters({ ...ledgerFilters, dateTo: e.target.value })}
+                                                                                                    className="w-full px-3 py-2 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all shadow-sm"
+                                                                                                />
                                                                                             </div>
                                                                                         </div>
-                                                                                    )}
-                                                                                </div>
-                                                                            </div>
-                                                                        </th>
-                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">
-                                                                            <div className="flex items-center justify-between relative">
-                                                                                <span className="truncate">Created From</span>
-                                                                                <div className="ml-2">
-                                                                                    <Filter
-                                                                                        className={`w-4 h-4 cursor-pointer ${activeFilter === 'transferFrom' ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-600'}`}
-                                                                                        onClick={() => toggleFilter('transferFrom')}
-                                                                                    />
-                                                                                    {activeFilter === 'transferFrom' && (
-                                                                                        <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-48">
-                                                                                            <div className="flex justify-between items-center mb-2">
-                                                                                                <span className="text-xs font-bold text-gray-700">Filter Type</span>
-                                                                                                <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
-                                                                                            </div>
-                                                                                            <input
-                                                                                                type="text"
-                                                                                                placeholder="Type to filter..."
-                                                                                                value={ledgerFilters.transferFrom}
-                                                                                                onChange={(e) => setLedgerFilters({ ...ledgerFilters, transferFrom: e.target.value })}
-                                                                                                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none"
-                                                                                                autoFocus
-                                                                                            />
+                                                                                        <div className="mt-5 pt-3 flex items-center justify-between">
+                                                                                            <button
+                                                                                                onClick={() => setLedgerFilters({ ...ledgerFilters, dateFrom: '', dateTo: '', date: '' })}
+                                                                                                className={`text-[11px] font-bold uppercase tracking-wider transition-colors ${ledgerFilters.dateFrom || ledgerFilters.dateTo || ledgerFilters.date ? 'text-slate-400 hover:text-red-500' : 'text-slate-300 cursor-not-allowed'}`}
+                                                                                                disabled={!ledgerFilters.dateFrom && !ledgerFilters.dateTo && !ledgerFilters.date}
+                                                                                            >
+                                                                                                Clear
+                                                                                            </button>
+                                                                                            <button
+                                                                                                onClick={() => setActiveFilter(null)}
+                                                                                                className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 uppercase tracking-wider transition-colors bg-indigo-50 px-3 py-1.5 rounded"
+                                                                                            >
+                                                                                                Apply Filter
+                                                                                            </button>
                                                                                         </div>
-                                                                                    )}
-                                                                                </div>
+                                                                                    </div>
+                                                                                )}
                                                                             </div>
-                                                                        </th>
-                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">
-                                                                            <div className="flex items-center justify-between relative">
-                                                                                <span>Reference No</span>
-                                                                                <div className="ml-2">
-                                                                                    <Filter
-                                                                                        className={`w-4 h-4 cursor-pointer ${activeFilter === 'referenceNo' ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-600'}`}
-                                                                                        onClick={() => toggleFilter('referenceNo')}
-                                                                                    />
-                                                                                    {activeFilter === 'referenceNo' && (
-                                                                                        <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-52">
-                                                                                            <div className="flex justify-between items-center mb-2">
-                                                                                                <span className="text-xs font-bold text-gray-700">Search Reference</span>
-                                                                                                <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
-                                                                                            </div>
-                                                                                            <input
-                                                                                                type="text"
-                                                                                                placeholder="Search..."
-                                                                                                value={ledgerFilters.referenceNo}
-                                                                                                onChange={(e) => setLedgerFilters({ ...ledgerFilters, referenceNo: e.target.value })}
-                                                                                                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none"
-                                                                                                autoFocus
-                                                                                            />
+                                                                        </div>
+                                                                    </th>
+                                                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">
+                                                                        <div className="flex items-center justify-between relative">
+                                                                            <span className="truncate">Created From</span>
+                                                                            <div className="ml-2">
+                                                                                <Filter
+                                                                                    className={`w-4 h-4 cursor-pointer ${activeFilter === 'transferFrom' ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-600'}`}
+                                                                                    onClick={() => toggleFilter('transferFrom')}
+                                                                                />
+                                                                                {activeFilter === 'transferFrom' && (
+                                                                                    <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-48">
+                                                                                        <div className="flex justify-between items-center mb-2">
+                                                                                            <span className="text-xs font-bold text-gray-700">Filter Type</span>
+                                                                                            <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
                                                                                         </div>
-                                                                                    )}
-                                                                                </div>
+                                                                                        <input
+                                                                                            type="text"
+                                                                                            placeholder="Type to filter..."
+                                                                                            value={ledgerFilters.transferFrom}
+                                                                                            onChange={(e) => setLedgerFilters({ ...ledgerFilters, transferFrom: e.target.value })}
+                                                                                            className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none"
+                                                                                            autoFocus
+                                                                                        />
+                                                                                    </div>
+                                                                                )}
                                                                             </div>
-                                                                        </th>
-                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">
-                                                                            <div className="flex items-center justify-between relative">
-                                                                                <span>Ledger</span>
-                                                                                <div className="ml-2">
-                                                                                    <Filter
-                                                                                        className={`w-4 h-4 cursor-pointer ${activeFilter === 'ledger' ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-600'}`}
-                                                                                        onClick={() => toggleFilter('ledger')}
-                                                                                    />
-                                                                                    {activeFilter === 'ledger' && (
-                                                                                        <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-52">
-                                                                                            <div className="flex justify-between items-center mb-2">
-                                                                                                <span className="text-xs font-bold text-gray-700">Search Ledger</span>
-                                                                                                <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
-                                                                                            </div>
-                                                                                            <input
-                                                                                                type="text"
-                                                                                                placeholder="Search..."
-                                                                                                value={ledgerFilters.ledger}
-                                                                                                onChange={(e) => setLedgerFilters({ ...ledgerFilters, ledger: e.target.value })}
-                                                                                                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none"
-                                                                                                autoFocus
-                                                                                            />
+                                                                        </div>
+                                                                    </th>
+                                                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">
+                                                                        <div className="flex items-center justify-between relative">
+                                                                            <span>Reference No</span>
+                                                                            <div className="ml-2">
+                                                                                <Filter
+                                                                                    className={`w-4 h-4 cursor-pointer ${activeFilter === 'referenceNo' ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-600'}`}
+                                                                                    onClick={() => toggleFilter('referenceNo')}
+                                                                                />
+                                                                                {activeFilter === 'referenceNo' && (
+                                                                                    <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-52">
+                                                                                        <div className="flex justify-between items-center mb-2">
+                                                                                            <span className="text-xs font-bold text-gray-700">Search Reference</span>
+                                                                                            <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
                                                                                         </div>
-                                                                                    )}
-                                                                                </div>
+                                                                                        <input
+                                                                                            type="text"
+                                                                                            placeholder="Search..."
+                                                                                            value={ledgerFilters.referenceNo}
+                                                                                            onChange={(e) => setLedgerFilters({ ...ledgerFilters, referenceNo: e.target.value })}
+                                                                                            className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none"
+                                                                                            autoFocus
+                                                                                        />
+                                                                                    </div>
+                                                                                )}
                                                                             </div>
-                                                                        </th>
-                                                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">
-                                                                            <div className="flex items-center justify-between relative">
-                                                                                <span>Status</span>
-                                                                                <div className="ml-2">
-                                                                                    <Filter
-                                                                                        className={`w-4 h-4 cursor-pointer ${activeFilter === 'status' ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-600'}`}
-                                                                                        onClick={() => toggleFilter('status')}
-                                                                                    />
-                                                                                    {activeFilter === 'status' && (
-                                                                                        <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-48">
-                                                                                            <div className="flex justify-between items-center mb-2">
-                                                                                                <span className="text-xs font-bold text-gray-700">Filter Status</span>
-                                                                                                <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
-                                                                                            </div>
-                                                                                            <input
-                                                                                                type="text"
-                                                                                                placeholder="Type status..."
-                                                                                                value={ledgerFilters.status}
-                                                                                                onChange={(e) => setLedgerFilters({ ...ledgerFilters, status: e.target.value })}
-                                                                                                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none"
-                                                                                                autoFocus
-                                                                                            />
+                                                                        </div>
+                                                                    </th>
+                                                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">
+                                                                        <div className="flex items-center justify-between relative">
+                                                                            <span>Ledger</span>
+                                                                            <div className="ml-2">
+                                                                                <Filter
+                                                                                    className={`w-4 h-4 cursor-pointer ${activeFilter === 'ledger' ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-600'}`}
+                                                                                    onClick={() => toggleFilter('ledger')}
+                                                                                />
+                                                                                {activeFilter === 'ledger' && (
+                                                                                    <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-52">
+                                                                                        <div className="flex justify-between items-center mb-2">
+                                                                                            <span className="text-xs font-bold text-gray-700">Search Ledger</span>
+                                                                                            <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
                                                                                         </div>
-                                                                                    )}
-                                                                                </div>
+                                                                                        <input
+                                                                                            type="text"
+                                                                                            placeholder="Search..."
+                                                                                            value={ledgerFilters.ledger}
+                                                                                            onChange={(e) => setLedgerFilters({ ...ledgerFilters, ledger: e.target.value })}
+                                                                                            className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none"
+                                                                                            autoFocus
+                                                                                        />
+                                                                                    </div>
+                                                                                )}
                                                                             </div>
-                                                                        </th>
-                                                                        <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">
-                                                                            <div className="flex items-center justify-end relative">
-                                                                                <span>Debit</span>
-                                                                                <div className="ml-2">
-                                                                                    <Filter
-                                                                                        className={`w-4 h-4 cursor-pointer ${activeFilter === 'debit' ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-600'}`}
-                                                                                        onClick={() => toggleFilter('debit')}
-                                                                                    />
-                                                                                    {activeFilter === 'debit' && (
-                                                                                        <div className="absolute z-50 top-8 right-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-40">
-                                                                                            <div className="flex justify-between items-center mb-2">
-                                                                                                <span className="text-xs font-bold text-gray-700">Debit Mask</span>
-                                                                                                <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
-                                                                                            </div>
-                                                                                            <input
-                                                                                                type="text"
-                                                                                                placeholder="0.00"
-                                                                                                value={ledgerFilters.debit}
-                                                                                                onChange={(e) => setLedgerFilters({ ...ledgerFilters, debit: e.target.value })}
-                                                                                                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none text-right"
-                                                                                                autoFocus
-                                                                                            />
+                                                                        </div>
+                                                                    </th>
+                                                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">
+                                                                        <div className="flex items-center justify-between relative">
+                                                                            <span>Status</span>
+                                                                            <div className="ml-2">
+                                                                                <Filter
+                                                                                    className={`w-4 h-4 cursor-pointer ${activeFilter === 'status' ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-600'}`}
+                                                                                    onClick={() => toggleFilter('status')}
+                                                                                />
+                                                                                {activeFilter === 'status' && (
+                                                                                    <div className="absolute z-50 top-8 left-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-48">
+                                                                                        <div className="flex justify-between items-center mb-2">
+                                                                                            <span className="text-xs font-bold text-gray-700">Filter Status</span>
+                                                                                            <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
                                                                                         </div>
-                                                                                    )}
-                                                                                </div>
+                                                                                        <input
+                                                                                            type="text"
+                                                                                            placeholder="Type status..."
+                                                                                            value={ledgerFilters.status}
+                                                                                            onChange={(e) => setLedgerFilters({ ...ledgerFilters, status: e.target.value })}
+                                                                                            className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none"
+                                                                                            autoFocus
+                                                                                        />
+                                                                                    </div>
+                                                                                )}
                                                                             </div>
-                                                                        </th>
-                                                                        <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">
-                                                                            <div className="flex items-center justify-end relative">
-                                                                                <span>Credit</span>
-                                                                                <div className="ml-2">
-                                                                                    <Filter
-                                                                                        className={`w-4 h-4 cursor-pointer ${activeFilter === 'credit' ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-600'}`}
-                                                                                        onClick={() => toggleFilter('credit')}
-                                                                                    />
-                                                                                    {activeFilter === 'credit' && (
-                                                                                        <div className="absolute z-50 top-8 right-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-40">
-                                                                                            <div className="flex justify-between items-center mb-2">
-                                                                                                <span className="text-xs font-bold text-gray-700">Credit Mask</span>
-                                                                                                <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
-                                                                                            </div>
-                                                                                            <input
-                                                                                                type="text"
-                                                                                                placeholder="0.00"
-                                                                                                value={ledgerFilters.credit}
-                                                                                                onChange={(e) => setLedgerFilters({ ...ledgerFilters, credit: e.target.value })}
-                                                                                                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none text-right"
-                                                                                                autoFocus
-                                                                                            />
+                                                                        </div>
+                                                                    </th>
+                                                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">
+                                                                        <div className="flex items-center justify-end relative">
+                                                                            <span>Debit</span>
+                                                                            <div className="ml-2">
+                                                                                <Filter
+                                                                                    className={`w-4 h-4 cursor-pointer ${activeFilter === 'debit' ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-600'}`}
+                                                                                    onClick={() => toggleFilter('debit')}
+                                                                                />
+                                                                                {activeFilter === 'debit' && (
+                                                                                    <div className="absolute z-50 top-8 right-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-40">
+                                                                                        <div className="flex justify-between items-center mb-2">
+                                                                                            <span className="text-xs font-bold text-gray-700">Debit Mask</span>
+                                                                                            <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
                                                                                         </div>
-                                                                                    )}
-                                                                                </div>
+                                                                                        <input
+                                                                                            type="text"
+                                                                                            placeholder="0.00"
+                                                                                            value={ledgerFilters.debit}
+                                                                                            onChange={(e) => setLedgerFilters({ ...ledgerFilters, debit: e.target.value })}
+                                                                                            className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none text-right"
+                                                                                            autoFocus
+                                                                                        />
+                                                                                    </div>
+                                                                                )}
                                                                             </div>
-                                                                        </th>
-                                                                        <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                                                            <div className="flex items-center justify-end relative">
-                                                                                <span className="truncate">Running Bal</span>
-                                                                                <div className="ml-2">
-                                                                                    <Filter
-                                                                                        className={`w-4 h-4 cursor-pointer ${activeFilter === 'runningBalance' ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-600'}`}
-                                                                                        onClick={() => toggleFilter('runningBalance')}
-                                                                                    />
-                                                                                    {activeFilter === 'runningBalance' && (
-                                                                                        <div className="absolute z-50 top-8 right-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-44">
-                                                                                            <div className="flex justify-between items-center mb-2">
-                                                                                                <span className="text-xs font-bold text-gray-700">Balance Mask</span>
-                                                                                                <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
-                                                                                            </div>
-                                                                                            <input
-                                                                                                type="text"
-                                                                                                placeholder="0.00"
-                                                                                                value={ledgerFilters.runningBalance}
-                                                                                                onChange={(e) => setLedgerFilters({ ...ledgerFilters, runningBalance: e.target.value })}
-                                                                                                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none text-right"
-                                                                                                autoFocus
-                                                                                            />
+                                                                        </div>
+                                                                    </th>
+                                                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider border-r border-slate-200">
+                                                                        <div className="flex items-center justify-end relative">
+                                                                            <span>Credit</span>
+                                                                            <div className="ml-2">
+                                                                                <Filter
+                                                                                    className={`w-4 h-4 cursor-pointer ${activeFilter === 'credit' ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-600'}`}
+                                                                                    onClick={() => toggleFilter('credit')}
+                                                                                />
+                                                                                {activeFilter === 'credit' && (
+                                                                                    <div className="absolute z-50 top-8 right-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-40">
+                                                                                        <div className="flex justify-between items-center mb-2">
+                                                                                            <span className="text-xs font-bold text-gray-700">Credit Mask</span>
+                                                                                            <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
                                                                                         </div>
-                                                                                    )}
-                                                                                </div>
+                                                                                        <input
+                                                                                            type="text"
+                                                                                            placeholder="0.00"
+                                                                                            value={ledgerFilters.credit}
+                                                                                            onChange={(e) => setLedgerFilters({ ...ledgerFilters, credit: e.target.value })}
+                                                                                            className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none text-right"
+                                                                                            autoFocus
+                                                                                        />
+                                                                                    </div>
+                                                                                )}
                                                                             </div>
-                                                                        </th>
-                                                                    </tr>
-                                                                </thead>
+                                                                        </div>
+                                                                    </th>
+                                                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                                                        <div className="flex items-center justify-end relative">
+                                                                            <span className="truncate">Running Bal</span>
+                                                                            <div className="ml-2">
+                                                                                <Filter
+                                                                                    className={`w-4 h-4 cursor-pointer ${activeFilter === 'runningBalance' ? 'text-indigo-600 font-bold' : 'text-gray-400 hover:text-gray-600'}`}
+                                                                                    onClick={() => toggleFilter('runningBalance')}
+                                                                                />
+                                                                                {activeFilter === 'runningBalance' && (
+                                                                                    <div className="absolute z-50 top-8 right-0 bg-white shadow-xl border border-gray-200 rounded-[4px] p-3 w-44">
+                                                                                        <div className="flex justify-between items-center mb-2">
+                                                                                            <span className="text-xs font-bold text-gray-700">Balance Mask</span>
+                                                                                            <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
+                                                                                        </div>
+                                                                                        <input
+                                                                                            type="text"
+                                                                                            placeholder="0.00"
+                                                                                            value={ledgerFilters.runningBalance}
+                                                                                            onChange={(e) => setLedgerFilters({ ...ledgerFilters, runningBalance: e.target.value })}
+                                                                                            className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none text-right"
+                                                                                            autoFocus
+                                                                                        />
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    </th>
+                                                                </tr>
+                                                            </thead>
                                                             <tbody className="bg-white divide-y divide-gray-200">
                                                                 {loadingLedger ? (
                                                                     <tr>
@@ -5259,13 +5313,14 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(entry.date)}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{entry.transferFrom}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-medium cursor-pointer hover:underline">{entry.referenceNo}</td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.ledger}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.referenceNo || entry.ledger}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap">
-                                                                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${entry.status === 'Paid' ? 'bg-green-100 text-green-800' :
-                                                                                entry.status === 'Unpaid' ? 'bg-red-100 text-red-800' :
+                                                                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${
+                                                                                    ['Paid', 'POSTED'].includes(entry.status) ? 'bg-green-100 text-green-800' :
+                                                                                    entry.status === 'Unpaid' ? 'bg-red-100 text-red-800' :
                                                                                     'bg-yellow-100 text-yellow-800'}`}>
-                                                                                {entry.status}
-                                                                            </span>
+                                                                                    {entry.status}
+                                                                                </span>
                                                                         </td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.debit !== '-' ? `₹${entry.debit}` : '-'}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.credit !== '-' ? `₹${entry.credit}` : '-'}</td>
@@ -5326,7 +5381,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                 {formatDate(entry.date)}
                                                                             </td>
                                                                             <td className="px-6 py-4 text-sm font-bold text-gray-800">
-                                                                                {entry.transferFrom === 'Purchase' ? '(as per details)' : entry.ledger}
+                                                                                {entry.transferFrom === 'Purchase' ? '(as per details)' : (entry.referenceNo || entry.ledger)}
                                                                             </td>
                                                                             <td className="px-6 py-4 text-sm text-gray-500 uppercase">
                                                                                 {entry.transferFrom === 'Purchase' ? 'PURCHASE' : entry.transferFrom === 'Payment' ? 'PAYMENT' : entry.transferFrom}
@@ -5376,7 +5431,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                                             Purchase A/c {item.itemName ? `(${item.itemName})` : ''} {gstPct ? `@ GST ${gstPct}%` : ''}
                                                                                                         </td>
                                                                                                         <td colSpan={2}></td>
-                                                                                                        <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-800 font-medium">₹{taxable.toLocaleString('en-IN', {minimumFractionDigits: 2})} DR</td>
+                                                                                                        <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-800 font-medium">₹{taxable.toLocaleString('en-IN', { minimumFractionDigits: 2 })} DR</td>
                                                                                                         <td className="px-6 py-3 text-right text-gray-400">-</td>
                                                                                                     </tr>
                                                                                                 )}
@@ -5385,7 +5440,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                                         <td></td>
                                                                                                         <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-700 font-medium">Input CGST Account</td>
                                                                                                         <td colSpan={2}></td>
-                                                                                                        <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-800 font-medium">₹{cgst.toLocaleString('en-IN', {minimumFractionDigits: 2})} DR</td>
+                                                                                                        <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-800 font-medium">₹{cgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })} DR</td>
                                                                                                         <td className="px-6 py-3 text-right text-gray-400">-</td>
                                                                                                     </tr>
                                                                                                 )}
@@ -5394,7 +5449,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                                         <td></td>
                                                                                                         <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-700 font-medium">Input SGST Account</td>
                                                                                                         <td colSpan={2}></td>
-                                                                                                        <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-800 font-medium">₹{sgst.toLocaleString('en-IN', {minimumFractionDigits: 2})} DR</td>
+                                                                                                        <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-800 font-medium">₹{sgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })} DR</td>
                                                                                                         <td className="px-6 py-3 text-right text-gray-400">-</td>
                                                                                                     </tr>
                                                                                                 )}
@@ -5403,7 +5458,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                                         <td></td>
                                                                                                         <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-700 font-medium">Input IGST Account</td>
                                                                                                         <td colSpan={2}></td>
-                                                                                                        <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-800 font-medium">₹{igst.toLocaleString('en-IN', {minimumFractionDigits: 2})} DR</td>
+                                                                                                        <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-800 font-medium">₹{igst.toLocaleString('en-IN', { minimumFractionDigits: 2 })} DR</td>
                                                                                                         <td className="px-6 py-3 text-right text-gray-400">-</td>
                                                                                                     </tr>
                                                                                                 )}
@@ -5420,7 +5475,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                             </td>
                                                                                             <td colSpan={2}></td>
                                                                                             <td className="px-6 py-3 text-right text-gray-400">-</td>
-                                                                                            <td className="px-6 py-3 whitespace-nowrap text-sm text-right font-bold text-indigo-600">₹{netPayable.toLocaleString('en-IN', {minimumFractionDigits: 2})} CR</td>
+                                                                                            <td className="px-6 py-3 whitespace-nowrap text-sm text-right font-bold text-indigo-600">₹{netPayable.toLocaleString('en-IN', { minimumFractionDigits: 2 })} CR</td>
                                                                                         </tr>
                                                                                     )}
                                                                                     {tdsIt > 0 && (
@@ -5429,7 +5484,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                             <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-700 font-medium">TDS Payable (Income Tax)</td>
                                                                                             <td colSpan={2}></td>
                                                                                             <td className="px-6 py-3 text-right text-gray-400">-</td>
-                                                                                            <td className="px-6 py-3 whitespace-nowrap text-sm text-right font-medium text-gray-800">₹{tdsIt.toLocaleString('en-IN', {minimumFractionDigits: 2})} CR</td>
+                                                                                            <td className="px-6 py-3 whitespace-nowrap text-sm text-right font-medium text-gray-800">₹{tdsIt.toLocaleString('en-IN', { minimumFractionDigits: 2 })} CR</td>
                                                                                         </tr>
                                                                                     )}
                                                                                     {tdsGst > 0 && (
@@ -5438,7 +5493,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                             <td className="px-6 py-3 whitespace-nowrap text-sm pl-16 text-gray-700 font-medium">TDS Payable (GST)</td>
                                                                                             <td colSpan={2}></td>
                                                                                             <td className="px-6 py-3 text-right text-gray-400">-</td>
-                                                                                            <td className="px-6 py-3 whitespace-nowrap text-sm text-right font-medium text-gray-800">₹{tdsGst.toLocaleString('en-IN', {minimumFractionDigits: 2})} CR</td>
+                                                                                            <td className="px-6 py-3 whitespace-nowrap text-sm text-right font-medium text-gray-800">₹{tdsGst.toLocaleString('en-IN', { minimumFractionDigits: 2 })} CR</td>
                                                                                         </tr>
                                                                                     )}
                                                                                     {/* Fallback: show net payable from entry.credit if no due_details */}
@@ -5673,50 +5728,50 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 <p className="helper-text mt-1">Select a procurement category to manage payments.</p>
                                             </div>
 
-                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                                 {(categories.length > 0
-                                                     ? categories.filter(c => c.is_active).map(c => ({ name: c.category, desc: `Manage ${c.category.toLowerCase()} payments` }))
-                                                     : VENDOR_SYSTEM_CATEGORIES.map(name => ({ name, desc: `Manage ${name.toLowerCase()} payments` }))
-                                                 ).map((item) => {
-                                                     const pendingBillsList = paymentBills.filter(bill => bill.status !== 'Posted' && bill.category === item.name);
-                                                     const totalPendingAmount = pendingBillsList.reduce((sum, bill) => {
-                                                         const amount = parseFloat(bill.amount.replace(/[^0-9.-]+/g, ""));
-                                                         return sum + amount;
-                                                     }, 0);
-                                                     const formattedTotal = totalPendingAmount.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
-                                                     
-                                                     return (
-                                                         <div
-                                                             key={item.name}
-                                                             onClick={() => setActivePaymentSubTab(item.name as ProcurementSubTab)}
-                                                             className="bg-white p-6 rounded-[4px] border border-gray-200 hover:border-indigo-500 hover:shadow-md cursor-pointer transition-all group"
-                                                         >
-                                                             <div className="flex items-center justify-between mb-4">
-                                                                 <div className="p-3 rounded-[4px] bg-red-50 text-red-600 group-hover:bg-red-600 group-hover:text-white transition-colors">
-                                                                     <Filter className="w-6 h-6" />
-                                                                 </div>
-                                                                 <div className="flex items-center gap-2">
-                                                                     <div className="text-right mr-2">
-                                                                         <p className="text-lg font-bold text-gray-800">{pendingBillsList.length}</p>
-                                                                         <p className="text-[10px] text-red-600 font-semibold uppercase tracking-wider">Unpaid</p>
-                                                                     </div>
-                                                                     <ChevronLeft className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transform rotate-180 transition-all opacity-0 group-hover:opacity-100" />
-                                                                 </div>
-                                                             </div>
-                                                             <div className="flex justify-between items-end">
-                                                                 <div>
-                                                                     <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{item.name}</h3>
-                                                                     <p className="text-sm text-gray-500 mt-2">{item.desc}</p>
-                                                                 </div>
-                                                                 <div className="text-right">
-                                                                     <p className="text-lg font-bold text-gray-900">{formattedTotal}</p>
-                                                                     <p className="text-[10px] text-red-600 font-bold uppercase tracking-wider">Payable</p>
-                                                                 </div>
-                                                             </div>
-                                                         </div>
-                                                     );
-                                                 })}
-                                             </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                                {(categories.length > 0
+                                                    ? categories.filter(c => c.is_active).map(c => ({ name: c.category, desc: `Manage ${c.category.toLowerCase()} payments` }))
+                                                    : VENDOR_SYSTEM_CATEGORIES.map(name => ({ name, desc: `Manage ${name.toLowerCase()} payments` }))
+                                                ).map((item) => {
+                                                    const pendingBillsList = paymentBills.filter(bill => bill.status !== 'Posted' && bill.category === item.name);
+                                                    const totalPendingAmount = pendingBillsList.reduce((sum, bill) => {
+                                                        const amount = parseFloat(bill.amount.replace(/[^0-9.-]+/g, ""));
+                                                        return sum + amount;
+                                                    }, 0);
+                                                    const formattedTotal = totalPendingAmount.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
+
+                                                    return (
+                                                        <div
+                                                            key={item.name}
+                                                            onClick={() => setActivePaymentSubTab(item.name as ProcurementSubTab)}
+                                                            className="bg-white p-6 rounded-[4px] border border-gray-200 hover:border-indigo-500 hover:shadow-md cursor-pointer transition-all group"
+                                                        >
+                                                            <div className="flex items-center justify-between mb-4">
+                                                                <div className="p-3 rounded-[4px] bg-red-50 text-red-600 group-hover:bg-red-600 group-hover:text-white transition-colors">
+                                                                    <Filter className="w-6 h-6" />
+                                                                </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="text-right mr-2">
+                                                                        <p className="text-lg font-bold text-gray-800">{pendingBillsList.length}</p>
+                                                                        <p className="text-[10px] text-red-600 font-semibold uppercase tracking-wider">Unpaid</p>
+                                                                    </div>
+                                                                    <ChevronLeft className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transform rotate-180 transition-all opacity-0 group-hover:opacity-100" />
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex justify-between items-end">
+                                                                <div>
+                                                                    <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{item.name}</h3>
+                                                                    <p className="text-sm text-gray-500 mt-2">{item.desc}</p>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <p className="text-lg font-bold text-gray-900">{formattedTotal}</p>
+                                                                    <p className="text-[10px] text-red-600 font-bold uppercase tracking-wider">Payable</p>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
                                     ) : selectedVoucherForView ? (
                                         /* ───────── INLINE VOUCHER DETAIL VIEW ───────── */
@@ -5920,54 +5975,54 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         </div>
                                     ) : (
                                         /* ───────── TRANSACTION LIST ───────── */
-                                         <div>
-                                             <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
-                                                 <div className="flex items-center gap-4">
-                                                     <button
-                                                         onClick={() => { setActivePaymentSubTab('Dashboard'); setSelectedVoucherForView(null); }}
-                                                         className="p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
-                                                         title="Back to Dashboard"
-                                                     >
-                                                         <ChevronLeft className="w-5 h-5 text-gray-600" />
-                                                     </button>
-                                                     <div>
-                                                         <div className="flex items-center space-x-2 text-xs text-gray-400 mb-1 uppercase tracking-widest font-semibold">
-                                                             <span>Payment</span>
-                                                             <span className="text-gray-300">/</span>
-                                                             <span className="text-indigo-500 font-bold">{activePaymentSubTab}</span>
-                                                         </div>
-                                                         <h3 className="text-xl font-bold text-gray-900">{activePaymentSubTab}</h3>
-                                                     </div>
-                                                 </div>
-                                                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                                                     <div className="relative group min-w-[280px]">
-                                                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
-                                                         <input
-                                                             type="text"
-                                                             placeholder={`Search in ${activePaymentSubTab}...`}
-                                                             value={paymentSearchTerm}
-                                                             onChange={(e) => setPaymentSearchTerm(e.target.value)}
-                                                             className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all shadow-sm"
-                                                         />
-                                                         {paymentSearchTerm && (
-                                                             <button
-                                                                 onClick={() => setPaymentSearchTerm('')}
-                                                                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                                                             >
-                                                                 <X className="w-3 h-3" />
-                                                             </button>
-                                                         )}
-                                                     </div>
-                                                     <select
-                                                         value={paymentSortOrder}
-                                                         onChange={(e) => setPaymentSortOrder(e.target.value as 'recent' | 'earliest')}
-                                                         className="px-4 py-2 bg-white border border-slate-200 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
-                                                     >
-                                                         <option value="recent">Recent First</option>
-                                                         <option value="earliest">Earliest First</option>
-                                                     </select>
-                                                 </div>
-                                             </div>
+                                        <div>
+                                            <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+                                                <div className="flex items-center gap-4">
+                                                    <button
+                                                        onClick={() => { setActivePaymentSubTab('Dashboard'); setSelectedVoucherForView(null); }}
+                                                        className="p-2 hover:bg-gray-100 rounded-[4px] transition-colors"
+                                                        title="Back to Dashboard"
+                                                    >
+                                                        <ChevronLeft className="w-5 h-5 text-gray-600" />
+                                                    </button>
+                                                    <div>
+                                                        <div className="flex items-center space-x-2 text-xs text-gray-400 mb-1 uppercase tracking-widest font-semibold">
+                                                            <span>Payment</span>
+                                                            <span className="text-gray-300">/</span>
+                                                            <span className="text-indigo-500 font-bold">{activePaymentSubTab}</span>
+                                                        </div>
+                                                        <h3 className="text-xl font-bold text-gray-900">{activePaymentSubTab}</h3>
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                                                    <div className="relative group min-w-[280px]">
+                                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+                                                        <input
+                                                            type="text"
+                                                            placeholder={`Search in ${activePaymentSubTab}...`}
+                                                            value={paymentSearchTerm}
+                                                            onChange={(e) => setPaymentSearchTerm(e.target.value)}
+                                                            className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-[4px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all shadow-sm"
+                                                        />
+                                                        {paymentSearchTerm && (
+                                                            <button
+                                                                onClick={() => setPaymentSearchTerm('')}
+                                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                                            >
+                                                                <X className="w-3 h-3" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    <select
+                                                        value={paymentSortOrder}
+                                                        onChange={(e) => setPaymentSortOrder(e.target.value as 'recent' | 'earliest')}
+                                                        className="px-4 py-2 bg-white border border-slate-200 rounded-[4px] text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+                                                    >
+                                                        <option value="recent">Recent First</option>
+                                                        <option value="earliest">Earliest First</option>
+                                                    </select>
+                                                </div>
+                                            </div>
 
                                             {/* Payment Bills Table */}
                                             <div className="erp-card border border-slate-200 overflow-hidden">
@@ -6029,10 +6084,10 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                             {[...paymentBills]
                                                                 .filter(bill => {
                                                                     if (bill.status === 'Posted' || bill.category !== activePaymentSubTab) return false;
-                                                                    
+
                                                                     if (paymentSearchTerm) {
                                                                         const st = paymentSearchTerm.toLowerCase();
-                                                                        const matchesSearch = 
+                                                                        const matchesSearch =
                                                                             bill.vendorReferenceName.toLowerCase().includes(st) ||
                                                                             bill.voucherNo.toLowerCase().includes(st) ||
                                                                             bill.supplierInvoiceNo.toLowerCase().includes(st);
@@ -7113,3 +7168,4 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 };
 
 export default VendorPortalPage;
+

@@ -6,6 +6,7 @@ from .models import (
     Voucher, JournalEntry, AmountTransaction
 )
 from .models_question import Answer, Question
+from .models_voucher_payment import PaymentVoucherItem
 from .services.ledger_service import post_transaction, _resolve_ledger
 from decimal import Decimal
 
@@ -460,4 +461,59 @@ class VoucherSerializer(TenantModelSerializerMixin, serializers.ModelSerializer)
                 )
         except Exception as e:
             logger.error(f"Failed to post Journal Entries for voucher {voucher.id}: {str(e)}")
+
+
+class PaymentVoucherItemSerializer(serializers.ModelSerializer):
+    """
+    Serializer for mapping PaymentVoucherItem (Advances) to Frontend categories.
+    Follows: PaymentVoucherItem -> MasterLedger -> Vendor/Customer -> Category
+    """
+    voucher_number = serializers.CharField(source='voucher.voucher_number', read_only=True)
+    voucher_date = serializers.DateField(source='voucher.date', read_only=True)
+    name = serializers.CharField(source='pay_to_ledger.name', read_only=True)
+    ledger_id = serializers.IntegerField(source='pay_to_ledger.id', read_only=True)
+    pay_to_ledger_id = serializers.IntegerField(source='pay_to_ledger.id', read_only=True)
+    
+    # Unified Category field for UI
+    category = serializers.SerializerMethodField()
+    
+    # Matching IDs for frontend (Mapped to ledger_id as per Step 2/7)
+    reference_no = serializers.CharField(source='voucher.voucher_number', read_only=True)
+
+    class Meta:
+        model = PaymentVoucherItem
+        fields = [
+            'id', 'voucher', 'voucher_number', 'voucher_date', 
+            'pay_to_ledger', 'pay_to_ledger_id', 'ledger_id', 'name',
+            'reference_type', 'reference_no', 'amount',
+            'category'
+        ]
+
+    def get_category(self, obj):
+        if not obj.pay_to_ledger:
+            return None
+            
+        # 1. Try Vendor mapping
+        try:
+            from vendors.models import VendorMasterBasicDetail
+            vendor = VendorMasterBasicDetail.objects.filter(ledger=obj.pay_to_ledger).first()
+            if vendor and vendor.vendor_category:
+                return vendor.vendor_category
+        except:
+            pass
+
+        # 2. Try Customer mapping
+        try:
+            from customerportal.models import CustomerMasterCustomerBasicDetails
+            customer = CustomerMasterCustomerBasicDetails.objects.filter(ledger=obj.pay_to_ledger).first()
+            if customer and customer.customer_category:
+                return customer.customer_category.category
+        except:
+            pass
+            
+        return None
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        return ret
 

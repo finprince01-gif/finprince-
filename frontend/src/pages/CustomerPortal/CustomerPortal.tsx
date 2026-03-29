@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { httpClient } from '../../services/httpClient';
+import { apiService } from '../../services/api';
 import { showSuccess, showError, showInfo, confirm } from '../../utils/toast';
 import { handleApiError } from '../../utils/errorHandler';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -46,6 +47,7 @@ interface LedgerEntry {
     id: string;
     date: string;
     postFrom: TransactionType;
+    referenceNo?: string;
     ledger: string;
     status: PurchaseStatus | SalesStatus;
     debit: number;
@@ -2383,8 +2385,8 @@ const CustomerContent: React.FC = () => {
                                                     tdsEnabled: type !== 'TDS' ? false : statutoryDetails.tdsEnabled,
                                                 })}
                                                 className={`px-6 py-2 text-sm font-semibold transition-colors border-r border-gray-300 last:border-r-0 ${statutoryDetails.taxType === type
-                                                        ? 'bg-gray-700 text-white'
-                                                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                                                    ? 'bg-gray-700 text-white'
+                                                    : 'bg-white text-gray-600 hover:bg-gray-50'
                                                     }`}
                                             >
                                                 {type}
@@ -3330,6 +3332,7 @@ const SalesOrderContent: React.FC = () => {
                             systemCategories={['Export', 'Within Country (B2B)', 'Within Country (B2C)']}
                             value={form.category}
                             onSelect={(selection) => handleChange('category', selection.fullPath)}
+                            mergeSystem={true}
                             colorTheme="teal"
                             placeholder="Select Category"
                         />
@@ -5644,7 +5647,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
 
 // Customer Ledger View Component
 interface CustomerLedgerViewProps {
-    customer: { id: string; name: string; is_also_vendor?: boolean };
+    customer: { id: string; name: string; is_also_vendor?: boolean; ledger_id?: string; };
     onBack: () => void;
 }
 
@@ -5661,7 +5664,7 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
     const [selectedMonthView, setSelectedMonthView] = useState<string | null>(null);
     const [showMonthDropdown, setShowMonthDropdown] = useState(false);
     const [activeFilter, setActiveFilter] = useState<string | null>(null);
-    const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
+    const [ledgerEntries, setLedgerEntries] = useState<(LedgerEntry & { referenceNo?: string })[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isGSTModalOpen, setIsGSTModalOpen] = useState(false);
@@ -5675,13 +5678,19 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
             setIsLoading(true);
             setError(null);
             try {
-                const data = await httpClient.get<any[]>(`/api/voucher-sales-new/`);
-                const customerInvoices = data.filter(inv => inv.customer_id?.toString() === customer.id?.toString());
-                const entries: LedgerEntry[] = customerInvoices.map((inv: any) => ({
+                const [salesData, transactionsData] = await Promise.all([
+                    httpClient.get<any[]>(`/api/voucher-sales-new/`),
+                    httpClient.get<any[]>(`/api/customerportal/transactions/by_customer/?customer_id=${customer.id}`)
+                ]);
+
+                const customerInvoices = salesData.filter(inv => inv.customer_id?.toString() === customer.id?.toString());
+                
+                const invoiceEntries: LedgerEntry[] = customerInvoices.map((inv: any) => ({
                     id: inv.id.toString(),
                     date: inv.date,
                     postFrom: 'Sales' as TransactionType,
-                    ledger: inv.sales_invoice_no,
+                    referenceNo: inv.sales_invoice_no,
+                    ledger: 'Sales',
                     status: (inv.posting_status === 'POSTED' ? 'Not Due' : 'Not Utilized') as SalesStatus,
                     debit: parseFloat(inv.payment_details?.payment_payable || 0),
                     credit: 0,
@@ -5689,7 +5698,25 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                     posting_status: inv.posting_status,
                     originalInv: inv
                 }));
-                setLedgerEntries(entries);
+
+                const transactionEntries: LedgerEntry[] = (transactionsData || []).map((t: any) => {
+                    const transType = t.transaction_type?.toUpperCase() === 'RECEIPT' ? 'Receipt' : (t.transaction_type?.toLowerCase() === 'payment' ? 'Payment' : 'Sales');
+                    return {
+                        id: `T-${t.id}`,
+                        date: t.date,
+                        postFrom: transType as TransactionType,
+                        referenceNo: t.reference_number || t.transaction_number || t.voucher_number || 'N/A',
+                        ledger: transType,
+                        status: (t.payment_status && t.payment_status !== 'pending' ? t.payment_status : (t.transaction_type?.toUpperCase() === 'RECEIPT' ? 'Not Utilized' : 'Not Due')) as SalesStatus,
+                        debit: parseFloat(t.debit || 0),
+                        credit: parseFloat(t.credit || 0),
+                        runningBalance: 0,
+                        posting_status: 'POSTED',
+                        originalInv: t
+                    };
+                });
+
+                setLedgerEntries([...invoiceEntries, ...transactionEntries]);
             } catch (err: any) {
                 console.error('Failed to fetch ledger data:', err);
                 setError(err?.message || 'Unable to connect to the server.');
@@ -5703,11 +5730,17 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
 
     const processedEntries = useMemo(() => {
         let balance = 0;
-        return [...ledgerEntries].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-            .map(entry => {
-                balance += entry.debit - entry.credit;
-                return { ...entry, runningBalance: balance };
-            });
+        return [...ledgerEntries].sort((a, b) => {
+            const dateDiff = new Date(a.date).getTime() - new Date(b.date).getTime();
+            if (dateDiff !== 0) return dateDiff;
+            // Fallback for same date: compare IDs (handling 'T-' prefix)
+            const idA = parseInt(a.id.replace('T-', ''));
+            const idB = parseInt(b.id.replace('T-', ''));
+            return idA - idB;
+        }).map(entry => {
+            balance += entry.debit - entry.credit;
+            return { ...entry, runningBalance: balance };
+        });
     }, [ledgerEntries]);
 
     interface MonthLedgerEntry {
@@ -6101,6 +6134,7 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                             </div>
                                                         </div>
                                                     </th>
+                                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">Reference No</th>
                                                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200">
                                                         <div className="flex items-center justify-between relative text-gray-400">
                                                             <span>Ledger</span>
@@ -6235,7 +6269,7 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 border-r border-gray-50">{entry.date.split('-').reverse().join('-')}</td>
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 border-r border-gray-50">(as per details)</td>
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 uppercase border-r border-gray-50">Sales</td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 border-r border-gray-50">{entry.ledger}</td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 border-r border-gray-50">{entry.referenceNo || entry.ledger}</td>
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-indigo-600 border-r border-gray-50">₹{entry.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-400">-</td>
                                                             </tr>
@@ -6341,6 +6375,7 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                                         >
                                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 border-r border-gray-100">{entry.date.split('-').reverse().join('-')}</td>
                                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 border-r border-gray-100">{entry.postFrom}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 border-r border-gray-100 font-medium">{entry.referenceNo || '-'}</td>
                                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 border-r border-gray-100">{entry.ledger}</td>
                                                             <td className="px-6 py-4 whitespace-nowrap text-sm border-r border-gray-100">
                                                                 <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${getStatusBadgeColor(entry.status)}`}>{entry.status}</span>
@@ -6364,7 +6399,7 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                             ))}
                                             {filteredData.length === 0 && (
                                                 <tr>
-                                                    <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
+                                                    <td colSpan={9} className="px-6 py-12 text-center text-gray-500">
                                                         No ledger entries found for this customer.
                                                     </td>
                                                 </tr>
@@ -6372,7 +6407,7 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                                         </tbody>
                                         <tfoot className="bg-gray-50 font-semibold">
                                             <tr>
-                                                <td colSpan={5} className="px-6 py-4 text-sm text-right text-gray-700 uppercase">TOTALS:</td>
+                                                <td colSpan={6} className="px-6 py-4 text-sm text-right text-gray-700 uppercase">TOTALS:</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold border-l border-gray-200">{formatCurrency(totalDebit)}</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold border-l border-gray-200">{formatCurrency(totalCredit)}</td>
                                                 <td className="px-6 py-4 text-sm text-right text-gray-400 italic"></td>
@@ -6397,26 +6432,64 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
 };
 
 // Sales Content Component with Aging Buckets
+interface CategoryCardProps {
+    category: SalesCategory;
+    desc: string;
+    activeOrders: number;
+    activeAdvances: number;
+    onClick: () => void;
+}
+
+const CategoryCard: React.FC<CategoryCardProps> = ({ category, desc, activeOrders, activeAdvances, onClick }) => (
+    <div
+        onClick={onClick}
+        className="bg-white p-6 rounded-[4px] border border-gray-200 hover:border-indigo-500 hover:shadow-md cursor-pointer transition-all group"
+    >
+        <div className="flex items-center justify-between mb-4">
+            <div className="p-3 rounded-[4px] bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                <Filter className="w-6 h-6" />
+            </div>
+            <div className="flex items-center gap-4">
+                <div className="text-right">
+                    <p className="text-lg font-bold text-gray-800">{activeOrders}</p>
+                    <p className="text-[10px] text-indigo-600 font-semibold uppercase tracking-wider">Invoices</p>
+                </div>
+                <div className="text-right">
+                    <p className="text-lg font-bold text-gray-800">{activeAdvances}</p>
+                    <p className="text-[10px] text-green-600 font-semibold uppercase tracking-wider">Advances</p>
+                </div>
+                <ChevronLeft className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transform rotate-180 transition-all opacity-0 group-hover:opacity-100" />
+            </div>
+        </div>
+        <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">{category}</h3>
+        <p className="text-sm text-gray-500 mt-2">{desc}</p>
+    </div>
+);
+
 function SalesContent() {
     const [viewMode, setViewMode] = useState<'dashboard' | 'list'>('dashboard');
     const [activeCategory, setActiveCategory] = useState<SalesCategory>('Export');
     const [showLedgerView, setShowLedgerView] = useState(false);
-    const [selectedCustomer, setSelectedCustomer] = useState<{ id: string, name: string, is_also_vendor?: boolean } | null>(null);
+    const [selectedCustomer, setSelectedCustomer] = useState<{ id: string, name: string, ledger_id?: string, is_also_vendor?: boolean } | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
 
     const [invoices, setInvoices] = useState<any[]>([]);
+    const [advancePayments, setAdvancePayments] = useState<any[]>([]);
+    const [allAdvancePayments, setAllAdvancePayments] = useState<any[]>([]); // For dashboard tiles
     const [customers, setCustomers] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         const fetchSalesData = async () => {
             try {
-                const [invData, custData] = await Promise.all([
+                const [invData, custData, allAdvData] = await Promise.all([
                     httpClient.get('/api/voucher-sales-new/'),
-                    httpClient.get('/api/customerportal/customer-master/')
+                    httpClient.get('/api/customerportal/customer-master/'),
+                    apiService.getAdvances() // Fetch ALL advances for tiles
                 ]);
                 setInvoices((invData as any[]) || []);
                 setCustomers((custData as any[]) || []);
+                setAllAdvancePayments((allAdvData as any[]) || []);
             } catch (error) {
                 handleApiError(error, 'Fetch Sales Data');
             } finally {
@@ -6426,10 +6499,24 @@ function SalesContent() {
         fetchSalesData();
     }, []);
 
-    const getAgingData = (category: SalesCategory): AgingData[] => {
-        if (!invoices.length || !customers.length) return [];
+    // Re-fetch category-specific advances when category changes
+    useEffect(() => {
+        if (!activeCategory) return;
+        const fetchCategoryAdvances = async () => {
+            try {
+                const advData: any = await apiService.getAdvances(undefined, activeCategory);
+                setAdvancePayments(advData || []);
+            } catch (error) {
+                console.error('Error fetching category advances:', error);
+            }
+        };
+        fetchCategoryAdvances();
+    }, [activeCategory]);
 
-        const customerGroups: Record<string, AgingData> = {};
+    const getAgingData = (category: SalesCategory): AgingData[] => {
+        if (!customers.length) return [];
+
+        const customerGroups: Record<string, AgingData & { advances: number }> = {};
 
         invoices.forEach(inv => {
             const custId = inv.customer_id;
@@ -6471,8 +6558,9 @@ function SalesContent() {
                     days45to90: 0,
                     months6: 0,
                     year1: 0,
-                    is_also_vendor: customer?.is_also_vendor
-                };
+                    is_also_vendor: customer?.is_also_vendor,
+                    advances: 0
+                } as any;
             }
 
             // Extract total amount from invoice
@@ -6495,6 +6583,49 @@ function SalesContent() {
             }
         });
 
+        // Add Advance Payments using unified pay_to_ledger Source of Truth
+        // Use category-specific advances; fall back to filtering allAdvancePayments
+        const advancesToUse = advancePayments.length > 0
+            ? advancePayments
+            : allAdvancePayments.filter((adv: any) => {
+                const cat = (adv.category || '').toLowerCase();
+                if (category === 'Export') return cat.includes('export');
+                if (category === 'Within Country (B2B)') return cat.includes('b2b') && !cat.includes('b2c');
+                if (category === 'Within Country (B2C)') return cat.includes('b2c');
+                return false;
+            });
+
+        advancesToUse.forEach((adv: any) => {
+            const ledgerId = adv.pay_to_ledger;
+            if (!ledgerId) return;
+
+            // Match by ledger_id — customers from customer-master API include ledger_id
+            const customer = customers.find((c: any) => 
+                c.ledger_id === ledgerId || c.ledger === ledgerId
+            );
+            if (!customer) return;
+            
+            const custId = customer.id;
+
+            if (!customerGroups[custId]) {
+                customerGroups[custId] = {
+                    customerId: custId.toString(),
+                    customerCode: customer.customer_code || `CUST-${custId}`,
+                    customerName: customer.customer_name || adv.pay_to_name || 'Unknown Customer',
+                    subCategory: customer.customer_category_name || adv.category || 'General',
+                    notDue: 0,
+                    days0to45: 0,
+                    days45to90: 0,
+                    months6: 0,
+                    year1: 0,
+                    is_also_vendor: customer?.is_also_vendor,
+                    advances: 0
+                } as any;
+            }
+
+            customerGroups[custId].advances += parseFloat(adv.amount || 0);
+        });
+
         return Object.values(customerGroups);
     };
 
@@ -6502,9 +6633,9 @@ function SalesContent() {
         return `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     };
 
-    const handleViewCustomer = (customerId: string, customerName: string, isVendor?: boolean) => {
+    const handleViewCustomer = (customerId: string, customerName: string, ledgerId?: string, isVendor?: boolean) => {
         // Navigate to Customer Ledger View
-        setSelectedCustomer({ id: customerId, name: customerName, is_also_vendor: isVendor });
+        setSelectedCustomer({ id: customerId, name: customerName, ledger_id: ledgerId, is_also_vendor: isVendor });
         setShowLedgerView(true);
     };
 
@@ -6560,50 +6691,37 @@ function SalesContent() {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {/* Export Card */}
-                        <div
+                        <CategoryCard 
+                            category="Export" 
+                            desc="View export sales aging." 
+                            activeOrders={invoices.filter(inv => (customers.find(c => c.id === inv.customer_id)?.customer_category_name || '').toLowerCase().includes('export')).length}
+                            activeAdvances={allAdvancePayments.filter(adv => (adv.category || '').toLowerCase().includes('export')).length}
                             onClick={() => handleCardClick('Export')}
-                            className="bg-white p-6 rounded-[4px] border border-gray-200 hover:border-indigo-500 hover:shadow-md cursor-pointer transition-all group"
-                        >
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="p-3 rounded-[4px] bg-indigo-50 text-indigo-600">
-                                    {/* Ideally use a Package icon here if available, fallback to default */}
-                                    <Filter className="w-6 h-6" />
-                                </div>
-                                <ChevronLeft className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transform rotate-180 transition-all opacity-0 group-hover:opacity-100" />
-                            </div>
-                            <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">Export</h3>
-                            <p className="text-sm text-gray-500 mt-2">View export sales aging.</p>
-                        </div>
+                        />
 
                         {/* Within Country (B2B) Card */}
-                        <div
+                        <CategoryCard 
+                            category="Within Country (B2B)" 
+                            desc="View B2B sales aging." 
+                            activeOrders={invoices.filter(inv => {
+                                const cat = (customers.find(c => c.id === inv.customer_id)?.customer_category_name || '').toLowerCase();
+                                return cat.includes('b2b') && !cat.includes('b2c');
+                            }).length}
+                            activeAdvances={allAdvancePayments.filter(adv => {
+                                const cat = (adv.category || '').toLowerCase();
+                                return cat.includes('b2b') && !cat.includes('b2c');
+                            }).length}
                             onClick={() => handleCardClick('Within Country (B2B)')}
-                            className="bg-white p-6 rounded-[4px] border border-gray-200 hover:border-indigo-500 hover:shadow-md cursor-pointer transition-all group"
-                        >
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="p-3 rounded-[4px] bg-indigo-50 text-indigo-600">
-                                    <Filter className="w-6 h-6" />
-                                </div>
-                                <ChevronLeft className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transform rotate-180 transition-all opacity-0 group-hover:opacity-100" />
-                            </div>
-                            <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">Within Country (B2B)</h3>
-                            <p className="text-sm text-gray-500 mt-2">View B2B sales aging.</p>
-                        </div>
+                        />
 
                         {/* Within Country (B2C) Card */}
-                        <div
+                        <CategoryCard 
+                            category="Within Country (B2C)" 
+                            desc="View B2C sales aging." 
+                            activeOrders={invoices.filter(inv => (customers.find(c => c.id === inv.customer_id)?.customer_category_name || '').toLowerCase().includes('b2c')).length}
+                            activeAdvances={allAdvancePayments.filter(adv => (adv.category || '').toLowerCase().includes('b2c')).length}
                             onClick={() => handleCardClick('Within Country (B2C)')}
-                            className="bg-white p-6 rounded-[4px] border border-gray-200 hover:border-indigo-500 hover:shadow-md cursor-pointer transition-all group"
-                        >
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="p-3 rounded-[4px] bg-indigo-50 text-indigo-600">
-                                    <Filter className="w-6 h-6" />
-                                </div>
-                                <ChevronLeft className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transform rotate-180 transition-all opacity-0 group-hover:opacity-100" />
-                            </div>
-                            <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">Within Country (B2C)</h3>
-                            <p className="text-sm text-gray-500 mt-2">View B2C sales aging.</p>
-                        </div>
+                        />
                     </div>
                 </div>
             ) : (
@@ -6711,7 +6829,10 @@ function SalesContent() {
                                             <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium border-l border-gray-100">
                                                 <div className="flex items-center justify-center space-x-3">
                                                     <button
-                                                        onClick={() => handleViewCustomer(customer.customerId, customer.customerName, customer.is_also_vendor)}
+                                                        onClick={() => {
+                                                            const custDef = customers.find(c => c.id?.toString() === customer.customerId);
+                                                            handleViewCustomer(customer.customerId, customer.customerName, custDef?.ledger_id, customer.is_also_vendor);
+                                                        }}
                                                         className="text-indigo-600 hover:text-indigo-900"
                                                         title="View Ledger"
                                                     >
@@ -6746,4 +6867,3 @@ function SalesContent() {
 };
 
 export default CustomerPortalPage;
-

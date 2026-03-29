@@ -10,7 +10,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.db import IntegrityError
 import logging
 
-from .models import VendorMasterPOSettings
+from .models import VendorMasterPOSettings, VendorMasterCategory
 from .posettings_serializers import (
     VendorMasterPOSettingsSerializer,
     VendorMasterPOSettingsCreateSerializer,
@@ -19,6 +19,12 @@ from .posettings_serializers import (
 from .posettings_database import POSettingsDatabase
 
 logger = logging.getLogger(__name__)
+
+VENDOR_SYSTEM_CATEGORIES = [
+    'Raw Material', 'Work in Progress', 'Finished Goods',
+    'Stores and Spares', 'Packing Material', 'Stock in Trade',
+    'By-product', 'Scrap'
+]
 
 
 class VendorMasterPOSettingsViewSet(viewsets.ModelViewSet):
@@ -83,7 +89,30 @@ class VendorMasterPOSettingsViewSet(viewsets.ModelViewSet):
         tenant_id = self.get_tenant_id()
         logger.info(f"Tenant ID: {tenant_id}")
         
-        serializer = self.get_serializer(data=request.data)
+        # Handle resolving 'system_N' virtual IDs to real category objects or PKs
+        data = request.data.copy()
+        category_val = data.get('category')
+        
+        if isinstance(category_val, str) and category_val.startswith('system_'):
+            logger.info(f"Resolving virtual category ID: {category_val}")
+            try:
+                idx = int(category_val.split('_')[1])
+                if 0 <= idx < len(VENDOR_SYSTEM_CATEGORIES):
+                    cat_name = VENDOR_SYSTEM_CATEGORIES[idx]
+                    # Find or create a matching real category record for this tenant
+                    cat_obj, _ = VendorMasterCategory.objects.get_or_create(
+                        tenant_id=tenant_id,
+                        category=cat_name,
+                        group='',
+                        subgroup='',
+                        defaults={'is_active': True}
+                    )
+                    data['category'] = cat_obj.id
+                    logger.info(f"Resolved to Category: {cat_name} (ID: {cat_obj.id})")
+            except (ValueError, IndexError) as e:
+                logger.error(f"Failed to resolve virtual category: {e}")
+
+        serializer = self.get_serializer(data=data)
         
         if not serializer.is_valid():
             logger.error(f"Serializer validation failed: {serializer.errors}")
@@ -151,8 +180,31 @@ class VendorMasterPOSettingsViewSet(viewsets.ModelViewSet):
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
         tenant_id = self.get_tenant_id()
+
+        # Handle resolving 'system_N' virtual IDs to real category objects or PKs
+        data = request.data.copy()
+        category_val = data.get('category')
         
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        if isinstance(category_val, str) and category_val.startswith('system_'):
+            logger.info(f"Resolving virtual category ID: {category_val}")
+            try:
+                idx = int(category_val.split('_')[1])
+                if 0 <= idx < len(VENDOR_SYSTEM_CATEGORIES):
+                    cat_name = VENDOR_SYSTEM_CATEGORIES[idx]
+                    # Find or create matching real category
+                    cat_obj, _ = VendorMasterCategory.objects.get_or_create(
+                        tenant_id=tenant_id,
+                        category=cat_name,
+                        group='',
+                        subgroup='',
+                        defaults={'is_active': True}
+                    )
+                    data['category'] = cat_obj.id
+                    logger.info(f"Resolved to Category: {cat_name} (ID: {cat_obj.id})")
+            except (ValueError, IndexError) as e:
+                logger.error(f"Failed to resolve virtual category: {e}")
+
+        serializer = self.get_serializer(instance, data=data, partial=partial)
         
         if not serializer.is_valid():
             return Response(

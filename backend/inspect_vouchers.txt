@@ -1,0 +1,32 @@
+﻿# This is an auto-generated Django model module.
+# You'll have to do the following manually to clean this up:
+#   * Rearrange models' order
+#   * Make sure each model has one field with primary_key=True
+#   * Make sure each ForeignKey and OneToOneField has `on_delete` set to the desired behavior
+#   * Remove `managed = False` lines if you wish to allow Django to create, modify, and delete the table
+# Feel free to rename the models, but don't rename db_table values or field names.
+from django.db import models
+
+
+class ReceiptVouchers(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    tenant_id = models.CharField(max_length=36)
+    voucher_number = models.CharField(max_length=100)
+    date = models.DateField()
+    voucher_type = models.CharField(max_length=100, blank=True, null=True)
+    receive_in_ledger = models.ForeignKey('MasterLedgers', models.DO_NOTHING)
+    receive_from_name = models.ForeignKey('MasterLedgers', models.DO_NOTHING, db_column='receive_from_name', related_name='receiptvouchers_receive_from_name_set', blank=True, null=True)
+    total_amount = models.DecimalField(max_digits=15, decimal_places=2)
+    notes = models.TextField(blank=True, null=True)
+    source = models.CharField(max_length=100, blank=True, null=True)
+    bank_reconciled = models.IntegerField(blank=True, null=True)
+    bank_reconcile_date = models.DateField(blank=True, null=True)
+    bank_statement_id = models.BigIntegerField(blank=True, null=True)
+    bank_reference_number = models.CharField(max_length=100, blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+    customer_ledger_id = models.BigIntegerField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'receipt_vouchers'

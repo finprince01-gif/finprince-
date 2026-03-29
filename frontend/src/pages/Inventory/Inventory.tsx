@@ -7962,6 +7962,7 @@ const InventoryPage: React.FC = () => {
                 <CategoryHierarchicalDropdown
                   key={categoryUpdateCount}
                   onlyRoots={false}
+                  mergeSystem={true}
                   onSelect={async (selection) => {
                     handleFormChange('category', selection.id);
                     handleFormChange('categoryPath', selection.fullPath);

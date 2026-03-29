@@ -205,7 +205,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const [scannerFiles, setScannerFiles] = useState<FileList | null>(null);
   const [scanType, setScanType] = useState<'single' | 'bulk'>('single');
   const scannerInputRef = useRef<HTMLInputElement>(null);
-  const [extractionMode, setExtractionMode] = useState<'finpixe' | 'tally' | 'zoho' | 'sap'>('finpixe');
+  const [extractionMode, setExtractionMode] = useState<'ai_native' | 'tally' | 'zoho' | 'sap'>('ai_native');
 
   // Zoho / SAP Scanner refs
   const zohoScannerInputRef = useRef<HTMLInputElement>(null);
@@ -438,12 +438,12 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     }
   };
 
-  const openScanner = (mode: 'finpixe' | 'tally' = 'finpixe', type: 'single' | 'bulk' = 'single') => {
+  const openScanner = (mode: 'ai_native' | 'tally' = 'ai_native', type: 'single' | 'bulk' = 'single') => {
     setExtractionMode(mode);
     setScanType(type);
-    if (isLimitReached && mode === 'finpixe') {
+    if (isLimitReached && mode === 'ai_native') {
       handleLimitReached();
-    } else if (mode === 'finpixe' && type === 'single') {
+    } else if (mode === 'ai_native' && type === 'single') {
       singleScanInputRef.current?.click();
     } else {
       scannerInputRef.current?.click();
@@ -467,6 +467,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
   // Common state
   const [date, setDate] = useState(getTodayDate());
+  const handleDateChange = (val: string) => {
+    const today = getTodayDate();
+    setDate(val > today ? today : val);
+  };
   const [party, setParty] = useState('');
   const [wasPartyAutoSet, setWasPartyAutoSet] = useState(false);
   const [vendorId, setVendorId] = useState<number | null>(null);
@@ -5399,7 +5403,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 <input
                   type="date"
                   value={date}
-                  onChange={e => setDate(e.target.value)}
+                  max={getTodayDate()}
+                  onChange={e => handleDateChange(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
@@ -7187,6 +7192,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           <input
             type="date"
             value={date}
+            max={getTodayDate()}
             onChange={e => setDate(e.target.value)}
             className="erp-input"
           />
@@ -7483,6 +7489,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           <input
             type="date"
             value={date}
+            max={getTodayDate()}
             onChange={e => setDate(e.target.value)}
             className="erp-input"
           />
@@ -7976,7 +7983,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           {/* Invoice Scanner Modal */}
           {isInvoiceScannerOpen && (
             <InvoiceScannerModal
-              extractionMode={extractionMode}
+              extractionMode={extractionMode as any}
               scanType={scanType}
               initialFiles={scannerFiles}
               voucherType={voucherType}
@@ -7988,7 +7995,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                 refetch(); // Refresh usage after scan
               }}
               onExtractionSuccess={(extractedData) => {
-                if (voucherType !== 'Purchase' || extractionMode !== 'finpixe') return;
+                if (voucherType !== 'Purchase' || extractionMode !== 'ai_native') return;
 
                 validateVendorFromInvoice(
                   extractedData.vendor_name,
