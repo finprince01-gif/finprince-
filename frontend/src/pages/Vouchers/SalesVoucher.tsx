@@ -783,6 +783,28 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
             setCustomerGstTdsApplicable(!!customer.gst_tds_applicable);
             setCustomerTdsEnabled(!!customer.tds_enabled);
             setCustomerTcsEnabled(!!customer.tcs_enabled);
+
+            // ── Fetch Advance Receipts ──
+            const ledgerId = customer.ledger_id || customer.ledger;
+            if (ledgerId) {
+                console.log('Fetching advances for ledger:', ledgerId);
+                apiService.getAdvances(ledgerId)
+                    .then(advances => {
+                        console.log('Got advances:', advances);
+                        if (Array.isArray(advances)) {
+                            setAdvanceReferences(advances.map(adv => ({
+                                id: adv.id,
+                                date: adv.date,
+                                refNo: adv.advance_ref_no,
+                                amount: adv.amount.toString(),
+                                appliedNow: false
+                            })));
+                        }
+                    })
+                    .catch(e => console.error('Failed to fetch advances:', e));
+            } else {
+                setAdvanceReferences([]);
+            }
         } else {
             setTermsConditions('');
             setMasterTermsData(null);
@@ -791,7 +813,14 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
             setCustomerGstTdsApplicable(false);
             setCustomerTdsEnabled(false);
             setCustomerTcsEnabled(false);
+            setAdvanceReferences([]);
         }
+    };
+
+    const handleAdvanceCheckedChange = (id: number, checked: boolean) => {
+        setAdvanceReferences(prev => prev.map(ref => 
+            ref.id === id ? { ...ref, appliedNow: checked } : ref
+        ));
     };
 
     // Handle Branch selection – auto-fill address from that branch
@@ -2521,6 +2550,14 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         setPaymentPayable(payable.toFixed(2));
     }, [itemRows, paymentTdsIncomeTax, paymentTdsGst, paymentAdvance, customerTcsEnabled, customerTcsRate]);
 
+    // Auto-calculate total advance from checked references
+    React.useEffect(() => {
+        const totalAdvance = advanceReferences
+            .filter(ref => ref.appliedNow)
+            .reduce((sum, ref) => sum + (parseFloat(ref.amount) || 0), 0);
+        setPaymentAdvance(totalAdvance.toFixed(2));
+    }, [advanceReferences]);
+
     // Auto-calculate TDS/TCS under Income Tax = Invoice Value × (TCS Rate + TDS Rate)
     React.useEffect(() => {
         const totalRate = customerTcsRate + customerTdsRate;
@@ -4163,7 +4200,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                         <input
                                                             type="checkbox"
                                                             checked={ref.appliedNow}
-                                                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                                                            onChange={(e) => handleAdvanceCheckedChange(ref.id, e.target.checked)}
+                                                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 cursor-pointer"
                                                         />
                                                     </div>
                                                 </div>
