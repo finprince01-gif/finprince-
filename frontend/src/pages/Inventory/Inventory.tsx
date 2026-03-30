@@ -318,7 +318,7 @@ const InventoryPage: React.FC = () => {
   const [grnBranchOptions, setGrnBranchOptions] = useState<any[]>([]);
   const [grnAddress, setGrnAddress] = useState('');
   const [grnGstin, setGrnGstin] = useState('');
-  const [grnReferenceNo, setGrnReferenceNo] = useState(''); // PO No or Sales Voucher No
+  const [grnSelectedPOs, setGrnSelectedPOs] = useState<string[]>([]); // Multi-select for Purchase Orders
   const [grnSelectedSalesVouchers, setGrnSelectedSalesVouchers] = useState<string[]>([]); // Multi-select for Sales Return
   const [grnReferenceNoOptions, setGrnReferenceNoOptions] = useState<any[]>([]);
   const [grnSecondaryRefNo, setGrnSecondaryRefNo] = useState(''); // Supplier Invoice or Debit Note
@@ -2123,7 +2123,7 @@ const InventoryPage: React.FC = () => {
     setGrnBranchOptions([]);
     setGrnAddress('');
     setGrnGstin('');
-    setGrnReferenceNo('');
+    setGrnSelectedPOs([]);
     setGrnReferenceNoOptions([]);
     setGrnSecondaryRefNo('');
     setGrnSecondaryRefNoOptions([]);
@@ -2161,7 +2161,7 @@ const InventoryPage: React.FC = () => {
     setGrnBranchOptions([]);
     setGrnAddress('');
     setGrnGstin('');
-    setGrnReferenceNo('');
+    setGrnSelectedPOs([]);
     setGrnSelectedSalesVouchers([]); // Reset selected vouchers
     setGrnReferenceNoOptions([]);
     setGrnSecondaryRefNo('');
@@ -2214,34 +2214,52 @@ const InventoryPage: React.FC = () => {
   };
 
 
-  const handleGrnReferenceNoChange = async (poNumber: string) => {
-    setGrnReferenceNo(poNumber);
-    const selectedOption = grnReferenceNoOptions.find(po => po.po_number === poNumber);
+  const handleGrnReferenceNoChange = async (selectedPOList: string[]) => {
+    setGrnSelectedPOs(selectedPOList);
+    
+    if (selectedPOList.length === 0) {
+      setGrnItems([{
+        itemCode: '', itemName: '', uom: '', refQty: '', secondaryQty: '', receivedQty: '', acceptedQty: '', rejectedQty: '', shortExcessQty: '', remarks: ''
+      }]);
+      return;
+    }
 
-    if (selectedOption) {
-      try {
-        const fullPOResponse = await apiService.getVendorPurchaseOrderById(selectedOption.id);
-        if (fullPOResponse && fullPOResponse.success && fullPOResponse.data) {
-          const fullPO = fullPOResponse.data;
-          if (fullPO.items && fullPO.items.length > 0) {
-            const newGrnItems = fullPO.items.map((poItem: any) => ({
-              itemCode: poItem.item_code,
-              itemName: poItem.item_name,
-              uom: poItem.uom,
-              refQty: poItem.quantity,
-              secondaryQty: '',
-              receivedQty: poItem.quantity, // Default to full qty
-              acceptedQty: poItem.quantity,
-              rejectedQty: '0',
-              shortExcessQty: '0',
-              remarks: ''
-            }));
-            setGrnItems(newGrnItems);
+    try {
+      const allNewItems: any[] = [];
+      const processedItemCodes = new Set();
+
+      for (const poNumber of selectedPOList) {
+        const selectedOption = grnReferenceNoOptions.find(po => po.po_number === poNumber);
+        if (selectedOption) {
+          const fullPOResponse = await apiService.getVendorPurchaseOrderById(selectedOption.id);
+          if (fullPOResponse && fullPOResponse.success && fullPOResponse.data) {
+            const fullPO = fullPOResponse.data;
+            if (fullPO.items && fullPO.items.length > 0) {
+              fullPO.items.forEach((poItem: any) => {
+                allNewItems.push({
+                  itemCode: poItem.item_code,
+                  itemName: poItem.item_name,
+                  uom: poItem.uom,
+                  refQty: poItem.quantity,
+                  secondaryQty: '',
+                  receivedQty: poItem.quantity,
+                  acceptedQty: poItem.quantity,
+                  rejectedQty: '0',
+                  shortExcessQty: '0',
+                  remarks: `From PO: ${poNumber}`,
+                  po_number: poNumber // Track source PO for color coding
+                });
+              });
+            }
           }
         }
-      } catch (err) {
-        console.error("Error fetching full PO details:", err);
       }
+      
+      if (allNewItems.length > 0) {
+        setGrnItems(allNewItems);
+      }
+    } catch (err) {
+      console.error("Error fetching full PO details:", err);
     }
   };
 
@@ -2320,12 +2338,17 @@ const InventoryPage: React.FC = () => {
         updatedItems[index].itemId = selectedItem.id;
 
         // Fetch PO Qty if PO is selected
-        if (grnReferenceNo) {
-          const selectedPO = grnReferenceNoOptions.find(po => po.po_number === grnReferenceNo);
-          if (selectedPO && selectedPO.items) {
-            const poItem = selectedPO.items.find((pi: any) => pi.item_code === updatedItems[index].itemCode);
-            if (poItem) {
-              updatedItems[index].refQty = poItem.quantity;
+        if (grnSelectedPOs.length > 0) {
+          // This logic is trickier with multiple POs. 
+          // For now, we search across all selected POs for this item code.
+          for (const poNum of grnSelectedPOs) {
+            const poOption = grnReferenceNoOptions.find(po => po.po_number === poNum);
+            if (poOption && poOption.items) {
+              const poItem = poOption.items.find((pi: any) => pi.item_code === updatedItems[index].itemCode);
+              if (poItem) {
+                updatedItems[index].refQty = poItem.quantity;
+                break; // Use the first one found
+              }
             }
           }
         }
@@ -2352,6 +2375,14 @@ const InventoryPage: React.FC = () => {
 
       updatedItems[index].shortExcessQty = (secondary - received).toString();
       updatedItems[index].rejectedQty = (received - accepted).toString();
+    }
+
+    // Update po_number if remarks changed manually and it indicates a different PO
+    if (field === 'remarks' && value.includes('From PO: ')) {
+      const parts = value.split('From PO: ');
+      if (parts.length > 1) {
+        updatedItems[index].po_number = parts[1].trim();
+      }
     }
 
     setGrnItems(updatedItems);
@@ -2429,7 +2460,7 @@ const InventoryPage: React.FC = () => {
         address: grnAddress,
         gstin: grnGstin,
 
-        reference_no: grnReferenceNo,
+        reference_no: grnSelectedPOs.join(', '),
         secondary_ref_no: grnSecondaryRefNo,
 
         return_reason: grnReason,
@@ -6812,18 +6843,36 @@ const InventoryPage: React.FC = () => {
                       </div>
 
                       <div className="grid grid-cols-2 gap-5 mt-4">
-                        <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-2">Purchase Order No.</label>
-                          <select value={grnReferenceNo} onChange={(e) => handleGrnReferenceNoChange(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                            <option value="">Select PO</option>
-                            {grnReferenceNoOptions.length === 0 ? (
-                              <option disabled>No Pending POs</option>
-                            ) : (
-                              grnReferenceNoOptions.map((po: any) => (
-                                <option key={po.id} value={po.po_number}>{po.po_number}</option>
-                              ))
-                            )}
-                          </select>
+                        <div className="flex flex-col gap-2">
+                          <label className="block text-sm font-semibold text-gray-700">Purchase Order No.</label>
+                          <div className="flex items-start gap-4">
+                            <div className="w-1/2">
+                              <MultiSelectDropdown
+                                options={grnReferenceNoOptions.map((po: any) => ({
+                                  value: po.po_number,
+                                  label: po.po_number
+                                }))}
+                                selectedValues={grnSelectedPOs}
+                                onChange={handleGrnReferenceNoChange}
+                                placeholder="Select PO(s)"
+                              />
+                            </div>
+                            <div className="w-1/2 flex flex-wrap gap-2 pt-1">
+                              {grnSelectedPOs.map((po, idx) => (
+                                <span 
+                                  key={po} 
+                                  className={`px-2 py-1 rounded text-xs font-bold text-white shadow-sm border border-black/10`}
+                                  style={{ 
+                                    backgroundColor: [
+                                      '#4F46E5', '#0891B2', '#059669', '#D97706', '#DC2626', '#7C3AED'
+                                    ][idx % 6] 
+                                  }}
+                                >
+                                  {po}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
                         </div>
                       </div>
 
@@ -6995,126 +7044,133 @@ const InventoryPage: React.FC = () => {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                          {grnItems.map((item, index) => (
-                            <tr key={index}>
-                              <td className="px-3 py-2">
-                                <select
-                                  value={item.itemCode || ''}
-                                  onChange={(e) => handleGrnItemChange(index, 'itemCode', e.target.value)}
-                                  className="w-32 px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                >
-                                  <option value="">Select Code</option>
-                                  {items.map(i => (
-                                    <option key={i.id} value={i.item_code}>{i.item_code}</option>
-                                  ))}
-                                </select>
-                              </td>
-                              <td className="px-3 py-2">
-                                <select
-                                  value={item.itemName || ''}
-                                  onChange={(e) => handleGrnItemChange(index, 'itemName', e.target.value)}
-                                  className="w-48 px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                >
-                                  <option value="">Select Item</option>
-                                  {items.map(i => (
-                                    <option key={i.id} value={i.item_name || i.name}>{i.item_name || i.name}</option>
-                                  ))}
-                                </select>
-                              </td>
-                              <td className="px-3 py-2">
-                                <select
-                                  value={item.uom || ''}
-                                  onChange={(e) => {
-                                    const newItems = [...grnItems];
-                                    newItems[index].uom = e.target.value;
-                                    setGrnItems(newItems);
-                                  }}
-                                  className="w-20 px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                >
-                                  <option value="">Select</option>
-                                  {(() => {
-                                    const selectedItem = items.find(i => i.item_code === item.itemCode);
-                                    const units = [];
-                                    if (selectedItem) {
-                                      const u1 = selectedItem.uom || selectedItem.unit;
-                                      const u2 = selectedItem.alternate_uom || selectedItem.alternative_unit;
-                                      if (u1) units.push(u1);
-                                      if (u2 && u2 !== u1) units.push(u2);
-                                    }
-                                    return units.map(u => (
-                                      <option key={u} value={u}>{u}</option>
-                                    ));
-                                  })()}
-                                </select>
-                              </td>
-                              <td className="px-3 py-2">
-                                <input
-                                  type="number"
-                                  value={item.refQty || ''}
-                                  readOnly
-                                  className="w-16 px-2 py-1 border border-gray-300 rounded text-xs bg-gray-100 cursor-not-allowed"
-                                />
-                              </td>
-                              <td className="px-3 py-2">
-                                <input
-                                  type="number"
-                                  value={item.secondaryQty || ''}
-                                  onChange={(e) => handleGrnItemChange(index, 'secondaryQty', e.target.value)}
-                                  className="w-16 px-2 py-1 border border-gray-300 rounded text-xs"
-                                />
-                              </td>
-                              <td className="px-3 py-2">
-                                <input
-                                  type="number"
-                                  value={item.receivedQty || ''}
-                                  onChange={(e) => handleGrnItemChange(index, 'receivedQty', e.target.value)}
-                                  className="w-16 px-2 py-1 border border-gray-300 rounded text-xs"
-                                />
-                              </td>
-                              <td className="px-3 py-2">
-                                <input
-                                  type="number"
-                                  value={item.acceptedQty || ''}
-                                  onChange={(e) => handleGrnItemChange(index, 'acceptedQty', e.target.value)}
-                                  className="w-16 px-2 py-1 border border-gray-300 rounded text-xs"
-                                />
-                              </td>
-                              <td className="px-3 py-2">
-                                <input
-                                  type="number"
-                                  value={item.rejectedQty || ''}
-                                  readOnly
-                                  className="w-16 px-2 py-1 border border-gray-300 rounded text-xs bg-gray-100 cursor-not-allowed"
-                                />
-                              </td>
-                              <td className="px-3 py-2">
-                                <input
-                                  type="number"
-                                  value={item.shortExcessQty || ''}
-                                  readOnly
-                                  className="w-16 px-2 py-1 border border-gray-300 rounded text-xs bg-gray-100 cursor-not-allowed"
-                                />
-                              </td>
-                              <td className="px-3 py-2">
-                                <input
-                                  type="text"
-                                  value={item.remarks || ''}
-                                  onChange={(e) => handleGrnItemChange(index, 'remarks', e.target.value)}
-                                  className="w-32 px-2 py-1 border border-gray-300 rounded text-xs"
-                                />
-                              </td>
-                              <td className="px-3 py-2 text-center">
-                                <button
-                                  onClick={() => handleRemoveGrnItem(index)}
-                                  className="text-red-600 hover:text-red-900"
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                                  </svg>
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
+                          {grnItems.map((item, index) => {
+                            // Find color index for the source PO
+                            const poIdx = item.po_number ? grnSelectedPOs.indexOf(item.po_number) : -1;
+                            const colors = ['#4F46E5', '#0891B2', '#059669', '#D97706', '#DC2626', '#7C3AED'];
+                            const bgColor = poIdx > -1 ? `${colors[poIdx % 6]}15` : 'transparent'; // 15% opacity
+
+                            return (
+                              <tr key={index} style={{ backgroundColor: bgColor }}>
+                                <td className="px-3 py-2">
+                                  <select
+                                    value={item.itemCode || ''}
+                                    onChange={(e) => handleGrnItemChange(index, 'itemCode', e.target.value)}
+                                    className="w-32 px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                  >
+                                    <option value="">Select Code</option>
+                                    {items.map(i => (
+                                      <option key={i.id} value={i.item_code}>{i.item_code}</option>
+                                    ))}
+                                  </select>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <select
+                                    value={item.itemName || ''}
+                                    onChange={(e) => handleGrnItemChange(index, 'itemName', e.target.value)}
+                                    className="w-48 px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                  >
+                                    <option value="">Select Item</option>
+                                    {items.map(i => (
+                                      <option key={i.id} value={i.item_name || i.name}>{i.item_name || i.name}</option>
+                                    ))}
+                                  </select>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <select
+                                    value={item.uom || ''}
+                                    onChange={(e) => {
+                                      const newItems = [...grnItems];
+                                      newItems[index].uom = e.target.value;
+                                      setGrnItems(newItems);
+                                    }}
+                                    className="w-20 px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                  >
+                                    <option value="">Select</option>
+                                    {(() => {
+                                      const selectedItem = items.find(i => i.item_code === item.itemCode);
+                                      const units = [];
+                                      if (selectedItem) {
+                                        const u1 = selectedItem.uom || selectedItem.unit;
+                                        const u2 = selectedItem.alternate_uom || selectedItem.alternative_unit;
+                                        if (u1) units.push(u1);
+                                        if (u2 && u2 !== u1) units.push(u2);
+                                      }
+                                      return units.map(u => (
+                                        <option key={u} value={u}>{u}</option>
+                                      ));
+                                    })()}
+                                  </select>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <input
+                                    type="number"
+                                    value={item.refQty || ''}
+                                    readOnly
+                                    className="w-16 px-2 py-1 border border-gray-300 rounded text-xs bg-gray-100 cursor-not-allowed"
+                                  />
+                                </td>
+                                <td className="px-3 py-2">
+                                  <input
+                                    type="number"
+                                    value={item.secondaryQty || ''}
+                                    onChange={(e) => handleGrnItemChange(index, 'secondaryQty', e.target.value)}
+                                    className="w-16 px-2 py-1 border border-gray-300 rounded text-xs"
+                                  />
+                                </td>
+                                <td className="px-3 py-2">
+                                  <input
+                                    type="number"
+                                    value={item.receivedQty || ''}
+                                    onChange={(e) => handleGrnItemChange(index, 'receivedQty', e.target.value)}
+                                    className="w-16 px-2 py-1 border border-gray-300 rounded text-xs"
+                                  />
+                                </td>
+                                <td className="px-3 py-2">
+                                  <input
+                                    type="number"
+                                    value={item.acceptedQty || ''}
+                                    onChange={(e) => handleGrnItemChange(index, 'acceptedQty', e.target.value)}
+                                    className="w-16 px-2 py-1 border border-gray-300 rounded text-xs"
+                                  />
+                                </td>
+                                <td className="px-3 py-2">
+                                  <input
+                                    type="number"
+                                    value={item.rejectedQty || ''}
+                                    readOnly
+                                    className="w-16 px-2 py-1 border border-gray-300 rounded text-xs bg-gray-100 cursor-not-allowed"
+                                  />
+                                </td>
+                                <td className="px-3 py-2">
+                                  <input
+                                    type="number"
+                                    value={item.shortExcessQty || ''}
+                                    readOnly
+                                    className="w-16 px-2 py-1 border border-gray-300 rounded text-xs bg-gray-100 cursor-not-allowed"
+                                  />
+                                </td>
+                                <td className="px-3 py-2">
+                                  <input
+                                    type="text"
+                                    value={item.remarks || ''}
+                                    onChange={(e) => handleGrnItemChange(index, 'remarks', e.target.value)}
+                                    className="w-32 px-2 py-1 border border-gray-300 rounded text-xs"
+                                  />
+                                </td>
+                                <td className="px-3 py-2 text-center">
+                                  <button
+                                    onClick={() => handleRemoveGrnItem(index)}
+                                    className="text-red-600 hover:text-red-900"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                      <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                                    </svg>
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                       <div className="p-2 border-t border-gray-200">

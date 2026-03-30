@@ -8,7 +8,7 @@ import threading
 from typing import Dict, Any, Optional
 from django.core.cache import cache
 from google.api_core import exceptions
-import google.generativeai as genai
+from google import genai
 from dotenv import load_dotenv
 
 # Ensure environment variables are loaded (especially for GEMINI_API_KEY)
@@ -89,10 +89,10 @@ class APIKeyManager:
     def _recheck_key(self, api_key: str):
         """Recheck if an unhealthy key is now healthy"""
         # Try a simple request to see if key works
-        genai.configure(api_key=api_key)
+        client = genai.Client(api_key=api_key)
         try:
             # Try 2.5-flash as current stable check in 2026
-            genai.GenerativeModel('gemini-2.5-flash').generate_content("test")
+            client.models.generate_content(model='gemini-2.0-flash', contents="test")
             self.unhealthy_keys.discard(api_key)
             logger.info(f"Rechecked API key {api_key[:10]}... - now healthy")
         except Exception:
@@ -382,24 +382,27 @@ def execute_with_retry(prompt: Any, request_data: dict, api_key: str) -> str:
     ]
 
     for attempt in range(max_attempts):
-        # Configure API key for this attempt
-        genai.configure(api_key=api_key_used)
+        # Initialize client for this attempt
+        client = genai.Client(api_key=api_key_used)
         
         # Try each model in the list
         last_error = None
         for model_name in candidate_models:
-            formatted_model = f"models/{model_name}"
             try:
-                logger.info(f"AI Call Attempt {attempt+1}: {formatted_model} (Key: {api_key_used[:6]}...)")
-                model = genai.GenerativeModel(formatted_model)
+                logger.info(f"AI Call Attempt {attempt+1}: {model_name} (Key: {api_key_used[:6]}...)")
                 
                 t_start = time.monotonic()
-                response = model.generate_content(prompt, request_options={"timeout": 60.0})
+                # google-genai uses 'contents' and 'model'
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config={'http_options': {'timeout': 60}}
+                )
                 t_end = time.monotonic()
                 
-                # Check for successful but filtered response
+                # Check for successful response
                 if not response.text:
-                    logger.warning(f"AI returned empty response for {formatted_model}. Check safety filters.")
+                    logger.warning(f"AI returned empty response for {model_name}. Check safety filters.")
                     continue
                 
                 print("🧠 RAW AI RESPONSE START ----------------", flush=True)
