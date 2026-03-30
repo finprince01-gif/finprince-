@@ -1,16 +1,13 @@
 import os
 import json
 import logging
-import google.generativeai as genai
+from google import genai
 from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
 
 # Reusing environment variable for API Key
 API_KEY = os.getenv("GEMINI_API_KEY")
-
-if API_KEY:
-    genai.configure(api_key=API_KEY)
 
 def extract_invoice(file_bytes: bytes) -> Dict[str, Any]:
     """
@@ -20,8 +17,8 @@ def extract_invoice(file_bytes: bytes) -> Dict[str, Any]:
     if not API_KEY:
         raise ValueError("GEMINI_API_KEY not configured in environment")
 
-    # Define the extraction model
-    model = genai.GenerativeModel("models/gemini-2.5-flash")
+    # Initialize Client
+    client = genai.Client(api_key=API_KEY)
     
     prompt = """
 You are a high-precision invoice extraction engine.
@@ -176,10 +173,13 @@ Return clean, structured, UI-ready data WITHOUT requiring mapping.
     
     # Process blob directly
     try:
-        response = model.generate_content([
-            prompt,
-            {"mime_type": "application/pdf", "data": file_bytes}
-        ])
+        response = client.models.generate_content(
+            model="gemini-2.0-flash", 
+            contents=[
+                prompt,
+                {"mime_type": "application/pdf", "data": file_bytes}
+            ]
+        )
         
         # Parse result
         text = response.text.strip()
