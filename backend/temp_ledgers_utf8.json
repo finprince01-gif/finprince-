@@ -1,0 +1,48 @@
+﻿[
+  {
+    "name": "Sales Account",
+    "cat": "Income",
+    "grp": "Sales Accounts"
+  },
+  {
+    "name": "Output GST",
+    "cat": "Liability",
+    "grp": "Duties & Taxes"
+  },
+  {
+    "name": "cash",
+    "cat": "Asset",
+    "grp": "Cash and bank balances"
+  },
+  {
+    "name": "demo",
+    "cat": "Asset",
+    "grp": "Short Term Loans and Advances"
+  },
+  {
+    "name": "ddd",
+    "cat": "Asset",
+    "grp": "Other current assets"
+  },
+  {
+    "name": "g",
+    "cat": "NPO Funds",
+    "grp": "Unrestricted Funds"
+  },
+  {
+    "name": "ulaganathan",
+    "cat": "Liability",
+    "grp": "Sundry Creditors"
+  },
+  {
+    "name": "dharun",
+    "cat": "Asset",
+    "grp": "Sundry Debtors"
+  },
+  {
+    "name": "sample1",
+    "cat": "Liability",
+    "grp": "Sundry Creditors"
+  }
+]
+

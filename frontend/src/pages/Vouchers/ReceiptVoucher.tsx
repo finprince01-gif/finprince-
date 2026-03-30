@@ -253,12 +253,19 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
     useEffect(() => {
         if (selectedReceiptConfig && receiptVoucherConfigs.length > 0) {
             const config = receiptVoucherConfigs.find(c => c.voucher_name === selectedReceiptConfig);
-            if (config && config.enable_auto_numbering) {
-                const paddedNum = String(config.current_number).padStart(config.required_digits, '0');
-                const generatedNumber = `${config.prefix || ''}${paddedNum}${config.suffix || ''}`;
-                setVoucherNumber(generatedNumber);
-            } else {
-                setVoucherNumber('Manual Input');
+            if (config) {
+                if (config.enable_auto_numbering) {
+                    // Fetch the correctly formatted next number from the backend
+                    httpClient.get<any>(`/api/masters/master-voucher-receipts/${config.id}/next-number/`)
+                        .then((res) => {
+                            setVoucherNumber(res.invoice_number || '');
+                        })
+                        .catch(() => {
+                            setVoucherNumber('');
+                        });
+                } else {
+                    setVoucherNumber('Manual Input');
+                }
             }
         } else {
             setVoucherNumber('');
@@ -584,7 +591,29 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
 
                 await httpClient.post('/api/vouchers/receipts/', payload);
                 showSuccess('Receipt Voucher posted successfully!');
-                handleCancel();
+
+                // Increment the voucher series counter so the next number is ready
+                const savedConfig = receiptVoucherConfigs.find(c => c.voucher_name === selectedReceiptConfig);
+                if (savedConfig && savedConfig.enable_auto_numbering) {
+                    try {
+                        await httpClient.post(`/api/masters/master-voucher-receipts/${savedConfig.id}/increment-number/`, {});
+                        const res = await httpClient.get<any>(`/api/masters/master-voucher-receipts/${savedConfig.id}/next-number/`);
+                        const nextNumber = res.invoice_number || '';
+                        const keepConfig = selectedReceiptConfig;
+                        handleCancel();
+                        setSelectedReceiptConfig(keepConfig);
+                        setVoucherNumber(nextNumber);
+                    } catch (e) {
+                        console.error('Failed to increment receipt voucher number:', e);
+                        const keepConfig = selectedReceiptConfig;
+                        handleCancel();
+                        setSelectedReceiptConfig(keepConfig);
+                    }
+                } else {
+                    const keepConfig = selectedReceiptConfig;
+                    handleCancel();
+                    setSelectedReceiptConfig(keepConfig);
+                }
             } else {
                 if (!receiveInId) {
                     showError('Please select a valid Receive In account.');
@@ -708,7 +737,29 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
 
                 await httpClient.post('/api/vouchers/receipts/', payload);
                 showSuccess(`Consolidated Receipt Voucher posted successfully.`);
-                handleCancel();
+
+                // Increment the voucher series counter so the next number is ready
+                const savedConfigBulk = receiptVoucherConfigs.find(c => c.voucher_name === selectedReceiptConfig);
+                if (savedConfigBulk && savedConfigBulk.enable_auto_numbering) {
+                    try {
+                        await httpClient.post(`/api/masters/master-voucher-receipts/${savedConfigBulk.id}/increment-number/`, {});
+                        const res = await httpClient.get<any>(`/api/masters/master-voucher-receipts/${savedConfigBulk.id}/next-number/`);
+                        const nextNumber = res.invoice_number || '';
+                        const keepConfig = selectedReceiptConfig;
+                        handleCancel();
+                        setSelectedReceiptConfig(keepConfig);
+                        setVoucherNumber(nextNumber);
+                    } catch (e) {
+                        console.error('Failed to increment receipt voucher number:', e);
+                        const keepConfig = selectedReceiptConfig;
+                        handleCancel();
+                        setSelectedReceiptConfig(keepConfig);
+                    }
+                } else {
+                    const keepConfig = selectedReceiptConfig;
+                    handleCancel();
+                    setSelectedReceiptConfig(keepConfig);
+                }
             }
         } catch (error: any) {
             console.error('Error posting receipt voucher:', error);

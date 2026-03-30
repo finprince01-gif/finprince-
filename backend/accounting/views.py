@@ -238,39 +238,72 @@ class PayFromLedgerView(APIView):
     permission_classes = [AllowAny] # TEMPORARY: disabled IsAuthenticated
 
     def get(self, request):
-        # Fetch actual tenant_id from the user context
         tenant_id = getattr(request.user, 'tenant_id', None)
+        if not tenant_id:
+            tenant_id = request.headers.get('X-Tenant-Id')
         
         if not tenant_id:
-            return Response({"error": "Tenant ID not found. Please log in again."}, status=400)
+            return Response({"error": "Tenant ID missing."}, status=400)
         
-        # MySQL Recursive CTE based on the new ID-based hierarchy and classification
-        # Filters: Assets (ASSET_CASH) and Liabilities (LIABILITY_LOAN) recursively
-        sql = """
+        # 1. Identify Party Ledgers that must be excluded
+        party_ledger_ids = set()
+        # Find all ledgers linked to Vendors
+        vendor_ledgers = Vendor.objects.filter(tenant_id=tenant_id, ledger_id__isnull=False).values_list('ledger_id', flat=True)
+        party_ledger_ids.update(vendor_ledgers)
+        
+        # Find all ledgers linked to Customers
+        customer_ledgers = Customer.objects.filter(tenant_id=tenant_id, ledger_id__isnull=False).values_list('ledger_id', flat=True)
+        party_ledger_ids.update(customer_ledgers)
+
+        # 2. Base Queryset for Ledgers
+        qs = MasterLedger.objects.filter(tenant_id=tenant_id).exclude(id__in=list(party_ledger_ids))
+
+        # 3. Apply Group-based filtering
+        # We include ledgers from groups that look like Cash, Bank, or Loans
+        # Plus recursive check for proper groups if any exist
+        valid_groups_sql = """
             WITH RECURSIVE group_tree(id) AS (
-                -- Root groups by classification
                 SELECT id FROM master_ledger_groups 
                 WHERE group_type IN ('ASSET_CASH', 'LIABILITY_LOAN')
                 UNION ALL
-                -- Children groups via parent_id link
                 SELECT g.id FROM master_ledger_groups g 
                 JOIN group_tree gt ON g.parent_id = gt.id
             )
-            -- Fetch only ledgers belonging to the matching group hierarchy
-            SELECT l.id, l.name 
-            FROM master_ledgers l
-            WHERE l.group_id IN (SELECT id FROM group_tree)
-            AND l.tenant_id = %s
+            SELECT id FROM group_tree
         """
         
         try:
-            with connection.cursor() as cursor:
-                cursor.execute(sql, [tenant_id])
-                columns = [col[0] for col in cursor.description]
-                results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-            return Response(results)
+            # Union of hierarchy-based ledgers AND ledgers with keywords in their group string
+            # This handles cases where group_id is null but the 'group' string is set (e.g., 'Bank Accounts')
+            from django.db.models import Q
+            results_qs = qs.filter(
+                Q(group_id__in=MasterLedgerGroup.objects.raw(valid_groups_sql)) |
+                Q(group__icontains='Bank') |
+                Q(group__icontains='Cash') |
+                Q(group__icontains='Loan') |
+                Q(group__icontains='Credit') # For Cash/Credit bank accounts
+            ).distinct()
+            
+            # Additional safety: explicitly exclude Sundry Debtors/Creditors groups
+            results_qs = results_qs.exclude(
+                Q(group__icontains='Debtor') | 
+                Q(group__icontains='Creditor')
+            )
+
+            serializer = MasterLedgerSerializer(results_qs, many=True)
+            return Response(serializer.data)
         except Exception as e:
-            return Response({"error": "Failed to fetch ledgers from hierarchy"}, status=500)
+            # Fallback if raw SQL fails or for simpler filtering
+            results_qs = qs.filter(
+                Q(group__icontains='Bank') |
+                Q(group__icontains='Cash') |
+                Q(group__icontains='Loan')
+            ).exclude(
+                Q(group__icontains='Debtor') | 
+                Q(group__icontains='Creditor')
+            ).distinct()
+            serializer = MasterLedgerSerializer(results_qs, many=True)
+            return Response(serializer.data)
 
 
 class PayToLedgerView(APIView):
