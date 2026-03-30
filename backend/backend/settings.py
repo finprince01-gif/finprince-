@@ -391,7 +391,7 @@ DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL") or EMAIL_HOST_USER or 'webm
 
 # Django migrations are completely disabled for project apps.
 MIGRATION_MODULES = {
-    'accounting': None,
+#    'accounting': None,
     'core': None,
     'customerportal': None,
     'inventory': None,

@@ -254,30 +254,51 @@ class AdvancePaymentViewSet(viewsets.ModelViewSet):
     serializer_class = AdvancePaymentSerializer
     permission_classes = [IsAuthenticated, IsTenantMember]
 
-    def get_queryset(self):
+    def list(self, request, *args, **kwargs):
         tenant_id = get_tenant_from_request(self.request)
         ledger_id = self.request.query_params.get('ledger_id')
         category = self.request.query_params.get('category')
 
-        if ledger_id:
-            # Fetch for specific ledger
-            return get_advances_by_ledger(ledger_id, tenant_id, category)
+        # 1. Fetch Payment Advances
+        payment_items = get_advances_by_ledger(ledger_id, tenant_id, category)
         
-        # Else fetch ALL advances for this tenant (e.g. for dashboard)
-        qs = PaymentVoucherItem.objects.filter(
-            voucher__tenant_id=tenant_id,
-            reference_type='ADVANCE',
-            amount__gt=0
-        ).select_related('voucher', 'pay_to_ledger')
+        # 2. Fetch Receipt Advances
+        receipt_items = self._get_receipt_advances(ledger_id, tenant_id, category)
+        
+        # Merge results into a list (or use chain for larger sets)
+        from itertools import chain
+        combined = list(chain(payment_items, receipt_items))
+        
+        # Sort by date descending (vouchers must be Prefetched)
+        combined.sort(key=lambda x: x.voucher.date, reverse=True)
 
+        serializer = self.get_serializer(combined, many=True)
+        return Response(serializer.data)
+
+    def _get_receipt_advances(self, ledger_id, tenant_id=None, category=None):
+        from .models_voucher_receipt import ReceiptVoucherItem
+        qs = ReceiptVoucherItem.objects.filter(
+            # matches either bool or string as some legacy code uses types
+            Q(is_advance=True) | Q(reference_type__iexact='advance'),
+            amount__gt=0
+        ).select_related('voucher', 'customer')
+
+        if ledger_id:
+            qs = qs.filter(customer_id=ledger_id)
+        if tenant_id:
+            qs = qs.filter(voucher__tenant_id=tenant_id)
         if category:
             from django.db.models.functions import Trim, Upper
             qs = qs.annotate(
-                v_cat=Upper(Trim('pay_to_ledger__vendors_basic__vendor_category')),
-                c_cat=Upper(Trim('pay_to_ledger__customers_basic__customer_category__category'))
+                v_cat=Upper(Trim('customer__vendors_basic__vendor_category')),
+                c_cat=Upper(Trim('customer__customers_basic__customer_category__category'))
             ).filter(
                 Q(v_cat=category.strip().upper()) | 
                 Q(c_cat=category.strip().upper())
             )
-            
         return qs
+
+    def get_queryset(self):
+        # Fallback for other ModelViewSet default methods
+        tenant_id = get_tenant_from_request(self.request)
+        return PaymentVoucherItem.objects.filter(voucher__tenant_id=tenant_id, reference_type='ADVANCE')

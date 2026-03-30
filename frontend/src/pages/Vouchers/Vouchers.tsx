@@ -716,6 +716,94 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
     return combined;
   }, [stockItems, inventoryItems, services]);
 
+  const fetchVendorAdvances = useCallback(async (value: string) => {
+    if (!value) {
+      setPurchaseAdvanceRefs([]);
+      return;
+    }
+
+    // Extract entity name if it's in the format "Name (Branch)"
+    const match = value.match(/^(.*) \((.*)\)$/);
+    const entityName = match ? match[1] : value;
+    
+    // Attempt to find the most accurate ledger ID
+    const findLedgerId = (name: string) => {
+      if (!name) return null;
+      const lower = name.toLowerCase().trim();
+      
+      // 1. Check richVendors for a matching vendor with a ledger_id
+      const vendor = richVendors.find(v => 
+        (v.vendor_name || '').toLowerCase().trim() === lower || 
+        (v.name || '').toLowerCase().trim() === lower
+      );
+      // Only return ledger_id if it's actually set; if vendor found but ledger_id is null,
+      // fall through to the ledgers array below (vendor.vendor_name becomes the lookup key)
+      if (vendor && (vendor.ledger_id || vendor.ledger)) return vendor.ledger_id || vendor.ledger;
+
+      // 2. Check richCustomers for a matching customer with a ledger_id
+      const customer = richCustomers.find(c => 
+        (c.customer_name || '').toLowerCase().trim() === lower || 
+        (c.name || '').toLowerCase().trim() === lower
+      );
+      if (customer && (customer.ledger_id || customer.ledger)) return customer.ledger_id || customer.ledger;
+
+      // 3. Direct MasterLedger lookup by name — this is the key fallback when vendor.ledger_id is null
+      // Works because ReceiptVoucherItem.customer_id = MasterLedger.id
+      const ledger = ledgers.find(l => (l.name || '').toLowerCase().trim() === lower);
+      if (ledger?.id) return ledger.id;
+
+      // 4. If a vendor was found but had no ledger_id, try looking up ledger by vendor_name
+      if (vendor && vendor.vendor_name) {
+        const vendorLedger = ledgers.find(l => (l.name || '').toLowerCase().trim() === (vendor.vendor_name || '').toLowerCase().trim());
+        if (vendorLedger?.id) return vendorLedger.id;
+      }
+
+      return null;
+    };
+
+    let ledgerId = findLedgerId(entityName);
+    if (!ledgerId && match) {
+      // Fallback: try raw value if entityName didn't match
+      ledgerId = findLedgerId(value);
+    }
+
+    console.log('[ADV-DEBUG] value:', value, '| entityName:', entityName, '| resolvedLedgerId:', ledgerId);
+    const _dbgVendor = richVendors.find((v: any) => (v.vendor_name || '').toLowerCase().trim() === entityName.toLowerCase().trim());
+    console.log('[ADV-DEBUG] richVendors.length:', richVendors.length, '| matched vendor:', _dbgVendor ? {id: _dbgVendor.id, name: _dbgVendor.vendor_name, ledger_id: _dbgVendor.ledger_id} : 'NOT FOUND');
+    const _dbgLedger = ledgers.find((l: any) => (l.name || '').toLowerCase().trim() === entityName.toLowerCase().trim());
+    console.log('[ADV-DEBUG] ledgers.length:', ledgers.length, '| matched ledger:', _dbgLedger ? {id: _dbgLedger.id, name: _dbgLedger.name} : 'NOT FOUND');
+
+    if (ledgerId) {
+      try {
+        console.log('[ADV-DEBUG] Calling getAdvances with ledgerId:', ledgerId);
+        const data = await apiService.getAdvances(ledgerId);
+        console.log('[ADV-DEBUG] Raw API response:', data);
+        if (Array.isArray(data)) {
+          const mapped = data.map(adv => ({
+            id: adv.id,
+            date: adv.date,
+            refNo: adv.advance_ref_no || adv.reference_no || adv.ref_no || adv.voucher_no,
+            amount: adv.amount || 0,
+            appliedNow: '0'
+          }));
+          console.log('[ADV-DEBUG] Mapped & setting:', mapped);
+          setPurchaseAdvanceRefs(mapped);
+        } else {
+          console.warn('[ADV-DEBUG] API did not return array, got:', typeof data, data);
+          setPurchaseAdvanceRefs([]);
+        }
+      } catch (err) {
+        console.error('[ADV-DEBUG] Failed to fetch advances for vendor:', err);
+        setPurchaseAdvanceRefs([]);
+      }
+    } else {
+      console.warn('[ADV-DEBUG] Could not resolve ledger ID for vendor:', entityName);
+      console.log('[ADV-DEBUG] All richVendors (name + ledger_id):', richVendors.map((v: any) => ({name: v.vendor_name, ledger_id: v.ledger_id})));
+      console.log('[ADV-DEBUG] All ledgers (id + name):', ledgers.map((l: any) => ({id: l.id, name: l.name})));
+      setPurchaseAdvanceRefs([]);
+    }
+  }, [richVendors, richCustomers, ledgers, setPurchaseAdvanceRefs]);
+
   // Item Options for Dropdowns
   const itemCodeOptions = React.useMemo(() =>
     Array.from(new Set(allItems.map((item: any) => item.item_code || item.code).filter(Boolean) as string[])),
@@ -831,7 +919,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   useEffect(() => {
     const fetchMultiplePODetails = async () => {
       if (selectedPurchasePOs.length === 0) {
-        setPurchaseAdvanceRefs([]);
+        // Only clear advance refs when there's no party selected (full form reset)
+        // Do NOT clear them here when vendor changes with POs reset - fetchVendorAdvances handles it
         setCurrentPOItems([]);
         setParty(prevParty => {
           if (wasPartyAutoSet) {
@@ -915,7 +1004,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
           });
 
           setPurchaseItems(mappedItems);
-          setPurchaseAdvanceRefs([]);
+          // Note: Do NOT clear purchaseAdvanceRefs here - vendor advances should persist when PO is selected
 
           if (!party && vendorNameFound) {
             setParty(vendorNameFound);
@@ -2280,7 +2369,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
               sourcePoNo: null as string | null
             };
           });
-          setPurchaseItems(newPurchaseItems);
+          if (prefilledData.sellerName) {
+          fetchVendorAdvances(prefilledData.sellerName);
+        }
+        setPurchaseItems(newPurchaseItems);
 
         } else {
           setItems([{ name: '', qty: 1, rate: 0, taxableAmount: 0, cgstAmount: 0, sgstAmount: 0, igstAmount: 0, totalAmount: 0 }]);
@@ -2409,6 +2501,10 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
 
     // Auto-population logic for Vouchers
     if (voucherType === 'Purchase' || voucherType === 'Sales') {
+      if (voucherType === 'Purchase' && value) {
+        fetchVendorAdvances(value);
+      }
+
       if (!value) {
         setGstin('');
         setSelectedBranch('');
@@ -2526,10 +2622,9 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
         if (ledger.additional_data?.address) {
           setAddressFields(ledger.additional_data.address);
         }
-        setVendorAddresses([]);
       }
     }
-  }, [richVendors, richCustomers, vendorGstDetails, voucherType, setAddressFields, setGstin, setVendorBillingCurrency, setVendorAddresses, setPurchaseTerms, setMasterTermsData, ledgers, setGrnRefNo, setSelectedPurchasePOs, setPurchaseItems]);
+  }, [richVendors, richCustomers, vendorGstDetails, voucherType, setAddressFields, setGstin, setVendorBillingCurrency, setVendorAddresses, setPurchaseTerms, setMasterTermsData, ledgers, setGrnRefNo, setSelectedPurchasePOs, setPurchaseItems, setPurchaseAdvanceRefs, fetchVendorAdvances]);
 
   const validateVendorFromInvoice = async (vendorName: string, gstin: string, state: string, address: string, branch: string = '') => {
     try {
@@ -4693,15 +4788,15 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                               <div className="text-center text-gray-600">{ref.date}</div>
                               <div className="text-center font-medium text-indigo-900">{ref.refNo}</div>
                               <div className="text-right pr-4 text-gray-700">{Number(ref.amount).toFixed(2)}</div>
-                              <div className="px-2">
+                              <div className="flex justify-center">
                                 <input
-                                  type="number"
-                                  min="0"
-                                  max={ref.amount}
-                                  value={ref.appliedNow}
-                                  onChange={(e) => handlePurchaseAdvanceRefChange(idx, 'appliedNow', e.target.value)}
-                                  className="w-full px-2 py-1 border border-gray-300 rounded text-right focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                                  placeholder="0.00"
+                                  type="checkbox"
+                                  checked={Number(ref.appliedNow) > 0}
+                                  onChange={(e) => {
+                                    const newVal = e.target.checked ? String(ref.amount) : "0";
+                                    handlePurchaseAdvanceRefChange(idx, 'appliedNow', newVal);
+                                  }}
+                                  className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
                                 />
                               </div>
                             </div>
@@ -4709,7 +4804,7 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                         </div>
                       ) : (
                         <div className="text-center py-8 text-gray-500 text-sm italic">
-                          No advance references available for selected Purchase Order.
+                          No unutilized advance receipts found for this vendor.
                         </div>
                       )}
                     </div>
