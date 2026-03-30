@@ -239,6 +239,8 @@ class PayFromLedgerView(APIView):
 
     def get(self, request):
         tenant_id = getattr(request.user, 'tenant_id', None)
+        if not tenant_id:
+            tenant_id = request.headers.get('X-Tenant-Id')
         
         if not tenant_id:
             return Response({"error": "Tenant ID not found. Please log in again."}, status=400)

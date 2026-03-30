@@ -3538,3 +3538,21 @@ CREATE INDEX IF NOT EXISTS `idx_ocr_temp_group` ON `invoice_ocr_temp` (`group_id
 CREATE INDEX IF NOT EXISTS `idx_ocr_temp_vendor` ON `invoice_ocr_temp` (`vendor_id`);
 
 
+
+--ALTER TABLE Transcaction_file MODIFY tds_section
+ALTER TABLE Transcaction_file MODIFY tds_section varchar(255);
+
+-- Fix for Transaction Log Table
+ALTER TABLE Transcaction_file 
+    MODIFY tds_section varchar(255);
+
+-- Fix for Customer Portal (Onboarding)
+ALTER TABLE customer_master_customer_tds 
+    MODIFY tds_section varchar(255),
+    MODIFY tcs_section varchar(255);
+
+-- Fix for Vendor Master Portal
+ALTER TABLE vendor_master_vendorcreation_tds 
+    MODIFY tds_section varchar(255),
+    MODIFY tds_section_applicable varchar(255),
+    MODIFY tcs_section_applicable varchar(255);

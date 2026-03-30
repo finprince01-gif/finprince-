@@ -674,6 +674,28 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
 
             await httpClient.post('/api/vouchers/payment/', payload);
             showSuccess(`${activeTab === 'single' ? 'Single' : 'Bulk'} Payment Voucher posted successfully!`);
+
+            // Increment the voucher series counter so the next number is ready
+            const savedConfig = paymentVoucherConfigs.find(c => c.voucher_name === (selectedPaymentConfig || voucherType));
+            if (savedConfig && savedConfig.enable_auto_numbering) {
+                try {
+                    const res = await httpClient.post<any>(`/api/masters/master-voucher-payments/${savedConfig.id}/increment-number/`, {});
+                    // Use the next number returned by the increment call
+                    setVoucherNumber(res.next_invoice_number || '');
+                } catch (e) {
+                    console.error('Failed to increment voucher number:', e);
+                    // Fallback: try refreshing manually if increment call response is unexpected
+                    try {
+                        const res = await httpClient.get<any>(`/api/masters/master-voucher-payments/${savedConfig.id}/next-number/`);
+                        setVoucherNumber(res.invoice_number || '');
+                    } catch (err) {
+                        console.error('Failed to refresh voucher number:', err);
+                    }
+                }
+            }
+
+            // Reset form fields but keep the selected Voucher Type so it stays ready
+            const keepConfig = selectedPaymentConfig;
             handleCancel();
         } catch (error: any) {
             console.error('Error posting payment voucher:', error);
@@ -722,7 +744,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Voucher Series</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Voucher Type</label>
                             <select
                                 value={selectedPaymentConfig}
                                 onChange={(e) => setSelectedPaymentConfig(e.target.value)}

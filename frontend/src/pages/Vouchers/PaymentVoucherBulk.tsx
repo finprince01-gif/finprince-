@@ -100,6 +100,8 @@ const PaymentVoucherBulk: React.FC = () => {
   const [postingNote, setPostingNote] = useState<string>('');
 
   // Ledgers state
+  const [payFromLedgers, setPayFromLedgers] = useState<any[]>([]);
+  const [payToOptions, setPayToOptions] = useState<any[]>([]);
   const [allLedgers, setAllLedgers] = useState<any[]>([]);
 
   // Filter Pay From options (Cash and Bank accounts)
@@ -127,20 +129,16 @@ const PaymentVoucherBulk: React.FC = () => {
 
   const fetchAllLedgers = async () => {
     try {
-      const token = httpClient.getToken();
-      const response = await fetch(`${API_BASE_URL}/api/ledgers/`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setAllLedgers(data);
-      }
+      const [payFromData, payToData, allData] = await Promise.all([
+        httpClient.get<any[]>('/api/ledgers/pay-from/'),
+        httpClient.get<any[]>('/api/ledgers/pay-to/'),
+        httpClient.get<any[]>('/api/ledgers/')
+      ]);
+      setPayFromLedgers(payFromData || []);
+      setPayToOptions(payToData || []);
+      setAllLedgers(allData || []);
     } catch (error) {
-      console.error('Error fetching ledgers:');
+      console.error('Error fetching ledgers:', error);
     }
   };
 
@@ -284,6 +282,19 @@ const PaymentVoucherBulk: React.FC = () => {
 
         if (response.ok) {
             showSuccess('Payment voucher posted successfully!');
+            
+            // Increment the voucher series counter so the next number is ready
+            const savedConfig = paymentVoucherConfigs.find(c => c.voucher_name === selectedPaymentConfig);
+            if (savedConfig && savedConfig.enable_auto_numbering) {
+                try {
+                    const res = await httpClient.post<any>(`/api/masters/master-voucher-payments/${savedConfig.id}/increment-number/`, {});
+                    // Update local state with the next formatted number
+                    setVoucherNumber(res.next_invoice_number || '');
+                } catch (e) {
+                    console.error('Failed to increment voucher number:', e);
+                }
+            }
+
             handleCancel();
         } else {
             const err = await response.json();
