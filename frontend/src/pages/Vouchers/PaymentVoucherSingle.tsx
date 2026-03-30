@@ -18,6 +18,9 @@ interface PaymentRow {
     id: string;
     payTo: string;
     amount: number;
+    advanceAmount?: number;
+    advanceRefNo?: string;
+    allocations?: BulkTransaction[];
 }
 
 interface BulkTransaction {
@@ -81,16 +84,26 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
     useEffect(() => {
         const fetchAllData = async () => {
             try {
-                const [ledgersData, payFromData, vendorsData, customersData] = await Promise.all([
+                const [ledgersData, payFromData, vendorsData, customersData, configsData] = await Promise.all([
                     apiService.getLedgers(),
                     apiService.getPayFromLedgers(),
                     apiService.getRichVendors(),
-                    apiService.getRichCustomers()
+                    apiService.getRichCustomers(),
+                    httpClient.get<any[]>('/api/masters/master-voucher-payments/')
                 ]);
                 setAllLedgers(ledgersData || []);
                 setPayFromOptions(payFromData || []);
                 setVendors(vendorsData || []);
                 setCustomers(customersData || []);
+                
+                const configs = (configsData || []).map(config => ({
+                    ...config,
+                    voucher_type: config.voucher_type || 'payments'
+                }));
+                setPaymentVoucherConfigs(configs);
+                if (configs && configs.length === 1) {
+                    setSelectedPaymentConfig(configs[0].voucher_name);
+                }
             } catch (error) {
                 console.error('Error fetching data:', error);
                 showError('Failed to fetch master data');
@@ -157,11 +170,13 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
 
     // Bulk mode state
     const [paymentRows, setPaymentRows] = useState<PaymentRow[]>([
-        { id: '1', payTo: '', amount: 0 },
-        { id: '2', payTo: '', amount: 0 },
-        { id: '3', payTo: '', amount: 0 }
+        { id: '1', payTo: '', amount: 0, advanceAmount: 0, advanceRefNo: '', allocations: [] },
+        { id: '2', payTo: '', amount: 0, advanceAmount: 0, advanceRefNo: '', allocations: [] },
+        { id: '3', payTo: '', amount: 0, advanceAmount: 0, advanceRefNo: '', allocations: [] }
     ]);
+    const [invalidRefNos, setInvalidRefNos] = useState<Set<string>>(new Set());
     const [selectedVendor, setSelectedVendor] = useState<string>('');
+    const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
     const [bulkTransactions, setBulkTransactions] = useState<BulkTransaction[]>([]);
 
     // Fetch pending invoices for Bulk mode
@@ -216,12 +231,6 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
     // Populate from AI Extraction
     useEffect(() => {
         if (prefilledData && allLedgers.length > 0) {
-
-            // Assuming prefilledData.invoiceDate is YYYY-MM-DD
-            if (prefilledData.invoiceDate) {
-                setDate(prefilledData.invoiceDate);
-            }
-
             // Helper to find exact ledger name from allLedgers (case-insensitive)
             const findLedgerName = (name: string) => {
                 if (!name) return '';
@@ -230,12 +239,10 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                 return found ? found.name : '';
             };
 
-            if (prefilledData.sellerName) {
-                setPayTo(findLedgerName(prefilledData.sellerName));
-            }
-            if ((prefilledData as any).account) {
-                setPayFrom(findLedgerName((prefilledData as any).account));
-            }
+            if (prefilledData.invoiceDate) setDate(prefilledData.invoiceDate);
+            if (prefilledData.sellerName) setPayTo(findLedgerName(prefilledData.sellerName));
+            if ((prefilledData as any).account) setPayFrom(findLedgerName((prefilledData as any).account));
+            
             if (prefilledData.totalAmount) {
                 setSingleAdvanceAmount(prefilledData.totalAmount);
                 setShowSingleAdvanceSection(true);
@@ -245,51 +252,55 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                     setSingleAdvanceRefNo((prefilledData as any).reference_number);
                 }
             }
-            if ((prefilledData as any).narration) {
-                setPostingNote((prefilledData as any).narration);
-            }
-            if ((prefilledData as any).bank_transaction_id) {
-                setBankTransactionId((prefilledData as any).bank_transaction_id);
-            }
+            if ((prefilledData as any).narration) setPostingNote((prefilledData as any).narration);
+            if ((prefilledData as any).bank_transaction_id) setBankTransactionId((prefilledData as any).bank_transaction_id);
             if (clearPrefilledData) clearPrefilledData();
         }
     }, [prefilledData, clearPrefilledData, allLedgers]);
 
-    // Fetch payment voucher configurations on mount
+    // Fetch payment configurations on mount
     useEffect(() => {
-        const fetchPaymentConfigs = async () => {
+        const fetchConfigs = async () => {
             try {
-
                 const data = await httpClient.get<any[]>('/api/masters/master-voucher-payments/');
-                const paymentConfigs = data || [];
-
-
-                setPaymentVoucherConfigs(paymentConfigs);
-                if (paymentConfigs && paymentConfigs.length === 1) {
-                    setSelectedPaymentConfig(paymentConfigs[0].voucher_name);
+                const configs = (data || []).map(config => ({
+                    ...config,
+                    voucher_type: config.voucher_type || 'payments'
+                }));
+                setPaymentVoucherConfigs(configs);
+                if (configs && configs.length === 1) {
+                    setSelectedPaymentConfig(configs[0].voucher_name);
                 }
-            } catch (error) {
-                console.error('Error fetching payment voucher configurations:');
-                setPaymentVoucherConfigs([]);
+            } catch (err) {
+                console.error('Failed to fetch payment configs:', err);
             }
         };
-        fetchPaymentConfigs();
+        fetchConfigs();
     }, []);
 
-    // Generate voucher number when payment configuration is selected
+    // Generate voucher number when configuration is selected
     useEffect(() => {
         if (selectedPaymentConfig && paymentVoucherConfigs.length > 0) {
             const config = paymentVoucherConfigs.find(c => c.voucher_name === selectedPaymentConfig);
             if (config) {
                 if (config.enable_auto_numbering) {
-                    // Fetch the correctly formatted next number from the backend
-                    httpClient.get<any>(`/api/masters/master-voucher-payments/${config.id}/next-number/`)
-                        .then((res) => {
-                            setVoucherNumber(res.invoice_number || '');
-                        })
-                        .catch(() => {
-                            setVoucherNumber('');
-                        });
+                    // Logic to format it locally for immediate feedback
+                    const num = config.current_number || config.start_from || 1;
+                    const digits = config.required_digits || 4;
+                    const prefix = config.prefix || '';
+                    const suffix = config.suffix || '';
+                    let generatedNumber = '';
+                    if (suffix && !isNaN(Number(suffix))) {
+                        const baseStr = String(config.start_from || 1).padStart(digits, '0') + suffix;
+                        const base = parseInt(baseStr);
+                        const offset = num - (config.start_from || 1);
+                        const fullNum = base + offset;
+                        const totalDigits = digits + suffix.length;
+                        generatedNumber = `${prefix}${String(fullNum).padStart(totalDigits, '0')}`;
+                    } else {
+                        generatedNumber = `${prefix}${String(num).padStart(digits, '0')}${suffix || ''}`;
+                    }
+                    setVoucherNumber(generatedNumber);
                 } else {
                     setVoucherNumber('Manual Input');
                 }
@@ -324,18 +335,85 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
         calculateTotalPayment(pendingTransactions, singleAdvanceAmount);
     }, [singleAdvanceAmount]);
 
+    // Uniqueness Check Logic
+    const uniquenessTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+
+    const checkRefUniqueness = async (refNo: string) => {
+        if (!refNo.trim()) return;
+        if (uniquenessTimerRef.current) clearTimeout(uniquenessTimerRef.current);
+
+        uniquenessTimerRef.current = setTimeout(async () => {
+            try {
+                // Shared endpoint for uniqueness can be used or separate one
+                const data = await httpClient.get<{ is_unique: boolean }>(`/api/vouchers/payment/check-uniqueness/?ref_no=${encodeURIComponent(refNo)}`);
+                if (!data.is_unique) {
+                    setInvalidRefNos(prev => new Set(prev).add(refNo));
+                    showError(`Reference Number '${refNo}' is already used.`);
+                } else {
+                    setInvalidRefNos(prev => {
+                        const next = new Set(prev);
+                        next.delete(refNo);
+                        return next;
+                    });
+                }
+            } catch (error) {
+                console.error('Error checking ref uniqueness:', error);
+            }
+        }, 500);
+    };
+
     // Bulk Mode: Auto-calculate Amount based on Pay Now + Advance for selected vendor
     useEffect(() => {
-        if (!selectedVendor) return;
+        if (!selectedRowId || activeTab !== 'bulk') return;
 
         const totalPayNow = bulkTransactions.reduce((sum, t) => sum + (t.payNow || 0), 0);
         const totalAdvance = advanceAmount || 0;
         const total = totalPayNow + totalAdvance;
 
         setPaymentRows(prev => prev.map(row =>
-            row.payTo === selectedVendor ? { ...row, amount: total } : row
+            row.id === selectedRowId ? { ...row, amount: total } : row
         ));
-    }, [bulkTransactions, advanceAmount, selectedVendor]);
+    }, [bulkTransactions, advanceAmount, selectedRowId, activeTab]);
+
+    // Row Selection / Loading Logic (Bulk Mode)
+    useEffect(() => {
+        if (!selectedRowId || activeTab !== 'bulk') return;
+        const row = paymentRows.find(r => r.id === selectedRowId);
+        if (row) {
+            setAdvanceAmount(row.advanceAmount !== undefined ? row.advanceAmount : 0);
+            setAdvanceRefNo(row.advanceRefNo || '');
+            setBulkTransactions(row.allocations || []);
+            setSelectedVendor(row.payTo || '');
+        }
+    }, [selectedRowId, activeTab]);
+
+    // Right-panel -> Row Sync Logic (Bulk Mode)
+    useEffect(() => {
+        if (!selectedRowId || activeTab !== 'bulk') return;
+
+        setPaymentRows(prevRows => {
+            return prevRows.map(row => {
+                if (row.id === selectedRowId) {
+                    const hasChanged =
+                        row.advanceAmount !== advanceAmount ||
+                        row.advanceRefNo !== advanceRefNo ||
+                        JSON.stringify(row.allocations) !== JSON.stringify(bulkTransactions) ||
+                        row.payTo !== selectedVendor;
+
+                    if (hasChanged) {
+                        return {
+                            ...row,
+                            advanceAmount: advanceAmount,
+                            advanceRefNo: advanceRefNo,
+                            allocations: bulkTransactions,
+                            payTo: selectedVendor
+                        };
+                    }
+                }
+                return row;
+            });
+        });
+    }, [advanceAmount, advanceRefNo, bulkTransactions, selectedRowId, activeTab, selectedVendor]);
 
     // Bulk Mode: Calculate Grand Total
     const bulkTotalPayment = useMemo(() => {
@@ -348,61 +426,54 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
             row.id === id ? { ...row, [field]: value } : row
         ));
 
-        if (field === 'payTo' && typeof value === 'string' && value) {
-            handleVendorSelect(value);
+        setSelectedRowId(id);
+
+        if (field === 'payTo' && typeof value === 'string') {
+            handleVendorSelect(value, id);
         }
     };
 
-    const handleVendorSelect = async (vendorName: string) => {
+    const handleVendorSelect = async (vendorName: string, rowId?: string) => {
         setSelectedVendor(vendorName);
         if (!vendorName) {
             setBulkTransactions([]);
+            setAvailableAdvances([]);
             return;
         }
 
-        const mockTransactions: BulkTransaction[] = [
-            { id: 'mock-1', date: '31-12-2025', invoiceNo: 'Adc/005', amount: 20000.00, payNow: 0, selected: false },
-            { id: 'mock-2', date: '02-01-2026', invoiceNo: 'Abc/008', amount: 45000.00, payNow: 0, selected: false }
-        ];
+        // Before fetching, check if we already have saved allocations for this specific row
+        const targetRow = paymentRows.find(r => r.id === (rowId || selectedRowId));
+        if (targetRow && targetRow.allocations && targetRow.allocations.length > 0) {
+            setBulkTransactions(targetRow.allocations);
+            setAdvanceAmount(targetRow.advanceAmount || 0);
+            setAdvanceRefNo(targetRow.advanceRefNo || '');
+            return;
+        }
 
         try {
-            // Determine if selected ledger is a Vendor
-            const ledger = allLedgers.find(l => l.name === vendorName);
-            const isVendor = ledger?.group === 'Sundry Creditors';
-
-            // Fetch transactions using the available endpoint
-            // Note: For Vendors this fetches Supplier Invoices. 
-            // For others, we assume the same endpoint can return relevant credit transactions 
-            // or we would need a dedicated 'getLedgerOutstanding' endpoint.
-            const response = await apiService.getVendorPurchaseInvoices(vendorName);
-
-            if (response && Array.isArray(response)) {
-                // Map API response to BulkTransaction format
-                const mappedTransactions: BulkTransaction[] = response.map((item: any) => ({
-                    id: item.id?.toString() || Math.random().toString(),
-                    date: item.date || getCurrentDate(),
-                    invoiceNo: item.invoice_number || item.voucher_number || 'N/A',
-                    // Use balance if available (pending amount), otherwise total
-                    amount: typeof item.balance !== 'undefined' ? Number(item.balance) : (Number(item.total_amount) || 0),
-                    payNow: 0,
-                    selected: false
-                }));
-
-                // Filter logic based on requirements:
-                // We filter for positive outstanding balance.
-                const validTransactions = mappedTransactions.filter(t => t.amount > 0);
-
-                if (validTransactions.length > 0) {
-                    setBulkTransactions(validTransactions);
-                } else {
-                    setBulkTransactions(mockTransactions);
+            const selectedOpt = payToOptions.find(opt => opt.name === vendorName);
+            if (selectedOpt && selectedOpt.ledger_id) {
+                // 1. Fetch Transactions
+                const response = await apiService.getPendingInvoices(selectedOpt.ledger_id);
+                if (response && Array.isArray(response)) {
+                    const mappedTransactions: BulkTransaction[] = response.map((item: any) => ({
+                        id: item.id?.toString() || Math.random().toString(),
+                        date: item.date || getCurrentDate(),
+                        invoiceNo: item.reference_number || 'N/A',
+                        amount: Number(item.amount) || 0,
+                        payNow: 0,
+                        selected: false
+                    }));
+                    setBulkTransactions(mappedTransactions.filter(t => t.amount > 0));
                 }
-            } else {
-                setBulkTransactions(mockTransactions);
+
+                // 2. Fetch Advances
+                const advances = await apiService.getAdvances(selectedOpt.ledger_id, selectedOpt.category);
+                setAvailableAdvances(advances);
             }
         } catch (error) {
-            console.error('Error fetching transactions:', error);
-            setBulkTransactions(mockTransactions);
+            console.error('Error fetching data for vendor:', error);
+            setBulkTransactions([]);
         }
     };
 
@@ -410,7 +481,10 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
         const newRow: PaymentRow = {
             id: Date.now().toString(),
             payTo: '',
-            amount: 0
+            amount: 0,
+            advanceAmount: 0,
+            advanceRefNo: '',
+            allocations: []
         };
         setPaymentRows(prev => [...prev, newRow]);
     };
@@ -435,12 +509,13 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
         setPayTo('');
         setPendingTransactions(pendingTransactions.map(txn => ({ ...txn, payment: 0 })));
         setPaymentRows([
-            { id: '1', payTo: '', amount: 0 },
-            { id: '2', payTo: '', amount: 0 },
-            { id: '3', payTo: '', amount: 0 }
+            { id: '1', payTo: '', amount: 0, advanceAmount: 0, advanceRefNo: '', allocations: [] },
+            { id: '2', payTo: '', amount: 0, advanceAmount: 0, advanceRefNo: '', allocations: [] },
+            { id: '3', payTo: '', amount: 0, advanceAmount: 0, advanceRefNo: '', allocations: [] }
         ]);
         setBulkTransactions([]);
         setSelectedVendor('');
+        setSelectedRowId(null);
         setPostingNote('');
         setShowAdvanceSection(false);
         setAdvanceRefNo('');
@@ -449,6 +524,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
         setSingleAdvanceAmount(0);
         setShowSingleAdvanceSection(false);
         setTotalPayment(0);
+        setInvalidRefNos(new Set());
     };
 
     const handlePostPayment = async () => {
@@ -510,44 +586,54 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                     });
                 }
             } else {
-                // Bulk mode
+                // Bulk mode - Consolidate all rows
                 paymentRows.forEach(row => {
                     if (!row.payTo || row.amount <= 0) return;
                     const opt = payToOptions.find(o => o.name === row.payTo);
                     if (!opt) return;
 
-                    // If it's the selected vendor, split into invoices + advance
-                    if (row.payTo === selectedVendor) {
-                        // Transactions
-                        bulkTransactions.forEach(t => {
-                            if (t.payNow > 0) {
-                                items.push({
-                                    pay_to_ledger: opt.ledger_id,
-                                    amount: t.payNow,
-                                    reference_type: 'INVOICE',
-                                    transaction_details: {
-                                        ...t,
-                                        pending: Math.max(0, t.amount - t.payNow)
-                                    }
-                                });
-                            }
-                        });
+                    // If this row has explicit allocations (stored during editing)
+                    const rowAllocations = row.id === selectedRowId ? bulkTransactions : (row.allocations || []);
+                    const rowAdvanceAmount = row.id === selectedRowId ? advanceAmount : (row.advanceAmount || 0);
+                    const rowAdvanceRefNo = row.id === selectedRowId ? advanceRefNo : (row.advanceRefNo || '');
 
-                        // Advance
-                        if (advanceAmount > 0) {
+                    let allocatedTotal = 0;
+
+                    // 1. Transactions
+                    rowAllocations.forEach(t => {
+                        if (t.payNow > 0) {
+                            allocatedTotal += t.payNow;
                             items.push({
                                 pay_to_ledger: opt.ledger_id,
-                                amount: advanceAmount,
-                                reference_type: 'ADVANCE',
-                                advance_ref_no: advanceRefNo
+                                amount: t.payNow,
+                                reference_type: 'INVOICE',
+                                transaction_details: {
+                                    ...t,
+                                    pending: Math.max(0, t.amount - t.payNow)
+                                }
                             });
                         }
-                    } else {
-                        // General Row
+                    });
+
+                    // 2. Advance
+                    if (rowAdvanceAmount > 0) {
+                        allocatedTotal += rowAdvanceAmount;
                         items.push({
                             pay_to_ledger: opt.ledger_id,
-                            amount: row.amount,
-                            reference_type: 'INVOICE'
+                            amount: rowAdvanceAmount,
+                            reference_type: 'ADVANCE',
+                            advance_ref_no: rowAdvanceRefNo
+                        });
+                    }
+
+                    // 3. Fallback: If amount entered but not fully allocated, treat remainder as 'On Account'
+                    const remainder = row.amount - allocatedTotal;
+                    if (remainder > 0.01) {
+                        items.push({
+                            pay_to_ledger: opt.ledger_id,
+                            amount: remainder,
+                            reference_type: 'INVOICE',
+                            narration: 'Balance payment'
                         });
                     }
                 });
@@ -556,6 +642,24 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
             if (items.length === 0) {
                 showError('No payment details to post.');
                 return;
+            }
+
+            // Pre-post uniqueness check for all advances & voucher number
+            if (voucherNumber && voucherNumber.trim()) {
+                const checkV = await httpClient.get<{ is_unique: boolean }>(`/api/vouchers/payment/check-uniqueness/?voucher_number=${encodeURIComponent(voucherNumber)}`);
+                if (!checkV.is_unique) {
+                    showError(`Voucher Number '${voucherNumber}' already exists. Please use a unique one.`);
+                    return;
+                }
+            }
+
+            const advances = items.filter(i => i.reference_type === 'ADVANCE' && i.advance_ref_no);
+            for (const adv of advances) {
+                const check = await httpClient.get<{ is_unique: boolean }>(`/api/vouchers/payment/check-uniqueness/?ref_no=${encodeURIComponent(adv.advance_ref_no)}`);
+                if (!check.is_unique) {
+                    showError(`Reference Number '${adv.advance_ref_no}' already exists. Please choose a unique one.`);
+                    return;
+                }
             }
 
             const payload = {
@@ -593,10 +697,10 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
             // Reset form fields but keep the selected Voucher Type so it stays ready
             const keepConfig = selectedPaymentConfig;
             handleCancel();
-            setSelectedPaymentConfig(keepConfig);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error posting payment voucher:', error);
-            showError('Failed to post payment voucher. Please try again.');
+            const serverMsg = error?.response?.data?.message;
+            showError(serverMsg || 'Failed to post payment voucher. Please try again.');
         }
     };
 
@@ -658,9 +762,14 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                             <label className="block text-sm font-medium text-gray-700 mb-1">Voucher Number</label>
                             <input
                                 type="text"
-                                value={voucherNumber}
-                                readOnly
-                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
+                                value={voucherNumber === 'Manual Input' ? '' : voucherNumber}
+                                onChange={(e) => setVoucherNumber(e.target.value)}
+                                readOnly={
+                                    paymentVoucherConfigs.find(c => c.voucher_name === selectedPaymentConfig)?.enable_auto_numbering &&
+                                    voucherNumber !== 'Manual Input'
+                                }
+                                placeholder={voucherNumber === 'Manual Input' ? 'Enter Voucher No' : ''}
+                                className={`w-full px-3 py-2 border border-gray-300 rounded-[4px] ${voucherNumber === 'Manual Input' ? 'bg-white' : 'bg-gray-50 text-gray-500'}`}
                             />
                         </div>
                     </div>
@@ -737,8 +846,12 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                     <input
                                         type="text"
                                         value={singleAdvanceRefNo}
-                                        onChange={(e) => setSingleAdvanceRefNo(e.target.value)}
-                                        className="w-full px-3 py-2 border border-indigo-200 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setSingleAdvanceRefNo(val);
+                                            checkRefUniqueness(val);
+                                        }}
+                                        className={`w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white ${invalidRefNos.has(singleAdvanceRefNo) ? 'border-red-500 bg-red-50' : 'border-indigo-200'}`}
                                         placeholder="Enter Reference No"
                                     />
                                 </div>
@@ -858,7 +971,11 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                         type="date"
                                         value={date}
                                         max={getCurrentDate()}
-                                        onChange={e => setDate(e.target.value)}
+                                        onChange={e => {
+                                            const today = getCurrentDate();
+                                            const val = e.target.value;
+                                            setDate(val > today ? today : val);
+                                        }}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                     />
                                 </div>
@@ -879,12 +996,17 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Voucher Number</label>
-                                    <input
-                                        type="text"
-                                        value={voucherNumber}
-                                        readOnly
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-[4px] bg-gray-50 text-gray-500"
-                                    />
+                                <input
+                                    type="text"
+                                    value={voucherNumber === 'Manual Input' ? '' : voucherNumber}
+                                    onChange={(e) => setVoucherNumber(e.target.value)}
+                                    readOnly={
+                                        paymentVoucherConfigs.find(c => c.voucher_name === selectedPaymentConfig)?.enable_auto_numbering &&
+                                        voucherNumber !== 'Manual Input'
+                                    }
+                                    placeholder={voucherNumber === 'Manual Input' ? 'Enter Voucher No' : ''}
+                                    className={`w-full px-3 py-2 border border-gray-300 rounded-[4px] ${voucherNumber === 'Manual Input' ? 'bg-white' : 'bg-gray-50 text-gray-500'}`}
+                                />
                                 </div>
                             </div>
 
@@ -915,22 +1037,27 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">Pay to</label>
-                                    <div className="space-y-2">
+                                    <div className="space-y-3">
                                         {paymentRows.map((row) => (
-                                            <SearchableSelect
+                                            <div 
                                                 key={row.id}
-                                                value={row.payTo}
-                                                onChange={val => handlePaymentRowChange(row.id, 'payTo', val)}
-                                                options={payToOptions.map(l => l.name)}
-                                                placeholder="Select Pay To"
-                                                className="w-full"
-                                            />
+                                                onClick={() => setSelectedRowId(row.id)}
+                                                className={`transition-all ${selectedRowId === row.id ? 'ring-2 ring-indigo-500 rounded-[4px] p-1 bg-indigo-50' : ''}`}
+                                            >
+                                                <SearchableSelect
+                                                    value={row.payTo}
+                                                    onChange={val => handlePaymentRowChange(row.id, 'payTo', val)}
+                                                    options={payToOptions.map(l => l.name)}
+                                                    placeholder="Select Pay To"
+                                                    className="w-full h-[40px]"
+                                                />
+                                            </div>
                                         ))}
                                     </div>
                                     <button
                                         type="button"
                                         onClick={handleAddPaymentRow}
-                                        className="mt-2 text-indigo-600 hover:text-slate-700 text-3xl font-bold"
+                                        className="mt-3 text-indigo-600 hover:text-slate-700 text-3xl font-bold"
                                     >
                                         +
                                     </button>
@@ -938,7 +1065,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
 
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">Amount</label>
-                                    <div className="space-y-2">
+                                    <div className="space-y-3">
                                         {paymentRows.map((row) => (
                                             <input
                                                 key={`amount-${row.id}`}
@@ -946,7 +1073,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                                 value={row.amount || ''}
                                                 onChange={e => handlePaymentRowChange(row.id, 'amount', parseFloat(e.target.value) || 0)}
                                                 placeholder="Pay now/Advance total"
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-[4px] focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm h-[40px]"
                                             />
                                         ))}
                                     </div>
@@ -954,8 +1081,8 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                             </div>
 
                             {/* Total Payment */}
-                            <div className="flex justify-center">
-                                <button className="px-8 py-2 bg-indigo-600 text-white rounded-[4px] font-medium">
+                            <div className="flex justify-center my-6">
+                                <button className="px-8 py-2 bg-indigo-600 text-white rounded-[4px] font-medium min-w-[200px] uppercase">
                                     Total Payment: ₹{bulkTotalPayment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                 </button>
                             </div>
@@ -1065,16 +1192,41 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                             ) : (
                                 <div className="bg-white rounded-[4px] p-6 min-h-[400px]">
                                     <h5 className="text-sm font-semibold text-gray-700 mb-4 text-center">Advance Payment</h5>
+                                    
+                                    {availableAdvances.length > 0 && (
+                                        <div className="mb-4">
+                                            <label className="block text-xs font-medium text-indigo-700 mb-2 text-center">Select from existing advances:</label>
+                                            <div className="flex flex-wrap justify-center gap-2">
+                                                {availableAdvances.map((adv, idx) => (
+                                                    <button
+                                                        key={idx}
+                                                        onClick={() => {
+                                                            setAdvanceRefNo(adv.reference_no);
+                                                            setAdvanceAmount(adv.amount);
+                                                        }}
+                                                        className="px-3 py-1 bg-indigo-50 border border-indigo-200 rounded text-xs text-indigo-600 hover:bg-indigo-100 transition-colors"
+                                                    >
+                                                        {adv.reference_no} (₹{adv.amount})
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <div className="space-y-4">
                                         <div className="flex items-center gap-3">
-                                            <input type="checkbox" className="w-4 h-4" />
+                                            <input type="checkbox" className="w-4 h-4 text-indigo-600 rounded" checked={!!advanceAmount} readOnly />
                                             <div className="flex-1">
                                                 <label className="block text-xs font-medium text-gray-700 mb-1">Advance Ref. No.</label>
                                                 <input
                                                     type="text"
                                                     value={advanceRefNo}
-                                                    onChange={e => setAdvanceRefNo(e.target.value)}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded"
+                                                    onChange={e => {
+                                                        const val = e.target.value;
+                                                        setAdvanceRefNo(val);
+                                                        checkRefUniqueness(val);
+                                                    }}
+                                                    className={`w-full px-3 py-2 border rounded focus:ring-2 focus:ring-indigo-500 ${invalidRefNos.has(advanceRefNo) ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
                                                 />
                                             </div>
                                             <div className="flex-1">
@@ -1083,7 +1235,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                                     type="number"
                                                     value={advanceAmount || ''}
                                                     onChange={e => setAdvanceAmount(parseFloat(e.target.value) || 0)}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded"
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
                                                 />
                                             </div>
                                         </div>

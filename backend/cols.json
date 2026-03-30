@@ -1,0 +1,1 @@
+["id", "tenant_id", "contract_basic_detail_id", "item_code", "item_name", "customer_item_name", "qty_min", "qty_max", "price_min", "price_max", "acceptable_price_deviation", "created_at", "updated_at", "created_by", "updated_by"]

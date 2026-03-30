@@ -167,8 +167,14 @@ class ReceiptVoucherSerializer(serializers.ModelSerializer):
                 validated_data['customer'] = first_item_customer if isinstance(first_item_customer, MasterLedger) else _resolve_ledger(first_item_customer, tenant_id)
             
         if not validated_data.get('voucher_number'):
-            # Allow custom prefix from client if needed, or default
-            validated_data['voucher_number'] = f"REC-{uuid.uuid4().hex[:6].upper()}"
+            from masters.models import MasterVoucherReceipts
+            series = MasterVoucherReceipts.objects.filter(tenant_id=tenant_id, is_active=True).first()
+            if series:
+                validated_data['voucher_number'] = series.get_next_number()
+                series.increment_number()
+            else:
+                # Allow custom prefix from client if needed, or default
+                validated_data['voucher_number'] = f"REC-{uuid.uuid4().hex[:6].upper()}"
             
         receipt = super().create(validated_data)
 

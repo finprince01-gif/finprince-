@@ -41,6 +41,7 @@ class PaymentVoucher(BaseModel):
 
     class Meta:
         db_table = 'payment_vouchers'
+        unique_together = ('tenant_id', 'voucher_number')
         ordering = ['-date', '-created_at']
         indexes = [
             models.Index(fields=['tenant_id', 'date']),
@@ -77,8 +78,10 @@ class PaymentVoucherItem(models.Model):
     # NEW: Unified linking for normal payments vs advances
     # 'INVOICE' → matched to reference_id
     # 'ADVANCE' → reference_id is NULL
+    tenant_id = models.CharField(max_length=36, db_index=True, null=True, blank=True)
     reference_type = models.CharField(max_length=20, default='INVOICE')
     reference_id   = models.BigIntegerField(null=True, blank=True)
+    advance_ref_no = models.CharField(max_length=100, null=True, blank=True)
 
     # Invoice-level transaction breakdown (denormalized JSON blob).
     # Single  schema: [{date, referenceNumber, amount, payment, pending, advance}]
@@ -90,6 +93,13 @@ class PaymentVoucherItem(models.Model):
 
     class Meta:
         db_table = 'payment_voucher_items'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant_id', 'advance_ref_no'],
+                name='unique_payment_advance_ref',
+                condition=models.Q(advance_ref_no__isnull=False) & ~models.Q(advance_ref_no='')
+            )
+        ]
         indexes = [
             models.Index(fields=['voucher']),
             models.Index(fields=['pay_to_ledger']),

@@ -44,7 +44,7 @@ class ReceiptVoucher(BaseModel):
 
     class Meta:
         db_table = 'receipt_vouchers'
-        # unique_together = ('tenant_id', 'voucher_number') # Removed to allow duplicates per user request
+        unique_together = ('tenant_id', 'voucher_number')
         ordering = ['-date', '-created_at']
 
     def __str__(self):
@@ -84,6 +84,13 @@ class ReceiptVoucherItem(BaseModel):
 
     class Meta:
         db_table = 'receipt_voucher_items'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant_id', 'advance_ref_no'],
+                name='unique_receipt_advance_ref',
+                condition=models.Q(advance_ref_no__isnull=False) & ~models.Q(advance_ref_no='')
+            )
+        ]
 
 # --- DEPRECATED MODELS (Maintained for Migration reference only) ---
 class VoucherReceiptSingle(BaseModel):

@@ -104,6 +104,24 @@ const PaymentVoucherBulk: React.FC = () => {
   const [payToOptions, setPayToOptions] = useState<any[]>([]);
   const [allLedgers, setAllLedgers] = useState<any[]>([]);
 
+  // Filter Pay From options (Cash and Bank accounts)
+  const payFromLedgers = useMemo(() => {
+    return allLedgers.filter(l => {
+      const group = (l.group || '').toLowerCase();
+      return (
+        group.includes('cash') ||
+        group.includes('bank') ||
+        group.includes('od') ||
+        group.includes('cc')
+      );
+    });
+  }, [allLedgers]);
+
+  // Filter Pay To options: All ledgers (allowing transfers)
+  const payToOptions = useMemo(() => {
+    return allLedgers;
+  }, [allLedgers]);
+
   // Fetch data
   useEffect(() => {
     fetchAllLedgers();

@@ -189,18 +189,29 @@ class PaymentVoucherSerializer(serializers.ModelSerializer):
     # CREATE
     # ------------------------------------------------------------------
     def create(self, validated_data):
+        request = self.context.get('request')
+        tenant_id = getattr(request.user, 'tenant_id', None) if request else None
+        validated_data['tenant_id'] = tenant_id
+        
         items_data = validated_data.pop('items', [])
         
         # Pull top-level advance if present
         top_adv_ref = validated_data.pop('advance_ref_no', None)
         top_adv_amt = _safe_decimal(validated_data.pop('advance_amount', 0))
 
-        # Auto voucher number
+        # Auto voucher number from Masters if available
         if not validated_data.get('voucher_number'):
-            # hex is a property returning a string, manually slice to appease linter
-            uid_str = str(uuid.uuid4().hex)
-            short_id = uid_str[0:6].upper()  # type: ignore
-            validated_data['voucher_number'] = f"PAY-{short_id}"
+            from masters.models import MasterVoucherPayments
+            # Use a transaction-safe way to get and increment the number
+            series = MasterVoucherPayments.objects.filter(tenant_id=tenant_id, is_active=True).first()
+            if series:
+                validated_data['voucher_number'] = series.get_next_number()
+                series.increment_number()
+            else:
+                # Fallback to UUID
+                uid_str = str(uuid.uuid4().hex)
+                short_id = uid_str[0:6].upper()
+                validated_data['voucher_number'] = f"PAY-{short_id}"
 
         # Compute total from items + top advance
         total = sum(_safe_decimal(i.get('amount', 0)) for i in items_data)
@@ -236,10 +247,12 @@ class PaymentVoucherSerializer(serializers.ModelSerializer):
 
                 PaymentVoucherItem.objects.create(
                     voucher=voucher, 
+                    tenant_id=tenant_id,
                     pay_to_ledger=pay_to_ledger, 
                     amount=item_data.get('amount'),
                     reference_type=item_data.get('reference_type', 'INVOICE'),
                     reference_id=item_data.get('reference_id'),
+                    advance_ref_no=adv_ref,
                     transaction_details=txn_details
                 )
 
