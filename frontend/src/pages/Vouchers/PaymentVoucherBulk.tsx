@@ -100,8 +100,6 @@ const PaymentVoucherBulk: React.FC = () => {
   const [postingNote, setPostingNote] = useState<string>('');
 
   // Ledgers state
-  const [payFromLedgers, setPayFromLedgers] = useState<any[]>([]);
-  const [payToOptions, setPayToOptions] = useState<any[]>([]);
   const [allLedgers, setAllLedgers] = useState<any[]>([]);
 
   // Filter Pay From options (Cash and Bank accounts)
@@ -129,13 +127,7 @@ const PaymentVoucherBulk: React.FC = () => {
 
   const fetchAllLedgers = async () => {
     try {
-      const [payFromData, payToData, allData] = await Promise.all([
-        httpClient.get<any[]>('/api/ledgers/pay-from/'),
-        httpClient.get<any[]>('/api/ledgers/pay-to/'),
-        httpClient.get<any[]>('/api/ledgers/')
-      ]);
-      setPayFromLedgers(payFromData || []);
-      setPayToOptions(payToData || []);
+      const allData = await httpClient.get<any[]>('/api/ledgers/');
       setAllLedgers(allData || []);
     } catch (error) {
       console.error('Error fetching ledgers:', error);
