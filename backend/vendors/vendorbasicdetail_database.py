@@ -28,7 +28,9 @@ class VendorBasicDetailDatabase:
         
         if last_vendor and last_vendor.vendor_code:
             try:
-                last_number = int(last_vendor.vendor_code.replace('VEN', ''))
+                # Strip prefix and any separators to get numeric portion
+                code_num = last_vendor.vendor_code.replace('VEN-', '').replace('VEN', '')
+                last_number = int(code_num)
                 new_number = last_number + 1
             except (ValueError, AttributeError):
                 new_number = 1
@@ -40,21 +42,28 @@ class VendorBasicDetailDatabase:
     @staticmethod
     def create_vendor_basic_detail(tenant_id, vendor_data, created_by=None):
         """
-        Create a new vendor basic detail entry.
-        
+        Create a new vendor basic detail entry and auto-create a MasterLedger.
+
+        When a vendor is created, a corresponding ledger entry under
+        'Sundry Creditors' is automatically created so the vendor appears
+        in the Pay To / Receive From dropdowns in Payment & Receipt vouchers.
+
         Args:
             tenant_id: Tenant identifier
             vendor_data: Dictionary containing vendor data
             created_by: Username of creator
-            
+
         Returns:
             Created VendorMasterBasicDetail instance
         """
+        import logging
+        logger = logging.getLogger(__name__)
+
         with transaction.atomic():
             # Auto-generate vendor code if not provided
             if not vendor_data.get('vendor_code'):
                 vendor_data['vendor_code'] = VendorBasicDetailDatabase.generate_vendor_code(tenant_id)
-            
+
             vendor = VendorMasterBasicDetail.objects.create(
                 tenant_id=tenant_id,
                 vendor_code=vendor_data.get('vendor_code'),
@@ -69,7 +78,29 @@ class VendorBasicDetailDatabase:
                 tcs_applicable=vendor_data.get('tcs_applicable', False),
                 created_by=created_by
             )
-            
+
+            # Auto-create a MasterLedger so this vendor shows in voucher dropdowns.
+            try:
+                from accounting.models import MasterLedger
+                ledger_code = f"VEN-LED-{vendor.id}"
+                ledger = MasterLedger.objects.create(
+                    tenant_id=tenant_id,
+                    name=vendor_data.get('vendor_name'),
+                    group='Sundry Creditors',
+                    category='Liability',
+                    code=ledger_code,
+                )
+                vendor.ledger_id = ledger.id
+                vendor.save(update_fields=['ledger_id'])
+                logger.info(
+                    f"Auto-created ledger {ledger.id} for vendor "
+                    f"{vendor.id} ({vendor.vendor_name})"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Could not auto-create ledger for vendor {vendor.id}: {e}"
+                )
+
             return vendor
     
     @staticmethod

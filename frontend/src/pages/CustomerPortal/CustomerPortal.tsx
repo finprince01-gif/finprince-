@@ -3449,7 +3449,7 @@ const LongTermContractsContent: React.FC = () => {
 
     // Basic Details State
     const [basicDetails, setBasicDetails] = useState({
-        contractNumber: `CT-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`, // Auto-generated
+        contractNumber: `CT-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}-${Date.now().toString().slice(-6)}`, // Auto-generated
         customerId: '',
         customerName: '',
         branchId: '',
@@ -3733,7 +3733,7 @@ const LongTermContractsContent: React.FC = () => {
 
     const resetForm = () => {
         setBasicDetails({
-            contractNumber: `CT-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`,
+            contractNumber: `CT-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}-${Date.now().toString().slice(-6)}`,
             customerId: '',
             customerName: '',
             branchId: '',

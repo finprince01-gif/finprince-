@@ -5,7 +5,20 @@ Each voucher type has its own dedicated table
 from django.db import models
 
 
-class MasterVoucherSales(models.Model):
+class NumberingMixin:
+    def get_next_number(self):
+        num = self.current_number if self.current_number is not None else self.start_from
+        digits = self.required_digits or 4
+        prefix = self.prefix or ''
+        suffix = self.suffix or ''
+        return f"{prefix}{str(num).zfill(digits)}{suffix}"
+
+    def increment_number(self):
+        self.current_number = (self.current_number if self.current_number is not None else self.start_from) + 1
+        self.save(update_fields=['current_number', 'updated_at'])
+
+
+class MasterVoucherSales(models.Model, NumberingMixin):
     """Sales Voucher Master"""
     tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
     voucher_name = models.CharField(max_length=100, help_text="Voucher name")
@@ -23,7 +36,6 @@ class MasterVoucherSales(models.Model):
     updated_by = models.CharField(max_length=100, blank=True, null=True)
 
     class Meta:
-
         db_table = 'master_voucher_sales'
         verbose_name = 'Sales Voucher Master'
         verbose_name_plural = 'Sales Voucher Masters'
@@ -33,7 +45,7 @@ class MasterVoucherSales(models.Model):
         ]
 
 
-class MasterVoucherCreditNote(models.Model):
+class MasterVoucherCreditNote(models.Model, NumberingMixin):
     """Credit Note Voucher Master"""
     tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
     voucher_name = models.CharField(max_length=100, help_text="Voucher name")
@@ -51,7 +63,6 @@ class MasterVoucherCreditNote(models.Model):
     updated_by = models.CharField(max_length=100, blank=True, null=True)
 
     class Meta:
-
         db_table = 'master_voucher_creditnote'
         verbose_name = 'Credit Note Voucher Master'
         verbose_name_plural = 'Credit Note Voucher Masters'
@@ -61,7 +72,7 @@ class MasterVoucherCreditNote(models.Model):
         ]
 
 
-class MasterVoucherReceipts(models.Model):
+class MasterVoucherReceipts(models.Model, NumberingMixin):
     """Receipts Voucher Master"""
     tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
     voucher_name = models.CharField(max_length=100, help_text="Voucher name")
@@ -79,7 +90,6 @@ class MasterVoucherReceipts(models.Model):
     updated_by = models.CharField(max_length=100, blank=True, null=True)
 
     class Meta:
-
         db_table = 'master_voucher_receipts'
         verbose_name = 'Receipts Voucher Master'
         verbose_name_plural = 'Receipts Voucher Masters'
@@ -89,7 +99,7 @@ class MasterVoucherReceipts(models.Model):
         ]
 
 
-class MasterVoucherPurchases(models.Model):
+class MasterVoucherPurchases(models.Model, NumberingMixin):
     """Purchases Voucher Master"""
     tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
     voucher_name = models.CharField(max_length=100, help_text="Voucher name")
@@ -107,7 +117,6 @@ class MasterVoucherPurchases(models.Model):
     updated_by = models.CharField(max_length=100, blank=True, null=True)
 
     class Meta:
-
         db_table = 'master_voucher_purchases'
         verbose_name = 'Purchases Voucher Master'
         verbose_name_plural = 'Purchases Voucher Masters'
@@ -117,7 +126,7 @@ class MasterVoucherPurchases(models.Model):
         ]
 
 
-class MasterVoucherDebitNote(models.Model):
+class MasterVoucherDebitNote(models.Model, NumberingMixin):
     """Debit Note Voucher Master"""
     tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
     voucher_name = models.CharField(max_length=100, help_text="Voucher name")
@@ -135,7 +144,6 @@ class MasterVoucherDebitNote(models.Model):
     updated_by = models.CharField(max_length=100, blank=True, null=True)
 
     class Meta:
-
         db_table = 'master_voucher_debitnote'
         verbose_name = 'Debit Note Voucher Master'
         verbose_name_plural = 'Debit Note Voucher Masters'
@@ -145,7 +153,7 @@ class MasterVoucherDebitNote(models.Model):
         ]
 
 
-class MasterVoucherPayments(models.Model):
+class MasterVoucherPayments(models.Model, NumberingMixin):
     """Payments Voucher Master"""
     tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
     voucher_name = models.CharField(max_length=100, help_text="Voucher name")
@@ -163,7 +171,6 @@ class MasterVoucherPayments(models.Model):
     updated_by = models.CharField(max_length=100, blank=True, null=True)
 
     class Meta:
-
         db_table = 'master_voucher_payments'
         verbose_name = 'Payments Voucher Master'
         verbose_name_plural = 'Payments Voucher Masters'
@@ -173,7 +180,7 @@ class MasterVoucherPayments(models.Model):
         ]
 
 
-class MasterVoucherExpenses(models.Model):
+class MasterVoucherExpenses(models.Model, NumberingMixin):
     """Expenses Voucher Master"""
     tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
     voucher_name = models.CharField(max_length=100, help_text="Voucher name")
@@ -191,7 +198,6 @@ class MasterVoucherExpenses(models.Model):
     updated_by = models.CharField(max_length=100, blank=True, null=True)
 
     class Meta:
-
         db_table = 'master_voucher_expenses'
         verbose_name = 'Expenses Voucher Master'
         verbose_name_plural = 'Expenses Voucher Masters'
@@ -201,7 +207,7 @@ class MasterVoucherExpenses(models.Model):
         ]
 
 
-class MasterVoucherJournal(models.Model):
+class MasterVoucherJournal(models.Model, NumberingMixin):
     """Journal Voucher Master"""
     tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
     voucher_name = models.CharField(max_length=100, help_text="Voucher name")
@@ -219,7 +225,6 @@ class MasterVoucherJournal(models.Model):
     updated_by = models.CharField(max_length=100, blank=True, null=True)
 
     class Meta:
-
         db_table = 'master_voucher_journal'
         verbose_name = 'Journal Voucher Master'
         verbose_name_plural = 'Journal Voucher Masters'
@@ -229,7 +234,7 @@ class MasterVoucherJournal(models.Model):
         ]
 
 
-class MasterVoucherContra(models.Model):
+class MasterVoucherContra(models.Model, NumberingMixin):
     """Contra Voucher Master"""
     tenant_id = models.CharField(max_length=36, help_text="Tenant ID for multi-tenancy")
     voucher_name = models.CharField(max_length=100, help_text="Voucher name")
@@ -247,7 +252,6 @@ class MasterVoucherContra(models.Model):
     updated_by = models.CharField(max_length=100, blank=True, null=True)
 
     class Meta:
-
         db_table = 'master_voucher_contra'
         verbose_name = 'Contra Voucher Master'
         verbose_name_plural = 'Contra Voucher Masters'

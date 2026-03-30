@@ -115,11 +115,10 @@ const PaymentVoucherBulk: React.FC = () => {
     });
   }, [allLedgers]);
 
-  // Filter Pay To options: All ledgers EXCEPT Pay From accounts
+  // Filter Pay To options: All ledgers (allowing transfers)
   const payToOptions = useMemo(() => {
-    const payFromIds = new Set(payFromLedgers.map(l => l.id));
-    return allLedgers.filter(l => !payFromIds.has(l.id));
-  }, [allLedgers, payFromLedgers]);
+    return allLedgers;
+  }, [allLedgers]);
 
   // Fetch data
   useEffect(() => {

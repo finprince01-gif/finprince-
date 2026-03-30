@@ -1,0 +1,7 @@
+payroll_employee
+payroll_salary_component
+payroll_salary_template_component
+payroll_pay_run_detail
+payroll_statutory_configuration
+payroll_attendance
+payroll_leave_application

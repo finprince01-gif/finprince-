@@ -50,6 +50,32 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
 
         return qs.distinct()
 
+    @action(detail=False, methods=['get'], url_path='check-uniqueness')
+    def check_uniqueness(self, request):
+        """Check if a reference number (Advance Ref No) is already used."""
+        ref_no = request.query_params.get('ref_no')
+        v_num = request.query_params.get('voucher_number')
+        tenant_id = getattr(request.user, 'tenant_id', None)
+        
+        if not tenant_id:
+            tenant_id = request.headers.get('X-Tenant-Id')
+
+        if ref_no:
+            exists = PaymentVoucherItem.objects.filter(
+                tenant_id=tenant_id,
+                advance_ref_no=ref_no
+            ).exclude(advance_ref_no='').exists()
+            return Response({'is_unique': not exists})
+            
+        if v_num:
+            exists = PaymentVoucher.objects.filter(
+                tenant_id=tenant_id,
+                voucher_number=v_num
+            ).exists()
+            return Response({'is_unique': not exists})
+
+        return Response({'is_unique': True})
+
     @action(detail=False, methods=['get'], url_path='pending-invoices')
     def pending_invoices(self, request):
         ledger_id = request.query_params.get('ledger_id')
@@ -216,16 +242,18 @@ class VoucherPaymentBulkViewSet(PaymentVoucherViewSet):
     """
     serializer_class = VoucherPaymentBulkSerializer
 
-def get_advances_by_ledger(ledger_id, tenant_id=None, category=None):
+def get_advances_by_ledger(ledger_id=None, tenant_id=None, category=None):
     """
     Common function to fetch advance payments for a specific ledger.
     Optionally filters by category (for Portal tiles).
     """
     qs = PaymentVoucherItem.objects.filter(
         reference_type='ADVANCE',
-        pay_to_ledger_id=ledger_id,
         amount__gt=0
     ).select_related('voucher', 'pay_to_ledger')
+    
+    if ledger_id:
+        qs = qs.filter(pay_to_ledger_id=ledger_id)
 
     if tenant_id:
         qs = qs.filter(voucher__tenant_id=tenant_id)

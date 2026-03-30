@@ -100,24 +100,31 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
         fetchData();
     }, []);
 
-    // Filter Receive In (Debit) options: Cash and Bank accounts
+    // Filter Receive In (Debit) options: Cash, Bank, CC, OD, and Loans/Borrowings
     const receiveInLedgers = useMemo(() => {
         return allLedgers.filter(l => {
             const group = (l.group || '').toLowerCase();
+            const category = (l.category || '').toLowerCase();
             return (
+                (category.includes('asset') && group.includes('cash')) ||
+                (category.includes('asset') && group.includes('bank')) ||
+                (category.includes('asset') && group.includes('od')) ||
+                (category.includes('asset') && group.includes('cc')) ||
+                (category.includes('liability') && group.includes('borrowing')) ||
+                (category.includes('liability') && group.includes('loan')) ||
+                // Fallbacks
                 group.includes('cash') ||
                 group.includes('bank') ||
                 group.includes('od') ||
-                group.includes('cc')
+                group.includes('cc') ||
+                group.includes('borrowing') ||
+                group.includes('loan')
             );
         });
     }, [allLedgers]);
 
-    // Filter Receive From (Credit) options: All ledgers EXCEPT Receive In accounts + Portal entities
+    // Filter Receive From (Credit) options: All ledgers (allowing transfers) + Portal entities
     const receiveFromOptions = useMemo(() => {
-        const receiveInIds = new Set(receiveInLedgers.map(l => l.id));
-        const filteredLedgers = allLedgers.filter(l => !receiveInIds.has(l.id));
-
         // Construct synthetic ledger objects for portal entities to make them selectable
         const custOptions = portalCustomers.map(c => ({
             id: `portal-cust-${c.id}`,
@@ -134,8 +141,8 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
         }));
 
         // Combine all, avoiding duplicates if name matches exactly with an existing ledger
-        const combined = [...filteredLedgers];
-        const existingNames = new Set(filteredLedgers.map(l => l.name.toLowerCase()));
+        const combined = [...allLedgers];
+        const existingNames = new Set(allLedgers.map(l => l.name.toLowerCase()));
 
         [...custOptions, ...vendOptions].forEach(portalEntity => {
             if (!existingNames.has(portalEntity.name.toLowerCase())) {
@@ -145,7 +152,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
         });
 
         return combined;
-    }, [allLedgers, receiveInLedgers, portalCustomers, portalVendors]);
+    }, [allLedgers, portalCustomers, portalVendors]);
 
     // Receipt Voucher Configuration state
     const [receiptVoucherConfigs, setReceiptVoucherConfigs] = useState<any[]>([]);

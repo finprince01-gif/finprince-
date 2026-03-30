@@ -232,46 +232,42 @@ class PayFromLedgerView(APIView):
     """
     Returns only ledgers eligible for 'Pay From' in Payment Vouchers.
     Filters:
-    - Assets: Cash and bank balances, Cash and cash equivalents (recursive)
-    - Liabilities: Short term borrowings (recursive)
+    - Assets: Cash and bank balances, Cash and cash equivalents
+    - Liabilities: Short term borrowings, Loans
     """
     permission_classes = [AllowAny] # TEMPORARY: disabled IsAuthenticated
 
     def get(self, request):
-        # Fetch actual tenant_id from the user context
         tenant_id = getattr(request.user, 'tenant_id', None)
         
         if not tenant_id:
             return Response({"error": "Tenant ID not found. Please log in again."}, status=400)
-        
-        # MySQL Recursive CTE based on the new ID-based hierarchy and classification
-        # Filters: Assets (ASSET_CASH) and Liabilities (LIABILITY_LOAN) recursively
-        sql = """
-            WITH RECURSIVE group_tree(id) AS (
-                -- Root groups by classification
-                SELECT id FROM master_ledger_groups 
-                WHERE group_type IN ('ASSET_CASH', 'LIABILITY_LOAN')
-                UNION ALL
-                -- Children groups via parent_id link
-                SELECT g.id FROM master_ledger_groups g 
-                JOIN group_tree gt ON g.parent_id = gt.id
-            )
-            -- Fetch only ledgers belonging to the matching group hierarchy
-            SELECT l.id, l.name 
-            FROM master_ledgers l
-            WHERE l.group_id IN (SELECT id FROM group_tree)
-            AND l.tenant_id = %s
-        """
+            
+        from django.db.models import Q
         
         try:
-            with connection.cursor() as cursor:
-                cursor.execute(sql, [tenant_id])
-                columns = [col[0] for col in cursor.description]
-                results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-            return Response(results)
+            # Query directly from MasterLedger filtering by group and category
+            # Assets -> Cash, Bank, OD, CC
+            # Liabilities -> Borrowing, Loan
+            ledgers = MasterLedger.objects.filter(
+                tenant_id=tenant_id
+            ).filter(
+                Q(category__icontains='Asset') & Q(group__icontains='Cash') |
+                Q(category__icontains='Asset') & Q(group__icontains='Bank') |
+                Q(category__icontains='Asset') & Q(group__icontains='OD') |
+                Q(category__icontains='Asset') & Q(group__icontains='CC') |
+                Q(category__icontains='Liability') & Q(group__icontains='Borrowing') |
+                Q(category__icontains='Liability') & Q(group__icontains='Loan') |
+                # Fallbacks in case category is not properly set
+                Q(group__icontains='Cash') | 
+                Q(group__icontains='Bank') |
+                Q(group__icontains='Borrowing') |
+                Q(group__icontains='Loan')
+            ).distinct().values('id', 'name')
+            
+            return Response(list(ledgers))
         except Exception as e:
-            return Response({"error": "Failed to fetch ledgers from hierarchy"}, status=500)
-
+            return Response({"error": f"Failed to fetch ledgers: {str(e)}"}, status=500)
 
 class PayToLedgerView(APIView):
     """
@@ -292,10 +288,26 @@ class PayToLedgerView(APIView):
         if not tenant_id:
             return Response({"error": "Tenant ID missing"}, status=400)
 
+        # Map to store our final results by ledger_id to ensure deduplication
+        results_map = {}
+
         # 1. Fetch Vendors with associated ledgers
-        vendors = Vendor.objects.filter(tenant_id=tenant_id, ledger_id__isnull=False).values('id', 'vendor_name', 'ledger_id', 'vendor_category')
+        vendors = Vendor.objects.filter(
+            tenant_id=tenant_id, 
+            ledger_id__isnull=False
+        ).values('id', 'vendor_name', 'ledger_id', 'vendor_category')
         
-        # 2. Fetch Customers with associated ledgers (resolve category name)
+        for v in vendors:
+            lid = v['ledger_id']
+            results_map[lid] = {
+                "id": v['id'],
+                "name": v['vendor_name'],
+                "type": "vendor",
+                "ledger_id": lid,
+                "category": v['vendor_category'] or "General"
+            }
+
+        # 2. Fetch Customers with associated ledgers
         customers = Customer.objects.filter(
             tenant_id=tenant_id, 
             ledger_id__isnull=False
@@ -303,38 +315,30 @@ class PayToLedgerView(APIView):
             'id', 'customer_name', 'ledger_id', 'customer_category__category'
         )
         
-        results = []
-        for v in vendors:
-            results.append({
-                "id": v['id'],
-                "name": v['vendor_name'],
-                "type": "vendor",
-                "ledger_id": v['ledger_id'],
-                "category": v['vendor_category'] or "General"
-            })
-
         for c in customers:
-            results.append({
-                "id": c['id'],
-                "name": c['customer_name'],
-                "type": "customer",
-                "ledger_id": c['ledger_id'],
-                "category": c['customer_category__category'] or "General"
-            })
-            
-        # 3. Fetch all Ledgers to find ones not already covered
+            lid = c['ledger_id']
+            # Only add if not already in (Vendor takes precedence if ledger is shared)
+            if lid not in results_map:
+                results_map[lid] = {
+                    "id": c['id'],
+                    "name": c['customer_name'],
+                    "type": "customer",
+                    "ledger_id": lid,
+                    "category": c['customer_category__category'] or "General"
+                }
+
+        # 3. Fetch all other Ledgers
         ledgers = MasterLedger.objects.filter(tenant_id=tenant_id).values('id', 'name', 'category')
-        
-        covered_ledger_ids = {r['ledger_id'] for r in results}
-        
         for l in ledgers:
-            if l['id'] not in covered_ledger_ids:
-                results.append({
-                    "id": l['id'],
+            lid = l['id']
+            if lid not in results_map:
+                results_map[lid] = {
+                    "id": lid,
                     "name": l['name'],
                     "type": "ledger",
-                    "ledger_id": l['id'],
+                    "ledger_id": lid,
                     "category": l['category'] or "Other"
-                })
+                }
 
-        return Response(results)
+        # Convert map to list and return
+        return Response(list(results_map.values()))
