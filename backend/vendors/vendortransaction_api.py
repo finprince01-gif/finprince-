@@ -57,13 +57,75 @@ class VendorTransactionViewSet(viewsets.ModelViewSet):
         tenant_id = self.get_tenant_id()
         logger.info(f"Tenant: {tenant_id}, Vendor ID: {vendor_id}")
         
-        total_db_count = VendorTransaction.objects.count()
         transactions = self.get_queryset().filter(vendor_id=vendor_id)
-        logger.info(f"DB Total: {total_db_count}, Found For Vendor {vendor_id}: {transactions.count()}")
-        
-        # Serialize and return
+        count_vendor = transactions.count()
+        logger.info(f"Transactions found for vendor {vendor_id}: {count_vendor}")
+
+        # ── Fetch vendor credit period ─────────────────────────────────────
+        from datetime import date, timedelta, datetime
+        from .models import VendorMasterTerms
+        import re
+
+        credit_period_days = 0
+        try:
+            terms = VendorMasterTerms.objects.filter(
+                tenant_id=tenant_id,
+                vendor_basic_detail_id=vendor_id
+            ).first()
+            if terms and terms.credit_period:
+                raw = str(terms.credit_period).strip()
+                if raw.isdigit():
+                    credit_period_days = int(raw)
+                else:
+                    m = re.match(r'(\d+)', raw)
+                    if m: credit_period_days = int(m.group(1))
+        except Exception as e:
+            logger.warning(f"Could not fetch credit period for vendor {vendor_id}: {e}")
+
+        def calculate_due_status(transaction_date, credit_days):
+            if not transaction_date:
+                return "Not Due", None
+            due_dt = transaction_date + timedelta(days=credit_days)
+            status = "Due" if date.today() > due_dt else "Not Due"
+            return status, due_dt.strftime('%Y-%m-%d')
+
+        # ── Serialize and enrich ───────────────────────────────────────────
+        # Using .values() can be even faster if we don't need the model instance features
         serializer = self.get_serializer(transactions, many=True)
-        return Response(serializer.data)
+        data = serializer.data
+
+        for item in data:
+            tx_type = (item.get('transaction_type') or '').lower()
+            if tx_type == 'purchase':
+                tx_status = (item.get('status') or '').lower()
+                tx_date = item.get('transaction_date')
+                
+                if tx_status == 'paid' or tx_status == 'received':
+                    item['due_status'] = 'Paid'
+                    item['due_date'] = None
+                    item['credit_period_days'] = credit_period_days
+                elif tx_date:
+                    try:
+                        parsed_date = datetime.strptime(str(tx_date), '%Y-%m-%d').date()
+                        due_status, due_date_str = calculate_due_status(parsed_date, credit_period_days)
+                        item['due_status'] = due_status
+                        item['due_date'] = due_date_str
+                        item['credit_period_days'] = credit_period_days
+                    except (ValueError, TypeError):
+                        item['due_status'] = 'Not Due'
+                        item['due_date'] = None
+                        item['credit_period_days'] = credit_period_days
+                else:
+                    item['due_status'] = 'Not Due'
+                    item['due_date'] = None
+                    item['credit_period_days'] = credit_period_days
+            else:
+                # Non-purchase transactions don't have a due status from credit period
+                item['due_status'] = None
+                item['due_date'] = None
+                item['credit_period_days'] = 0
+
+        return Response(data)
         
     @action(detail=False, methods=['post'])
     def remove_seed_data(self, request):
