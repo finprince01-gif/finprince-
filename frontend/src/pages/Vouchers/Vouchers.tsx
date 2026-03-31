@@ -3228,7 +3228,17 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
   const handlePurchaseAdvanceRefChange = (index: number, field: string, value: string) => {
     const newRefs = [...purchaseAdvanceRefs];
     const ref = { ...newRefs[index] };
-    (ref as any)[field] = value;
+    
+    let finalValue = value;
+    if (field === 'appliedNow') {
+      const max = parseFloat(ref.amount) || 0;
+      const current = parseFloat(value) || 0;
+      if (current > max) {
+          finalValue = ref.amount;
+      }
+    }
+
+    (ref as any)[field] = finalValue;
     newRefs[index] = ref;
     setPurchaseAdvanceRefs(newRefs);
   };
@@ -4772,8 +4782,8 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                   </div>
 
                   {/* Middle Column: Advance Reference Grid */}
-                  <div className="border border-gray-300 rounded-[4px] p-4 bg-indigo-50/50">
-                    <div className="space-y-3">
+                  <div className="border border-gray-300 rounded-[4px] p-4 bg-indigo-50/50 flex flex-col h-full">
+                    <div className="space-y-3 flex-1 flex flex-col">
                       <div className="grid grid-cols-4 gap-2 text-xs font-semibold text-gray-700 border-b border-gray-200 pb-2">
                         <div className="text-center">Date</div>
                         <div className="text-center">Advance Ref. No.</div>
@@ -4782,12 +4792,20 @@ const VouchersPage: React.FC<VouchersPageProps> = ({ vouchers, ledgers, stockIte
                       </div>
 
                       {purchaseAdvanceRefs.length > 0 ? (
-                        <div className="max-h-[250px] overflow-y-auto space-y-2">
+                        <div className="max-h-[450px] overflow-y-auto space-y-2 flex-1">
                           {purchaseAdvanceRefs.map((ref, idx) => (
                             <div key={ref.id || idx} className="grid grid-cols-4 gap-2 items-center text-sm py-1 border-b border-indigo-100/50">
                               <div className="text-center text-gray-600">{ref.date}</div>
                               <div className="text-center font-medium text-indigo-900">{ref.refNo}</div>
-                              <div className="text-right pr-4 text-gray-700">{Number(ref.amount).toFixed(2)}</div>
+                              <div className="text-right pr-4">
+                                <input
+                                  type="text"
+                                  value={ref.appliedNow === "0" ? Number(ref.amount).toFixed(2) : ref.appliedNow}
+                                  readOnly={ref.appliedNow === "0"}
+                                  onChange={(e) => handlePurchaseAdvanceRefChange(idx, 'appliedNow', e.target.value)}
+                                  className={`w-24 px-2 py-1 border border-gray-300 rounded text-xs text-right ${ref.appliedNow === "0" ? 'bg-white cursor-not-allowed' : 'bg-white font-medium border-indigo-300 shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500'}`}
+                                />
+                              </div>
                               <div className="flex justify-center">
                                 <input
                                   type="checkbox"

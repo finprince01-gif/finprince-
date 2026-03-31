@@ -350,7 +350,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         setPaymentPayable('');
         setPaymentPostingNote('');
         setTermsConditions('');
-        setAdvanceReferences([{ id: 1, date: '', refNo: '', amount: '', appliedNow: false }]);
+        setAdvanceReferences([{ id: 1, date: '', refNo: '', amount: '', originalAmount: '', appliedNow: false }]);
         
         setDispatchFrom('');
         setModeOfTransport('Road');
@@ -797,6 +797,7 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                 date: adv.date,
                                 refNo: adv.advance_ref_no,
                                 amount: adv.amount.toString(),
+                                originalAmount: adv.amount.toString(),
                                 appliedNow: false
                             })));
                         }
@@ -817,10 +818,27 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
         }
     };
 
-    const handleAdvanceCheckedChange = (id: number, checked: boolean) => {
+    const handleAdvanceCheckedChange = (id: number | string, checked: boolean) => {
         setAdvanceReferences(prev => prev.map(ref => 
-            ref.id === id ? { ...ref, appliedNow: checked } : ref
+            ref.id === id ? { 
+                ...ref, 
+                appliedNow: checked,
+                amount: checked ? ref.amount : ref.originalAmount 
+            } : ref
         ));
+    };
+
+    const handleAdvanceAmountChange = (id: number | string, amount: string) => {
+        setAdvanceReferences(prev => prev.map(ref => {
+            if (ref.id === id) {
+                const max = parseFloat(ref.originalAmount) || 0;
+                const value = parseFloat(amount) || 0;
+                // If entered amount is more than maximum available, cap it to maximum
+                const finalAmount = value > max ? ref.originalAmount : amount;
+                return { ...ref, amount: finalAmount };
+            }
+            return ref;
+        }));
     };
 
     // Handle Branch selection – auto-fill address from that branch
@@ -1306,10 +1324,11 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
     const [paymentPayable, setPaymentPayable] = useState('0.00');
     const [paymentPostingNote, setPaymentPostingNote] = useState('');
     const [advanceReferences, setAdvanceReferences] = useState<Array<{
-        id: number;
+        id: string | number;
         date: string;
         refNo: string;
         amount: string;
+        originalAmount: string;
         appliedNow: boolean;
     }>>([]);
     const [termsConditions, setTermsConditions] = useState('');
@@ -4161,8 +4180,8 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                 </div>
 
                                 {/* Middle Column - Advance References */}
-                                <div className="border border-gray-300 rounded-[4px] p-4 bg-blue-50">
-                                    <div className="space-y-3">
+                                <div className="border border-gray-300 rounded-[4px] p-4 bg-blue-50 h-full">
+                                    <div className="space-y-3 h-full flex flex-col">
                                         <div className="grid grid-cols-4 gap-2 text-xs font-semibold text-gray-700">
                                             <div className="text-center">Date</div>
                                             <div className="text-center">Advance Ref. No.</div>
@@ -4193,8 +4212,9 @@ const SalesVoucher: React.FC<SalesVoucherProps> = ({
                                                     <input
                                                         type="text"
                                                         value={ref.amount}
-                                                        readOnly
-                                                        className="px-2 py-1 border border-gray-300 rounded text-xs bg-white text-center"
+                                                        readOnly={!ref.appliedNow}
+                                                        onChange={(e) => handleAdvanceAmountChange(ref.id, e.target.value)}
+                                                        className={`px-2 py-1 border border-gray-300 rounded text-xs text-center ${!ref.appliedNow ? 'bg-white' : 'bg-white font-medium border-indigo-300 shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500'}`}
                                                     />
                                                     <div className="flex items-center justify-center">
                                                         <input
