@@ -398,32 +398,65 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                     transferFrom: type,
                     referenceNo: t.reference_number || t.transaction_number || t.number || '-',
                     ledger: transactionType === 'receipt' ? 'Receipt' : (t.ledger_name || (transactionType === 'purchase' ? 'Purchase A/c' : '-')),
-                    status: t.status || 'Paid',
-                    debit: isDebit ? amt.toLocaleString('en-IN') : '-',
-                    credit: !isDebit ? amt.toLocaleString('en-IN') : '-',
-                    runningBalance: '-',
+                    status: (() => {
+                        const refType = (t.reference_type || '').toUpperCase();
+                        const txType = transactionType;
+                        const amount = amt;
+                        const paidAmount = parseFloat(t.paid_amount || t.used_amount || 0);
+
+                        // ── PURCHASE: use backend credit-period due status ──────────
+                        if (txType === 'purchase') {
+                            if (t.due_status === 'Paid') return 'Received';
+                            if (t.due_status === 'Due') return 'Due';
+                            if (t.due_status === 'Not Due') return 'Not Due';
+                            
+                            // Fallback logic
+                            if (paidAmount >= amount && amount > 0) return 'Received';
+                            if (paidAmount > 0) return 'Partially Received';
+                            return 'Not Due';
+                        }
+
+                        // ── ADVANCE entries ────────────────────────────────────────
+                        if (refType === 'ADVANCE' || t.is_advance) {
+                            return paidAmount > 0 ? 'Utilized' : 'Not Utilized';
+                        }
+                        // ── PAYMENT / RECEIPT ──────────────────────────────────────
+                        if (txType === 'payment' || txType === 'receipt') {
+                            return paidAmount >= amount ? 'Received' : paidAmount > 0 ? 'Partially Received' : 'Not Due';
+                        }
+                        // ── Fallback ───────────────────────────────────────────────
+                        const s = (t.status || '').toLowerCase();
+                        if (s === 'paid' || s === 'received') return 'Received';
+                        if (s === 'advance') return 'Utilized';
+                        return 'Not Due';
+                    })(),
+                    debit: isDebit ? amt : 0,
+                    credit: !isDebit ? amt : 0,
                     rawVoucher: t
                 };
             });
 
-            // Calculate running balance (Credit balance = Liability for vendors)
-            let balance = 0;
+            // Calculate running balance using numeric data (Credit balance = Liability for vendors)
             const sortedEntries = allEntries.sort((a, b) => {
-                const dateDiff = new Date(a.date).getTime() - new Date(b.date).getTime();
-                if (dateDiff !== 0) return dateDiff;
-                // Fallback for identical dates: sort by ID (removing 't-' prefix)
-                const idA = parseInt(a.id.replace('t-', ''));
-                const idB = parseInt(b.id.replace('t-', ''));
-                return idA - idB;
+                const dateA = new Date(a.date).getTime();
+                const dateB = new Date(b.date).getTime();
+                if (dateA !== dateB) return dateA - dateB;
+                return parseInt(a.id.replace('t-', '')) - parseInt(b.id.replace('t-', ''));
             });
 
+            let balance = 0;
             const updatedEntries = sortedEntries.map(entry => {
-                const pCredit = entry.credit !== '-' ? parseFloat(entry.credit.replace(/,/g, '')) : 0;
-                const pDebit = entry.debit !== '-' ? parseFloat(entry.debit.replace(/,/g, '')) : 0;
-                // For vendors, Credit balance is positive (Liability)
+                const pCredit = typeof entry.credit === 'number' ? entry.credit : 0;
+                const pDebit = typeof entry.debit === 'number' ? entry.debit : 0;
                 balance += pCredit - pDebit;
-                entry.runningBalance = Math.abs(balance).toLocaleString('en-IN') + (balance >= 0 ? ' Cr' : ' Dr');
-                return entry;
+                
+                return {
+                    ...entry,
+                    // Format for display only at the final step
+                    debit: entry.debit > 0 ? entry.debit.toLocaleString('en-IN') : '-',
+                    credit: entry.credit > 0 ? entry.credit.toLocaleString('en-IN') : '-',
+                    runningBalance: Math.abs(balance).toLocaleString('en-IN') + (balance >= 0 ? ' Cr' : ' Dr')
+                };
             });
 
             setVendorLedgerData(updatedEntries);
@@ -1665,6 +1698,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
     const [linkVendorToCustomer, setLinkVendorToCustomer] = useState<boolean | null>(null);
     const [createCustomerOption, setCreateCustomerOption] = useState<boolean | null>(null);
     const [customerSearchAttempted, setCustomerSearchAttempted] = useState(false);
+    const [ledgerId, setLedgerId] = useState<number | null>(null);
+    const [allLedgers, setAllLedgers] = useState<any[]>([]);
 
 
     // Handle Basic Details Form Submit (Navigation Only)
@@ -1900,6 +1935,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         setGstRegistrationType('regular');
         setLegalName('');
         setTradeName('');
+        setTradeName('');
+        setLedgerId(null);
         setCreatedVendorId(null);
         sessionStorage.removeItem('currentVendorId');
         localStorage.removeItem('currentVendorId');
@@ -1930,7 +1967,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                 vendor_category: vendorCategory || null,
                 billing_currency: billingCurrency || null,
                 is_also_customer: isAlsoCustomer,
-                tcs_applicable: tcsApplicable
+                tcs_applicable: tcsApplicable,
+                ledger_id: ledgerId || undefined
             };
 
             let newId = createdVendorId;
@@ -2298,6 +2336,16 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
             }
         };
         fetchItems();
+        
+        const fetchLedgers = async () => {
+            try {
+                const res: any = await httpClient.get('/api/accounting/ledgers/?group=Sundry Creditors');
+                setAllLedgers(Array.isArray(res) ? res : (res.results || []));
+            } catch (err) {
+                console.error('Error fetching ledgers:', err);
+            }
+        };
+        fetchLedgers();
     }, []);
 
     // Recalculate GST amounts when supply type changes (Intrastate ↔ Interstate)
@@ -3092,6 +3140,26 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                 placeholder="Select Category"
                                                 className="w-full"
                                             />
+                                        </div>
+
+                                        {/* Billing Currency */}
+                                        <div>
+                                            <label className="label-text">
+                                                Link Accounting Ledger (Optional)
+                                            </label>
+                                            <select
+                                                value={ledgerId || ''}
+                                                onChange={(e) => setLedgerId(e.target.value ? parseInt(e.target.value) : null)}
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                                            >
+                                                <option value="">-- Auto-create later --</option>
+                                                {allLedgers.map(l => (
+                                                    <option key={l.id} value={l.id}>{l.name} ({l.code})</option>
+                                                ))}
+                                            </select>
+                                            <p className="text-[10px] text-gray-400 mt-1 uppercase italic">
+                                                If not selected, a ledger will be created on the first transaction.
+                                            </p>
                                         </div>
 
                                         {/* Billing Currency */}
@@ -4360,15 +4428,32 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
 
                                         <div>
                                             <label className="label-text">
-                                                Credit Period
+                                                Credit Period (Days)
                                             </label>
-                                            <input
-                                                type="text"
-                                                value={creditPeriod}
-                                                onChange={(e) => setCreditPeriod(e.target.value)}
-                                                className="w-full px-4 py-2 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
-                                                placeholder="Enter credit period (e.g., 30 days, 60 days)"
-                                            />
+                                            <div className="relative">
+                                                <input
+                                                    type="number"
+                                                    min={0}
+                                                    step={1}
+                                                    value={creditPeriod}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        // Allow only non-negative integers
+                                                        if (val === '' || (/^\d+$/.test(val) && parseInt(val, 10) >= 0)) {
+                                                            setCreditPeriod(val);
+                                                        }
+                                                    }}
+                                                    onKeyDown={(e) => {
+                                                        // Block decimal point, minus, and 'e'
+                                                        if (['.', '-', '+', 'e', 'E'].includes(e.key)) e.preventDefault();
+                                                    }}
+                                                    className="w-full px-4 py-2 pr-14 border border-slate-200 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500"
+                                                    placeholder="e.g. 30"
+                                                />
+                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 pointer-events-none select-none">
+                                                    days
+                                                </span>
+                                            </div>
                                         </div>
 
                                         <div>
@@ -5199,14 +5284,20 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                             <span className="text-xs font-bold text-gray-700">Filter Status</span>
                                                                                             <X className="w-3 h-3 cursor-pointer text-gray-400 hover:text-gray-600" onClick={() => setActiveFilter(null)} />
                                                                                         </div>
-                                                                                        <input
-                                                                                            type="text"
-                                                                                            placeholder="Type status..."
+                                                                                        <select
                                                                                             value={ledgerFilters.status}
-                                                                                            onChange={(e) => setLedgerFilters({ ...ledgerFilters, status: e.target.value })}
-                                                                                            className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none"
+                                                                                            onChange={(e) => { setLedgerFilters({ ...ledgerFilters, status: e.target.value }); setActiveFilter(null); }}
+                                                                                            className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none bg-white"
                                                                                             autoFocus
-                                                                                        />
+                                                                                        >
+                                                                                            <option value="">All Statuses</option>
+                                                                                            <option value="Not Due">Not Due</option>
+                                                                                            <option value="Due">Due</option>
+                                                                                            <option value="Partially Received">Partially Received</option>
+                                                                                            <option value="Received">Received</option>
+                                                                                            <option value="Utilized">Utilized</option>
+                                                                                            <option value="Not Utilized">Not Utilized</option>
+                                                                                        </select>
                                                                                     </div>
                                                                                 )}
                                                                             </div>
@@ -5316,9 +5407,13 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.referenceNo || entry.ledger}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap">
                                                                                 <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${
-                                                                                    ['Paid', 'POSTED'].includes(entry.status) ? 'bg-green-100 text-green-800' :
-                                                                                    entry.status === 'Unpaid' ? 'bg-red-100 text-red-800' :
-                                                                                    'bg-yellow-100 text-yellow-800'}`}>
+                                                                                    entry.status === 'Received'          ? 'bg-green-100 text-green-800' :
+                                                                                    entry.status === 'Due'               ? 'bg-red-100 text-red-800' :
+                                                                                    entry.status === 'Partially Received'? 'bg-orange-100 text-orange-700' :
+                                                                                    entry.status === 'Utilized'          ? 'bg-blue-100 text-blue-700' :
+                                                                                    entry.status === 'Not Utilized'      ? 'bg-purple-100 text-purple-700' :
+                                                                                    'bg-gray-100 text-gray-600'
+                                                                                }`}>
                                                                                     {entry.status}
                                                                                 </span>
                                                                         </td>
