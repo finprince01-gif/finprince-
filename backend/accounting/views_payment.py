@@ -109,21 +109,54 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
             id__in=matched_vouchers_criteria
         ).order_by('-date')
         
-        # 3. Format response for the frontend Pelding Transactions table
+        # 3. Get Credit Period for this ledger
+        from vendors.models import VendorMasterTerms, VendorMasterBasicDetail
+        import re
+        
+        credit_period_days = 0
+        vendor = VendorMasterBasicDetail.objects.filter(ledger_id=ledger_id, tenant_id=tenant_id).first()
+        if vendor:
+            terms = VendorMasterTerms.objects.filter(vendor_basic_detail=vendor, tenant_id=tenant_id).first()
+            if terms and terms.credit_period:
+                raw = str(terms.credit_period).strip()
+                if raw.isdigit():
+                    credit_period_days = int(raw)
+                else:
+                    m = re.search(r'(\d+)', raw)
+                    if m: credit_period_days = int(m.group(1))
+
+        from datetime import timedelta
+        today = datetime.date.today()
+        
+        # 4. Format response for the frontend Pending Transactions table
         results = []
         for v in vouchers:
-            # Pick the best amount field (total or amount or total_debit/credit)
-            amt = v.total if v.total and v.total > 0 else (v.amount if v.amount else 0)
-            if amt == 0:
-                 amt = v.total_debit if v.total_debit > 0 else v.total_credit
+            v_amt = v.total if v.total and v.total > 0 else (v.amount if v.amount else 0)
+            if v_amt == 0:
+                 v_amt = v.total_debit if v.total_debit > 0 else v.total_credit
 
+            due_date = v.date + timedelta(days=credit_period_days) if v.date else None
+            due_status = "Not Due"
+            days_to_due = 0
+            
+            if due_date:
+                days_to_due = (due_date - today).days
+                if days_to_due < 0:
+                    due_status = "Due"
+                elif days_to_due == 0:
+                    due_status = "Due Today"
+            
             results.append({
                 'id': v.id,
-                'date': v.date.strftime('%d-%m-%Y') if v.date else '',
+                'date': v.date.strftime('%Y-%m-%d') if v.date else '',
                 'reference_number': v.voucher_number or v.invoice_no or f"V-{v.id}",
-                'amount': float(amt),
-                'pending': float(amt), # TODO: subtract already paid amounts in future iteration
-                'type': v.type
+                'amount': float(v_amt),
+                'pending': float(v_amt), 
+                'type': v.type,
+                'credit_period': credit_period_days,
+                'due_date': due_date.strftime('%Y-%m-%d') if due_date else '',
+                'due_status': due_status,
+                'days_to_due': days_to_due
             })
             
         return Response(results)

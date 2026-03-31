@@ -12,6 +12,9 @@ interface PendingTransaction {
     referenceNumber: string;
     amount: number;
     payment: number;
+    dueStatus?: string;
+    daysToDue?: number;
+    dueDate?: string;
 }
 
 interface PaymentRow {
@@ -150,12 +153,26 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                 try {
                     // 1. Fetch pending invoices
                     const data = await apiService.getPendingInvoices(selectedOpt.ledger_id);
-                    setPendingTransactions(data.map(item => ({
-                        date: item.date,
-                        referenceNumber: item.reference_number,
-                        amount: item.amount,
-                        payment: 0
-                    })));
+                    setPendingTransactions(data.map(item => {
+                        const isMatch = prefilledData?.invoiceNumber === item.reference_number;
+                        const pAmt = isMatch ? (prefilledData?.totalAmount || 0) : 0;
+                        return {
+                            date: item.date,
+                            referenceNumber: item.reference_number,
+                            amount: item.amount,
+                            payment: pAmt,
+                            dueStatus: item.due_status,
+                            daysToDue: item.days_to_due,
+                            dueDate: item.due_date
+                        };
+                    }));
+                    
+                    if (prefilledData?.invoiceNumber && data.some(item => item.reference_number === prefilledData.invoiceNumber)) {
+                        calculateTotalPayment(data.map(item => ({
+                            amount: item.amount,
+                            payment: prefilledData.invoiceNumber === item.reference_number ? (prefilledData.totalAmount || 0) : 0
+                        })) as any, 0);
+                    }
 
                     // 2. Fetch available advances (Requirement Step 2)
                     const advances = await apiService.getAdvances(selectedOpt.ledger_id, selectedOpt.category);
@@ -243,14 +260,16 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
             if (prefilledData.sellerName) setPayTo(findLedgerName(prefilledData.sellerName));
             if ((prefilledData as any).account) setPayFrom(findLedgerName((prefilledData as any).account));
             
-            if (prefilledData.totalAmount) {
+            if (prefilledData.totalAmount && !prefilledData.invoiceNumber) {
                 setSingleAdvanceAmount(prefilledData.totalAmount);
                 setShowSingleAdvanceSection(true);
-                if (prefilledData.invoiceNumber) {
-                    setSingleAdvanceRefNo(prefilledData.invoiceNumber);
-                } else if ((prefilledData as any).reference_number) {
+                if ((prefilledData as any).reference_number) {
                     setSingleAdvanceRefNo((prefilledData as any).reference_number);
                 }
+            } else if (prefilledData.invoiceNumber) {
+                // Just clear any high-level advance show if it's an against-bill payment
+                setShowSingleAdvanceSection(false);
+                setSingleAdvanceAmount(0);
             }
             if ((prefilledData as any).narration) setPostingNote((prefilledData as any).narration);
             if ((prefilledData as any).bank_transaction_id) setBankTransactionId((prefilledData as any).bank_transaction_id);
@@ -886,6 +905,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                         <tr>
                                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase">DATE</th>
                                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase">REFERENCE NUMBER</th>
+                                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-600 uppercase">STATUS</th>
                                             <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase">AMOUNT</th>
                                             <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase">PENDING</th>
                                             <th className="px-6 py-3 text-center text-xs font-medium text-gray-600 uppercase">ACTION</th>
@@ -896,7 +916,25 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                         {pendingTransactions.map((txn, index) => (
                                             <tr key={index} className="hover:bg-gray-50">
                                                 <td className="px-6 py-4 text-sm text-gray-700">{txn.date}</td>
-                                                <td className="px-6 py-4 text-sm text-gray-700">{txn.referenceNumber}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-700">
+                                                    <div className="font-medium">{txn.referenceNumber}</div>
+                                                    {txn.dueDate && (
+                                                        <div className="text-[10px] text-gray-400">Due: {txn.dueDate}</div>
+                                                    )}
+                                                </td>
+                                                <td className="px-6 py-4 text-center">
+                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${txn.dueStatus === 'Due' || txn.dueStatus === 'Due Today'
+                                                        ? 'bg-red-100 text-red-600 border border-red-200'
+                                                        : 'bg-green-100 text-green-600 border border-green-200'
+                                                        }`}>
+                                                        {txn.dueStatus}
+                                                    </span>
+                                                    {txn.dueStatus === 'Not Due' && txn.daysToDue !== undefined && (
+                                                        <div className="text-[10px] text-gray-400 mt-1">
+                                                            {txn.daysToDue} days left
+                                                        </div>
+                                                    )}
+                                                </td>
                                                 <td className="px-6 py-4 text-sm text-gray-700 text-right">
                                                     ₹{txn.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                 </td>

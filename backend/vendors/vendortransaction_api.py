@@ -68,17 +68,25 @@ class VendorTransactionViewSet(viewsets.ModelViewSet):
 
         credit_period_days = 0
         try:
+            from .models import VendorMasterTerms
+            import re
+            
+            # Fetch from Terms model
             terms = VendorMasterTerms.objects.filter(
                 tenant_id=tenant_id,
                 vendor_basic_detail_id=vendor_id
             ).first()
+            
             if terms and terms.credit_period:
                 raw = str(terms.credit_period).strip()
+                # If numeric, use it directly
                 if raw.isdigit():
                     credit_period_days = int(raw)
                 else:
-                    m = re.match(r'(\d+)', raw)
-                    if m: credit_period_days = int(m.group(1))
+                    # Robust extraction: "30 days" -> 30
+                    m = re.search(r'(\d+)', raw)
+                    if m:
+                        credit_period_days = int(m.group(1))
         except Exception as e:
             logger.warning(f"Could not fetch credit period for vendor {vendor_id}: {e}")
 

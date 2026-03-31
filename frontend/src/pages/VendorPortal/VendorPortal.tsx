@@ -126,9 +126,11 @@ interface VendorBasicDetail {
 
 interface VendorPortalProps {
     onLogout?: () => void;
+    onNavigate?: (page: any) => void;
+    setPrefilledVoucherData?: (data: any) => void;
 }
 
-const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
+const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, setPrefilledVoucherData }) => {
     const { hasTabAccess, isSuperuser } = usePermissions();
     // GST Details Interfaces (Defined inside to avoid placement issues, or better moved out if stable)
     // Actually, moving them here
@@ -466,6 +468,29 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
         } finally {
             setLoadingLedger(false);
         }
+    };
+
+    const handleActionPay = (entry: any) => {
+        if (!onNavigate || !setPrefilledVoucherData) {
+            showError("Navigation/Payment interface is not available.");
+            return;
+        }
+
+        const amt = parseFloat(entry.rawVoucher.total || entry.rawVoucher.amount || 0);
+
+        const prefill: any = {
+            sellerName: entry.rawVoucher.vendor_name || selectedProcurementVendor.name,
+            invoiceNumber: entry.referenceNo,
+            invoiceDate: entry.date,
+            totalAmount: amt,
+            account: entry.rawVoucher.pay_from_name || '', // Suggesting previous account if possible
+            narration: `Payment against ${entry.transferFrom} ref: ${entry.referenceNo}`,
+            reference_number: entry.referenceNo,
+            bank_transaction_id: null
+        };
+
+        setPrefilledVoucherData(prefill);
+        onNavigate('Vouchers');
     };
 
 
@@ -3145,26 +3170,6 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                         {/* Billing Currency */}
                                         <div>
                                             <label className="label-text">
-                                                Link Accounting Ledger (Optional)
-                                            </label>
-                                            <select
-                                                value={ledgerId || ''}
-                                                onChange={(e) => setLedgerId(e.target.value ? parseInt(e.target.value) : null)}
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
-                                            >
-                                                <option value="">-- Auto-create later --</option>
-                                                {allLedgers.map(l => (
-                                                    <option key={l.id} value={l.id}>{l.name} ({l.code})</option>
-                                                ))}
-                                            </select>
-                                            <p className="text-[10px] text-gray-400 mt-1 uppercase italic">
-                                                If not selected, a ledger will be created on the first transaction.
-                                            </p>
-                                        </div>
-
-                                        {/* Billing Currency */}
-                                        <div>
-                                            <label className="label-text">
                                                 Billing Currency
                                             </label>
                                             <select
@@ -3347,6 +3352,34 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                     )}
                                                 </div>
                                             )}
+                                        </div>
+
+                                        <div className="col-span-1">
+                                            <label className="label-text">
+                                                TCS Applicable?
+                                            </label>
+                                            <div className="flex gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setTcsApplicable(true)}
+                                                    className={`px-6 py-1.5 text-sm border-2 rounded focus:outline-none transition-colors ${tcsApplicable
+                                                        ? 'border-teal-500 bg-teal-50 text-teal-700 font-medium'
+                                                        : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                                                        }`}
+                                                >
+                                                    Yes
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setTcsApplicable(false)}
+                                                    className={`px-6 py-1.5 text-sm border-2 rounded focus:outline-none transition-colors ${!tcsApplicable
+                                                        ? 'border-teal-500 bg-teal-50 text-teal-700 font-medium'
+                                                        : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                                                        }`}
+                                                >
+                                                    No
+                                                </button>
+                                            </div>
                                         </div>
 
                                     </div>
@@ -5417,6 +5450,24 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                                                     {entry.status}
                                                                                 </span>
                                                                         </td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                                                                            {entry.transferFrom === 'Purchase Voucher' && entry.status !== 'Received' && (
+                                                                                <button
+                                                                                    onClick={() => {
+                                                                                        setPrefilledVoucherData({
+                                                                                            sellerName: selectedProcurementVendor.name,
+                                                                                            totalAmount: typeof entry.credit === 'string' ? parseFloat(entry.credit.replace(/,/g, '')) : entry.credit,
+                                                                                            invoiceNumber: entry.referenceNo,
+                                                                                            invoiceDate: entry.date
+                                                                                        });
+                                                                                        onNavigate('Vouchers');
+                                                                                    }}
+                                                                                    className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold rounded uppercase transition-colors"
+                                                                                >
+                                                                                    Pay
+                                                                                </button>
+                                                                            )}
+                                                                        </td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.debit !== '-' ? `₹${entry.debit}` : '-'}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.credit !== '-' ? `₹${entry.credit}` : '-'}</td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">{entry.runningBalance !== '-' ? `₹${entry.runningBalance}` : '-'}</td>
@@ -5425,7 +5476,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout }) => {
                                                             </tbody>
                                                             <tfoot className="bg-gray-50 font-bold border-t border-gray-200">
                                                                 <tr>
-                                                                    <td colSpan={5} className="px-6 py-3 text-right text-gray-900 text-sm">TOTAL</td>
+                                                                    <td colSpan={7} className="px-6 py-3 text-right text-gray-900 text-sm">TOTAL</td>
                                                                     <td className="px-6 py-3 text-gray-900 text-sm">₹{totalDebit.toLocaleString('en-IN')}</td>
                                                                     <td className="px-6 py-3 text-gray-900 text-sm">₹{totalCredit.toLocaleString('en-IN')}</td>
                                                                     <td className="px-6 py-3"></td>

@@ -1136,7 +1136,7 @@ const App: React.FC = () => {
       /></ErrorBoundary>; // Available for all plans
       case 'Settings': return <SettingsPage companyDetails={companyDetails} onSave={handleSaveSettings} />; // Available for all plans
       case 'Users & Roles': return <UsersAndRolesPage onNavigate={handleNavigate} />;
-      case 'Vendor Portal': return <VendorPortalPage onLogout={handleLogout} />;
+      case 'Vendor Portal': return <VendorPortalPage onLogout={handleLogout} onNavigate={handleNavigate} setPrefilledVoucherData={setPrefilledVoucherData} />;
       case 'Customer Portal': return <CustomerPortalPage />;
       case 'Payroll': return <PayrollPage />;
       case 'Service': return <ServicePage />;
