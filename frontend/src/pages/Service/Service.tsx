@@ -20,6 +20,7 @@ import { httpClient } from '../../services/httpClient';
 import { usePermissions } from '../../hooks/usePermissions';
 import { showSuccess, showError, showWarning } from '../../utils/toast';
 import { handleApiError } from '../../utils/errorHandler';
+import { SERVICE_UOM_LIST } from '../../constants/serviceConstants';
 
 type ServiceTab = 'service-group' | 'service-list';
 
@@ -59,30 +60,8 @@ const DEFAULT_SYSTEM_CATEGORIES = [
 const DEFAULT_GROUPS = ['Direct', 'Indirect'];
 
 // UOM Master Data
-const UOM_LIST = [
-  { code: 'HRS', description: 'Hours' },
-  { code: 'DAY', description: 'Day' },
-  { code: 'MDY', description: 'Man Day' },
-  { code: 'MTH', description: 'Month' },
-  { code: 'YRS', description: 'Year' },
-  { code: 'MIN', description: 'Minutes' },
-  { code: 'VST', description: 'Visit' },
-  { code: 'SES', description: 'Session' },
-  { code: 'TRP', description: 'Trip' },
-  { code: 'LIC', description: 'License' },
-  { code: 'GB', description: 'Gigabyte' },
-  { code: 'KWD', description: 'Keyword' },
-  { code: 'SQFT', description: 'Square Feet' },
-  { code: 'MTR', description: 'Metres' },
-  { code: 'CBM', description: 'Cubic Meters' },
-  { code: 'KMS', description: 'Kilometers' },
-  { code: 'PAX', description: 'Person' },
-  { code: 'NIT', description: 'Night' },
-  { code: 'MHR', description: 'Machine Hours' },
-  { code: 'SHF', description: 'Shift' },
-  { code: 'BCH', description: 'Batch' },
-  { code: 'MNH', description: 'Man Hours' }
-];
+const UOM_LIST = SERVICE_UOM_LIST;
+
 
 const GST_RATES = [0, 5, 12, 18, 28];
 

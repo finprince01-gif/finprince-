@@ -11,6 +11,7 @@ import Icon from '../../components/Icon'; // Assuming Icon component exists
 import CreateSalesQuotation from './CreateSalesQuotation';
 import CategoryHierarchicalDropdown, { Category as DropdownCategory } from '../../components/CategoryHierarchicalDropdown';
 import { CUSTOMER_CATEGORIES, BILLING_CURRENCIES } from '../../constants/customerPortalConstants';
+
 import SalesQuotationList from './SalesQuotationList';
 import CreateSalesOrder from './CreateSalesOrder';
 import SalesOrderList from './SalesOrderList';
@@ -2817,12 +2818,13 @@ const CustomerContent: React.FC = () => {
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">Credit Period</label>
                                 <input
-                                    type="text"
+                                    type="number"
                                     className="w-full px-4 py-2.5 border border-gray-300 rounded-[4px] focus:ring-indigo-500 focus:border-indigo-500 text-sm placeholder-gray-400"
-                                    placeholder="e.g., 30 Days"
+                                    placeholder="e.g., 30"
                                     value={termsDetails.creditPeriod}
                                     onChange={(e) => setTermsDetails({ ...termsDetails, creditPeriod: e.target.value })}
                                 />
+
                             </div>
 
                             <div>
@@ -3500,15 +3502,16 @@ const LongTermContractsContent: React.FC = () => {
                     const item = contractStockItems.find(i => i.code === value);
                     if (item) {
                         updatedProduct.itemName = item.name;
-                        updatedProduct.uom = item.uom;
+                        if (item.uom) updatedProduct.uom = item.uom;
                     }
                 } else if (field === 'itemName') {
                     const item = contractStockItems.find(i => i.name === value);
                     if (item) {
                         updatedProduct.itemCode = item.code;
-                        updatedProduct.uom = item.uom;
+                        if (item.uom) updatedProduct.uom = item.uom;
                     }
                 }
+
                 return updatedProduct;
             }
             return p;
@@ -4080,11 +4083,14 @@ const LongTermContractsContent: React.FC = () => {
                                                             {(() => {
                                                                 const item = contractStockItems.find(i => i.code === product.itemCode || i.name === product.itemName);
                                                                 if (!item) return null;
+                                                                
                                                                 const units = [...new Set([item.uom, item.alternateUom].filter(u => u && u.trim() !== ''))];
+                                                                
                                                                 return units.map((u, ui) => (
                                                                     <option key={ui} value={u as string}>{u as string}</option>
                                                                 ));
                                                             })()}
+
                                                         </select>
                                                     </td>
                                                     <td className="px-4 py-3 whitespace-nowrap">
@@ -5647,7 +5653,7 @@ const NetOffModal: React.FC<NetOffModalProps> = ({ isOpen, onClose, customerName
 
 // Customer Ledger View Component
 interface CustomerLedgerViewProps {
-    customer: { id: string; name: string; is_also_vendor?: boolean; ledger_id?: string; };
+    customer: { id: string; name: string; is_also_vendor?: boolean; ledger_id?: string; credit_period?: string; };
     onBack: () => void;
 }
 
@@ -5684,25 +5690,36 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                 ]);
 
                 const customerInvoices = salesData.filter(inv => inv.customer_id?.toString() === customer.id?.toString());
-                
-                const invoiceEntries: LedgerEntry[] = customerInvoices.map((inv: any) => ({
-                    id: inv.id.toString(),
-                    date: inv.date,
-                    postFrom: 'Sales' as TransactionType,
-                    referenceNo: inv.sales_invoice_no,
-                    ledger: 'Sales',
-                    status: (inv.posting_status === 'POSTED' ? 'Not Due' : 'Not Utilized') as SalesStatus,
-                    debit: parseFloat(inv.payment_details?.payment_payable || 0),
-                    credit: 0,
-                    runningBalance: 0,
-                    posting_status: inv.posting_status,
-                    originalInv: inv
-                }));
+
+                const invoiceEntries: LedgerEntry[] = customerInvoices.map((inv: any) => {
+                    const creditPeriod = parseInt(customer.credit_period || '0', 10);
+                    const invDate = new Date(inv.date);
+                    const today = new Date();
+                    const d1 = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
+                    const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                    const diffTime = d2.getTime() - d1.getTime();
+                    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                    const isDue = diffDays > creditPeriod;
+
+                    return {
+                        id: inv.id.toString(),
+                        date: inv.date,
+                        postFrom: 'Sales' as TransactionType,
+                        referenceNo: inv.sales_invoice_no,
+                        ledger: 'Sales',
+                        status: (inv.posting_status === 'POSTED' ? (isDue ? 'Due' : 'Not Due') : 'Not Utilized') as SalesStatus,
+                        debit: parseFloat(inv.payment_details?.payment_payable || 0),
+                        credit: 0,
+                        runningBalance: 0,
+                        posting_status: inv.posting_status,
+                        originalInv: inv
+                    };
+                });
 
                 const transactionEntries: LedgerEntry[] = (transactionsData || []).map((t: any) => {
                     const rawType = t.transaction_type?.toLowerCase();
                     const transType = rawType === 'receipt' ? 'Receipt' : (rawType === 'payment' ? 'Payment' : 'Sales');
-                    
+
                     // For customers, a 'Payment' (refund) is a Debit, and a 'Receipt' is a Credit.
                     // We ensure the display logic reflects this by swapping if necessary based on transType.
                     let d = parseFloat(t.debit || 0);
@@ -5716,13 +5733,26 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                         d = 0;
                     }
 
+                    const creditPeriod = parseInt(customer.credit_period || '0', 10);
+                    const invDate = new Date(t.date);
+                    const today = new Date();
+                    const d1 = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
+                    const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                    const diffTime = d2.getTime() - d1.getTime();
+                    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                    const isDue = diffDays > creditPeriod;
+
+                    let finalStatus = (t.payment_status && t.payment_status.toLowerCase() !== 'pending') 
+                        ? t.payment_status 
+                        : (transType === 'Receipt' ? 'Not Utilized' : (transType === 'Sales' ? (isDue ? 'Due' : 'Not Due') : 'Not Due'));
+
                     return {
                         id: `T-${t.id}`,
                         date: t.date,
                         postFrom: transType as TransactionType,
                         referenceNo: t.reference_number || t.transaction_number || t.voucher_number || 'N/A',
                         ledger: transType,
-                        status: (t.payment_status && t.payment_status !== 'pending' ? t.payment_status : (transType === 'Receipt' ? 'Not Utilized' : 'Not Due')) as SalesStatus,
+                        status: finalStatus as SalesStatus,
                         debit: d,
                         credit: c,
                         runningBalance: 0,
@@ -6485,7 +6515,7 @@ function SalesContent() {
     const [viewMode, setViewMode] = useState<'dashboard' | 'list'>('dashboard');
     const [activeCategory, setActiveCategory] = useState<SalesCategory>('Export');
     const [showLedgerView, setShowLedgerView] = useState(false);
-    const [selectedCustomer, setSelectedCustomer] = useState<{ id: string, name: string, ledger_id?: string, is_also_vendor?: boolean } | null>(null);
+    const [selectedCustomer, setSelectedCustomer] = useState<{ id: string, name: string, ledger_id?: string, is_also_vendor?: boolean, credit_period?: string } | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
 
     const [invoices, setInvoices] = useState<any[]>([]);
@@ -6581,17 +6611,24 @@ function SalesContent() {
             // Extract total amount from invoice
             const amount = parseFloat(inv.payment_details?.payment_payable || 0);
 
-            // Basic Aging Logic — bucket by days outstanding
+            // Calculate aging days relative to credit period
             const invDate = new Date(inv.date);
             const today = new Date();
-            const diffTime = Math.abs(today.getTime() - invDate.getTime());
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            const d1 = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
+            const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+            const diffTime = d2.getTime() - d1.getTime();
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            
+            const creditPeriod = parseInt(customer.credit_period || '0', 10);
+            const overdueDays = diffDays - creditPeriod;
 
-            if (diffDays <= 45) {
+            if (overdueDays <= 0) {
+                customerGroups[custId].notDue += amount;
+            } else if (overdueDays <= 45) {
                 customerGroups[custId].days0to45 += amount;
-            } else if (diffDays <= 90) {
+            } else if (overdueDays <= 90) {
                 customerGroups[custId].days45to90 += amount;
-            } else if (diffDays <= 180) {
+            } else if (overdueDays <= 180) {
                 customerGroups[custId].months6 += amount;
             } else {
                 customerGroups[custId].year1 += amount;
@@ -6615,11 +6652,11 @@ function SalesContent() {
             if (!ledgerId) return;
 
             // Match by ledger_id — customers from customer-master API include ledger_id
-            const customer = customers.find((c: any) => 
+            const customer = customers.find((c: any) =>
                 c.ledger_id === ledgerId || c.ledger === ledgerId
             );
             if (!customer) return;
-            
+
             const custId = customer.id;
 
             if (!customerGroups[custId]) {
@@ -6648,9 +6685,9 @@ function SalesContent() {
         return `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     };
 
-    const handleViewCustomer = (customerId: string, customerName: string, ledgerId?: string, isVendor?: boolean) => {
+    const handleViewCustomer = (customerId: string, customerName: string, ledgerId?: string, isVendor?: boolean, creditPeriod?: string) => {
         // Navigate to Customer Ledger View
-        setSelectedCustomer({ id: customerId, name: customerName, ledger_id: ledgerId, is_also_vendor: isVendor });
+        setSelectedCustomer({ id: customerId, name: customerName, ledger_id: ledgerId, is_also_vendor: isVendor, credit_period: creditPeriod });
         setShowLedgerView(true);
     };
 
@@ -6706,18 +6743,18 @@ function SalesContent() {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {/* Export Card */}
-                        <CategoryCard 
-                            category="Export" 
-                            desc="View export sales aging." 
+                        <CategoryCard
+                            category="Export"
+                            desc="View export sales aging."
                             activeOrders={invoices.filter(inv => (customers.find(c => c.id === inv.customer_id)?.customer_category_name || '').toLowerCase().includes('export')).length}
                             activeAdvances={allAdvancePayments.filter(adv => (adv.category || '').toLowerCase().includes('export')).length}
                             onClick={() => handleCardClick('Export')}
                         />
 
                         {/* Within Country (B2B) Card */}
-                        <CategoryCard 
-                            category="Within Country (B2B)" 
-                            desc="View B2B sales aging." 
+                        <CategoryCard
+                            category="Within Country (B2B)"
+                            desc="View B2B sales aging."
                             activeOrders={invoices.filter(inv => {
                                 const cat = (customers.find(c => c.id === inv.customer_id)?.customer_category_name || '').toLowerCase();
                                 return cat.includes('b2b') && !cat.includes('b2c');
@@ -6730,9 +6767,9 @@ function SalesContent() {
                         />
 
                         {/* Within Country (B2C) Card */}
-                        <CategoryCard 
-                            category="Within Country (B2C)" 
-                            desc="View B2C sales aging." 
+                        <CategoryCard
+                            category="Within Country (B2C)"
+                            desc="View B2C sales aging."
                             activeOrders={invoices.filter(inv => (customers.find(c => c.id === inv.customer_id)?.customer_category_name || '').toLowerCase().includes('b2c')).length}
                             activeAdvances={allAdvancePayments.filter(adv => (adv.category || '').toLowerCase().includes('b2c')).length}
                             onClick={() => handleCardClick('Within Country (B2C)')}
@@ -6846,7 +6883,7 @@ function SalesContent() {
                                                     <button
                                                         onClick={() => {
                                                             const custDef = customers.find(c => c.id?.toString() === customer.customerId);
-                                                            handleViewCustomer(customer.customerId, customer.customerName, custDef?.ledger_id, customer.is_also_vendor);
+                                                            handleViewCustomer(customer.customerId, customer.customerName, custDef?.ledger_id, customer.is_also_vendor, custDef?.credit_period);
                                                         }}
                                                         className="text-indigo-600 hover:text-indigo-900"
                                                         title="View Ledger"
