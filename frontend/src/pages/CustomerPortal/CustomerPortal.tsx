@@ -5700,16 +5700,31 @@ function CustomerLedgerView({ customer, onBack }: CustomerLedgerViewProps) {
                 }));
 
                 const transactionEntries: LedgerEntry[] = (transactionsData || []).map((t: any) => {
-                    const transType = t.transaction_type?.toUpperCase() === 'RECEIPT' ? 'Receipt' : (t.transaction_type?.toLowerCase() === 'payment' ? 'Payment' : 'Sales');
+                    const rawType = t.transaction_type?.toLowerCase();
+                    const transType = rawType === 'receipt' ? 'Receipt' : (rawType === 'payment' ? 'Payment' : 'Sales');
+                    
+                    // For customers, a 'Payment' (refund) is a Debit, and a 'Receipt' is a Credit.
+                    // We ensure the display logic reflects this by swapping if necessary based on transType.
+                    let d = parseFloat(t.debit || 0);
+                    let c = parseFloat(t.credit || 0);
+
+                    if (transType === 'Payment' && c > 0 && d === 0) {
+                        d = c;
+                        c = 0;
+                    } else if (transType === 'Receipt' && d > 0 && c === 0) {
+                        c = d;
+                        d = 0;
+                    }
+
                     return {
                         id: `T-${t.id}`,
                         date: t.date,
                         postFrom: transType as TransactionType,
                         referenceNo: t.reference_number || t.transaction_number || t.voucher_number || 'N/A',
                         ledger: transType,
-                        status: (t.payment_status && t.payment_status !== 'pending' ? t.payment_status : (t.transaction_type?.toUpperCase() === 'RECEIPT' ? 'Not Utilized' : 'Not Due')) as SalesStatus,
-                        debit: parseFloat(t.debit || 0),
-                        credit: parseFloat(t.credit || 0),
+                        status: (t.payment_status && t.payment_status !== 'pending' ? t.payment_status : (transType === 'Receipt' ? 'Not Utilized' : 'Not Due')) as SalesStatus,
+                        debit: d,
+                        credit: c,
                         runningBalance: 0,
                         posting_status: 'POSTED',
                         originalInv: t
