@@ -12,7 +12,6 @@ import datetime
 class VoucherSalesViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
     queryset = VoucherSalesInvoiceDetails.objects.all().order_by('-date', '-created_at')
     serializer_class = VoucherSalesInvoiceDetailsSerializer
-
     def get_queryset(self):
         queryset = super().get_queryset()
         # Filter for the current tenant
@@ -39,6 +38,11 @@ class VoucherSalesViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
             ).values_list('reference_id', flat=True)
             
             queryset = queryset.exclude(id__in=receipt_invoice_ids)
+        
+        # Optional: Filter by customer name if provided
+        customer_name = self.request.query_params.get('customer_name')
+        if customer_name:
+            queryset = queryset.filter(customer_name=customer_name)
         
         return queryset
 

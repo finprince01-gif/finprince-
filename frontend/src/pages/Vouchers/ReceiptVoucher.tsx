@@ -11,6 +11,7 @@ interface PendingTransaction {
     referenceNumber: string;
     amount: number;
     receipt: number;
+    status: string;
 }
 
 interface ReceiptRow {
@@ -30,6 +31,7 @@ interface BulkTransaction {
     amount: number;
     receiveNow: number;
     selected: boolean;
+    status: string;
 }
 
 
@@ -397,29 +399,64 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
         }
 
         try {
-            // Fetch transactions (Sales Invoices)
-            const response = await apiService.getCustomerSalesInvoices(customerName);
+            // Fetch transactions (Sales Invoices) from the rich system
+            const response = await apiService.getRichCustomerSalesInvoices(customerName);
+
+            // Find the customer to get their credit period from the portal master
+            const normalizedName = customerName.trim().toLowerCase();
+            const customer = portalCustomers.find(c => 
+                (c.customer_name || c.name || '').trim().toLowerCase() === normalizedName
+            );
+            const creditPeriod = parseInt(customer?.credit_period || '0', 10);
 
             if (response && Array.isArray(response)) {
+                const today = new Date();
+                
                 // Map API response to BulkTransaction format
-                const mappedTransactions: BulkTransaction[] = response.map((item: any) => ({
-                    id: item.id?.toString() || Math.random().toString(),
-                    date: item.date || getCurrentDate(),
-                    invoiceNo: item.invoice_number || item.voucher_number || 'N/A',
-                    // Use balance if available (pending amount), otherwise total
-                    amount: typeof item.balance !== 'undefined' ? Number(item.balance) : (Number(item.total_amount) || 0),
-                    receiveNow: 0,
-                    selected: false
-                }));
+                const mappedTransactions: BulkTransaction[] = response.map((item: any) => {
+                    const invDate = new Date(item.date || getCurrentDate());
+                    const d1 = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
+                    const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                    const diffTime = d2.getTime() - d1.getTime();
+                    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                    const status = diffDays > creditPeriod ? 'Due' : 'Not Due';
+
+                    // Resolve the outstanding amount from rich payment details or standard balance
+                    const outstandingAmount = item.payment_details 
+                        ? Number(item.payment_details.payment_payable || 0)
+                        : (typeof item.balance !== 'undefined' ? Number(item.balance) : (Number(item.total_amount) || 0));
+
+                    return {
+                        id: item.id?.toString() || Math.random().toString(),
+                        date: item.date || getCurrentDate(),
+                        invoiceNo: item.sales_invoice_no || item.invoice_number || item.voucher_number || 'N/A',
+                        amount: outstandingAmount,
+                        receiveNow: 0,
+                        selected: false,
+                        status: status
+                    };
+                });
 
                 const validTransactions = mappedTransactions.filter(t => t.amount > 0);
                 setBulkTransactions(validTransactions);
+
+                // Populate pendingTransactions for Single Mode as well
+                const mappedPending: PendingTransaction[] = validTransactions.map(t => ({
+                    date: t.date,
+                    referenceNumber: t.invoiceNo,
+                    amount: t.amount,
+                    receipt: 0,
+                    status: t.status
+                }));
+                setPendingTransactions(mappedPending);
             } else {
                 setBulkTransactions([]);
+                setPendingTransactions([]);
             }
         } catch (error) {
             console.error('Error fetching customer transactions:', error);
             setBulkTransactions([]);
+            setPendingTransactions([]);
         }
     };
 
@@ -438,7 +475,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
 
     const handleTransactionSelect = (transactionId: string, checked: boolean) => {
         setBulkTransactions(prev => prev.map(t =>
-            t.id === transactionId ? { ...t, selected: checked } : t
+            t.id === transactionId ? { ...t, selected: checked, receiveNow: checked ? t.amount : 0 } : t
         ));
     };
 
@@ -934,8 +971,10 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                         <tr>
                                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase">DATE</th>
                                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase">REFERENCE NUMBER</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase">STATUS</th>
                                             <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase">AMOUNT</th>
                                             <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase">PENDING</th>
+                                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-600 uppercase">ACTION</th>
                                             <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase">RECEIPT</th>
                                         </tr>
                                     </thead>
@@ -951,11 +990,24 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                                         className="w-full px-2 py-1 border border-gray-300 rounded focus:outline-none bg-gray-50 text-gray-500 cursor-default"
                                                     />
                                                 </td>
+                                                <td className="px-6 py-4 text-sm text-gray-700">
+                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${txn.status === 'Due' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>
+                                                        {txn.status}
+                                                    </span>
+                                                </td>
                                                 <td className="px-6 py-4 text-sm text-gray-700 text-right">
                                                     ₹{txn.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                 </td>
                                                 <td className="px-6 py-4 text-sm text-gray-700 text-right font-medium text-red-600">
                                                     ₹{Math.max(0, txn.amount - txn.receipt).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                </td>
+                                                <td className="px-6 py-4 text-center">
+                                                    <button 
+                                                        onClick={() => handleReceiptChange(index, txn.amount)}
+                                                        className="px-4 py-1.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-[4px] text-[10px] font-bold uppercase transition-colors shadow-sm"
+                                                    >
+                                                        PAY
+                                                    </button>
                                                 </td>
 
                                                 <td className="px-6 py-4 text-right">
@@ -1169,9 +1221,11 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                                 <thead className="bg-gray-50 border-b-2 border-gray-200">
                                                     <tr>
                                                         <th className="px-2 py-3 text-left text-xs font-medium text-gray-600 uppercase">DATE</th>
-                                                        <th className="px-2 py-3 text-left text-xs font-medium text-gray-600 uppercase">REFERENCE NUMBER</th>
+                                                        <th className="px-2 py-3 text-left text-xs font-medium text-gray-600 uppercase">REFERENCE</th>
+                                                        <th className="px-2 py-3 text-left text-xs font-medium text-gray-600 uppercase">STATUS</th>
                                                         <th className="px-2 py-3 text-right text-xs font-medium text-gray-600 uppercase">AMOUNT</th>
                                                         <th className="px-2 py-3 text-right text-xs font-medium text-gray-600 uppercase">PENDING</th>
+                                                        <th className="px-2 py-3 text-center text-xs font-medium text-gray-600 uppercase">ACTION</th>
                                                         <th className="px-2 py-3 text-right text-xs font-medium text-gray-600 uppercase">RECEIPT</th>
                                                     </tr>
                                                 </thead>
@@ -1197,11 +1251,24 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                                                     className="w-full px-2 py-1 border border-gray-300 rounded focus:outline-none bg-gray-50 text-gray-500 cursor-default"
                                                                 />
                                                             </td>
+                                                            <td className="py-3 px-2 text-sm text-gray-700">
+                                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${transaction.status === 'Due' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>
+                                                                    {transaction.status}
+                                                                </span>
+                                                            </td>
                                                             <td className="py-3 px-2 text-sm text-gray-700 text-right">
                                                                 ₹{transaction.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                             </td>
                                                             <td className="py-3 px-2 text-sm text-right text-red-600 font-medium">
                                                                 ₹{(Math.max(0, transaction.amount - transaction.receiveNow)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                            </td>
+                                                            <td className="py-3 px-2 text-center">
+                                                                <button 
+                                                                    onClick={() => handleReceiveNowChange(transaction.id, transaction.amount)}
+                                                                    className="px-4 py-1.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-[4px] text-[10px] font-bold uppercase transition-colors shadow-sm"
+                                                                >
+                                                                    PAY
+                                                                </button>
                                                             </td>
 
                                                             <td className="py-3 px-2 text-right">

@@ -905,6 +905,15 @@ class ApiService {
     }
 
     /**
+     * Get rich sales invoices for a specific customer from the new system
+     * @param customerName - Name of the customer
+     * @returns Array of sales invoices with payment details
+     */
+    async getRichCustomerSalesInvoices(customerName: string) {
+        return httpClient.get<any[]>(`/api/voucher-sales-new/?customer_name=${encodeURIComponent(customerName)}`);
+    }
+
+    /**
      * Get customer address details for auto-filling bill-to and ship-to
      * @param customerId - Customer ledger ID
      * @returns Customer address data
