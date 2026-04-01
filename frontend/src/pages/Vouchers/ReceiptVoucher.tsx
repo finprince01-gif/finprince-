@@ -421,9 +421,9 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
                     const status = diffDays > creditPeriod ? 'Due' : 'Not Due';
 
-                    // Resolve the outstanding amount from rich payment details or standard balance
+                    // Resolve the outstanding amount using the actual payment balance
                     const outstandingAmount = item.payment_details 
-                        ? Number(item.payment_details.payment_payable || 0)
+                        ? Number(item.payment_details.payment_balance ?? item.payment_details.payment_payable ?? 0)
                         : (typeof item.balance !== 'undefined' ? Number(item.balance) : (Number(item.total_amount) || 0));
 
                     return {
