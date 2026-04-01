@@ -89,6 +89,7 @@ router.register('gst/gstr1', GSTR1ViewSet, basename='gstr1')
 # e.g., /api/accounting/vouchers/?type=sales
 # MOVED TO END to prevent masking specific paths
 router.register('vouchers', VoucherViewSet, basename='vouchers')
+router.register('ledgers', MasterLedgerViewSet, basename='ledgers')
 
 from .views_dashboard import DashboardAnalyticsView # pyre-fixme
 from .views_subscription import SubscriptionUsageView, SubscriptionUpdateView # pyre-fixme
