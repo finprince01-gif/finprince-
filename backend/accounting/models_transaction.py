@@ -69,7 +69,7 @@ class TransactionFile(models.Model):
     
     # TDS Details
     is_tds_applicable = models.BooleanField(default=False)
-    tds_section = models.CharField(max_length=20, null=True, blank=True)
+    tds_section = models.CharField(max_length=255, null=True, blank=True)
     tds_rate = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     
     # Contact Details

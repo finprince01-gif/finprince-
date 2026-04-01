@@ -50,6 +50,40 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
 
         return qs.distinct()
 
+    @action(detail=False, methods=['get'], url_path='check-uniqueness')
+    def check_uniqueness(self, request):
+        """Check if a reference number (Advance Ref No) is already used."""
+        ref_no = request.query_params.get('ref_no')
+        v_num = request.query_params.get('voucher_number')
+        tenant_id = getattr(request.user, 'tenant_id', None)
+        
+        if not tenant_id:
+            tenant_id = request.headers.get('X-Tenant-Id')
+
+        if ref_no:
+            exists = PaymentVoucherItem.objects.filter(
+                tenant_id=tenant_id,
+                advance_ref_no=ref_no
+            ).exclude(advance_ref_no='').exists()
+            return Response({'is_unique': not exists})
+            
+        if v_num:
+            exists = PaymentVoucher.objects.filter(
+                tenant_id=tenant_id,
+                voucher_number=v_num
+            ).exists()
+            return Response({'is_unique': not exists})
+
+        return Response({'is_unique': True})
+
+    def _parse_credit_days(self, raw_val):
+        import re
+        raw = str(raw_val).strip()
+        if raw.isdigit():
+            return int(raw)
+        m = re.search(r"(\d+)", raw)
+        return int(m.group(1)) if m else 0
+
     @action(detail=False, methods=['get'], url_path='pending-invoices')
     def pending_invoices(self, request):
         ledger_id = request.query_params.get('ledger_id')
@@ -83,24 +117,61 @@ class PaymentVoucherViewSet(viewsets.ModelViewSet):
             id__in=matched_vouchers_criteria
         ).order_by('-date')
         
-        # 3. Format response for the frontend Pelding Transactions table
+        # 3. Get Credit Period for this ledger
+        credit_period_days = 0
+        from vendors.models import VendorMasterTerms, VendorMasterBasicDetail
+        vendor = VendorMasterBasicDetail.objects.filter(ledger_id=ledger_id, tenant_id=tenant_id).first()
+        if vendor:
+            terms = VendorMasterTerms.objects.filter(vendor_basic_detail=vendor, tenant_id=tenant_id).first()
+            if terms and terms.credit_period:
+                credit_period_days = self._parse_credit_days(terms.credit_period)
+        else:
+            # Check customers
+            from customerportal.database import CustomerMasterCustomerTermsCondition, CustomerMasterCustomerBasicDetails
+            customer = CustomerMasterCustomerBasicDetails.objects.filter(ledger_id=ledger_id, tenant_id=tenant_id).first()
+            if customer:
+                terms = CustomerMasterCustomerTermsCondition.objects.filter(customer_basic_detail=customer, tenant_id=tenant_id).first()
+                if terms and terms.credit_period:
+                    credit_period_days = self._parse_credit_days(terms.credit_period)
+
+        from datetime import timedelta
+        today = datetime.date.today()
+        
+        # 4. Format response for the frontend Pending Transactions table
         results = []
         for v in vouchers:
-            # Pick the best amount field (total or amount or total_debit/credit)
-            amt = v.total if v.total and v.total > 0 else (v.amount if v.amount else 0)
-            if amt == 0:
-                 amt = v.total_debit if v.total_debit > 0 else v.total_credit
+            v_amt = v.total if v.total and v.total > 0 else (v.amount if v.amount else 0)
+            if v_amt == 0:
+                 v_amt = v.total_debit if v.total_debit > 0 else v.total_credit
 
-            results.append({
-                'id': v.id,
-                'date': v.date.strftime('%d-%m-%Y') if v.date else '',
-                'reference_number': v.voucher_number or v.invoice_no or f"V-{v.id}",
-                'amount': float(amt),
-                'pending': float(amt), # TODO: subtract already paid amounts in future iteration
-                'type': v.type
-            })
+            due_date = v.date + timedelta(days=credit_period_days) if v.date else None
+            due_status = "Not Due"
+            days_to_due = 0
+            
+            if due_date:
+                days_to_due = (due_date - today).days
+                if days_to_due < 0:
+                    due_status = "Due"
+                elif days_to_due == 0:
+                    due_status = "Due Today"
+            
+            # FILTER: only show "Due" or "Due Today" as requested by user
+            if due_status in ["Due", "Due Today"]:
+                results.append({
+                    'id': v.id,
+                    'date': v.date.strftime('%Y-%m-%d') if v.date else '',
+                    'reference_number': v.voucher_number or v.invoice_no or f"V-{v.id}",
+                    'amount': float(v_amt),
+                    'pending': float(v_amt), 
+                    'type': v.type,
+                    'credit_period': credit_period_days,
+                    'due_date': due_date.strftime('%Y-%m-%d') if due_date else '',
+                    'due_status': due_status,
+                    'days_to_due': days_to_due
+                })
             
         return Response(results)
+
 
     def create(self, request, *args, **kwargs):
         bank_transaction_id = request.data.get('bank_transaction_id')
@@ -216,16 +287,18 @@ class VoucherPaymentBulkViewSet(PaymentVoucherViewSet):
     """
     serializer_class = VoucherPaymentBulkSerializer
 
-def get_advances_by_ledger(ledger_id, tenant_id=None, category=None):
+def get_advances_by_ledger(ledger_id=None, tenant_id=None, category=None):
     """
     Common function to fetch advance payments for a specific ledger.
     Optionally filters by category (for Portal tiles).
     """
     qs = PaymentVoucherItem.objects.filter(
         reference_type='ADVANCE',
-        pay_to_ledger_id=ledger_id,
         amount__gt=0
     ).select_related('voucher', 'pay_to_ledger')
+    
+    if ledger_id:
+        qs = qs.filter(pay_to_ledger_id=ledger_id)
 
     if tenant_id:
         qs = qs.filter(voucher__tenant_id=tenant_id)

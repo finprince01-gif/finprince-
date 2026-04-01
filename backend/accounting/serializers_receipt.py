@@ -4,6 +4,7 @@ from rest_framework import serializers # type: ignore
 from .models_voucher_receipt import ReceiptVoucher, ReceiptVoucherItem # type: ignore
 from .models import MasterLedger, Voucher, JournalEntry # type: ignore
 from accounting.services.ledger_service import post_transaction, _resolve_ledger
+from accounting.services.sales_status_service import update_sales_invoice_payment_status
 
 def _safe_decimal(value):
     try:
@@ -22,6 +23,12 @@ class ReceiptVoucherItemSerializer(serializers.ModelSerializer):
             'pending_transaction', 'amount', 'pending_before', 'received_amount', 
             'balance_after', 'is_advance', 'advance_ref_no'
         ]
+        extra_kwargs = {
+            'amount': {'max_digits': 20, 'decimal_places': 2},
+            'pending_before': {'max_digits': 20, 'decimal_places': 2},
+            'received_amount': {'max_digits': 20, 'decimal_places': 2},
+            'balance_after': {'max_digits': 20, 'decimal_places': 2},
+        }
 
     def validate_customer(self, value):
         request = self.context.get('request')
@@ -108,6 +115,9 @@ class ReceiptVoucherSerializer(serializers.ModelSerializer):
         model = ReceiptVoucher
         fields = '__all__'
         read_only_fields = ['tenant_id']
+        extra_kwargs = {
+            'total_amount': {'max_digits': 20, 'decimal_places': 2},
+        }
 
     def validate(self, attrs):
         request = self.context.get('request')
@@ -167,8 +177,14 @@ class ReceiptVoucherSerializer(serializers.ModelSerializer):
                 validated_data['customer'] = first_item_customer if isinstance(first_item_customer, MasterLedger) else _resolve_ledger(first_item_customer, tenant_id)
             
         if not validated_data.get('voucher_number'):
-            # Allow custom prefix from client if needed, or default
-            validated_data['voucher_number'] = f"REC-{uuid.uuid4().hex[:6].upper()}"
+            from masters.models import MasterVoucherReceipts
+            series = MasterVoucherReceipts.objects.filter(tenant_id=tenant_id, is_active=True).first()
+            if series:
+                validated_data['voucher_number'] = series.get_next_number()
+                series.increment_number()
+            else:
+                # Allow custom prefix from client if needed, or default
+                validated_data['voucher_number'] = f"REC-{uuid.uuid4().hex[:6].upper()}"
             
         receipt = super().create(validated_data)
 
@@ -184,6 +200,10 @@ class ReceiptVoucherSerializer(serializers.ModelSerializer):
                 tenant_id=receipt.tenant_id,
                 **item_data
             )
+            
+            # Post-save: Update Sales Invoice payment status if we have a reference_id
+            if item_data.get('reference_id'):
+                update_sales_invoice_payment_status(receipt.tenant_id, item_data.get('reference_id'))
 
         self._mirror_to_generic_voucher(receipt)
         self._mirror_to_customer_portal(receipt)
@@ -302,8 +322,16 @@ class ReceiptVoucherSerializer(serializers.ModelSerializer):
                     ).first()
                     
                     if portal_customer:
+                        # NEW: Selective Mirroring Logic
+                        # ONLY create a portal transaction if it's an Advance or On Account payment.
+                        # Normal invoice settlements should NOT create a new entry (they update the Sales row instead).
+                        is_adv = (item.is_advance or item.reference_type == 'advance' or not item.reference_id)
+                        if not is_adv:
+                            print(f"!!! Portal Mirror Skip: {lookup_name} (Settlement row, skipping new entry)")
+                            continue
+                            
                         # Map transaction types to portal-specific statuses
-                        p_status = 'Advance' if (item.is_advance or item.reference_type == 'advance') else 'Received'
+                        p_status = 'Advance' if is_adv else 'Received'
                         
                         # Use update_or_create to avoid duplicates on retries
                         # Use a composite key for transaction_number to prevent overwriting different items or different allocations on the same voucher

@@ -225,7 +225,17 @@ class CustomerMasterCustomerViewSet(viewsets.ModelViewSet):
         user = self.request.user
         tenant_id = getattr(user, 'tenant_id', None)
         if tenant_id:
-            return CustomerMasterCustomer.objects.select_related('customer_category').filter(tenant_id=tenant_id, is_deleted=False)
+            queryset = CustomerMasterCustomer.objects.select_related('customer_category').filter(tenant_id=tenant_id, is_deleted=False)
+            
+            # Simple filtering
+            pan = self.request.query_params.get('pan_number')
+            name = self.request.query_params.get('customer_name')
+            if pan:
+                queryset = queryset.filter(pan_number=pan)
+            if name:
+                queryset = queryset.filter(customer_name__icontains=name)
+                
+            return queryset
         return CustomerMasterCustomer.objects.none()
     
     def create(self, request, *args, **kwargs):
@@ -259,7 +269,7 @@ class CustomerMasterCustomerViewSet(viewsets.ModelViewSet):
             raise
     
     def perform_create(self, serializer):
-        """Set tenant_id and created_by when creating"""
+        """Set tenant_id and created_by when creating, and auto-create a MasterLedger."""
         import logging
         logger = logging.getLogger(__name__)
         
@@ -272,10 +282,27 @@ class CustomerMasterCustomerViewSet(viewsets.ModelViewSet):
             from rest_framework.exceptions import ValidationError
             raise ValidationError({'error': 'User does not have a tenant_id. Please contact administrator.'})
         
-        serializer.save(
+        customer = serializer.save(
             tenant_id=tenant_id,
             created_by=user.username if hasattr(user, 'username') else None
         )
+        
+        # Auto-create a MasterLedger so this customer shows in Receive From dropdowns.
+        try:
+            from accounting.models import MasterLedger
+            ledger_code = f"CUST-LED-{customer.id}"
+            ledger = MasterLedger.objects.create(
+                tenant_id=tenant_id,
+                name=customer.customer_name,
+                group='Sundry Debtors',
+                category='Asset',
+                code=ledger_code,
+            )
+            customer.ledger_id = ledger.id
+            customer.save(update_fields=['ledger'])
+            logger.info(f"Auto-created ledger {ledger.id} for customer {customer.id} ({customer.customer_name})")
+        except Exception as e:
+            logger.warning(f"Could not auto-create ledger for customer {customer.id}: {e}")
         
         logger.info("perform_create completed successfully")
     
@@ -438,13 +465,13 @@ class CustomerMasterLongTermContractViewSet(viewsets.ModelViewSet):
     
     def create(self, request, *args, **kwargs):
         """Override create to add logging for debugging 400 errors"""
-        logger.info(f"📥 Received Long-term Contract creation request")
+        logger.info(f"Received Long-term Contract creation request")
         # logger.debug(f"Request data: {request.data}")
         
         try:
             serializer = self.get_serializer(data=request.data)
             if not serializer.is_valid():
-                logger.warning(f"⚠️ Validation errors: {serializer.errors}")
+                logger.warning(f"Validation errors: {serializer.errors}")
                 return Response(
                     {'error': 'Invalid input data', 'details': serializer.errors},
                     status=status.HTTP_400_BAD_REQUEST
@@ -452,10 +479,10 @@ class CustomerMasterLongTermContractViewSet(viewsets.ModelViewSet):
             
             self.perform_create(serializer)
             headers = self.get_success_headers(serializer.data)
-            logger.info("✅ Long-term Contract created successfully")
+            logger.info("Long-term Contract created successfully")
             return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
         except Exception as e:
-            logger.error(f"❌ Error creating contract: {str(e)}", exc_info=True)
+            logger.error(f"Error creating contract: {str(e)}", exc_info=True)
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -730,7 +757,21 @@ class SalesCustomerCreateView(APIView):
                     customer_category=cat,
                     created_by=username
                 )
-                print("CUSTOMER CREATED - NO LEDGER SHOULD BE CREATED")
+
+                # Auto-create a MasterLedger for this customer
+                try:
+                    from accounting.models import MasterLedger
+                    ledger_code = f"CUST-LED-{customer.id}"
+                    ledger = MasterLedger.objects.create(
+                        tenant_id=tenant_id,
+                        name=c_name,
+                        group='Sundry Debtors',
+                        code=ledger_code,
+                    )
+                    customer.ledger_id = ledger.id
+                    customer.save(update_fields=['ledger'])
+                except Exception as ledger_err:
+                    logger.warning(f"Could not auto-create ledger for sales customer {customer.id}: {ledger_err}")
                 
                 # 2. GST Details
                 if gstin or branch:

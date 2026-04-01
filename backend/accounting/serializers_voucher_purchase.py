@@ -269,7 +269,12 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
                     else None
                 )
                 if vendor_ledger:
-                    entries.append({"ledger_id": vendor_ledger.id, "debit": 0, "credit": total_amt})
+                    entries.append({
+                        "ledger_id": vendor_ledger.id, 
+                        "debit": 0, 
+                        "credit": total_amt,
+                        "vendor_id": supplier_instance.vendor_basic_detail.id
+                    })
 
                 # 2. Debit the Purchase Ledger
                 p_ledger_name = None
@@ -279,6 +284,23 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
                     p_ledger_name = supply_foreign_data.get('purchase_ledger')
 
                 p_ledger_obj = _resolve_ledger(p_ledger_name or 'Purchase', tenant_id)
+                
+                # If no Purchase ledger exists, the double-entry would fail.
+                # Create a default one if it's missing to ensure it shows up in entries.
+                if not p_ledger_obj:
+                    # Find a group or fallback to 'Purchase Accounts'
+                    from accounting.models import MasterLedgerGroup
+                    p_group = MasterLedgerGroup.objects.filter(name__icontains='Purchase', tenant_id=tenant_id).first()
+                    if not p_group:
+                        p_group = MasterLedgerGroup.objects.create(name='Purchase Accounts', tenant_id=tenant_id)
+                    p_ledger_obj = MasterLedger.objects.create(
+                        name=p_ledger_name or 'Purchase Account',
+                        group=p_group.name,
+                        group_id=p_group,
+                        tenant_id=tenant_id,
+                        category='Expense'
+                    )
+
                 if p_ledger_obj:
                     entries.append({"ledger_id": p_ledger_obj.id, "debit": total_amt, "credit": 0})
 
@@ -289,8 +311,30 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
                         tenant_id=tenant_id,
                         entries=entries,
                     )
+                    
+                    # --- Record Advance Allocation Maps (Missing Linkage) ---
+                    try:
+                        from accounting.models import AdvanceAllocationMap
+                        adv_refs = due_data.get('advance_references', []) if due_data else []
+                        if isinstance(adv_refs, list):
+                            for ref in adv_refs:
+                                ref_no = ref.get('refNo')
+                                applied = float(ref.get('appliedNow', 0))
+                                if ref_no and applied > 0:
+                                    AdvanceAllocationMap.objects.create(
+                                        tenant_id=tenant_id,
+                                        advance_ref_no=ref_no,
+                                        voucher_id=voucher.id,
+                                        voucher_type='purchase',
+                                        amount=applied
+                                    )
+                                    print(f"Registered allocation: {ref_no} -> Purchase {voucher.id}")
+                    except Exception as ex:
+                        print(f"FAILED TO REGISTER ADVANCE ALLOCATION: {ex}")
         except Exception as e:
             print(f"Error posting purchase to entries: {str(e)}")
+
+        self._mirror_to_vendor_portal(supplier_instance)
 
         return supplier_instance
 
@@ -411,41 +455,153 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
                 defaults={**filtered_data, 'tenant_id': tenant_id},
             )
 
+        # NOTE: _mirror_to_vendor_portal is already called below in the main body
         self._mirror_to_vendor_portal(instance)
+
+        # --- Double-Entry Posting Update for Purchase (entries table) ---
+        try:
+            total_amt = float(purchase_total)
+            if total_amt > 0 and voucher_id:
+                # Clear existing entries for this voucher first to avoid duplicates
+                from accounting.models import JournalEntry
+                JournalEntry.objects.filter(tenant_id=tenant_id, voucher_type='PURCHASE', voucher_id=voucher_id).delete()
+                
+                entries = []
+                # 1. Credit the Vendor
+                vendor_ledger = (
+                    instance.vendor_basic_detail.ledger
+                    if instance.vendor_basic_detail
+                    else None
+                )
+                if vendor_ledger:
+                    entries.append({
+                        "ledger_id": vendor_ledger.id, 
+                        "debit": 0, 
+                        "credit": total_amt,
+                        "vendor_id": instance.vendor_basic_detail.id
+                    })
+
+                # 2. Debit the Purchase Ledger
+                p_ledger_name = None
+                if supply_inr_data is not None:
+                    p_ledger_name = supply_inr_data.get('purchase_ledger')
+                elif supply_foreign_data is not None:
+                    p_ledger_name = supply_foreign_data.get('purchase_ledger')
+
+                p_ledger_obj = _resolve_ledger(p_ledger_name or 'Purchase', tenant_id)
+                
+                # If no Purchase ledger exists, ensure one is created
+                if not p_ledger_obj:
+                    from accounting.models import MasterLedgerGroup
+                    p_group = MasterLedgerGroup.objects.filter(name__icontains='Purchase', tenant_id=tenant_id).first()
+                    if not p_group:
+                        p_group = MasterLedgerGroup.objects.create(name='Purchase Accounts', tenant_id=tenant_id)
+                    p_ledger_obj = MasterLedger.objects.create(
+                        name=p_ledger_name or 'Purchase Account',
+                        group=p_group.name,
+                        group_id=p_group,
+                        tenant_id=tenant_id,
+                        category='Expense'
+                    )
+
+                if p_ledger_obj:
+                    entries.append({"ledger_id": p_ledger_obj.id, "debit": total_amt, "credit": 0})
+
+                if len(entries) == 2:
+                    post_transaction(
+                        voucher_type="PURCHASE",
+                        voucher_id=voucher_id,
+                        tenant_id=tenant_id,
+                        entries=entries,
+                    )
+                    
+                    # --- Record Advance Allocation Maps Update ---
+                    try:
+                        from accounting.models import AdvanceAllocationMap
+                        # Clear old allocations for this voucher
+                        AdvanceAllocationMap.objects.filter(tenant_id=tenant_id, voucher_id=voucher_id, voucher_type='purchase').delete()
+                        
+                        adv_refs = due_data.get('advance_references', []) if due_data else []
+                        if isinstance(adv_refs, list):
+                            for ref in adv_refs:
+                                ref_no = ref.get('refNo')
+                                applied = float(ref.get('appliedNow', 0))
+                                if ref_no and applied > 0:
+                                    AdvanceAllocationMap.objects.create(
+                                        tenant_id=tenant_id,
+                                        advance_ref_no=ref_no,
+                                        voucher_id=voucher_id,
+                                        voucher_type='purchase',
+                                        amount=applied
+                                    )
+                    except Exception as ex:
+                        print(f"FAILED TO UPDATE ADVANCE ALLOCATION: {ex}")
+        except Exception as e:
+            print(f"Error updating purchase accounting entries: {str(e)}")
+
         return instance
 
     def _mirror_to_vendor_portal(self, purchase):
-        """Mirror Purchase vouchers to Vendor Portal ledger"""
+        """
+        Mirror a Purchase voucher to the Vendor Portal ledger (VendorTransaction).
+        Called from both create() and update() so the procurement ledger is always
+        up-to-date and Due / Not Due status is calculated correctly by the API.
+        """
         try:
             from vendors.models import VendorMasterBasicDetail, VendorTransaction
             tenant_id = purchase.tenant_id
-            
-            # Find vendor master
-            vendor = VendorMasterBasicDetail.objects.filter(
-                tenant_id=tenant_id, 
-                vendor_name__iexact=purchase.vendor_name
-            ).first()
-            
-            if vendor:
-                # Calculate total amount
-                due_details = getattr(purchase, 'due_details', None)
-                total_amt = due_details.to_pay if due_details else 0
-                
-                VendorTransaction.objects.update_or_create(
+
+            # Resolve the canonical transaction number (prefer purchase voucher no)
+            tx_number = (
+                purchase.purchase_voucher_no
+                or purchase.supplier_invoice_no
+                or f"PUR-{purchase.id}"
+            )
+
+            # Prefer vendor_basic_detail FK; fall back to name match
+            vendor = None
+            if purchase.vendor_basic_detail_id:
+                vendor = VendorMasterBasicDetail.objects.filter(
                     tenant_id=tenant_id,
-                    vendor_id=vendor.id,
-                    transaction_number=purchase.purchase_voucher_no or purchase.supplier_invoice_no,
-                    transaction_type='purchase',
-                    defaults={
-                        'transaction_date': purchase.invoice_date,
-                        'amount': total_amt,
-                        'total_amount': total_amt,
-                        'status': 'Unpaid' if total_amt > 0 else 'Paid',
-                        'reference_number': purchase.supplier_invoice_no,
-                        'notes': f"Purchase from {purchase.vendor_name}",
-                        'ledger_name': 'Purchase A/c'
-                    }
-                )
-                print(f"!!! Vendor Sync OK (Purchase): {purchase.vendor_name}")
+                    id=purchase.vendor_basic_detail_id
+                ).first()
+            if not vendor and purchase.vendor_name:
+                vendor = VendorMasterBasicDetail.objects.filter(
+                    tenant_id=tenant_id,
+                    vendor_name__iexact=purchase.vendor_name
+                ).first()
+
+            if not vendor:
+                print(f"!!! Vendor Portal Sync: no vendor found for '{purchase.vendor_name}'")
+                return
+
+            # Pull the to_pay amount from the related DueDetails row
+            # (the instance may or may not have the cached reverse-related attr)
+            try:
+                due_details = purchase.due_details
+                total_amt = due_details.to_pay if due_details else 0
+            except Exception:
+                total_amt = 0
+
+            # 'Unpaid' → the by_vendor API treats non-paid as eligible for
+            # credit-period Due / Not Due calculation.
+            tx_status = 'Paid' if float(total_amt or 0) == 0 else 'Unpaid'
+
+            VendorTransaction.objects.update_or_create(
+                tenant_id=tenant_id,
+                vendor_id=vendor.id,
+                transaction_number=tx_number,
+                transaction_type='purchase',
+                defaults={
+                    'transaction_date': purchase.date,
+                    'amount': total_amt,
+                    'total_amount': total_amt,
+                    'status': tx_status,
+                    'reference_number': purchase.supplier_invoice_no,
+                    'notes': f"Purchase from {purchase.vendor_name}",
+                    'ledger_name': 'Purchase A/c',
+                }
+            )
+            print(f"!!! Vendor Sync OK (Purchase): {purchase.vendor_name} | tx={tx_number} | amt={total_amt}")
         except Exception as e:
             print(f"!!! Vendor Portal Sync Failure (Purchase): {str(e)}")

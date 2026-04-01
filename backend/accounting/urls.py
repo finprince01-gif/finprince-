@@ -37,6 +37,7 @@ from .views_contra_journal import VoucherContraViewSet, VoucherJournalViewSet # 
 from .views_voucher_purchase import VoucherPurchaseViewSet # pyre-fixme
 from .views_gst import GSTR1ViewSet # pyre-fixme
 from .views_bank_reconciliation import BankReconciliationViewSet # pyre-fixme
+from .views_allocation import VoucherAllocationViewSet
 
 router = routers.DefaultRouter()
 
@@ -72,6 +73,7 @@ router.register('bank-reconciliation', BankReconciliationViewSet, basename='bank
 # Sales Invoice endpoints (NEW)
 router.register('invoices', SalesInvoiceViewSet, basename='invoices')
 router.register('voucher-sales-new', VoucherSalesViewSet, basename='voucher-sales-new')
+router.register('allocations', VoucherAllocationViewSet, basename='voucher-allocations')
 
 # Journal entries
 router.register('journal-entries', JournalEntryViewSet, basename='journal-entries')
@@ -87,6 +89,7 @@ router.register('gst/gstr1', GSTR1ViewSet, basename='gstr1')
 # e.g., /api/accounting/vouchers/?type=sales
 # MOVED TO END to prevent masking specific paths
 router.register('vouchers', VoucherViewSet, basename='vouchers')
+router.register('ledgers', MasterLedgerViewSet, basename='ledgers')
 
 from .views_dashboard import DashboardAnalyticsView # pyre-fixme
 from .views_subscription import SubscriptionUsageView, SubscriptionUpdateView # pyre-fixme

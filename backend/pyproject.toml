@@ -29,7 +29,7 @@ dependencies = [
     "whitenoise",
     "drf-spectacular",
     "PyMuPDF",
-    "google-generativeai",
+    "google-genai",
     "requests",
     "twilio",
     "gunicorn",

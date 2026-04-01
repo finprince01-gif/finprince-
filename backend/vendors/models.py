@@ -495,7 +495,7 @@ class VendorMasterTDS(models.Model):
     )
     
     # TDS Information
-    tds_section_applicable = models.CharField(max_length=100, blank=True, null=True, help_text="TDS Section Applicable")
+    tds_section_applicable = models.CharField(max_length=255, blank=True, null=True, help_text="TDS Section Applicable")
     enable_automatic_tds_posting = models.BooleanField(default=False, help_text="Enable automatic TDS posting")
     
     # MSME and FSSAI
@@ -509,12 +509,12 @@ class VendorMasterTDS(models.Model):
     # Additional Statutory & TDS Fields
     pan_number = models.CharField(max_length=10, blank=True, null=True, help_text="PAN Number")
     tan_number = models.CharField(max_length=10, blank=True, null=True, help_text="TAN Number")
-    tds_section = models.CharField(max_length=100, blank=True, null=True, help_text="TDS Section (alternate)")
+    tds_section = models.CharField(max_length=255, blank=True, null=True, help_text="TDS Section (alternate)")
     tds_rate = models.CharField(max_length=50, blank=True, null=True, help_text="TDS Rate")
     penalty_rate = models.CharField(max_length=50, blank=True, null=True, help_text="Penalty Rate")
     cin_number = models.CharField(max_length=21, blank=True, null=True, help_text="CIN Number")
     # TCS Fields
-    tcs_section_applicable = models.CharField(max_length=200, blank=True, null=True, help_text="TCS Section Applicable")
+    tcs_section_applicable = models.CharField(max_length=255, blank=True, null=True, help_text="TCS Section Applicable")
     tcs_rate = models.CharField(max_length=50, blank=True, null=True, help_text="TCS Rate")
     
     # File Uploads

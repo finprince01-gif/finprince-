@@ -11,6 +11,9 @@ interface PendingTransaction {
     referenceNumber: string;
     amount: number;
     receipt: number;
+    status: string;
+    dueDate?: string;
+    daysToDue?: number;
 }
 
 interface ReceiptRow {
@@ -30,6 +33,9 @@ interface BulkTransaction {
     amount: number;
     receiveNow: number;
     selected: boolean;
+    status: string;
+    dueDate?: string;
+    daysToDue?: number;
 }
 
 
@@ -61,7 +67,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
     };
 
     const [date, setDate] = useState(getCurrentDate());
-    const [voucherType, setVoucherType] = useState('Receipt');
+    const [voucherType, setVoucherType] = useState('');
     const [voucherNumber, setVoucherNumber] = useState('');
     const [bankTransactionId, setBankTransactionId] = useState<number | null>(null);
 
@@ -100,24 +106,31 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
         fetchData();
     }, []);
 
-    // Filter Receive In (Debit) options: Cash and Bank accounts
+    // Filter Receive In (Debit) options: Cash, Bank, CC, OD, and Loans/Borrowings
     const receiveInLedgers = useMemo(() => {
         return allLedgers.filter(l => {
             const group = (l.group || '').toLowerCase();
+            const category = (l.category || '').toLowerCase();
             return (
+                (category.includes('asset') && group.includes('cash')) ||
+                (category.includes('asset') && group.includes('bank')) ||
+                (category.includes('asset') && group.includes('od')) ||
+                (category.includes('asset') && group.includes('cc')) ||
+                (category.includes('liability') && group.includes('borrowing')) ||
+                (category.includes('liability') && group.includes('loan')) ||
+                // Fallbacks
                 group.includes('cash') ||
                 group.includes('bank') ||
                 group.includes('od') ||
-                group.includes('cc')
+                group.includes('cc') ||
+                group.includes('borrowing') ||
+                group.includes('loan')
             );
         });
     }, [allLedgers]);
 
-    // Filter Receive From (Credit) options: All ledgers EXCEPT Receive In accounts + Portal entities
+    // Filter Receive From (Credit) options: All ledgers (allowing transfers) + Portal entities
     const receiveFromOptions = useMemo(() => {
-        const receiveInIds = new Set(receiveInLedgers.map(l => l.id));
-        const filteredLedgers = allLedgers.filter(l => !receiveInIds.has(l.id));
-
         // Construct synthetic ledger objects for portal entities to make them selectable
         const custOptions = portalCustomers.map(c => ({
             id: `portal-cust-${c.id}`,
@@ -134,8 +147,8 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
         }));
 
         // Combine all, avoiding duplicates if name matches exactly with an existing ledger
-        const combined = [...filteredLedgers];
-        const existingNames = new Set(filteredLedgers.map(l => l.name.toLowerCase()));
+        const combined = [...allLedgers];
+        const existingNames = new Set(allLedgers.map(l => l.name.toLowerCase()));
 
         [...custOptions, ...vendOptions].forEach(portalEntity => {
             if (!existingNames.has(portalEntity.name.toLowerCase())) {
@@ -145,7 +158,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
         });
 
         return combined;
-    }, [allLedgers, receiveInLedgers, portalCustomers, portalVendors]);
+    }, [allLedgers, portalCustomers, portalVendors]);
 
     // Receipt Voucher Configuration state
     const [receiptVoucherConfigs, setReceiptVoucherConfigs] = useState<any[]>([]);
@@ -253,12 +266,19 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
     useEffect(() => {
         if (selectedReceiptConfig && receiptVoucherConfigs.length > 0) {
             const config = receiptVoucherConfigs.find(c => c.voucher_name === selectedReceiptConfig);
-            if (config && config.enable_auto_numbering) {
-                const paddedNum = String(config.current_number).padStart(config.required_digits, '0');
-                const generatedNumber = `${config.prefix || ''}${paddedNum}${config.suffix || ''}`;
-                setVoucherNumber(generatedNumber);
-            } else {
-                setVoucherNumber('Manual Input');
+            if (config) {
+                if (config.enable_auto_numbering) {
+                    // Fetch the correctly formatted next number from the backend
+                    httpClient.get<any>(`/api/masters/master-voucher-receipts/${config.id}/next-number/`)
+                        .then((res) => {
+                            setVoucherNumber(res.invoice_number || '');
+                        })
+                        .catch(() => {
+                            setVoucherNumber('');
+                        });
+                } else {
+                    setVoucherNumber('Manual Input');
+                }
             }
         } else {
             setVoucherNumber('');
@@ -383,29 +403,79 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
         }
 
         try {
-            // Fetch transactions (Sales Invoices)
-            const response = await apiService.getCustomerSalesInvoices(customerName);
+            // Fetch transactions (Sales Invoices) from the rich system
+            const response = await apiService.getRichCustomerSalesInvoices(customerName);
+
+            // Find the customer to get their credit period from the portal master
+            const normalizedName = customerName.trim().toLowerCase();
+            const customer = portalCustomers.find(c => 
+                (c.customer_name || c.name || '').trim().toLowerCase() === normalizedName
+            );
+            const creditPeriod = parseInt(customer?.credit_period || '0', 10);
 
             if (response && Array.isArray(response)) {
-                // Map API response to BulkTransaction format
-                const mappedTransactions: BulkTransaction[] = response.map((item: any) => ({
-                    id: item.id?.toString() || Math.random().toString(),
-                    date: item.date || getCurrentDate(),
-                    invoiceNo: item.invoice_number || item.voucher_number || 'N/A',
-                    // Use balance if available (pending amount), otherwise total
-                    amount: typeof item.balance !== 'undefined' ? Number(item.balance) : (Number(item.total_amount) || 0),
-                    receiveNow: 0,
-                    selected: false
-                }));
+                const today = new Date();
+                
+                const mappedTransactions: BulkTransaction[] = response.map((item: any) => {
+                    const invDate = new Date(item.date || getCurrentDate());
+                    const d1 = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
+                    const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                    const diffTime = d2.getTime() - d1.getTime();
+                    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                    
+                    let status = 'Not Due';
+                    if (diffDays > creditPeriod) {
+                        status = 'Due';
+                    } else if (diffDays === creditPeriod) {
+                        status = 'Due Today';
+                    }
+
+                    // Resolve the outstanding amount using the actual payment balance
+                    const outstandingAmount = item.payment_details 
+                        ? Number(item.payment_details.payment_balance ?? item.payment_details.payment_payable ?? 0)
+                        : (typeof item.balance !== 'undefined' ? Number(item.balance) : (Number(item.total_amount) || 0));
+
+                    const dueDate = new Date(d1);
+                    dueDate.setDate(dueDate.getDate() + creditPeriod);
+                    const dueDateStr = dueDate.getFullYear() + '-' + 
+                                       String(dueDate.getMonth() + 1).padStart(2, '0') + '-' + 
+                                       String(dueDate.getDate()).padStart(2, '0');
+
+                    return {
+                        id: item.id?.toString() || Math.random().toString(),
+                        date: item.date || getCurrentDate(),
+                        invoiceNo: item.sales_invoice_no || item.invoice_number || item.voucher_number || 'N/A',
+                        amount: outstandingAmount,
+                        receiveNow: 0,
+                        selected: false,
+                        status: status,
+                        dueDate: dueDateStr
+                    };
+                }).filter(t => t.status === 'Due' || t.status === 'Due Today');
 
                 const validTransactions = mappedTransactions.filter(t => t.amount > 0);
                 setBulkTransactions(validTransactions);
+
+                // Populate pendingTransactions for Single Mode as well
+                const mappedPending: PendingTransaction[] = validTransactions.map(t => ({
+                    date: t.date,
+                    referenceNumber: t.invoiceNo,
+                    amount: t.amount,
+                    receipt: 0,
+                    status: t.status,
+                    dueDate: t.dueDate,
+                    daysToDue: t.daysToDue as number | undefined
+                }));
+                setPendingTransactions(mappedPending);
+
             } else {
                 setBulkTransactions([]);
+                setPendingTransactions([]);
             }
         } catch (error) {
             console.error('Error fetching customer transactions:', error);
             setBulkTransactions([]);
+            setPendingTransactions([]);
         }
     };
 
@@ -424,7 +494,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
 
     const handleTransactionSelect = (transactionId: string, checked: boolean) => {
         setBulkTransactions(prev => prev.map(t =>
-            t.id === transactionId ? { ...t, selected: checked } : t
+            t.id === transactionId ? { ...t, selected: checked, receiveNow: checked ? t.amount : 0 } : t
         ));
     };
 
@@ -501,9 +571,15 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
         setSingleAdvanceAmount(0);
         setShowSingleAdvanceSection(false);
         setTotalReceipt(0);
+        setSelectedReceiptConfig('');
     };
 
     const handlePostReceipt = async () => {
+        if (!selectedReceiptConfig) {
+            showError("Please select a Voucher Type.");
+            return;
+        }
+
         try {
             const findLedgerId = (name: string) => {
                 if (!name) return null;
@@ -544,7 +620,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                     voucher_number: voucherNumber,
                     receive_in: receiveInId,
                     customer: receiveFromId, // RESTORED to Master
-                    total_amount: totalReceipt,
+                    total_amount: Number(Number(totalReceipt).toFixed(2)),
                     bank_transaction_id: bankTransactionId,
                     items: [
                         // Main allocation items
@@ -555,10 +631,10 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                 reference_id: t.referenceNumber,
                                 reference_type: 'invoice',
                                 pending_transaction: { ...t, customer_name: receiveFrom },
-                                amount: t.amount,
-                                pending_before: t.amount,
-                                received_amount: t.receipt,
-                                balance_after: Math.max(0, t.amount - t.receipt)
+                                amount: Number(Number(t.amount).toFixed(2)),
+                                pending_before: Number(Number(t.amount).toFixed(2)),
+                                received_amount: Number(Number(t.receipt).toFixed(2)),
+                                balance_after: Number(Math.max(0, t.amount - t.receipt).toFixed(2))
                             })),
                         // Advance item if applicable
                         ...(singleAdvanceAmount > 0 ? [{
@@ -566,8 +642,8 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                             reference_id: singleAdvanceRefNo || 'ADVANCE',
                             reference_type: 'advance',
                             pending_transaction: { customer_name: receiveFrom },
-                            amount: singleAdvanceAmount,
-                            received_amount: singleAdvanceAmount,
+                            amount: Number(Number(singleAdvanceAmount).toFixed(2)),
+                            received_amount: Number(Number(singleAdvanceAmount).toFixed(2)),
                             is_advance: true,
                             advance_ref_no: singleAdvanceRefNo
                         }] : [])
@@ -584,7 +660,29 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
 
                 await httpClient.post('/api/vouchers/receipts/', payload);
                 showSuccess('Receipt Voucher posted successfully!');
-                handleCancel();
+
+                // Increment the voucher series counter so the next number is ready
+                const savedConfig = receiptVoucherConfigs.find(c => c.voucher_name === selectedReceiptConfig);
+                if (savedConfig && savedConfig.enable_auto_numbering) {
+                    try {
+                        await httpClient.post(`/api/masters/master-voucher-receipts/${savedConfig.id}/increment-number/`, {});
+                        const res = await httpClient.get<any>(`/api/masters/master-voucher-receipts/${savedConfig.id}/next-number/`);
+                        const nextNumber = res.invoice_number || '';
+                        const keepConfig = selectedReceiptConfig;
+                        handleCancel();
+                        setSelectedReceiptConfig(keepConfig);
+                        setVoucherNumber(nextNumber);
+                    } catch (e) {
+                        console.error('Failed to increment receipt voucher number:', e);
+                        const keepConfig = selectedReceiptConfig;
+                        handleCancel();
+                        setSelectedReceiptConfig(keepConfig);
+                    }
+                } else {
+                    const keepConfig = selectedReceiptConfig;
+                    handleCancel();
+                    setSelectedReceiptConfig(keepConfig);
+                }
             } else {
                 if (!receiveInId) {
                     showError('Please select a valid Receive In account.');
@@ -624,10 +722,10 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                 reference_id: t.invoiceNo,
                                 reference_type: 'invoice',
                                 pending_transaction: { ...t, customer_name: row.receiveFrom },
-                                amount: t.amount,
-                                pending_before: t.amount,
-                                received_amount: t.receiveNow,
-                                balance_after: Math.max(0, t.amount - t.receiveNow)
+                                amount: Number(Number(t.amount).toFixed(2)),
+                                pending_before: Number(Number(t.amount).toFixed(2)),
+                                received_amount: Number(Number(t.receiveNow).toFixed(2)),
+                                balance_after: Number(Math.max(0, t.amount - t.receiveNow).toFixed(2))
                             }));
 
                         allItems.push(...allocatedItems);
@@ -642,8 +740,8 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                 reference_id: rowAdvanceRefNo || 'ADVANCE',
                                 reference_type: 'advance',
                                 pending_transaction: { customer_name: row.receiveFrom },
-                                amount: Math.max(remaining, rowAdvanceAmount, row.amount),
-                                received_amount: Math.max(remaining, rowAdvanceAmount),
+                                amount: Number(Math.max(remaining, rowAdvanceAmount, row.amount).toFixed(2)),
+                                received_amount: Number(Math.max(remaining, rowAdvanceAmount).toFixed(2)),
                                 is_advance: true,
                                 advance_ref_no: rowAdvanceRefNo
                             });
@@ -688,8 +786,8 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                             reference_id: rowAdvanceRefNo || row.referenceNumber || 'RCV',
                             reference_type: isAdvance ? 'advance' : 'on_account',
                             pending_transaction: { customer_name: row.receiveFrom },
-                            amount: row.amount,
-                            received_amount: row.amount,
+                            amount: Number(Number(row.amount).toFixed(2)),
+                            received_amount: Number(Number(row.amount).toFixed(2)),
                             is_advance: isAdvance,
                             advance_ref_no: rowAdvanceRefNo || row.referenceNumber
                         });
@@ -699,7 +797,7 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                 const payload = {
                     date: date,
                     receive_in: receiveInId,
-                    total_amount: bulkTotalReceipt,
+                    total_amount: Number(Number(bulkTotalReceipt).toFixed(2)),
                     voucher_number: voucherNumber,
                     voucher_type: selectedReceiptConfig || voucherType,
                     items: allItems,
@@ -708,7 +806,29 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
 
                 await httpClient.post('/api/vouchers/receipts/', payload);
                 showSuccess(`Consolidated Receipt Voucher posted successfully.`);
-                handleCancel();
+
+                // Increment the voucher series counter so the next number is ready
+                const savedConfigBulk = receiptVoucherConfigs.find(c => c.voucher_name === selectedReceiptConfig);
+                if (savedConfigBulk && savedConfigBulk.enable_auto_numbering) {
+                    try {
+                        await httpClient.post(`/api/masters/master-voucher-receipts/${savedConfigBulk.id}/increment-number/`, {});
+                        const res = await httpClient.get<any>(`/api/masters/master-voucher-receipts/${savedConfigBulk.id}/next-number/`);
+                        const nextNumber = res.invoice_number || '';
+                        const keepConfig = selectedReceiptConfig;
+                        handleCancel();
+                        setSelectedReceiptConfig(keepConfig);
+                        setVoucherNumber(nextNumber);
+                    } catch (e) {
+                        console.error('Failed to increment receipt voucher number:', e);
+                        const keepConfig = selectedReceiptConfig;
+                        handleCancel();
+                        setSelectedReceiptConfig(keepConfig);
+                    }
+                } else {
+                    const keepConfig = selectedReceiptConfig;
+                    handleCancel();
+                    setSelectedReceiptConfig(keepConfig);
+                }
             }
         } catch (error: any) {
             console.error('Error posting receipt voucher:', error);
@@ -876,8 +996,10 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                         <tr>
                                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase">DATE</th>
                                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase">REFERENCE NUMBER</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase">STATUS</th>
                                             <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase">AMOUNT</th>
                                             <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase">PENDING</th>
+                                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-600 uppercase">ACTION</th>
                                             <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase">RECEIPT</th>
                                         </tr>
                                     </thead>
@@ -886,18 +1008,37 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                             <tr key={index} className="hover:bg-gray-50">
                                                 <td className="px-6 py-4 text-sm text-gray-700">{txn.date}</td>
                                                 <td className="px-6 py-4 text-sm text-gray-700">
-                                                    <input
-                                                        type="text"
-                                                        value={txn.referenceNumber}
-                                                        readOnly
-                                                        className="w-full px-2 py-1 border border-gray-300 rounded focus:outline-none bg-gray-50 text-gray-500 cursor-default"
-                                                    />
+                                                    <div className="font-medium">{txn.referenceNumber}</div>
+                                                    {txn.dueDate && (
+                                                        <div className="text-[10px] text-gray-400">Due: {txn.dueDate}</div>
+                                                    )}
+                                                </td>
+                                                <td className="px-6 py-4 text-center">
+                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${txn.status === 'Due' || txn.status === 'Due Today'
+                                                        ? 'bg-red-100 text-red-600 border border-red-200'
+                                                        : 'bg-green-100 text-green-600 border border-green-200'
+                                                        }`}>
+                                                        {txn.status}
+                                                    </span>
+                                                    {txn.status === 'Not Due' && txn.daysToDue !== undefined && (
+                                                        <div className="text-[10px] text-gray-400 mt-1">
+                                                            {txn.daysToDue} days left
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-4 text-sm text-gray-700 text-right">
                                                     ₹{txn.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                 </td>
                                                 <td className="px-6 py-4 text-sm text-gray-700 text-right font-medium text-red-600">
                                                     ₹{Math.max(0, txn.amount - txn.receipt).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                </td>
+                                                <td className="px-6 py-4 text-center">
+                                                    <button 
+                                                        onClick={() => handleReceiptChange(index, txn.amount)}
+                                                        className="px-4 py-1.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-[4px] text-[10px] font-bold uppercase transition-colors shadow-sm"
+                                                    >
+                                                        PAY
+                                                    </button>
                                                 </td>
 
                                                 <td className="px-6 py-4 text-right">
@@ -1111,39 +1252,60 @@ const ReceiptVoucher: React.FC<ReceiptVoucherProps> = ({
                                                 <thead className="bg-gray-50 border-b-2 border-gray-200">
                                                     <tr>
                                                         <th className="px-2 py-3 text-left text-xs font-medium text-gray-600 uppercase">DATE</th>
-                                                        <th className="px-2 py-3 text-left text-xs font-medium text-gray-600 uppercase">REFERENCE NUMBER</th>
+                                                        <th className="px-2 py-3 text-left text-xs font-medium text-gray-600 uppercase">REFERENCE</th>
+                                                        <th className="px-2 py-3 text-left text-xs font-medium text-gray-600 uppercase">STATUS</th>
                                                         <th className="px-2 py-3 text-right text-xs font-medium text-gray-600 uppercase">AMOUNT</th>
                                                         <th className="px-2 py-3 text-right text-xs font-medium text-gray-600 uppercase">PENDING</th>
+                                                        <th className="px-2 py-3 text-center text-xs font-medium text-gray-600 uppercase">ACTION</th>
                                                         <th className="px-2 py-3 text-right text-xs font-medium text-gray-600 uppercase">RECEIPT</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     {bulkTransactions.map(transaction => (
-                                                        <tr key={transaction.id} className="border-b border-gray-200">
+                                                        <tr key={transaction.id} className="border-b border-gray-200 hover:bg-gray-50">
                                                             <td className="py-3 px-2 text-sm text-gray-700 text-left">
                                                                 <div className="flex items-center gap-2">
                                                                     <input
                                                                         type="checkbox"
                                                                         checked={transaction.selected}
                                                                         onChange={e => handleTransactionSelect(transaction.id, e.target.checked)}
-                                                                        className="w-4 h-4"
+                                                                        className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                                                                     />
                                                                     <span>{transaction.date}</span>
                                                                 </div>
                                                             </td>
                                                             <td className="py-3 px-2 text-sm text-gray-700">
-                                                                <input
-                                                                    type="text"
-                                                                    value={transaction.invoiceNo}
-                                                                    readOnly
-                                                                    className="w-full px-2 py-1 border border-gray-300 rounded focus:outline-none bg-gray-50 text-gray-500 cursor-default"
-                                                                />
+                                                                <div className="font-medium">{transaction.invoiceNo}</div>
+                                                                {transaction.dueDate && (
+                                                                    <div className="text-[10px] text-gray-400">Due: {transaction.dueDate}</div>
+                                                                )}
+                                                            </td>
+                                                            <td className="py-3 px-2 text-center text-sm text-gray-700">
+                                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${transaction.status === 'Due' || transaction.status === 'Due Today'
+                                                                    ? 'bg-red-100 text-red-600 border border-red-200'
+                                                                    : (transaction.status === 'Not Due' ? 'bg-green-100 text-green-600 border border-green-200' : 'bg-gray-100 text-gray-600 border border-gray-200')
+                                                                    }`}>
+                                                                    {transaction.status || 'Pending'}
+                                                                </span>
+                                                                {transaction.status === 'Not Due' && transaction.daysToDue !== undefined && (
+                                                                    <div className="text-[10px] text-gray-400 mt-1">
+                                                                        {transaction.daysToDue} days left
+                                                                    </div>
+                                                                )}
                                                             </td>
                                                             <td className="py-3 px-2 text-sm text-gray-700 text-right">
                                                                 ₹{transaction.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                             </td>
-                                                            <td className="py-3 px-2 text-sm text-right text-red-600 font-medium">
+                                                            <td className="py-3 px-2 text-sm text-right text-red-600 font-medium font-medium">
                                                                 ₹{(Math.max(0, transaction.amount - transaction.receiveNow)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                            </td>
+                                                            <td className="py-3 px-2 text-center">
+                                                                <button 
+                                                                    onClick={() => handleReceiveNowChange(transaction.id, transaction.amount)}
+                                                                    className="px-4 py-1.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-[4px] text-[10px] font-bold uppercase transition-colors shadow-sm"
+                                                                >
+                                                                    PAY
+                                                                </button>
                                                             </td>
 
                                                             <td className="py-3 px-2 text-right">

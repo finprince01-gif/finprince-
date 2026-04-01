@@ -12,7 +12,6 @@ import datetime
 class VoucherSalesViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
     queryset = VoucherSalesInvoiceDetails.objects.all().order_by('-date', '-created_at')
     serializer_class = VoucherSalesInvoiceDetailsSerializer
-
     def get_queryset(self):
         queryset = super().get_queryset()
         # Filter for the current tenant
@@ -22,23 +21,25 @@ class VoucherSalesViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
         if tenant_id:
             queryset = queryset.filter(tenant_id=tenant_id)
 
-        # MANDATORY: Only show vouchers with positive outstanding payable
-        # This filters out zero, negative, or NULL payable invoices at the DB level
-        queryset = queryset.filter(
-            payment_details__payment_payable__isnull=False,
-            payment_details__payment_payable__gt=0
-        ).select_related('payment_details')
+        # Support for showing all OR filtering for Pending/Due ones
+        show_all = self.request.query_params.get('show_all') == 'true'
+        status_param = self.request.query_params.get('status')
+        
+        if not show_all and status_param != 'all':
+            # EXCLUDE FULLY PAID INVOICES
+            # This ensures they only disappear when status is 'received'
+            queryset = queryset.exclude(status='received')
 
-        # Exclude invoices that already have a receipt voucher linked to them
-        # (vouchers with reference_id = invoice_id and type = 'receipt')
-        # This keeps the "Due Invoices" list clean
-        if tenant_id:
-            receipt_invoice_ids = Voucher.objects.filter(
-                type='receipt', 
-                tenant_id=tenant_id
-            ).values_list('reference_id', flat=True)
-            
-            queryset = queryset.exclude(id__in=receipt_invoice_ids)
+            # MANDATORY: Only show vouchers with positive outstanding payable
+            queryset = queryset.filter(
+                payment_details__payment_payable__isnull=False,
+                payment_details__payment_payable__gt=0
+            ).select_related('payment_details')
+        
+        # Optional: Filter by customer name if provided
+        customer_name = self.request.query_params.get('customer_name')
+        if customer_name:
+            queryset = queryset.filter(customer_name=customer_name)
         
         return queryset
 

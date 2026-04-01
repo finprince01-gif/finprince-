@@ -25,6 +25,7 @@ from .models_voucher_sales import ( # pyre-fixme
     VoucherSalesDispatchDetails,
     VoucherSalesEwayBill
 )
+from .models_voucher_allocation import VoucherAllocation
 
 
 # ============================================================================
@@ -284,6 +285,7 @@ class Voucher(BaseModel):
     class Meta:
 
         db_table = 'vouchers'
+        unique_together = ('tenant_id', 'type', 'voucher_number')
         ordering = ['-date']
         indexes = [
             models.Index(fields=['type', 'tenant_id', 'date']),
