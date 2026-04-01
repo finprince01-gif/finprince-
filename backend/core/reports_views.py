@@ -18,7 +18,7 @@ from django.utils.decorators import method_decorator
 
 # Configure Gemini
 try:
-    import google.generativeai as genai
+    from google import genai
 except ImportError:
     genai = None
 

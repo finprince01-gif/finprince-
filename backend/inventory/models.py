@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 from core.models import BaseModel
 
 class InventoryMasterCategory(BaseModel):
@@ -223,6 +224,7 @@ class InventoryOperationJobWork(BaseModel):
     
     # Jobwork Outward Specific Fields
     job_work_outward_no = models.CharField(max_length=50, null=True, blank=True)
+    issue_slip_series = models.CharField(max_length=255, null=True, blank=True)
     po_reference_no = models.CharField(max_length=50, null=True, blank=True)
     
     # Jobwork Receipt Specific Fields
@@ -271,6 +273,7 @@ class InventoryOperationInterUnit(BaseModel):
     Inter Unit Operation
     """
     issue_slip_no = models.CharField(max_length=100)
+    issue_slip_series = models.CharField(max_length=255, null=True, blank=True)
     date = models.DateField(null=True, blank=True)
     time = models.TimeField(null=True, blank=True)
     status = models.CharField(max_length=50, default='Draft')
@@ -401,32 +404,21 @@ class InventoryOperationConsumption(BaseModel):
     status = models.CharField(max_length=50, default='Draft')
     
     goods_from_location = models.CharField(max_length=255, null=True, blank=True)
-    goods_to_location = models.CharField(max_length=255, null=True, blank=True)
     
     posting_note = models.TextField(null=True, blank=True)
 
     # Items (Stored as JSON)
     items = models.JSONField(default=list, blank=True, null=True)
     
-    delivery_challan = models.JSONField(default=dict, blank=True, null=True)
-    eway_bill_details = models.JSONField(default=list, blank=True, null=True)
-
-
-
-    # Dispatch Details
-    dispatch_from = models.TextField(null=True, blank=True)
-    mode_of_transport = models.CharField(max_length=100, null=True, blank=True)
-    dispatch_date = models.DateField(null=True, blank=True)
-    dispatch_time = models.TimeField(null=True, blank=True)
-    delivery_type = models.CharField(max_length=100, null=True, blank=True)
-    transporter_id = models.CharField(max_length=100, null=True, blank=True)
-    transporter_name = models.CharField(max_length=255, null=True, blank=True)
-    vehicle_no = models.CharField(max_length=100, null=True, blank=True)
-    lr_gr_consignment = models.CharField(max_length=100, null=True, blank=True)
+    # Consumption Specific Details
+    consumption_type = models.CharField(max_length=50, null=True, blank=True)
+    issue_slip_series = models.CharField(max_length=100, null=True, blank=True)
+    fixed_asset_ledger = models.CharField(max_length=255, null=True, blank=True)
+    expense_ledger = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:
-
         db_table = 'inventory_operation_consumption'
+
 
 
 class InventoryOperationScrap(BaseModel):
@@ -475,6 +467,7 @@ class InventoryOperationOutward(BaseModel):
     Outward Operation (Sales / Purchase Return)
     """
     outward_slip_no = models.CharField(max_length=100)
+    issue_slip_series = models.CharField(max_length=100, null=True, blank=True)
     date = models.DateField(null=True, blank=True)
     time = models.TimeField(null=True, blank=True)
     
@@ -485,7 +478,8 @@ class InventoryOperationOutward(BaseModel):
     location = models.ForeignKey(InventoryLocation, on_delete=models.SET_NULL, null=True, blank=True)
     
     # Sales Fields
-    sales_order_no = models.CharField(max_length=100, null=True, blank=True)
+    sales_order_no = models.CharField(max_length=500, null=True, blank=True)
+
     customer_name = models.CharField(max_length=255, null=True, blank=True)
     customer_id = models.BigIntegerField(null=True, blank=True, help_text="Link to customer master")
     
@@ -500,6 +494,7 @@ class InventoryOperationOutward(BaseModel):
     
     total_boxes = models.CharField(max_length=50, null=True, blank=True)
     posting_note = models.TextField(null=True, blank=True)
+    reasons_for_return = models.TextField(null=True, blank=True)
     
     # Tracking
     status = models.CharField(max_length=20, default='PENDING')
@@ -511,22 +506,9 @@ class InventoryOperationOutward(BaseModel):
     delivery_challan = models.JSONField(default=dict, blank=True, null=True)
     eway_bill_details = models.JSONField(default=list, blank=True, null=True)
 
-
-
-    # Dispatch Details
-    dispatch_from = models.TextField(null=True, blank=True)
-    mode_of_transport = models.CharField(max_length=100, null=True, blank=True)
-    dispatch_date = models.DateField(null=True, blank=True)
-    dispatch_time = models.TimeField(null=True, blank=True)
-    delivery_type = models.CharField(max_length=100, null=True, blank=True)
-    transporter_id = models.CharField(max_length=100, null=True, blank=True)
-    transporter_name = models.CharField(max_length=255, null=True, blank=True)
-    vehicle_no = models.CharField(max_length=100, null=True, blank=True)
-    lr_gr_consignment = models.CharField(max_length=100, null=True, blank=True)
-
     class Meta:
-
         db_table = 'inventory_operation_outward'
+
 
 
 class InventoryOperationNewGRN(BaseModel):
@@ -577,3 +559,63 @@ class HsnGstMaster(models.Model):
 
         db_table = 'hsn_gst_master'
 
+class InventoryStockGroup(BaseModel):
+    """
+    Inventory Stock Group Model for hierarchy
+    """
+    name = models.CharField(max_length=255)
+    parent = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='subgroups')
+    description = models.TextField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'inventory_stock_groups'
+        unique_together = ('tenant_id', 'name')
+
+    def __str__(self):
+        return self.name
+
+class InventoryStockItem(BaseModel):
+    """
+    Inventory Stock Item Model - used for centralized stock balance and reporting
+    """
+    name = models.CharField(max_length=255)
+    item_code = models.CharField(max_length=100, db_index=True)
+    hsn_code = models.CharField(max_length=20, null=True, blank=True)
+    group = models.CharField(max_length=255, null=True, blank=True)
+    unit = models.CharField(max_length=50, default='nos')
+    current_balance = models.DecimalField(max_digits=15, decimal_places=3, default=0)
+    rate = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'inventory_stock_items'
+        unique_together = ('tenant_id', 'item_code')
+
+    def __str__(self):
+        return f"{self.item_code} - {self.name}"
+
+class StockMovement(BaseModel):
+    """
+    Stock Movement Model - tracks all inward/outward movements
+    """
+    item_code = models.CharField(max_length=100, db_index=True)
+    date = models.DateField(default=timezone.now)
+    time = models.TimeField(null=True, blank=True)
+    voucher_type = models.CharField(max_length=50) # GRN, Outward, etc.
+    voucher_no = models.CharField(max_length=100)
+    location = models.CharField(max_length=255, null=True, blank=True)
+    inward_qty = models.DecimalField(max_digits=15, decimal_places=3, default=0)
+    outward_qty = models.DecimalField(max_digits=15, decimal_places=3, default=0)
+    balance_qty = models.DecimalField(max_digits=15, decimal_places=3, default=0)
+    rate = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    value = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+
+    class Meta:
+        db_table = 'inventory_stock_movements'
+        indexes = [
+            models.Index(fields=['tenant_id', 'item_code', 'date']),
+            models.Index(fields=['tenant_id', 'location']),
+        ]
+
+    def __str__(self):
+        return f"{self.item_code} | {self.voucher_type} | {self.voucher_no}"

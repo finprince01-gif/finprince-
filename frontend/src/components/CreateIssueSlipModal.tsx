@@ -13,11 +13,15 @@ interface IssueSlipItem {
     uom: string;
     alternateUnit: string;
     quantity: string;
+    pendingQuantity?: string; // Original SO quantity
+    stockBalance?: number;    // Balance at selected location
     boxes: string;
     packingNotes: string;
+    remarks: string;
     soNo?: string;
     itemRate: string;
 }
+
 
 // Helper to generate consistent vibrant colors for SO tags
 const getSOColor = (value: string) => {
@@ -75,11 +79,13 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
     const [address, setAddress] = useState(initialData?.address || '');
     const [gstin, setGstin] = useState(initialData?.gstin || '');
     const [postingNote, setPostingNote] = useState('');
+    const [outwardType, setOutwardType] = useState<'sales' | 'purchase_return'>('sales');
+    const [reasonsForReturn, setReasonsForReturn] = useState('');
 
     // Delivery Challan / Dispatch Details State
     const [dispatchFrom, setDispatchFrom] = useState('');
     const [modeOfTransport, setModeOfTransport] = useState('');
-    const [dispatchDate, setDispatchDate] = useState('');
+    const [dispatchDate, setDispatchDate] = useState(todayStr);
     const [dispatchTime, setDispatchTime] = useState('');
     const [dispatchDocument, setDispatchDocument] = useState<File | null>(null);
     const [deliveryType, setDeliveryType] = useState('');
@@ -124,9 +130,23 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
     const [availableBranches, setAvailableBranches] = useState<any[]>([]);
     const [inventoryItems, setInventoryItems] = useState<any[]>([]);
 
+    // Confirmation Dialog State
+    const [confirmDialog, setConfirmDialog] = useState<{
+        isOpen: boolean;
+        message: string;
+        onConfirm: () => void;
+        onCancel: () => void;
+    }>({
+        isOpen: false,
+        message: '',
+        onConfirm: () => {},
+        onCancel: () => {}
+    });
+
+
     // Items State
     const [items, setItems] = useState<IssueSlipItem[]>([
-        { id: 1, itemCode: '', itemName: '', hsnCode: '', uom: '', alternateUnit: '', quantity: '', boxes: '', packingNotes: '', itemRate: '' }
+        { id: 1, itemCode: '', itemName: '', hsnCode: '', uom: '', alternateUnit: '', quantity: '', boxes: '', packingNotes: '', remarks: '', itemRate: '' }
     ]);
 
     // Fetch data on mount
@@ -199,7 +219,41 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
         }
     }, [customerName, customersList]);
 
-    // Filter Sales Orders by selected Customer and Branch
+    // Fetch Pending Sales Orders when Customer or Branch changes
+    useEffect(() => {
+        const fetchPendingOrders = async () => {
+            if (!customerName || !branch) {
+                setSalesOrdersList([]);
+                return;
+            }
+
+            try {
+                // The source must be Pending Sales Orders for this customer and branch
+                const response = await apiService.getSalesOrders({
+                    customer_name: customerName,
+                    branch: branch,
+                    status: 'Pending'
+                });
+                
+                const getList = (resp: any) => {
+                    if (!resp) return [];
+                    if (Array.isArray(resp)) return resp;
+                    if (Array.isArray(resp.results)) return resp.results;
+                    if (Array.isArray(resp.data)) return resp.data;
+                    return [];
+                };
+                
+                setSalesOrdersList(getList(response));
+            } catch (error) {
+                console.error('Failed to fetch pending sales orders:', error);
+                setSalesOrdersList([]);
+            }
+        };
+
+        fetchPendingOrders();
+    }, [customerName, branch]);
+
+    // Filter Sales Orders by selected Customer and Branch (local safeguard)
     const filteredSalesOrders = React.useMemo(() => {
         if (!customerName || !branch) return [];
         return salesOrdersList.filter(so =>
@@ -324,8 +378,10 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                 uom: soItem.uom || masterItem?.uom || masterItem?.unit || '',
                                 alternateUnit: masterItem?.alternate_uom || '',
                                 quantity: soItem.quantity?.toString() || '',
+                                pendingQuantity: soItem.quantity?.toString() || '', // Store original SO quantity
                                 boxes: '',
                                 packingNotes: notes,
+                                remarks: '',
                                 soNo: orderNo,
                                 itemRate: (soItem.item_rate || soItem.price || soItem.negotiated_price || soItem.rate || '0').toString()
                             };
@@ -333,6 +389,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                     });
                 }
             });
+
 
             const newItemsList = Object.values(aggregatedItems);
             if (newItemsList.length > 0) {
@@ -361,6 +418,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
             quantity: '',
             boxes: '',
             packingNotes: '',
+            remarks: '',
             itemRate: ''
         };
         setItems([...items, newItem]);
@@ -378,7 +436,42 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
 
             let updatedItem = { ...item, [field]: value };
 
+            if (field === 'quantity') {
+                const enteredQty = parseFloat(value) || 0;
+                
+                // 1. Stock Validation
+                // For now, if stockBalance is unknown, we assume it's infinite in this mock/partial implementation
+                // In a real system, we'd fetch it earlier.
+                if (item.stockBalance !== undefined && enteredQty > item.stockBalance) {
+                    showWarning(`Insufficient stock at selected location. Available: ${item.stockBalance}`);
+                    // Optional: auto-adjust to max or just show warning. Requirement says "Show error".
+                }
+
+                // 2. SO Quantity Validation
+                if (item.pendingQuantity) {
+                    const pendingQty = parseFloat(item.pendingQuantity) || 0;
+                    if (enteredQty > pendingQty) {
+                        setConfirmDialog({
+                            isOpen: true,
+                            message: "Issue quantity exceeds Sales Order quantity. Proceed?",
+                            onConfirm: () => {
+                                // Keep the entered quantity (already in updatedItem)
+                                setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+                            },
+                            onCancel: () => {
+                                // Overwrite with SO quantity
+                                setItems(prevItems => prevItems.map(p => 
+                                    p.id === id ? { ...p, quantity: item.pendingQuantity || '' } : p
+                                ));
+                                setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+                            }
+                        });
+                    }
+                }
+            }
+
             if (field === 'itemCode') {
+
                 const found = inventoryItems.find(i => (i.item_code || i.service_code) === value);
                 if (found) {
                     updatedItem.itemName = found.item_name || found.service_name || found.name || '';
@@ -458,7 +551,8 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
             issue_slip_series_name: outwardSlipSeries || '',
             date: date || null,
             time: time || null,
-            outward_type: 'sales',
+            outward_type: outwardType,
+            reasons_for_return: reasonsForReturn,
             location: location ? parseInt(location) : null,
             sales_order_no: salesOrderNo || '',
             customer_name: customerName || '',
@@ -541,6 +635,34 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                 </div>
 
                 <div className="p-6">
+                    {/* Outward Type Toggle */}
+                    <div className="flex items-center gap-6 mb-6">
+                        <label className="flex items-center gap-2 cursor-pointer group">
+                            <input
+                                type="radio"
+                                name="outward_type"
+                                checked={outwardType === 'sales'}
+                                onChange={() => setOutwardType('sales')}
+                                className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500 cursor-pointer"
+                            />
+                            <span className={`text-sm font-bold uppercase tracking-wide transition-colors ${outwardType === 'sales' ? 'text-indigo-700' : 'text-gray-400 group-hover:text-gray-600'}`}>
+                                Sales
+                            </span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer group">
+                            <input
+                                type="radio"
+                                name="outward_type"
+                                checked={outwardType === 'purchase_return'}
+                                onChange={() => setOutwardType('purchase_return')}
+                                className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500 cursor-pointer"
+                            />
+                            <span className={`text-sm font-bold uppercase tracking-wide transition-colors ${outwardType === 'purchase_return' ? 'text-indigo-700' : 'text-gray-400 group-hover:text-gray-600'}`}>
+                                Purchase Return
+                            </span>
+                        </label>
+                    </div>
+
                     {/* Row 1 */}
                     <div className="grid grid-cols-4 gap-5">
                         {/* Outward Slip Series – full width above the 4-col row */}
@@ -608,81 +730,84 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                         </div>
                     </div>
 
-                    {/* Row 2 */}
-                    <div className="grid grid-cols-2 gap-5 mt-4">
-                        <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-2">Sales Order No.</label>
-                            <MultiSelectDropdown
-                                options={filteredSalesOrders.map(so => ({
-                                    value: so.voucher_number || so.so_number || so.id.toString(),
-                                    label: so.voucher_number || so.so_number || `SO #${so.id}`
-                                }))}
-                                selectedValues={selectedSalesOrders}
-                                onChange={handleSalesOrdersChange}
-                                placeholder={customerName && branch ? "Select Pending Sales Orders" : "Select Customer & Branch first"}
-                                disabled={!customerName || !branch}
-                            />
-                            {/* Color-coded SO Tags */}
-                            {selectedSalesOrders.length > 0 && (
-                                <div className="flex flex-wrap gap-1.5 mt-2.5">
-                                    {selectedSalesOrders.map((so) => (
-                                        <div
-                                            key={so}
-                                            className={`group flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border transition-all duration-200 hover:shadow-md ${getSOColor(so)}`}
-                                        >
-                                            <span className="tracking-wide uppercase">SO: {so}</span>
-                                            <span
-                                                onClick={() => removeSO(so)}
-                                                className="cursor-pointer hover:bg-white/50 rounded-full p-0.5"
-                                                title="Remove"
-                                            >
-                                                <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
-                                                </svg>
-                                            </span>
-                                        </div>
-                                    ))}
+                    {/* Row 2: Sales Order No, Customer Name, Branch */}
+                    <div className="grid grid-cols-12 gap-5 mt-4 items-start">
+                        <div className="col-span-6">
+                            <label className="block text-sm font-semibold text-gray-700 mb-2 uppercase tracking-tight">Sales Order No.</label>
+                            <div className="flex flex-wrap items-center gap-3">
+                                <div className="w-64 min-w-[200px]">
+                                    <MultiSelectDropdown
+                                        options={filteredSalesOrders.map(so => ({
+                                            value: so.voucher_number || so.so_number || so.id.toString(),
+                                            label: so.voucher_number || so.so_number || `SO #${so.id}`
+                                        }))}
+                                        selectedValues={selectedSalesOrders}
+                                        onChange={handleSalesOrdersChange}
+                                        placeholder={customerName && branch ? "Select Pending Sales Orders" : "Select Customer & Branch first"}
+                                        disabled={!customerName || !branch}
+                                    />
                                 </div>
-                            )}
+                                
+                                {/* Color-coded SO Tags - Displayed next to the dropdown */}
+                                {selectedSalesOrders.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5 py-1">
+                                        {selectedSalesOrders.map((so) => (
+                                            <div
+                                                key={so}
+                                                className={`group flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-bold border transition-all duration-200 hover:shadow-md ${getSOColor(so)}`}
+                                            >
+                                                <span className="tracking-wide uppercase">{so}</span>
+                                                <span
+                                                    onClick={() => removeSO(so)}
+                                                    className="cursor-pointer hover:bg-white/50 rounded-full p-0.5"
+                                                    title="Remove"
+                                                >
+                                                    <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                                                    </svg>
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1">
-                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                                    Customer Name
-                                </label>
-                                <SearchableDropdown
-                                    options={customersList.map(c => c.customer_name).filter(Boolean)}
-                                    value={customerName}
-                                    onChange={(val) => {
-                                        setCustomerName(val);
-                                        setBranch('');
-                                        setSelectedSalesOrders([]);
-                                        setSalesOrderNo('');
-                                    }}
-                                    disabled={selectedSalesOrders.length > 0}
-                                    placeholder="Select Customer"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">Branch</label>
-                                <select
-                                    value={branch}
-                                    onChange={(e) => {
-                                        setBranch(e.target.value);
-                                        setSelectedSalesOrders([]);
-                                        setSalesOrderNo('');
-                                    }}
-                                    disabled={selectedSalesOrders.length > 0}
-                                    className={`w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${selectedSalesOrders.length > 0 ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                                >
-                                    <option value="">Select Branch</option>
-                                    {availableBranches.map((br: any) => (
-                                        <option key={br.id || br.branch_reference_name || br.reference_name} value={br.branch_reference_name || br.reference_name}>
-                                            {br.branch_reference_name || br.reference_name}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
+                        <div className="col-span-3">
+                            <label className="block text-sm font-semibold text-gray-400 uppercase tracking-tight mb-2">
+                                Customer Name
+                            </label>
+                            <SearchableDropdown
+                                options={customersList.map(c => c.customer_name).filter(Boolean)}
+                                value={customerName}
+                                onChange={(val) => {
+                                    setCustomerName(val);
+                                    setBranch('');
+                                    setSelectedSalesOrders([]);
+                                    setSalesOrderNo('');
+                                }}
+                                disabled={selectedSalesOrders.length > 0}
+                                placeholder="Select Customer"
+                            />
+                        </div>
+                        <div className="col-span-3">
+                            <label className="block text-sm font-semibold text-gray-700 mb-2 uppercase tracking-tight">Branch</label>
+                            <select
+                                value={branch}
+                                onChange={(e) => {
+                                    setBranch(e.target.value);
+                                    setSelectedSalesOrders([]);
+                                    setSalesOrderNo('');
+                                }}
+                                disabled={selectedSalesOrders.length > 0}
+                                className={`erp-input py-[7px] w-full px-3 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${selectedSalesOrders.length > 0 ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
+                            >
+                                <option value="">Select Branch</option>
+                                {availableBranches.map((br: any) => (
+                                    <option key={br.id || br.branch_reference_name || br.reference_name} value={br.branch_reference_name || br.reference_name}>
+                                        {br.branch_reference_name || br.reference_name}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
                     </div>
 
@@ -729,6 +854,8 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                         <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">UOM</th>
                                         <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Quantity</th>
                                         <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">No. of boxes/packs</th>
+                                        <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700 min-w-[200px]">Packing Notes</th>
+                                        <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700 min-w-[150px]">Remarks</th>
                                         <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700">Action</th>
                                     </tr>
                                 </thead>
@@ -748,109 +875,102 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                             : '';
 
                                         return (
-                                            <React.Fragment key={item.id}>
-                                                <tr className={`border-t border-gray-100 ${rowBgClass} ${borderClass}`}>
-                                                    <td className="px-3 py-2 min-w-[150px]">
-                                                        <SearchableDropdown
-                                                            options={inventoryItems.map(i => i.item_code || i.service_code).filter(Boolean)}
-                                                            value={item.itemCode}
-                                                            onChange={(val) => handleItemChange(item.id, 'itemCode', val)}
-                                                            placeholder="Code"
-                                                        />
-                                                    </td>
-                                                    <td className="px-3 py-2 min-w-[200px]">
-                                                        <SearchableDropdown
-                                                            options={inventoryItems.map(i => i.item_name || i.service_name || i.name).filter(Boolean)}
-                                                            value={item.itemName}
-                                                            onChange={(val) => handleItemChange(item.id, 'itemName', val)}
-                                                            placeholder="Item"
-                                                        />
-                                                    </td>
-                                                    <td className="px-3 py-2">
-                                                        <input
-                                                            type="text"
-                                                            value={item.hsnCode}
-                                                            readOnly
-                                                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-gray-50"
-                                                        />
-                                                    </td>
-                                                    <td className="px-3 py-2">
-                                                        <select
-                                                            value={item.uom}
-                                                            onChange={(e) => handleItemChange(item.id, 'uom', e.target.value)}
-                                                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-center"
-                                                        >
-                                                            <option value="">Unit</option>
-                                                            {(() => {
-                                                                const selectedItem = inventoryItems.find(i => i.item_code === item.itemCode);
-                                                                const units = [];
-                                                                if (selectedItem) {
-                                                                    const u1 = selectedItem.uom || selectedItem.unit;
-                                                                    const u2 = selectedItem.alternate_uom || selectedItem.alternative_unit;
-                                                                    if (u1) units.push(u1);
-                                                                    if (u2 && u2 !== u1) units.push(u2);
-                                                                }
-                                                                if (item.uom && !units.includes(item.uom)) units.push(item.uom);
+                                            <tr key={item.id} className={`border-t border-gray-100 ${rowBgClass} ${borderClass}`}>
+                                                <td className="px-3 py-2 min-w-[150px]">
+                                                    <SearchableDropdown
+                                                        options={inventoryItems.map(i => i.item_code || i.service_code).filter(Boolean)}
+                                                        value={item.itemCode}
+                                                        onChange={(val) => handleItemChange(item.id, 'itemCode', val)}
+                                                        placeholder="Code"
+                                                    />
+                                                </td>
+                                                <td className="px-3 py-2 min-w-[200px]">
+                                                    <SearchableDropdown
+                                                        options={inventoryItems.map(i => i.item_name || i.service_name || i.name).filter(Boolean)}
+                                                        value={item.itemName}
+                                                        onChange={(val) => handleItemChange(item.id, 'itemName', val)}
+                                                        placeholder="Item"
+                                                    />
+                                                </td>
+                                                <td className="px-3 py-2">
+                                                    <input
+                                                        type="text"
+                                                        value={item.hsnCode}
+                                                        readOnly
+                                                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-gray-50"
+                                                    />
+                                                </td>
+                                                <td className="px-3 py-2">
+                                                    <select
+                                                        value={item.uom}
+                                                        onChange={(e) => handleItemChange(item.id, 'uom', e.target.value)}
+                                                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-center"
+                                                    >
+                                                        <option value="">Unit</option>
+                                                        {(() => {
+                                                            const selectedItem = inventoryItems.find(i => i.item_code === item.itemCode);
+                                                            const units = [];
+                                                            if (selectedItem) {
+                                                                const u1 = selectedItem.uom || selectedItem.unit;
+                                                                const u2 = selectedItem.alternate_uom || selectedItem.alternative_unit;
+                                                                if (u1) units.push(u1);
+                                                                if (u2 && u2 !== u1) units.push(u2);
+                                                            }
+                                                            if (item.uom && !units.includes(item.uom)) units.push(item.uom);
 
-                                                                return units.map(u => (
-                                                                    <option key={u} value={u}>{u}</option>
-                                                                ));
-                                                            })()}
-                                                        </select>
-                                                    </td>
-                                                    <td className="px-3 py-2">
-                                                        <input
-                                                            type="number"
-                                                            value={item.quantity}
-                                                            onChange={(e) => handleItemChange(item.id, 'quantity', e.target.value)}
-                                                            min="0"
-                                                            onKeyDown={(e) => {
-                                                                if (e.key === '-' || e.key === 'e') {
-                                                                    e.preventDefault();
-                                                                }
-                                                            }}
-                                                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                                                        />
-                                                    </td>
-                                                    <td className="px-3 py-2">
-                                                        <input
-                                                            type="number"
-                                                            value={item.boxes}
-                                                            onChange={(e) => handleItemChange(item.id, 'boxes', e.target.value)}
-                                                            min="0"
-                                                            onKeyDown={(e) => {
-                                                                if (e.key === '-' || e.key === 'e') {
-                                                                    e.preventDefault();
-                                                                }
-                                                            }}
-                                                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                                                        />
-                                                    </td>
-                                                    <td className="px-3 py-2 text-center">
-                                                        <button
-                                                            onClick={() => handleRemoveItem(item.id)}
-                                                            className="text-red-600 hover:text-red-800 text-sm font-medium"
-                                                        >
-                                                            Remove
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                                <tr className={`${rowBgClass} ${borderClass}`}>
-                                                    <td colSpan={7} className="px-3 py-2 border-b border-gray-100">
-                                                        <div className="flex items-center gap-3">
-                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Packing Notes:</span>
-                                                            <input
-                                                                type="text"
-                                                                value={item.packingNotes}
-                                                                onChange={(e) => handleItemChange(item.id, 'packingNotes', e.target.value)}
-                                                                className="w-full px-3 py-1.5 border border-indigo-100 rounded text-sm focus:ring-1 focus:ring-indigo-500 bg-white shadow-sm"
-                                                                placeholder="Enter specific packing instructions for this item..."
-                                                            />
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            </React.Fragment>
+                                                            return units.map(u => (
+                                                                <option key={u} value={u}>{u}</option>
+                                                            ));
+                                                        })()}
+                                                    </select>
+                                                </td>
+                                                <td className="px-3 py-2">
+                                                    <input
+                                                        type="number"
+                                                        value={item.quantity}
+                                                        onChange={(e) => handleItemChange(item.id, 'quantity', e.target.value)}
+                                                        min="0"
+                                                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                                                    />
+                                                </td>
+                                                <td className="px-3 py-2">
+                                                    <input
+                                                        type="number"
+                                                        value={item.boxes}
+                                                        onChange={(e) => handleItemChange(item.id, 'boxes', e.target.value)}
+                                                        min="0"
+                                                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                                                    />
+                                                </td>
+                                                <td className="px-3 py-2 min-w-[200px]">
+                                                    <input
+                                                        type="text"
+                                                        value={item.packingNotes}
+                                                        onChange={(e) => handleItemChange(item.id, 'packingNotes', e.target.value)}
+                                                        className="w-full px-2 py-1 border border-indigo-100 rounded text-sm focus:ring-1 focus:ring-indigo-500 bg-white shadow-sm"
+                                                        placeholder="Packing instructions..."
+                                                    />
+                                                </td>
+                                                <td className="px-3 py-2 min-w-[150px]">
+                                                    <input
+                                                        type="text"
+                                                        value={item.remarks}
+                                                        onChange={(e) => handleItemChange(item.id, 'remarks', e.target.value)}
+                                                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 bg-white"
+                                                        placeholder="Remarks..."
+                                                    />
+                                                </td>
+                                                <td className="px-3 py-2 text-center">
+                                                    <button
+                                                        onClick={() => handleRemoveItem(item.id)}
+                                                        className="text-red-600 hover:text-red-800 text-sm font-medium"
+                                                    >
+                                                        Remove
+                                                    </button>
+                                                </td>
+                                            </tr>
                                         );
+
                                     })}
                                 </tbody>
                             </table>
@@ -858,12 +978,27 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                         <div className="mt-4 flex justify-end items-center gap-4">
                             <label className="text-sm font-bold text-gray-900">Total Number of Boxes / Packs:</label>
                             <input
-                                type="text"
+                                type="number"
+                                min="0"
                                 value={calculateTotalBoxes()}
                                 readOnly
                                 className="w-32 px-2 py-1 border border-gray-300 rounded text-sm font-bold text-right bg-gray-50"
                             />
                         </div>
+
+                        {/* Reasons for Return - Specific to Purchase Return */}
+                        {outwardType === 'purchase_return' && (
+                            <div className="mt-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                                <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-tight">Reasons for Return</label>
+                                <textarea
+                                    value={reasonsForReturn}
+                                    onChange={(e) => setReasonsForReturn(e.target.value)}
+                                    rows={2}
+                                    placeholder="Enter specific reasons for item returns..."
+                                    className="w-full px-4 py-3 border-2 border-indigo-50 border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white shadow-inner"
+                                />
+                            </div>
+                        )}
                     </div>
 
                     {/* Posting Note */}
@@ -918,7 +1053,7 @@ const CreateIssueSlipModal: React.FC<CreateIssueSlipModalProps> = ({ onClose, on
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Dispatch Date</label>
                                         <input
                                             type="date"
-                                            value={dispatchDate}
+                                            value={dispatchDate || todayStr}
                                             onChange={(e) => setDispatchDate(e.target.value)}
                                             max={todayStr}
                                             className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
