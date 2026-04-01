@@ -37,6 +37,20 @@ class MasterLedgerViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
     # permission_classes = [IsAuthenticated, IsTenantMember]
     required_permission = 'MASTERS_LEDGERS'
     
+    def get_queryset(self):
+        """Filter ledgers by tenant and query parameters (group, category)"""
+        queryset = super().get_queryset()
+        
+        group = self.request.query_params.get('group')
+        category = self.request.query_params.get('category')
+        
+        if group:
+            queryset = queryset.filter(group__icontains=group)
+        if category:
+            queryset = queryset.filter(category__icontains=category)
+            
+        return queryset
+
     def list(self, request, *args, **kwargs):
         """Override list to add logging"""
         import logging
@@ -44,7 +58,7 @@ class MasterLedgerViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
         try:
             logger.info(f"🔍 MasterLedgerViewSet.list called - User: {request.user}, Tenant: {getattr(request.user, 'tenant_id', None)}")
             queryset = self.get_queryset()
-            logger.info(f"🔍 Queryset count: {queryset.count()}")
+            logger.info(f"🔍 Queryset count: {queryset.count()} (Filters: group={request.query_params.get('group')}, category={request.query_params.get('category')})")
             serializer = self.get_serializer(queryset, many=True)
             return Response(serializer.data)
         except Exception as e:

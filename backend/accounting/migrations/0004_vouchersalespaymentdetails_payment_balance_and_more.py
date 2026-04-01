@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('accounting', '0002_paymentvoucheritem_advance_ref_no_and_more'),
+        ('accounting', '0003_voucherallocation'),
     ]
 
     operations = [

@@ -90,8 +90,8 @@ class VendorBasicDetailDatabase:
                     category='Liability',
                     code=ledger_code,
                 )
-                vendor.ledger_id = ledger.id
-                vendor.save(update_fields=['ledger_id'])
+                vendor.ledger = ledger
+                vendor.save(update_fields=['ledger'])
                 logger.info(
                     f"Auto-created ledger {ledger.id} for vendor "
                     f"{vendor.id} ({vendor.vendor_name})"
