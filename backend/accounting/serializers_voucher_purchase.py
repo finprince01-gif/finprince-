@@ -334,6 +334,8 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
         except Exception as e:
             print(f"Error posting purchase to entries: {str(e)}")
 
+        self._mirror_to_vendor_portal(supplier_instance)
+
         return supplier_instance
 
     # ------------------------------------------------------------------
@@ -453,6 +455,7 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
                 defaults={**filtered_data, 'tenant_id': tenant_id},
             )
 
+        # NOTE: _mirror_to_vendor_portal is already called below in the main body
         self._mirror_to_vendor_portal(instance)
 
         # --- Double-Entry Posting Update for Purchase (entries table) ---
@@ -539,37 +542,66 @@ class VoucherPurchaseSupplierDetailsSerializer(serializers.ModelSerializer):  # 
         return instance
 
     def _mirror_to_vendor_portal(self, purchase):
-        """Mirror Purchase vouchers to Vendor Portal ledger"""
+        """
+        Mirror a Purchase voucher to the Vendor Portal ledger (VendorTransaction).
+        Called from both create() and update() so the procurement ledger is always
+        up-to-date and Due / Not Due status is calculated correctly by the API.
+        """
         try:
             from vendors.models import VendorMasterBasicDetail, VendorTransaction
             tenant_id = purchase.tenant_id
-            
-            # Find vendor master
-            vendor = VendorMasterBasicDetail.objects.filter(
-                tenant_id=tenant_id, 
-                vendor_name__iexact=purchase.vendor_name
-            ).first()
-            
-            if vendor:
-                # Calculate total amount
-                due_details = getattr(purchase, 'due_details', None)
-                total_amt = due_details.to_pay if due_details else 0
-                
-                VendorTransaction.objects.update_or_create(
+
+            # Resolve the canonical transaction number (prefer purchase voucher no)
+            tx_number = (
+                purchase.purchase_voucher_no
+                or purchase.supplier_invoice_no
+                or f"PUR-{purchase.id}"
+            )
+
+            # Prefer vendor_basic_detail FK; fall back to name match
+            vendor = None
+            if purchase.vendor_basic_detail_id:
+                vendor = VendorMasterBasicDetail.objects.filter(
                     tenant_id=tenant_id,
-                    vendor_id=vendor.id,
-                    transaction_number=purchase.purchase_voucher_no or purchase.supplier_invoice_no,
-                    transaction_type='purchase',
-                    defaults={
-                        'transaction_date': purchase.date,
-                        'amount': total_amt,
-                        'total_amount': total_amt,
-                        'status': 'Unpaid' if total_amt > 0 else 'Paid',
-                        'reference_number': purchase.supplier_invoice_no,
-                        'notes': f"Purchase from {purchase.vendor_name}",
-                        'ledger_name': 'Purchase A/c'
-                    }
-                )
-                print(f"!!! Vendor Sync OK (Purchase): {purchase.vendor_name}")
+                    id=purchase.vendor_basic_detail_id
+                ).first()
+            if not vendor and purchase.vendor_name:
+                vendor = VendorMasterBasicDetail.objects.filter(
+                    tenant_id=tenant_id,
+                    vendor_name__iexact=purchase.vendor_name
+                ).first()
+
+            if not vendor:
+                print(f"!!! Vendor Portal Sync: no vendor found for '{purchase.vendor_name}'")
+                return
+
+            # Pull the to_pay amount from the related DueDetails row
+            # (the instance may or may not have the cached reverse-related attr)
+            try:
+                due_details = purchase.due_details
+                total_amt = due_details.to_pay if due_details else 0
+            except Exception:
+                total_amt = 0
+
+            # 'Unpaid' → the by_vendor API treats non-paid as eligible for
+            # credit-period Due / Not Due calculation.
+            tx_status = 'Paid' if float(total_amt or 0) == 0 else 'Unpaid'
+
+            VendorTransaction.objects.update_or_create(
+                tenant_id=tenant_id,
+                vendor_id=vendor.id,
+                transaction_number=tx_number,
+                transaction_type='purchase',
+                defaults={
+                    'transaction_date': purchase.date,
+                    'amount': total_amt,
+                    'total_amount': total_amt,
+                    'status': tx_status,
+                    'reference_number': purchase.supplier_invoice_no,
+                    'notes': f"Purchase from {purchase.vendor_name}",
+                    'ledger_name': 'Purchase A/c',
+                }
+            )
+            print(f"!!! Vendor Sync OK (Purchase): {purchase.vendor_name} | tx={tx_number} | amt={total_amt}")
         except Exception as e:
             print(f"!!! Vendor Portal Sync Failure (Purchase): {str(e)}")

@@ -1993,6 +1993,8 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                 billing_currency: billingCurrency || null,
                 is_also_customer: isAlsoCustomer,
                 tcs_applicable: tcsApplicable,
+                link_to_customer_id: (isAlsoCustomer && linkVendorToCustomer && matchingCustomer) ? matchingCustomer.id : null,
+                create_new_customer: (isAlsoCustomer && createCustomerOption) ? true : false,
                 ledger_id: ledgerId || undefined
             };
 
@@ -2987,6 +2989,7 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CATEGORY</th>
                                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">VENDOR CODE</th>
                                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">VENDOR NAME</th>
+                                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">ALSO CUSTOMER?</th>
                                                         <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">STATUS</th>
                                                         <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">ACTIONS</th>
                                                     </tr>
@@ -3018,6 +3021,15 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                 </td>
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                                                                     {vendor.vendor_name}
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-center">
+                                                                    {vendor.is_also_customer ? (
+                                                                        <span className="px-2 py-1 inline-flex text-[10px] leading-4 font-bold rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200 uppercase tracking-tighter">
+                                                                            Yes
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="text-gray-300 text-xs">—</span>
+                                                                    )}
                                                                 </td>
                                                                 <td className="px-6 py-4 whitespace-nowrap text-center">
                                                                     <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-[4px] ${vendor.is_active
@@ -5450,36 +5462,20 @@ const VendorPortalPage: React.FC<VendorPortalProps> = ({ onLogout, onNavigate, s
                                                                                     {entry.status}
                                                                                 </span>
                                                                         </td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-right">
-                                                                            {entry.transferFrom === 'Purchase Voucher' && entry.status !== 'Received' && (
-                                                                                <button
-                                                                                    onClick={() => {
-                                                                                        setPrefilledVoucherData({
-                                                                                            sellerName: selectedProcurementVendor.name,
-                                                                                            totalAmount: typeof entry.credit === 'string' ? parseFloat(entry.credit.replace(/,/g, '')) : entry.credit,
-                                                                                            invoiceNumber: entry.referenceNo,
-                                                                                            invoiceDate: entry.date
-                                                                                        });
-                                                                                        onNavigate('Vouchers');
-                                                                                    }}
-                                                                                    className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold rounded uppercase transition-colors"
-                                                                                >
-                                                                                    Pay
-                                                                                </button>
-                                                                            )}
-                                                                        </td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.debit !== '-' ? `₹${entry.debit}` : '-'}</td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.credit !== '-' ? `₹${entry.credit}` : '-'}</td>
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">{entry.runningBalance !== '-' ? `₹${entry.runningBalance}` : '-'}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">{entry.debit !== '-' ? `₹${entry.debit}` : '-'}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">{entry.credit !== '-' ? `₹${entry.credit}` : '-'}</td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-gray-900">{entry.runningBalance !== '-' ? `₹${entry.runningBalance}` : '-'}</td>
                                                                     </tr>
                                                                 ))}
                                                             </tbody>
                                                             <tfoot className="bg-gray-50 font-bold border-t border-gray-200">
                                                                 <tr>
-                                                                    <td colSpan={7} className="px-6 py-3 text-right text-gray-900 text-sm">TOTAL</td>
-                                                                    <td className="px-6 py-3 text-gray-900 text-sm">₹{totalDebit.toLocaleString('en-IN')}</td>
-                                                                    <td className="px-6 py-3 text-gray-900 text-sm">₹{totalCredit.toLocaleString('en-IN')}</td>
-                                                                    <td className="px-6 py-3"></td>
+                                                                    <td colSpan={5} className="px-6 py-3 text-right text-gray-900 text-sm">TOTAL</td>
+                                                                    <td className="px-6 py-3 text-right text-gray-900 text-sm">₹{totalDebit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                                    <td className="px-6 py-3 text-right text-gray-900 text-sm">₹{totalCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                                    <td className="px-6 py-3 text-right text-gray-900 text-sm">
+                                                                        {filteredLedgerData.length > 0 && `₹${filteredLedgerData[filteredLedgerData.length - 1].runningBalance}`}
+                                                                    </td>
                                                                 </tr>
                                                             </tfoot>
                                                         </table>

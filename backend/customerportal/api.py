@@ -225,7 +225,17 @@ class CustomerMasterCustomerViewSet(viewsets.ModelViewSet):
         user = self.request.user
         tenant_id = getattr(user, 'tenant_id', None)
         if tenant_id:
-            return CustomerMasterCustomer.objects.select_related('customer_category').filter(tenant_id=tenant_id, is_deleted=False)
+            queryset = CustomerMasterCustomer.objects.select_related('customer_category').filter(tenant_id=tenant_id, is_deleted=False)
+            
+            # Simple filtering
+            pan = self.request.query_params.get('pan_number')
+            name = self.request.query_params.get('customer_name')
+            if pan:
+                queryset = queryset.filter(pan_number=pan)
+            if name:
+                queryset = queryset.filter(customer_name__icontains=name)
+                
+            return queryset
         return CustomerMasterCustomer.objects.none()
     
     def create(self, request, *args, **kwargs):

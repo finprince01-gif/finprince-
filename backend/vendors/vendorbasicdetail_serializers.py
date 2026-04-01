@@ -53,8 +53,13 @@ class VendorBasicDetailCreateSerializer(serializers.ModelSerializer):
             'vendor_category',
             'billing_currency',
             'is_also_customer',
-            'tcs_applicable'
+            'tcs_applicable',
+            'link_to_customer_id',
+            'create_new_customer'
         ]
+    
+    link_to_customer_id = serializers.IntegerField(required=False, allow_null=True)
+    create_new_customer = serializers.BooleanField(required=False, default=False)
     
     def validate_vendor_name(self, value):
         """Validate vendor name"""
@@ -108,8 +113,13 @@ class VendorBasicDetailUpdateSerializer(serializers.ModelSerializer):
             'billing_currency',
             'is_also_customer',
             'tcs_applicable',
-            'is_active'
+            'is_active',
+            'link_to_customer_id',
+            'create_new_customer'
         ]
+
+    link_to_customer_id = serializers.IntegerField(required=False, allow_null=True)
+    create_new_customer = serializers.BooleanField(required=False, default=False)
     
     def validate_vendor_name(self, value):
         """Validate vendor name"""

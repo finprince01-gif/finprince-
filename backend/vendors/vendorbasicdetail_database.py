@@ -101,7 +101,57 @@ class VendorBasicDetailDatabase:
                     f"Could not auto-create ledger for vendor {vendor.id}: {e}"
                 )
 
+            # Handle reciprocal customer linkage
+            VendorBasicDetailDatabase._handle_reciprocal_customer_linkage(
+                tenant_id, vendor, vendor_data, created_by
+            )
+
             return vendor
+
+    @staticmethod
+    def _handle_reciprocal_customer_linkage(tenant_id, vendor, vendor_data, user=None):
+        """
+        Handle creation or linkage of a customer record for this vendor.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        is_also_customer = vendor_data.get('is_also_customer', False)
+        link_to_customer_id = vendor_data.get('link_to_customer_id')
+        create_new_customer = vendor_data.get('create_new_customer', False)
+
+        if not is_also_customer:
+            return
+
+        try:
+            from customerportal.database import CustomerMasterCustomerBasicDetails
+            # 1. Link to existing
+            if link_to_customer_id:
+                try:
+                    customer = CustomerMasterCustomerBasicDetails.objects.get(id=link_to_customer_id)
+                    customer.is_also_vendor = True
+                    customer.save(update_fields=['is_also_vendor'])
+                    logger.info(f"Linked vendor {vendor.id} to customer {customer.id}")
+                except CustomerMasterCustomerBasicDetails.DoesNotExist:
+                    logger.warning(f"Customer to link (ID: {link_to_customer_id}) does not exist.")
+
+            # 2. Create new if requested and not linked
+            elif create_new_customer:
+                # Basic creation
+                customer = CustomerMasterCustomerBasicDetails.objects.create(
+                    tenant_id=tenant_id,
+                    customer_name=vendor.vendor_name,
+                    customer_code=f"CUST-GEN-{vendor.id}",
+                    pan_number=vendor.pan_no,
+                    email_address=vendor.email,
+                    contact_number=vendor.contact_no,
+                    billing_currency=vendor.billing_currency,
+                    is_also_vendor=True,
+                    created_by=user
+                )
+                logger.info(f"Created new reciprocal customer {customer.id} for vendor {vendor.id}")
+        except Exception as e:
+            logger.error(f"Error handling reciprocal customer linkage: {e}", exc_info=True)
     
     @staticmethod
     def get_vendor_basic_detail_by_id(vendor_id):
@@ -207,6 +257,12 @@ class VendorBasicDetailDatabase:
                     vendor.updated_by = updated_by
                 
                 vendor.save()
+
+                # Handle reciprocal linkage (e.g. if is_also_customer changed or new link requested)
+                VendorBasicDetailDatabase._handle_reciprocal_customer_linkage(
+                    vendor.tenant_id, vendor, update_data, updated_by
+                )
+                
                 return vendor
         except ObjectDoesNotExist:
             return None

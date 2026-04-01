@@ -33,6 +33,9 @@ interface BulkTransaction {
     amount: number;
     payNow: number;
     selected: boolean;
+    status?: string;
+    dueDate?: string;
+    daysToDue?: number;
 }
 
 
@@ -148,33 +151,84 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                 return;
             }
             const selectedOpt = payToOptions.find(opt => opt.name === payTo);
-            // Use resolved ledger_id for invoice lookup
+            const today = new Date();
+            
             if (selectedOpt && selectedOpt.ledger_id) {
                 try {
-                    // 1. Fetch pending invoices
-                    const data = await apiService.getPendingInvoices(selectedOpt.ledger_id);
-                    setPendingTransactions(data.map(item => {
-                        const isMatch = prefilledData?.invoiceNumber === item.reference_number;
-                        const pAmt = isMatch ? (prefilledData?.totalAmount || 0) : 0;
-                        return {
+                    // 1. Fetch pending invoices using the richer purchase/sales APIs
+                    let data: any[] = [];
+                    let entityCreditPeriod = 0;
+
+                    if (selectedOpt.type === 'vendor') {
+                        // Use rich purchase API for vendors
+                        data = await apiService.getVendorPurchaseInvoices(selectedOpt.name);
+                        const vendor = vendors.find(v => v.id === selectedOpt.id);
+                        entityCreditPeriod = parseInt(vendor?.payment_terms || vendor?.credit_days || '0', 10);
+                        
+                        setPendingTransactions(data.map(item => {
+                            const invDate = new Date(item.date || getCurrentDate());
+                            const d1 = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
+                            const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                            const diffTime = d2.getTime() - d1.getTime();
+                            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                            const status = diffDays > entityCreditPeriod ? 'Due' : 'Not Due';
+                            const dueDate = new Date(d1);
+                            dueDate.setDate(dueDate.getDate() + entityCreditPeriod);
+
+                            const isMatch = prefilledData?.invoiceNumber === item.supplier_invoice_no || prefilledData?.invoiceNumber === item.purchase_voucher_no;
+                            const pAmt = isMatch ? (prefilledData?.totalAmount || 0) : 0;
+                            
+                            return {
+                                date: item.date,
+                                referenceNumber: item.supplier_invoice_no || item.purchase_voucher_no || `PUR-${item.id}`,
+                                amount: Number(item.due_details?.to_pay || item.total || 0),
+                                payment: pAmt,
+                                dueStatus: status,
+                                daysToDue: Math.abs(entityCreditPeriod - diffDays),
+                                dueDate: dueDate.toISOString().split('T')[0]
+                            };
+                        }));
+                    } else if (selectedOpt.type === 'customer') {
+                        // Use rich sales API for customers
+                        data = await apiService.getRichCustomerSalesInvoices(selectedOpt.name);
+                        const customer = customers.find(c => c.id === selectedOpt.id);
+                        entityCreditPeriod = parseInt(customer?.credit_period || '0', 10);
+
+                        setPendingTransactions(data.map(item => {
+                            const invDate = new Date(item.date || getCurrentDate());
+                            const d1 = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
+                            const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                            const diffTime = d2.getTime() - d1.getTime();
+                            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                            const status = diffDays > entityCreditPeriod ? 'Due' : 'Not Due';
+                            const dueDate = new Date(d1);
+                            dueDate.setDate(dueDate.getDate() + entityCreditPeriod);
+
+                            return {
+                                date: item.date,
+                                referenceNumber: item.sales_invoice_no || item.invoice_number || `SAL-${item.id}`,
+                                amount: Number(item.payment_details?.payment_payable || item.total || 0),
+                                payment: 0,
+                                dueStatus: status,
+                                daysToDue: Math.abs(entityCreditPeriod - diffDays),
+                                dueDate: dueDate.toISOString().split('T')[0]
+                            };
+                        }));
+                    } else {
+                        // Fallback to standard pending invoices for other ledgers
+                        data = await apiService.getPendingInvoices(selectedOpt.ledger_id);
+                        setPendingTransactions(data.map(item => ({
                             date: item.date,
                             referenceNumber: item.reference_number,
                             amount: item.amount,
-                            payment: pAmt,
+                            payment: 0,
                             dueStatus: item.due_status,
                             daysToDue: item.days_to_due,
                             dueDate: item.due_date
-                        };
-                    }));
-                    
-                    if (prefilledData?.invoiceNumber && data.some(item => item.reference_number === prefilledData.invoiceNumber)) {
-                        calculateTotalPayment(data.map(item => ({
-                            amount: item.amount,
-                            payment: prefilledData.invoiceNumber === item.reference_number ? (prefilledData.totalAmount || 0) : 0
-                        })) as any, 0);
+                        })));
                     }
-
-                    // 2. Fetch available advances (Requirement Step 2)
+                    
+                    // 2. Fetch available advances
                     const advances = await apiService.getAdvances(selectedOpt.ledger_id, selectedOpt.category);
                     setAvailableAdvances(advances);
                 } catch (error) {
@@ -183,7 +237,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
             }
         };
         fetchPending();
-    }, [payTo, payToOptions]);
+    }, [payTo, payToOptions, vendors, customers]);
 
     // Bulk mode state
     const [paymentRows, setPaymentRows] = useState<PaymentRow[]>([
@@ -471,28 +525,97 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
 
         try {
             const selectedOpt = payToOptions.find(opt => opt.name === vendorName);
+            const today = new Date();
+            
             if (selectedOpt && selectedOpt.ledger_id) {
-                // 1. Fetch Transactions
-                const response = await apiService.getPendingInvoices(selectedOpt.ledger_id);
-                if (response && Array.isArray(response)) {
-                    const mappedTransactions: BulkTransaction[] = response.map((item: any) => ({
+                let data: any[] = [];
+                let entityCreditPeriod = 0;
+
+                if (selectedOpt.type === 'vendor') {
+                    // Use rich purchase API for vendors
+                    data = await apiService.getVendorPurchaseInvoices(selectedOpt.name);
+                    const vendor = vendors.find(v => v.id === selectedOpt.id);
+                    entityCreditPeriod = parseInt(vendor?.payment_terms || vendor?.credit_days || '0', 10);
+                    
+                    const mapped: BulkTransaction[] = data.map(item => {
+                        const invDate = new Date(item.date || getCurrentDate());
+                        const d1 = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
+                        const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                        const diffTime = d2.getTime() - d1.getTime();
+                        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                        const status = diffDays > entityCreditPeriod ? 'Due' : 'Not Due';
+                        const dueDate = new Date(d1);
+                        dueDate.setDate(dueDate.getDate() + entityCreditPeriod);
+                        
+                        return {
+                            id: item.id?.toString() || Math.random().toString(),
+                            date: item.date,
+                            invoiceNo: item.supplier_invoice_no || item.purchase_voucher_no || `PUR-${item.id}`,
+                            amount: Number(item.due_details?.to_pay || item.total || 0),
+                            payNow: 0,
+                            selected: false,
+                            status: status,
+                            daysToDue: Math.abs(entityCreditPeriod - diffDays),
+                            dueDate: dueDate.toISOString().split('T')[0]
+                        };
+                    });
+                    setBulkTransactions(mapped.filter(t => t.amount > 0));
+
+                } else if (selectedOpt.type === 'customer') {
+                    // Use rich sales API for customers
+                    data = await apiService.getRichCustomerSalesInvoices(selectedOpt.name);
+                    const customer = customers.find(c => c.id === selectedOpt.id);
+                    entityCreditPeriod = parseInt(customer?.credit_period || '0', 10);
+
+                    const mapped: BulkTransaction[] = data.map(item => {
+                        const invDate = new Date(item.date || getCurrentDate());
+                        const d1 = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate());
+                        const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                        const diffTime = d2.getTime() - d1.getTime();
+                        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                        const status = diffDays > entityCreditPeriod ? 'Due' : 'Not Due';
+                        const dueDate = new Date(d1);
+                        dueDate.setDate(dueDate.getDate() + entityCreditPeriod);
+
+                        return {
+                            id: item.id?.toString() || Math.random().toString(),
+                            date: item.date,
+                            invoiceNo: item.sales_invoice_no || item.invoice_number || `SAL-${item.id}`,
+                            amount: Number(item.payment_details?.payment_payable || item.total || 0),
+                            payNow: 0,
+                            selected: false,
+                            status: status,
+                            daysToDue: Math.abs(entityCreditPeriod - diffDays),
+                            dueDate: dueDate.toISOString().split('T')[0]
+                        };
+                    });
+                    setBulkTransactions(mapped.filter(t => t.amount > 0));
+
+                } else {
+                    // Fallback to standard pending invoices
+                    data = await apiService.getPendingInvoices(selectedOpt.ledger_id);
+                    const mapped: BulkTransaction[] = data.map(item => ({
                         id: item.id?.toString() || Math.random().toString(),
-                        date: item.date || getCurrentDate(),
+                        date: item.date,
                         invoiceNo: item.reference_number || 'N/A',
                         amount: Number(item.amount) || 0,
                         payNow: 0,
-                        selected: false
+                        selected: false,
+                        status: item.due_status || 'Pending',
+                        dueDate: item.due_date,
+                        daysToDue: item.days_to_due
                     }));
-                    setBulkTransactions(mappedTransactions.filter(t => t.amount > 0));
+                    setBulkTransactions(mapped.filter(t => t.amount > 0));
                 }
 
-                // 2. Fetch Advances
+                // 2. Fetch available advances
                 const advances = await apiService.getAdvances(selectedOpt.ledger_id, selectedOpt.category);
                 setAvailableAdvances(advances);
             }
         } catch (error) {
-            console.error('Error fetching data for vendor:', error);
+            console.error('Error fetching data for entity:', error);
             setBulkTransactions([]);
+            setAvailableAdvances([]);
         }
     };
 
@@ -1172,21 +1295,23 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                         </div>
                                     ) : (
                                         <div className="border border-gray-200 rounded-[4px] overflow-hidden">
-                                            <table className="w-full">
-                                                <thead className="bg-gray-50 border-b border-gray-200">
+                                            <table className="w-full text-sm">
+                                                <thead className="bg-gray-50 border-b-2 border-gray-200">
                                                     <tr>
-                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-600 uppercase">DATE</th>
-                                                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-600 uppercase">REFERENCE NUMBER</th>
-                                                        <th className="px-3 py-3 text-right text-xs font-medium text-gray-600 uppercase">AMOUNT</th>
-                                                        <th className="px-3 py-3 text-right text-xs font-medium text-gray-600 uppercase">PENDING</th>
-                                                        <th className="px-3 py-3 text-right text-xs font-medium text-gray-600 uppercase">PAYMENT</th>
+                                                        <th className="px-2 py-3 text-left text-xs font-medium text-gray-600 uppercase">DATE</th>
+                                                        <th className="px-2 py-3 text-left text-xs font-medium text-gray-600 uppercase">REFERENCE</th>
+                                                        <th className="px-2 py-3 text-center text-xs font-medium text-gray-600 uppercase">STATUS</th>
+                                                        <th className="px-2 py-3 text-right text-xs font-medium text-gray-600 uppercase">AMOUNT</th>
+                                                        <th className="px-2 py-3 text-right text-xs font-medium text-gray-600 uppercase">PENDING</th>
+                                                        <th className="px-2 py-3 text-center text-xs font-medium text-gray-600 uppercase">ACTION</th>
+                                                        <th className="px-2 py-3 text-right text-xs font-medium text-gray-600 uppercase">PAYMENT</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="bg-white divide-y divide-gray-200">
                                                     {bulkTransactions.length > 0 ? (
                                                         bulkTransactions.map(transaction => (
                                                             <tr key={transaction.id} className="hover:bg-gray-50">
-                                                                <td className="px-3 py-4 text-sm text-gray-700">
+                                                                <td className="py-3 px-2 text-sm text-gray-700 text-left">
                                                                     <div className="flex items-center gap-2">
                                                                         <input
                                                                             type="checkbox"
@@ -1197,14 +1322,40 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                                                         <span>{transaction.date}</span>
                                                                     </div>
                                                                 </td>
-                                                                <td className="px-3 py-4 text-sm text-gray-700">{transaction.invoiceNo}</td>
-                                                                <td className="px-3 py-4 text-sm text-gray-700 text-right">
+                                                                <td className="py-3 px-2 text-sm text-gray-700">
+                                                                    <div className="font-medium">{transaction.invoiceNo}</div>
+                                                                    {transaction.dueDate && (
+                                                                        <div className="text-[10px] text-gray-400">Due: {transaction.dueDate}</div>
+                                                                    )}
+                                                                </td>
+                                                                <td className="py-3 px-2 text-center text-sm text-gray-700">
+                                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${transaction.status === 'Due' || transaction.status === 'Due Today'
+                                                                        ? 'bg-red-100 text-red-600 border border-red-200'
+                                                                        : (transaction.status === 'Not Due' ? 'bg-green-100 text-green-600 border border-green-200' : 'bg-gray-100 text-gray-600 border border-gray-200')
+                                                                        }`}>
+                                                                        {transaction.status || 'Pending'}
+                                                                    </span>
+                                                                    {transaction.status === 'Not Due' && transaction.daysToDue !== undefined && (
+                                                                        <div className="text-[10px] text-gray-400 mt-1">
+                                                                            {transaction.daysToDue} days left
+                                                                        </div>
+                                                                    )}
+                                                                </td>
+                                                                <td className="py-3 px-2 text-sm text-gray-700 text-right">
                                                                     ₹{transaction.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                                 </td>
-                                                                <td className="px-3 py-4 text-sm text-gray-700 text-right font-medium text-red-600">
+                                                                <td className="py-3 px-2 text-sm text-gray-700 text-right font-medium text-red-600">
                                                                     ₹{(Math.max(0, transaction.amount - (transaction.payNow || 0))).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                                 </td>
-                                                                <td className="px-3 py-4 text-right">
+                                                                <td className="py-3 px-2 text-center">
+                                                                    <button 
+                                                                        onClick={() => handlePayNowChange(transaction.id, transaction.amount)}
+                                                                        className="px-4 py-1.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-[4px] text-[10px] font-bold uppercase transition-colors shadow-sm"
+                                                                    >
+                                                                        PAY
+                                                                    </button>
+                                                                </td>
+                                                                <td className="py-3 px-2 text-right">
                                                                     <input
                                                                         type="number"
                                                                         value={transaction.payNow || ''}
@@ -1217,7 +1368,7 @@ const PaymentVoucherSingle: React.FC<PaymentVoucherSingleProps> = ({
                                                         ))
                                                     ) : (
                                                         <tr>
-                                                            <td colSpan={5} className="px-6 py-12 text-center text-sm text-gray-500 italic">
+                                                            <td colSpan={7} className="px-6 py-12 text-center text-sm text-gray-500 italic">
                                                                 No pending transactions found for {selectedVendor}.
                                                             </td>
                                                         </tr>
